@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { ResumeJobCard } from "../components/ResumeJobCard";
 import { ResumeProjectCard } from "../components/ResumeProjectCard";
 import { SiteHeader } from "../components/SiteHeader";
-import {
+import { WorkTenureLive } from "../components/WorkTenureLive";import {
   advantages,
   education,
   experience,
@@ -30,8 +30,12 @@ export function ResumePage() {
               <div>
                 <h1>{profile.name}</h1>
                 <p className="resume-meta">
-                  {profile.title} · {profile.years} 年 · {profile.degree} · {profile.availability} · {profile.location}
+                  {profile.title} · {profile.degree} · {profile.availability} · {profile.location}
                 </p>
+                <WorkTenureLive
+                  startDate={profile.careerStart}
+                  startLabel={profile.careerStartLabel}
+                />
                 <ul className="resume-metrics">
                   {profile.highlights.map((h) => (
                     <li key={h}>{h}</li>

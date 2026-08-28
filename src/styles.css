@@ -4593,6 +4593,44 @@ textarea {
   line-height: 1.45;
 }
 
+.resume-tenure {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.45rem 0 0;
+  padding: 0.28rem 0.55rem;
+  border-radius: 999px;
+  width: fit-content;
+  max-width: 100%;
+  background: rgba(13, 148, 136, 0.08);
+  border: 1px solid rgba(13, 148, 136, 0.2);
+  font-size: 0.76rem;
+  color: #475569;
+  line-height: 1.4;
+}
+
+.resume-tenure strong {
+  color: #0f766e;
+  font-weight: 700;
+}
+
+.resume-tenure-days {
+  font-weight: 500;
+  color: #64748b;
+}
+
+.resume-tenure-live {
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: #0d9488;
+  padding: 0.12rem 0.35rem;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.14);
+  animation: pulse 1.8s ease infinite;
+}
+
 .resume-metrics {
   display: flex;
   flex-wrap: wrap;

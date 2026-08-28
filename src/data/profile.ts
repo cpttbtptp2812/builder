@@ -10,16 +10,19 @@ import {
 export const profile = {
   name: "王旭",
   title: "前端开发工程师",
-  years: 10,
   degree: "本科",
   availability: "离职 · 随时到岗",
+  location: "广州",
+  /** 工作年限起算日 — 北大软件入职 */
+  careerStart: "2016-06-01",
+  careerStartLabel: "自 2016.06 起",
   email: "17301212105@163.com",
-  phone: "19157288895",
+  phone: "17376563937",
   /** 首页一句话，不含完整简历 */
   tagline: "前端 · 自动化 · 交互演示作品站",
   /** 兼容旧页面 / 对话知识库 */
   summary:
-    "10 年前端经验，深耕 React / TypeScript。主导 iMean AI 智能自动化平台，参与阿里剑池大型重构与招商银行微前端架构。",
+    "深耕 React / TypeScript。主导 iMean AI 智能自动化平台，参与阿里剑池大型重构与招商银行微前端架构。",
   highlights: [
     "元素定位成功率 70% → 90%+",
     "首屏包体积减少约 30%",
