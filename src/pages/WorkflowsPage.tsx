@@ -26,7 +26,7 @@ export function WorkflowsPage() {
     <div className="page">
       <header>
         <h1>工作流库</h1>
-        <p>对应 iMean：频道 / 场景 / 一键 startProcess + 回放</p>
+        <p>频道筛选 · 一键运行 · 同步 DOM 回放面板</p>
       </header>
       <div className="filters">
         {channels.map((c) => (

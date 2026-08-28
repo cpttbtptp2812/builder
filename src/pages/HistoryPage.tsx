@@ -13,7 +13,7 @@ export function HistoryPage() {
     <div className="page">
       <header>
         <h1>历史</h1>
-        <p>对应 agent /history：本地会话列表（演示数据存浏览器）</p>
+        <p>浏览器本地持久化 · 点击继续演示</p>
       </header>
       {list.length === 0 ? (
         <p className="empty">暂无会话，去「对话」发一条消息吧。</p>

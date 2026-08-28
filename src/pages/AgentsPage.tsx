@@ -10,7 +10,7 @@ export function AgentsPage() {
     <div className="page">
       <header>
         <h1>智能体</h1>
-        <p>对应 agent 项目 /agents：选择 Agent 并进入专属对话</p>
+        <p>点击卡片切换 Agent，体验不同开场白与工具链</p>
       </header>
       <div className="cards">
         {AGENTS.map((a) => (

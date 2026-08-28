@@ -1,28 +1,36 @@
-import { NavLink, Outlet, Navigate, useNavigate, Link } from "react-router-dom";
+import { useEffect } from "react";
+import { NavLink, Outlet, Link } from "react-router-dom";
+import { profile } from "../data/profile";
 import { useStore } from "../store";
 
 const links = [
-  { to: "/demo/chat", label: "对话", icon: "💬" },
+  { to: "/demo/chat", label: "对话演示", icon: "💬" },
+  { to: "/demo/projects", label: "项目经历", icon: "📁" },
   { to: "/demo/agents", label: "智能体", icon: "🤖" },
   { to: "/demo/workflows", label: "工作流库", icon: "📋" },
-  { to: "/demo/history", label: "历史", icon: "🕐" },
-  { to: "/demo/features", label: "能力地图", icon: "🗺" },
+  { to: "/demo/history", label: "会话历史", icon: "🕐" },
 ];
 
 export function Shell() {
-  const user = useStore((s) => s.user);
-  const logout = useStore((s) => s.logout);
-  const nav = useNavigate();
+  const initShowcase = useStore((s) => s.initShowcase);
+  const resetDemo = useStore((s) => s.resetDemo);
 
-  if (!user) return <Navigate to="/" replace />;
+  useEffect(() => {
+    initShowcase();
+  }, [initShowcase]);
 
   return (
-    <div className="app">
+    <div className="app showcase">
       <aside className="aside">
         <div className="logo">
-          <span>王旭 · 交互演示</span>
-          <small>Agent + iMean AI</small>
-          <Link to="/" className="back-home">← 返回作品集</Link>
+          <span>{profile.name}</span>
+          <small>{profile.title} · 技术演示</small>
+          <Link to="/" className="back-home">
+            ← 项目首页
+          </Link>
+          <Link to="/about" className="back-home secondary">
+            完整简历 →
+          </Link>
         </div>
         <nav>
           {links.map((l) => (
@@ -32,10 +40,15 @@ export function Shell() {
             </NavLink>
           ))}
         </nav>
+        <div className="aside-metrics">
+          {profile.highlights.map((h) => (
+            <span key={h}>{h}</span>
+          ))}
+        </div>
         <div className="aside-foot">
-          <span>{user}</span>
-          <button type="button" onClick={() => { logout(); nav("/"); }}>
-            退出
+          <a href={`mailto:${profile.email}`}>联系</a>
+          <button type="button" onClick={() => { resetDemo(); initShowcase(); }}>
+            重置演示
           </button>
         </div>
       </aside>
