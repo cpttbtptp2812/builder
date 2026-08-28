@@ -1,29 +1,26 @@
 import { Link, useLocation } from "react-router-dom";
 
-/** 全站顶栏 — 作品 / 履历 */
-export function SiteHeader({ minimal = false }: { minimal?: boolean }) {
+/** 全站顶栏 — 品牌标识 + 分段导航 */
+export function SiteHeader() {
   const loc = useLocation();
   const onHome = loc.pathname === "/";
   const onResume = loc.pathname === "/resume";
 
   return (
     <header className="site-header">
-      <Link to="/" className="site-header-brand">
-        wangxu.dev
+      <Link to="/" className="site-header-mark" aria-label="作品集首页">
+        <span className="site-header-mark-icon" aria-hidden="true" />
+        <span className="site-header-mark-label">Frontend · Automation</span>
       </Link>
-      {!minimal && (
-        <nav className="site-header-nav">
-          <Link to="/" className={onHome ? "on" : ""}>
-            作品
-          </Link>
-          <Link to="/resume" className={onResume ? "on" : ""}>
-            完整简历
-          </Link>
-        </nav>
-      )}
-      <Link to="/resume" className={`btn-resume ${onResume ? "on" : ""}`}>
-        完整简历 →
-      </Link>
+
+      <nav className="site-header-nav" aria-label="主导航">
+        <Link to="/" className={onHome ? "on" : ""}>
+          作品
+        </Link>
+        <Link to="/resume" className={onResume ? "on" : ""}>
+          完整简历
+        </Link>
+      </nav>
     </header>
   );
 }

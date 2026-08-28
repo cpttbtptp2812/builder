@@ -1,5 +1,7 @@
 import type { CSSProperties } from "react";
 import { Link, Outlet, useParams } from "react-router-dom";
+import { SiteAmbient } from "./SiteAmbient";
+import { CursorParticles } from "./CursorParticles";
 import { SiteHeader } from "./SiteHeader";
 import { getWork } from "../data/works";
 
@@ -9,6 +11,8 @@ export function WorkLayout() {
 
   return (
     <div className="work-shell site-work" style={{ "--work-accent": work?.accent ?? "#5eead4" } as CSSProperties}>
+      <SiteAmbient />
+      <CursorParticles />
       <div className="site-work-inner">
         <SiteHeader />
         <div className="work-subhead">
