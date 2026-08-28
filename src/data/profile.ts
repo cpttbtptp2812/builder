@@ -13,7 +13,6 @@ export const profile = {
   years: 10,
   degree: "本科",
   availability: "离职 · 随时到岗",
-  location: "广州",
   email: "17301212105@163.com",
   phone: "19157288895",
   /** 首页一句话，不含完整简历 */

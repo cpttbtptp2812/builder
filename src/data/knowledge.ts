@@ -211,7 +211,7 @@ export function replyForProject(text: string): string | null {
     }
     if (/自我介绍|介绍一下你|你是谁/.test(text)) {
       return (
-        "我是王旭，10 年前端，目前在广州。从 Java 后端转前端，经历银行核心、阿里 enterprise 重构，" +
+        "我是王旭，10 年前端。从 Java 后端转前端，经历银行核心、阿里 enterprise 重构，" +
         "现在在 AI 自动化平台做 Agent 对话、SDK 回放和工作流编排。\n\n" +
         "强项是 React/TS 工程化、流式 AI 交互、性能优化和带 small team 交付。" +
         "你可以点上方项目按钮，或问我任意一个项目的架构、难点和成果。"

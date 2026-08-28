@@ -244,7 +244,7 @@ export const jobExperienceEntries: JobExperienceEntry[] = [
   {
     company: "天阳宏业科技股份有限公司",
     role: "前端开发工程师",
-    period: "2025.05 — 至今",
+    period: "2025.08 — 2025.05",
     stack: ["JavaScript", "React", "TypeScript", "Next.js", "GraphQL"],
     sections: [
       {

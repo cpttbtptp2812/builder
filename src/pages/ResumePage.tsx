@@ -5,7 +5,6 @@ import { SiteHeader } from "../components/SiteHeader";
 import {
   advantages,
   education,
-  expectedJobs,
   experience,
   profile,
   resumeProjects,
@@ -29,17 +28,17 @@ export function ResumePage() {
           <section className="resume-hero">
             <div className="resume-hero-grid">
               <div>
-                <p className="site-home-eyebrow">Resume</p>
                 <h1>{profile.name}</h1>
                 <p className="resume-meta">
-                  {profile.years} 年经验 · {profile.degree} · {profile.availability}
+                  {profile.title} · {profile.years} 年 · {profile.degree} · {profile.availability} · {profile.location}
                 </p>
-                <p className="resume-meta-sub">
-                  {profile.title} · {profile.location}
-                </p>
+                <ul className="resume-metrics">
+                  {profile.highlights.map((h) => (
+                    <li key={h}>{h}</li>
+                  ))}
+                </ul>
               </div>
               <aside className="resume-contact-card">
-                <h3>联系方式</h3>
                 <dl>
                   <dt>电话</dt>
                   <dd>
@@ -51,19 +50,11 @@ export function ResumePage() {
                   </dd>
                   <dt>教育</dt>
                   <dd>
-                    {education.school}（{education.tag}）· {education.degree}
+                    {education.school}（{education.tag}）· {education.degree} · {education.period}
                   </dd>
-                  <dt>在校时间</dt>
-                  <dd>{education.period}</dd>
                 </dl>
               </aside>
             </div>
-
-            <ul className="resume-metrics">
-              {profile.highlights.map((h) => (
-                <li key={h}>{h}</li>
-              ))}
-            </ul>
           </section>
 
           <section className="resume-section">
@@ -74,8 +65,6 @@ export function ResumePage() {
               ))}
             </ul>
           </section>
-
-       
 
           <section className="resume-section">
             <h2>工作经历</h2>
@@ -88,9 +77,6 @@ export function ResumePage() {
 
           <section className="resume-section">
             <h2>项目经历</h2>
-            <p className="resume-section-lead">
-              带「可演示」标签的项目可点击进入作品站交互演示。
-            </p>
             <div className="resume-project-grid">
               {resumeProjects.map((p) => (
                 <ResumeProjectCard key={p.id} project={p} />
@@ -98,18 +84,11 @@ export function ResumePage() {
             </div>
           </section>
 
-          <section className="resume-section">
+          <section className="resume-section resume-section-tight">
             <h2>技能概览</h2>
-            <div className="resume-skills-grid">
-              {skills.map((g) => (
-                <div key={g.group} className="resume-skill-group">
-                  <h3>{g.group}</h3>
-                  <ul>
-                    {g.items.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                </div>
+            <div className="resume-skill-tags">
+              {skills.flatMap((g) => g.items).map((item) => (
+                <span key={item}>{item}</span>
               ))}
             </div>
           </section>
