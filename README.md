@@ -7,7 +7,13 @@
 | 作品集首页 | 关于、项目、技能、经历、联系方式 |
 | 交互演示 | 流式对话、工作流匹配、执行进度、工具卡、智能体 |
 
-纯前端 + 浏览器存储，构建后可上传 **百度智能云 BOS 静态网站**。
+纯前端 + 浏览器存储，支持 **GitHub Pages** 与 **百度智能云 BOS** 静态托管。
+
+## 在线访问
+
+推送 `main` 分支后自动部署：
+
+**https://cpttbtptp2812.github.io/builder/**
 
 ## 开发
 
@@ -20,11 +26,28 @@ npm run dev
 
 打开 `http://localhost:5173` → 浏览作品集 → 点击 **交互演示** 进入 `#/demo/chat`。
 
+## GitHub Pages
+
+仓库已配置 Actions 工作流（`.github/workflows/static.yml`）：
+
+1. push 到 `main` 后自动 `npm ci && npm run build`
+2. 部署 `dist/` 到 Pages（Node 24）
+3. 首次若仍失败，到仓库 **Settings → Pages → Build and deployment** 确认 Source 为 **GitHub Actions**
+
+本地模拟 Pages 构建：
+
+```bash
+# PowerShell
+$env:GITHUB_PAGES="true"; npm run build; npm run preview
+```
+
 ## 构建 & 发布到百度
 
 ```bash
 npm run build
 ```
+
+（不要设置 `GITHUB_PAGES`，默认 `base: './'` 适用于 BOS 根目录）
 
 ### 1. 上传 BOS
 
