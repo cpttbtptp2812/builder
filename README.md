@@ -32,7 +32,7 @@ npm run dev
 
 1. push 到 `main` 后自动 `npm ci && npm run build`
 2. 部署 `dist/` 到 Pages（Node 24）
-3. 首次若仍失败，到仓库 **Settings → Pages → Build and deployment** 确认 Source 为 **GitHub Actions**
+3. **首次部署前**（只需一次）：仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**，保存后再 push 或手动重跑工作流
 
 本地模拟 Pages 构建：
 

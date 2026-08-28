@@ -10,8 +10,8 @@ permissions:
   contents: read
   pages: write
   id-token: write
-  # enablement: true 需要此权限以自动开启 Pages
-  administration: write
+  # 首次需在仓库 Settings → Pages 手动选择 Source: GitHub Actions；
+  # GITHUB_TOKEN 无法自动创建 Pages 站点，enablement 仅对个人 PAT 有效。
 
 concurrency:
   group: "pages"
@@ -42,8 +42,6 @@ jobs:
 
       - name: Setup Pages
         uses: actions/configure-pages@v5
-        with:
-          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

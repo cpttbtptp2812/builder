@@ -10,4 +10,8 @@ export default defineConfig({
   root,
   plugins: [react()],
   base: process.env.GITHUB_PAGES === "true" ? "/builder/" : "./",
+  server: {
+    host: true,
+    port: 5173,
+  },
 });
