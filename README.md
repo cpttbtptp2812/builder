@@ -9,16 +9,11 @@
 
 纯前端 + 浏览器存储，构建后可上传 **百度智能云 BOS 静态网站**。
 
-## 路径
-
-```
-e:\claude-code-haha\ai-product-showcase
-```
-
 ## 开发
 
 ```bash
-cd ai-product-showcase
+git clone https://github.com/cpttbtptp2812/builder.git
+cd builder
 npm install
 npm run dev
 ```
@@ -79,8 +74,7 @@ npm run build
 
 | 仓库 | 本站点复现 |
 |------|-----------|
-| `E:\tianyangAgent\agent` | 流式对话、智能体、历史、工具卡 |
-| `E:\tianyang\imean-ai` | 工作流匹配、频道库、执行进度、评价 |
-| `E:\unicode\unicode` | 简历项目描述与技术亮点 |
+| `tianyangAgent/agent` | 流式对话、智能体、历史、工具卡 |
+| `tianyang/imean-ai` | 工作流匹配、频道库、执行进度、评价 |
 
 完整线上能力需部署 `agent` Next 应用及 iMean 后端；本站点为**静态可部署**的技术展示与 UI 演示。
