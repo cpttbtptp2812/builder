@@ -1,6 +1,6 @@
-import { Link } from "react-router-dom";
 import { ResumeJobCard } from "../components/ResumeJobCard";
 import { ResumeProjectCard } from "../components/ResumeProjectCard";
+import { SiteFooter } from "../components/SiteFooter";
 import { SiteShell } from "../components/SiteShell";
 import { WorkTenureLive } from "../components/WorkTenureLive";
 import {
@@ -17,17 +17,7 @@ export function ResumePage() {
   return (
     <SiteShell
       pageClass="site-resume"
-      footer={
-        <footer className="site-home-foot">
-          <span>
-            © {new Date().getFullYear()} {profile.name}
-          </span>
-          <nav className="site-home-foot-nav">
-            <Link to="/">全部作品</Link>
-            <a href={`mailto:${profile.email}`}>邮件联系</a>
-          </nav>
-        </footer>
-      }
+      footer={<SiteFooter />}
     >
       <main className="resume-body">
         <section className="resume-hero">

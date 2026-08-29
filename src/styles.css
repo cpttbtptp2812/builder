@@ -5282,6 +5282,65 @@ textarea {
   overflow: hidden;
 }
 
+.home-featured-card--product {
+  border-color: color-mix(in srgb, var(--card-accent) 22%, rgba(226, 232, 240, 0.9));
+}
+
+.mini-clip-hub-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.mini-clip-hub-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  padding: 0.28rem 0.35rem;
+  border-radius: 0.45rem;
+  opacity: 0.45;
+  transition: opacity 0.25s, background 0.25s;
+}
+
+.mini-clip-hub-step.on {
+  opacity: 1;
+  background: rgba(13, 148, 136, 0.08);
+}
+
+.mini-clip-hub-num {
+  flex-shrink: 0;
+  width: 1.1rem;
+  height: 1.1rem;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.15);
+  color: #0f766e;
+  font-size: 0.62rem;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.mini-clip-hub-step strong {
+  display: block;
+  font-size: 0.68rem;
+  color: #1e293b;
+  margin-bottom: 0.08rem;
+}
+
+.mini-clip-hub-step p {
+  margin: 0;
+  font-size: 0.62rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+
+.home-note-btn--dl {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .home-featured-cta {
   position: relative;
   overflow: hidden;
@@ -6012,6 +6071,10 @@ textarea {
 
   .home-featured-grid {
     grid-template-columns: 1fr;
+  }
+
+  .clip-hub-downloads {
+    flex-direction: column;
   }
 
   .resume-hero-grid {
@@ -8732,5 +8795,183 @@ input.replay-typing {
   .real-replay-body {
     grid-template-columns: 1fr;
   }
+}
+
+/* ── ClipHub 下载页（仅安装包，无源码）── */
+
+.clip-hub-page-head {
+  margin-bottom: 1.5rem;
+}
+
+.clip-hub-version {
+  margin: 0.65rem 0 0;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.clip-hub-panel {
+  background: rgba(255, 255, 255, 0.82);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  border-radius: 14px;
+  padding: 1.15rem 1.25rem;
+  margin-bottom: 1rem;
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.clip-hub-panel h2 {
+  margin: 0 0 0.65rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.clip-hub-panel p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #475569;
+  line-height: 1.65;
+}
+
+.clip-hub-panel-muted {
+  background: rgba(248, 250, 252, 0.75);
+}
+
+.clip-hub-soon {
+  color: #0d9488 !important;
+  font-weight: 600;
+}
+
+.clip-hub-downloads {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.clip-hub-dl-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 200px;
+  padding: 0.85rem 1.1rem;
+  border-radius: 12px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  color: #0f172a;
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.92rem;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.clip-hub-dl-btn span {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: #64748b;
+}
+
+.clip-hub-dl-btn:hover {
+  transform: translateY(-2px);
+  border-color: #0d9488;
+  box-shadow: 0 8px 24px rgba(13, 148, 136, 0.12);
+}
+
+.clip-hub-dl-btn.primary {
+  background: linear-gradient(135deg, #0d9488, #0f766e);
+  border-color: transparent;
+  color: #fff;
+}
+
+.clip-hub-dl-btn.primary span {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.clip-hub-dl-btn.ghost-link {
+  background: rgba(248, 250, 252, 0.9);
+}
+
+.clip-hub-panel-highlight {
+  border-color: rgba(13, 148, 136, 0.25);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.95), rgba(240, 253, 250, 0.6));
+}
+
+.clip-hub-flow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+
+.clip-hub-flow-col h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  color: #0d9488;
+}
+
+.clip-hub-flow-col ul {
+  margin: 0;
+  padding-left: 1.1rem;
+  font-size: 0.84rem;
+  color: #475569;
+  line-height: 1.65;
+}
+
+.clip-hub-flow-col li + li {
+  margin-top: 0.35rem;
+}
+
+.clip-hub-tip {
+  margin: 0 !important;
+  padding: 0.65rem 0.75rem;
+  border-radius: 8px;
+  background: rgba(13, 148, 136, 0.08);
+  font-size: 0.82rem !important;
+  color: #0f766e !important;
+}
+
+.clip-hub-flow-col kbd,
+.clip-hub-steps kbd {
+  display: inline-block;
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  font-size: 0.75rem;
+  font-family: inherit;
+}
+
+@media (max-width: 768px) {
+  .clip-hub-flow {
+    grid-template-columns: 1fr;
+  }
+}
+
+.clip-hub-panel + .site-home-foot {
+  margin-top: 2rem;
+}
+
+.clip-hub-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  color: #475569;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.clip-hub-steps li + li {
+  margin-top: 0.35rem;
+}
+
+.clip-hub-back {
+  margin: 1.5rem 0 0;
+}
+
+.clip-hub-back a {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 0.88rem;
+}
+
+.clip-hub-back a:hover {
+  color: #0d9488;
 }
 

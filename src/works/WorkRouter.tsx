@@ -17,6 +17,8 @@ export function WorkRouter() {
   if (!work) return <Navigate to="/" replace />;
 
   switch (work.kind) {
+    case "product-tool":
+      return <Navigate to="/tools/clip-hub" replace />;
     case "automation-chat": return <WorkImean />;
     case "agent-chat": return <WorkAgent />;
     case "flow-builder": return <WorkBuilder />;

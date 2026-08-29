@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { FeaturedWorkCard } from "../components/home/FeaturedWorkCard";
+import { SiteFooter } from "../components/SiteFooter";
 import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { profile } from "../data/profile";
@@ -11,19 +11,7 @@ export function HomePage() {
 
   return (
     <>
-      <SiteShell
-        footer={
-          <footer className="site-home-foot">
-            <span>
-              © {new Date().getFullYear()} {profile.name}
-            </span>
-            <nav className="site-home-foot-nav">
-              <Link to="/resume">完整简历</Link>
-              <a href={`mailto:${profile.email}`}>邮件</a>
-            </nav>
-          </footer>
-        }
-      >
+      <SiteShell footer={<SiteFooter />}>
         <header className="site-home-head">
           <p className="site-home-eyebrow">Portfolio</p>
           <h1>{profile.name}</h1>

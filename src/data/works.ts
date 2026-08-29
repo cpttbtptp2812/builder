@@ -1,6 +1,7 @@
 /** 作品目录 — 每个项目独立路由与交互类型 */
 
 export type WorkKind =
+  | "product-tool"
   | "automation-chat"
   | "agent-chat"
   | "replay-sdk"
@@ -27,6 +28,7 @@ export type Work = {
 };
 
 export const WORKS: Work[] = [
+ 
   {
     id: "imean",
     slug: "imean",
@@ -38,6 +40,19 @@ export const WORKS: Work[] = [
     stack: ["React Flow", "ReplaySDK", "Web Worker", "GraphQL"],
     teaser: "说一句话 → 匹配流程 → 浏览器自动执行",
     accent: "#5eead4",
+    featured: true,
+  },
+  {
+    id: "clip-hub",
+    slug: "clip-hub",
+    title: "ClipHub",
+    subtitle: "网页片段 · 跳回原位",
+    desc: "Chrome / Edge 插件：右键保存选中文字与页面位置，点击列表精准跳回并高亮",
+    period: "2026",
+    kind: "product-tool",
+    stack: ["Chrome MV3", "文字匹配", "本地存储"],
+    teaser: "选中 → 右键保存 → 点击跳回原处",
+    accent: "#0d9488",
     featured: true,
   },
   {

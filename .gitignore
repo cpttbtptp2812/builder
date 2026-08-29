@@ -5,3 +5,9 @@ dist/
 !.env.example
 .DS_Store
 *.log
+
+# ClipHub 工具源码不公开（网站仅放插件 zip）
+clip-hub/
+
+# ClipHub 安装包不入库（仅 zip 在 public/downloads/）
+public/downloads/*.exe
