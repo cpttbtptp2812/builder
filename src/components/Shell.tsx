@@ -29,7 +29,7 @@ export function Shell() {
             ← 项目首页
           </Link>
           <Link to="/about" className="back-home secondary">
-            完整简历 →
+            个人履历 →
           </Link>
         </div>
         <nav>

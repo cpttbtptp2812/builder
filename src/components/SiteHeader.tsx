@@ -23,7 +23,7 @@ export function SiteHeader() {
               作品
             </Link>
             <Link to="/resume" className={onResume ? "on" : ""}>
-              完整简历
+              个人履历
             </Link>
           </nav>
           <SecretStarButton onOpen={() => setGateOpen(true)} />

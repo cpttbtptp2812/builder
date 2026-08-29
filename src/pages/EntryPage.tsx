@@ -61,7 +61,7 @@ export function EntryPage() {
           <p className="entry-lead">{profile.summary}</p>
           <div className="entry-actions">
             <Link to="/about" className="ghost-btn">
-              查看完整简历
+              查看个人履历
             </Link>
             <button type="button" className="cta" onClick={() => enterChat([])}>
               直接体验技术演示

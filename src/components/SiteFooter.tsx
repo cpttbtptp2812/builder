@@ -10,7 +10,7 @@ export function SiteFooter() {
       </span>
       <nav className="site-home-foot-nav" aria-label="页脚导航">
         <Link to="/">全部作品</Link>
-        <Link to="/resume">完整简历</Link>
+        <Link to="/resume">个人履历</Link>
         <Link to="/tools/clip-hub">ClipHub 工具</Link>
         <a href={`mailto:${profile.email}`}>邮件</a>
       </nav>

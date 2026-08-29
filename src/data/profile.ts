@@ -12,13 +12,13 @@ export const profile = {
   title: "前端开发工程师",
   degree: "本科",
   availability: "离职 · 随时到岗",
-  location: "广州",
+  location: "",
   /** 工作年限起算日 — 北大软件入职 */
   careerStart: "2016-06-01",
   careerStartLabel: "自 2016.06 起",
   email: "17301212105@163.com",
   phone: "17376563937",
-  /** 首页一句话，不含完整简历 */
+  /** 首页一句话，不含个人履历 */
   tagline: "本人单独使用的网页, 偶尔开发测试一些功能和项目, 有些插件自己在用, 有些是自己写来练手的",
   /** 兼容旧页面 / 对话知识库 */
   summary:
@@ -39,9 +39,6 @@ export const advantages = [
 ];
 
 export const expectedJobs = [
-  { title: "前端开发工程师", salary: "18-22K", city: "广州" },
-  { title: "前端开发工程师", salary: "17-20K", city: "北京" },
-  { title: "前端开发工程师", salary: "18-21K", city: "杭州" },
 ];
 
 export const skills = [
