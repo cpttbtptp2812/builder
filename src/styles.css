@@ -8975,3 +8975,349 @@ input.replay-typing {
   color: #0d9488;
 }
 
+/* ── 隐藏星星 · 密码门 ── */
+
+.site-header-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.site-header-star {
+  position: relative;
+  flex-shrink: 0;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: 1px solid rgba(13, 148, 136, 0.18);
+  border-radius: 999px;
+  background: rgba(240, 253, 250, 0.55);
+  color: #0f766e;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  box-shadow: 0 1px 6px rgba(13, 148, 136, 0.08);
+  transition:
+    color 0.25s ease,
+    border-color 0.25s ease,
+    background 0.25s ease,
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.site-header-star-glow {
+  position: absolute;
+  inset: 1px;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(94, 234, 212, 0.22), transparent 72%);
+  opacity: 0.65;
+  transition: opacity 0.25s ease;
+}
+
+.site-header-star-icon {
+  position: relative;
+  z-index: 1;
+  width: 1.15rem;
+  height: 1.15rem;
+  overflow: visible;
+}
+
+.site-header-star-shape {
+  fill: rgba(13, 148, 136, 0.12);
+  stroke: currentColor;
+  stroke-width: 1.35;
+  stroke-linejoin: round;
+  transform-origin: 12px 11.35px;
+  animation: site-header-star-twinkle 3.2s ease-in-out infinite;
+}
+
+.site-header-star-dot {
+  fill: currentColor;
+  opacity: 0.85;
+  animation: site-header-star-twinkle 3.2s ease-in-out infinite reverse;
+}
+
+@keyframes site-header-star-twinkle {
+  0%,
+  100% {
+    opacity: 0.78;
+    transform: scale(0.97);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+}
+
+.site-header-star:hover {
+  color: #0d9488;
+  border-color: rgba(13, 148, 136, 0.35);
+  background: rgba(240, 253, 250, 0.95);
+  box-shadow:
+    0 0 0 1px rgba(94, 234, 212, 0.18),
+    0 4px 16px rgba(13, 148, 136, 0.16);
+  transform: translateY(-1px);
+}
+
+.site-header-star:hover .site-header-star-glow {
+  opacity: 1;
+}
+
+.site-header-star:hover .site-header-star-shape {
+  fill: rgba(13, 148, 136, 0.18);
+  stroke: #0d9488;
+  filter: drop-shadow(0 0 5px rgba(94, 234, 212, 0.5));
+}
+
+.site-header-star:active {
+  transform: translateY(0) scale(0.96);
+}
+
+.site-header-star svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.star-gate-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+}
+
+.star-gate-modal {
+  position: relative;
+  width: min(100%, 320px);
+  padding: 1.5rem 1.35rem 1.35rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.18);
+  text-align: center;
+}
+
+.star-gate-modal.shake {
+  animation: star-gate-shake 0.45s ease;
+}
+
+@keyframes star-gate-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-6px);
+  }
+  75% {
+    transform: translateX(6px);
+  }
+}
+
+.star-gate-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.65rem;
+  border: none;
+  background: none;
+  font-size: 1.35rem;
+  line-height: 1;
+  color: #94a3b8;
+  cursor: pointer;
+}
+
+.star-gate-eyebrow {
+  margin: 0 0 0.35rem;
+  color: #fbbf24;
+  font-size: 1.1rem;
+}
+
+.star-gate-modal h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+  color: #1e293b;
+}
+
+.star-gate-hint {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+
+.star-gate-modal form input {
+  width: 100%;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.55rem;
+  padding: 0.55rem 0.75rem;
+  font-size: 1rem;
+  letter-spacing: 0.15em;
+  text-align: center;
+  margin-bottom: 0.65rem;
+}
+
+.star-gate-modal form button {
+  width: 100%;
+  border: none;
+  border-radius: 0.55rem;
+  padding: 0.55rem;
+  background: linear-gradient(135deg, #fbbf24, #f59e0b);
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.star-gate-error {
+  margin: -0.35rem 0 0.55rem;
+  font-size: 0.75rem;
+  color: #e11d48;
+}
+
+/* ── 隐藏浪漫页 ── */
+
+.site-secret-romance .site-header-star {
+  color: #5eead4;
+  border-color: rgba(94, 234, 212, 0.15);
+}
+
+.secret-romance {
+  max-width: 42rem;
+  margin: 0 auto;
+}
+
+.secret-romance-head {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+.secret-romance-eyebrow {
+  margin: 0 0 0.75rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  color: #a78bfa;
+}
+
+.secret-romance-head h1 {
+  margin: 0 0 0.65rem;
+  font-size: clamp(1.35rem, 4vw, 1.85rem);
+  line-height: 1.35;
+  color: #1e293b;
+}
+
+.secret-romance-sub {
+  margin: 0 0 0.55rem;
+  color: #64748b;
+  font-size: 0.92rem;
+}
+
+.secret-romance-dedication {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.secret-romance-poem {
+  margin-bottom: 2rem;
+  padding: 1rem 1.1rem;
+  border-radius: 0.85rem;
+  background: linear-gradient(145deg, rgba(30, 41, 59, 0.97), rgba(15, 23, 42, 0.98));
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.12);
+}
+
+.secret-romance-poem h2 {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #5eead4;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+.secret-romance-poem pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.78rem;
+  line-height: 1.65;
+  color: #e2e8f0;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+}
+
+.secret-romance-stories-label {
+  margin: 0 0 1rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0f766e;
+}
+
+.secret-romance-chapters {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.secret-romance-chapter {
+  padding: 1rem 1.05rem;
+  border-radius: 0.85rem;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  animation: secret-fade-up 0.6s ease both;
+}
+
+@keyframes secret-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.secret-romance-chapter h3 {
+  margin: 0 0 0.45rem;
+  font-size: 0.88rem;
+  color: #334155;
+}
+
+.secret-romance-chapter p {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.75;
+  color: #475569;
+}
+
+.secret-romance-foot {
+  margin-top: 2rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(226, 232, 240, 0.9);
+  text-align: center;
+}
+
+.secret-romance-foot p {
+  margin: 0 0 0.75rem;
+  font-size: 0.78rem;
+  color: #94a3b8;
+}
+
+.secret-romance-foot a {
+  color: #64748b;
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.secret-romance-foot a:hover {
+  color: #0f766e;
+}
+
+.site-home .site-header-actions .site-header-nav {
+  margin-left: 0;
+}
+

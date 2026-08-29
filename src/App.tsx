@@ -3,6 +3,7 @@ import { WorkLayout } from "./components/WorkLayout";
 import { ClipHubDownloadPage } from "./pages/ClipHubDownloadPage";
 import { HomePage } from "./pages/HomePage";
 import { ResumePage } from "./pages/ResumePage";
+import { SecretRomancePage } from "./pages/SecretRomancePage";
 import { WorkRouter } from "./works/WorkRouter";
 
 export default function App() {
@@ -15,6 +16,7 @@ export default function App() {
         </Route>
         <Route path="/resume" element={<ResumePage />} />
         <Route path="/tools/clip-hub" element={<ClipHubDownloadPage />} />
+        <Route path="/for-you" element={<SecretRomancePage />} />
         <Route path="/about" element={<Navigate to="/resume" replace />} />
         <Route path="/demo/*" element={<Navigate to="/work/imean" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
