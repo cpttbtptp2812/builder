@@ -19,7 +19,14 @@ export function SecretStarModal({ open, onClose }: Props) {
     if (!open) return;
     setValue("");
     setError(false);
-    const t = window.setTimeout(() => inputRef.current?.focus(), 80);
+    const input = inputRef.current;
+    if (input) {
+      input.setAttribute("readonly", "readonly");
+    }
+    const t = window.setTimeout(() => {
+      input?.removeAttribute("readonly");
+      input?.focus();
+    }, 120);
     return () => clearTimeout(t);
   }, [open]);
 
@@ -69,13 +76,20 @@ export function SecretStarModal({ open, onClose }: Props) {
         <form onSubmit={submit}>
           <input
             ref={inputRef}
-            type="password"
+            type="text"
+            name="star-gate-key"
+            className="star-gate-input"
             inputMode="numeric"
             autoComplete="off"
-            placeholder="······"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            data-lpignore="true"
+            data-1p-ignore
+            placeholder="请输入密钥"
             value={value}
             onChange={(e) => {
-              setValue(e.target.value);
+              setValue(e.target.value.replace(/\D/g, ""));
               setError(false);
             }}
           />

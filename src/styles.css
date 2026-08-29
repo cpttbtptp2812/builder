@@ -9148,7 +9148,8 @@ input.replay-typing {
   color: #64748b;
 }
 
-.star-gate-modal form input {
+.star-gate-modal form input,
+.star-gate-modal form input.star-gate-input {
   width: 100%;
   border: 1px solid #cbd5e1;
   border-radius: 0.55rem;
@@ -9157,6 +9158,24 @@ input.replay-typing {
   letter-spacing: 0.15em;
   text-align: center;
   margin-bottom: 0.65rem;
+  background: #fff;
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
+.star-gate-modal form input::placeholder {
+  letter-spacing: normal;
+  -webkit-text-security: none;
+  text-security: none;
+  color: #94a3b8;
+}
+
+.star-gate-modal form input:-webkit-autofill,
+.star-gate-modal form input:-webkit-autofill:hover,
+.star-gate-modal form input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #fff inset;
+  -webkit-text-fill-color: #1e293b;
+  transition: background-color 99999s ease-out 0s;
 }
 
 .star-gate-modal form button {
