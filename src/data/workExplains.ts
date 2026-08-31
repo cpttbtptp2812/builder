@@ -30,17 +30,17 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   agent: {
     slug: "agent",
-    oneLiner: "企业 AI 对话成品：流式回复、可折叠思考链、工具逐步执行，必要时弹出远程浏览器。",
-    demoProves: "和首页一致：SSE 流式出字、Reasoning、Tool Call 卡片、发布前检查场景下 noVNC 浮窗。",
+    oneLiner: "企业 AI Agent：SSE 流式对话 + Reasoning + Tool Call + noVNC；下半页是进程内 MCP Server，工具走真实 fetch / 知识库 / DOM snapshot。",
+    demoProves: "上半：流式出字、思考链、工具流水线、发布检查 noVNC。下半：tools/list → call、JSON-RPC 报文对照、真实 latency Trace。",
     steps: [
-      "选「发布前检查」或「知识库问答」场景",
-      "点「开始对话」— 左侧看流式回复与思考链",
-      "中间 Tool Call 流水线逐步执行 HTTP / VNC 等工具",
-      "发布前检查场景会弹出 noVNC 远程浏览器（可拖拽）",
+      "上半 — 选「发布前检查」或「知识库问答」，点「开始对话」",
+      "看 Reasoning、Tool Call 流水线；发布检查场景弹出 noVNC",
+      "下半 — 选 MCP 场景，▶ tools/list → call",
+      "http_probe 真实请求本站；knowledge_search 检索作品集知识库",
     ],
     compare: {
-      usual: { title: "纯聊天框", desc: "只有文字，看不到 AI 在调什么" },
-      here: { title: "对话 + 工具 + VNC", desc: "完整 Agent 产品体验" },
+      usual: { title: "聊天 + 硬编码 tool", desc: "流和工具各做各的，协议说不清" },
+      here: { title: "SSE 消费 + MCP 协议", desc: "一层看产品体验，一层看工具工程" },
     },
   },
 

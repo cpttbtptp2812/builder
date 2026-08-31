@@ -52,7 +52,7 @@ export const skills = [
   },
   {
     group: "AI & 自动化",
-    items: ["Vercel AI SDK", "流式 SSE", "DOM 回放引擎", "PostMessage 跨窗口调度"],
+    items: ["Vercel AI SDK", "MCP", "流式 SSE", "DOM 回放引擎"],
   },
   {
     group: "性能 & 质量",

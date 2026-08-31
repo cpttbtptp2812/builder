@@ -77,50 +77,52 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   agent: {
     slug: "agent",
     purpose:
-      "从 Agent 产品里单独拆出「流式消费链路」验证页。只聚焦一件事：GraphQL SSE 字节流 → AI SDK 5 UIMessage，每一层 TransformStream 能不能跑通、能不能断点续传。",
+      "Agent 完整链路验证页：上半 SSE 流式消费（GraphQL → AI SDK 5 UIMessage），下半 MCP 工具协议层（tools/list · Schema · 真实 handler）。两层在同一页，面试时一条线讲清楚。",
     highlights: [
       {
         title: "Web Streams pipeThrough 全链路",
         analysis:
-          "不是 setTimeout 模拟打字，而是真的 ReadableStream 管道：Uint8Array 字节源 → TextDecoderStream 解码 → TransformStream 切 SSE 帧 → TransformStream 映射 UIMessage part。每一站是一个标准 Web API，AbortController 可以随时 cancel。演示页五段会高亮当前走到哪一站。",
-        metric: "5 段管道 · 每段可独立调试和替换",
+          "ReadableStream 管道：字节源 → TextDecoderStream → SSE 帧切分 → UIMessage part 映射。AbortController 随时 cancel，和 MCP 下半页的 JSON-RPC 一样是可观测的真实管道，不是 setTimeout 假动画。",
+        metric: "5 段管道 · 每段可独立调试",
       },
       {
-        title: "UIMessage 部件模型 — 按 part 渲染",
+        title: "UIMessage + Tool Call 卡片",
         analysis:
-          "AI SDK 5 的消息不是一整段字符串，而是 part 数组：text-delta 是正文流、reasoning-delta 是思考过程、tool-call / tool-result 是工具调用。前端按 part.type 渲染不同卡片，reasoning 可折叠，tool 有 wave 加载动画。不拼字符串，避免流式更新时整段 re-render。",
-        metric: "6 种 part 类型 · 每种独立 React 组件",
+          "text-delta / reasoning-delta / tool-call / tool-result 按 part 渲染。工具走 data-backend-tool 协议，避免 AI SDK function call 双重执行。发布检查场景联动 noVNC 浮窗。",
+        metric: "6 种 part · 异构工具卡 wave 动画",
       },
       {
-        title: "SSE 长流截断 — undici vs native http",
+        title: "进程内 MCP Server — 真工具实现",
         analysis:
-          "Node 端 Provider 最初用 undici fetch 读 GraphQL SSE，长对话流到一半会被截断，assistant 消息丢后半段。排查后发现 undici 对长连接有 buffer 限制。改成 native http.request 监听 data 事件逐 chunk 读，问题消失。这是线上真实事故。",
-        metric: "长流（>30s）截断率 100% → 0%",
+          "下半页 McpInProcessServer 暴露 tools/list 与 tools/call。http_probe 真实 fetch；knowledge_search 检索 PROJECT_DETAILS；browser_snapshot 遍历 DOM。JSON-RPC 报文可对照，Trace 记录真实 ms。",
+        metric: "5 tools · JSON-RPC 2.0 · 真实 latency",
       },
       {
-        title: "断线续传 — pendingTurnId + resume API",
+        title: "断线续传 — pendingTurnId + resume",
         analysis:
-          "用户刷新或断网时，localStorage 存 pendingTurnId。重新进入页面后调 GET /api/chat/resume?turnId=xxx，Provider 从断点 chunk 接着读流，半条 assistant 消息能续上。send 和 resume 两种模式共用同一套 parse 管道，只是入口不同。",
-        metric: "半条消息恢复率 100% · 不丢上下文",
+          "localStorage 存 pendingTurnId，/api/chat/resume 从断点 chunk 续流。send 与 resume 共用 parse 管道。底层细节见 /work/sse 实验室。",
+        metric: "半条消息恢复率 100%",
       },
     ],
     content:
-      "AI 对话入口，比普通 Chat 多三层：调后端工具、挂工作流、开 VNC 看自动化执行。\n\n" +
-      "我主要做 SSE → UIMessage 的适配层，以及工具卡、VNC 浮窗、虚拟列表等配套。工具走 data-backend-tool 自定义协议，不走 AI SDK function call，避免前后端各执行一次。",
+      "AI 对话入口 + MCP 工具协议，合并在一个项目里讲。\n\n" +
+      "消费层：SSE → UIMessage，Reasoning、Tool Call、VNC。\n" +
+      "协议层：MCP tools/list / tools/call，Schema 校验，真实 fetch 和知识库检索。\n\n" +
+      "面试官问 Agent，可以从「用户看到什么」讲到「工具怎么接、协议长什么样」。",
     techJots: [
-      { tag: "ReadableStream", text: "createSSEByteStream() 模拟后端，400ms 间隔推 chunk，真实环境是 http.request data 事件。" },
-      { tag: "TransformStream", text: "sseParser: enqueue 按 \\n\\n 切 block；uiMapper: JSON → UIMessage part。" },
-      { tag: "AbortController", text: "pause = abort()，resume = 新 reader 从 turnId 对应 offset 开始。" },
-      { tag: "data-backend-tool", text: "自定义 data part 协议，前端只渲染不 trigger function call。" },
-      { tag: "@tanstack/virtual", text: "useVirtualizer 渲染会话列表，estimateSize + overscan。" },
-      { tag: "WorkflowProvider", text: "React Context 提顶层，VNC pause/resume 跨路由保持。" },
+      { tag: "ReadableStream", text: "SSE byte stream → UIMessage part；AbortController pause/resume。" },
+      { tag: "MCP", text: "tools/list · tools/call · JSON Schema 校验 · structuredContent。" },
+      { tag: "http_probe", text: "真实 fetch HEAD/GET · 记录 status + latencyMs。" },
+      { tag: "knowledge_search", text: "PROJECT_DETAILS 语料打分 · matchProject 加权。" },
+      { tag: "data-backend-tool", text: "自定义 data part，前端只渲染不 trigger function call。" },
+      { tag: "useAutoResume", text: "pendingTurnId 续传 — 详见 SSE 实验室。" },
     ],
     scraps: [
-      "undici 截断 → native http",
-      "工具 double-execute → data part 协议",
-      "VNC 浮窗跨路由 → Provider 提顶层",
+      "undici 截断 SSE → native http",
+      "硬编码 tool → MCP discover",
+      "MCP 与 Agent 拆两页 → 合并一页上下层",
     ],
-    siteNote: "成品演示：流式对话 + Reasoning + Tool Call + noVNC。底层 SSE 见 /work/sse。",
+    siteNote: "上半：流式对话 + Tool Call + VNC。下半：MCP Server + JSON-RPC。底层 SSE 见 /work/sse。",
   },
 
   builder: {
