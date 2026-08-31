@@ -98,76 +98,6 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
       扩展: "Operation 插件注册表，新增组件类型不改核心循环。",
     },
   },
-  {
-    ...projects.find((p) => p.id === "jianchi")!,
-    era: "history",
-    architecture:
-      "类组件 + alife → Hooks + antd 渐进迁移，react-window 虚拟列表，Web Worker 处理大列表计算。",
-    challenges: [
-      "20 万行 legacy 代码不能停服重写",
-      "TR 流程图性能 — Canvas + 分层渲染",
-      "Redux 过度渲染 — selector 优化 + memo",
-    ],
-    interviewTopics: ["首屏 3.2s→1.4s", "虚拟滚动", "类组件迁移策略", "React DnD 审批流"],
-    narrative:
-      "剑池是阿里内部项目管理平台，我负责前端架构重构，周期约 3 个月。\n\n" +
-      "背景是 alife 老架构 + 类组件维护成本高，目标是 Hooks + antd 现代化，同时业务不能停。\n\n" +
-      "策略是「按模块渐进替换」：先抽公共 Hooks 和组件库，再逐页迁移 TR 流程可视化、自检、会签模块。" +
-      "性能方面：react-window 虚拟滚动让万级列表可滚动；Web Worker 做 TR 节点布局预计算；" +
-      "路由级 code splitting 把首屏从 3.2s 打到 1.4s。Redux 用 reselect 减少 60% 无效渲染。\n\n" +
-      "成果：组件复用率 60%，审批配置效率 +40%，构建时间 -35%。",
-    aspects: {
-      迁移: "共存期 alife 与新 antd 模块 iframe/路由隔离，共享 Redux store 子树。",
-      性能: "webpack splitChunks 按路由；动态 import 重型图表；Worker  offload 布局。",
-      流程: "React DnD 拖拽审批节点，会签增强支持并行/串行配置可视化。",
-    },
-  },
-  {
-    ...projects.find((p) => p.id === "cmb")!,
-    era: "history",
-    architecture:
-      "招商银行分布式柜面，React + Redux，远程见证视频链路与 Pad 端授权转账，多渠道代码复用。",
-    challenges: [
-      "柜面/Pad/远程三端 UI 差异大但业务逻辑同",
-      "视频见证低延迟与弱网重连",
-      "监管合规下的操作留痕",
-    ],
-    interviewTopics: ["项目组长经验", "分布式柜面", "远程见证", "团队 5 人协作"],
-    narrative:
-      "在汇合发展期间担任招行远程银行 & 分布式柜面项目组长，带 5 人前端团队。\n\n" +
-      "项目覆盖柜员桌面端、Pad 移动授权、远程视频见证等模块。我负责架构拆分、代码 Review 和核心流程交付。\n\n" +
-      "技术上是 React + Redux + antd，重点在多渠道适配层：同一套业务 action，不同 channel 渲染不同 UI 组件。" +
-      "远程见证涉及 WebRTC/专线视频 SDK 封装，弱网重连和双录合规是难点。\n\n" +
-      "作为组长主要做任务拆分、风险同步、与产品和后端对齐接口，保证多业务线并行交付。",
-    aspects: {
-      管理: "5 人前端，双周迭代，Jira + 内部 Git，Code Review 门禁。",
-      远程: "视频见证流程：排队 → 身份核验 → 业务办理 → 双录存档。",
-      架构: "渠道抽象层 ChannelAdapter，Redux middleware 统一埋点。",
-    },
-  },
-  {
-    ...projects.find((p) => p.id === "fee")!,
-    era: "history",
-    architecture:
-      "薪福通智能费控，qiankun 微前端主应用 + 多个 React 子应用，dumi 组件库独立发布。",
-    challenges: [
-      "子应用独立部署与样式隔离",
-      "MutationObserver 适配动态表头",
-      "HOC 封装动态 Form 字段联动",
-    ],
-    interviewTopics: ["qiankun 微前端", "dumi 组件库", "MutationObserver", "GitHub Actions CI"],
-    narrative:
-      "招行薪福通智能费控，我担任前端组长（4 人），负责微前端架构和公共能力。\n\n" +
-      "用 qiankun 拆主应用和费控、审批等子应用，各自独立构建部署，registerMicroApps 按路由加载。" +
-      "公共组件库用 dumi 文档化，GitHub Actions 自动发 npm。\n\n" +
-      "业务亮点：MutationObserver 监听表格 DOM 变化做表头自适应；HOC 封装动态 Form，" +
-      "根据后端 schema 渲染字段联动和校验。稳定性方面加了全局 ErrorBoundary 和用户操作埋点。",
-    aspects: {
-      微前端: "qiankun sandbox + 公共依赖 externals，子应用 vite/webpack 混部。",
-      组件库: "dumi 写文档，gulp 打包 ES/CJS，Actions 发私有 npm。",
-      表单: "HOC withDynamicForm，schema-driven，字段 visibility 表达式引擎。",
-    },
-  },
 ];
 
 const KEYWORDS: Record<string, string[]> = {
@@ -319,7 +249,7 @@ export function buildMultiProjectPrompt(ids: string[]): string {
 }
 
 /** Quick prompts for ScenarioBar — grouped */
-export const PROJECT_PROMPTS = PROJECT_DETAILS.map((p) => ({
+export const PROJECT_PROMPTS = PROJECT_DETAILS.filter((p) => p.name).map((p) => ({
   id: p.id,
   label: p.name.replace(/ · .+$/, "").slice(0, 8),
   prompt: `详细介绍${p.name}的项目背景、架构和你的贡献`,
