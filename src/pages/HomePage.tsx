@@ -33,15 +33,7 @@ export function HomePage() {
             ))}
           </ul>
 
-          <div className="site-home-actions">
-            <Link to="/resume" className="site-home-btn-resume">
-              完整履历
-              <span aria-hidden>→</span>
-            </Link>
-            <a href={`mailto:${profile.email}`} className="site-home-btn-mail">
-              {profile.email}
-            </a>
-          </div>
+      
         </header>
 
         <section className="works-section works-section-flagship">
