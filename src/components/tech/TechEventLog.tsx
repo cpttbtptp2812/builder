@@ -7,6 +7,8 @@ type Props = {
   hint?: string;
   empty?: string;
   className?: string;
+  /** 默认 true；SkillForge 内关闭，避免整页滚到底部 */
+  autoScroll?: boolean;
 };
 
 /** 浅色技术事件流 — 每次操作打出 API 名 */
@@ -16,12 +18,14 @@ export function TechEventLog({
   hint = "每次操作对应真实 API",
   empty = "操作后这里会逐条打出用了什么技术…",
   className = "",
+  autoScroll = true,
 }: Props) {
   const endRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!autoScroll) return;
     endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [events.length]);
+  }, [events.length, autoScroll]);
 
   return (
     <div className={`tech-event-log ${className}`.trim()}>

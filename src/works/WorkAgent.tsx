@@ -39,6 +39,12 @@ export function WorkAgent() {
           links={[sse]}
         />
       )}
+      {getWork("skills") && (
+        <WorkTechDeepLinks
+          intro="Skills 是 MCP 之上的意图路由层 — SKILL.md manifest + trigger 匹配 + 步骤编排。"
+          links={[getWork("skills")!]}
+        />
+      )}
     </div>
   );
 }

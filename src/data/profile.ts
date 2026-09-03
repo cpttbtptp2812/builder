@@ -9,25 +9,34 @@ import {
 
 export const profile = {
   name: "王旭",
-  title: "前端开发工程师",
+  title: "前端工程师 · AI 自动化",
   degree: "本科",
-  availability: "离职 · 随时到岗",
   location: "",
   /** 工作年限起算日 — 北大软件入职 */
   careerStart: "2016-06-01",
   careerStartLabel: "自 2016.06 起",
   email: "17301212105@163.com",
   phone: "17376563937",
-  /** 首页一句话，不含个人履历 */
-  tagline: "本人单独使用的网页, 偶尔开发测试一些功能和项目, 有些插件自己在用, 有些是自己写来练手的",
+  /** 首页主 pitch — 站点第一眼介绍 */
+  homePitch:
+    "主导 iMean AI 智能自动化平台：Agent Skills 运行时、MCP 工具链、SSE 流式对话、浏览器 DOM 回放全链路。作品全部可在线交互试玩。",
+  /** 首页一句话（兼容旧引用） */
+  tagline:
+    "10 年前端 · React / TypeScript · AI Agent 与浏览器自动化 · 作品可在线试玩",
+  /** 首页成果条 */
+  homeMetrics: [
+    { label: "元素定位", value: "70% → 92%" },
+    { label: "SDK 包体积", value: "-30%" },
+    { label: "AI 方向", value: "Skills + MCP + SSE" },
+  ],
   /** 兼容旧页面 / 对话知识库 */
   summary:
-    "深耕 React / TypeScript。主导 iMean AI 智能自动化平台，参与阿里剑池大型重构与招商银行微前端架构。",
+    "深耕 React / TypeScript。主导 iMean AI 智能自动化平台，负责 Agent 流式对话、SDK 回放引擎与 MCP 工具协议。",
   highlights: [
     "元素定位成功率 70% → 90%+",
-    "首屏包体积减少约 30%",
-    "剑池首屏 3.2s → 1.4s",
-    "审批配置效率提升 40%",
+    "SDK 首屏包体积减少约 30%",
+    "SSE 长流截断问题修复（undici → native http）",
+    "Agent + MCP + Tool Call 生产级链路",
   ],
 };
 
@@ -123,6 +132,24 @@ export const projects: Project[] = [
       "实现 useAutoResume 流恢复 Hook",
       "data-backend-tool 协议统一工具卡渲染",
     ],
+    demo: true,
+  },
+  {
+    id: "skills",
+    name: "SkillForge · Agent Skills",
+    role: "个人作品",
+    period: "2026",
+    workSlug: "skills",
+    repo: "portfolio / skill-forge",
+    stack: ["SKILL.md", "MCP", "Trigger Match", "Tool Call"],
+    sections: [],
+    desc: "Skill Runtime Lab：Router 矩阵 + MCP 流水线 + Performance/DOM 审计面板。",
+    highlights: [
+      "explainDiscovery 可见打分",
+      "SKILL.md 来自 src/skills/ 真实文件",
+      "http_probe / snapshot / workflow_run",
+    ],
+    achievements: ["3 技术 Skill · DevTools 面板"],
     demo: true,
   },
   {

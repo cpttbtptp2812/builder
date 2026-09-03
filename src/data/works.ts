@@ -4,6 +4,7 @@ export type WorkKind =
   | "product-tool"
   | "automation-chat"
   | "agent-chat"
+  | "agent-skills"
   | "replay-sdk"
   | "perf-lab"
   | "multi-channel"
@@ -13,125 +14,174 @@ export type WorkKind =
   | "locator-lab"
   | "extension-demo";
 
+/** flagship = 简历主推；lab = 技术深潜模块 */
+export type WorkTier = "flagship" | "lab";
+
 export type Work = {
   id: string;
   slug: string;
   title: string;
   subtitle: string;
+  /** 卡片主文案 — 讲解决了什么问题 */
   desc: string;
+  /** 一行钩子 — 比 desc 更短、更抓眼 */
+  hook: string;
+  /** 成果数字 — 卡片右上角 */
+  impact?: string;
   period: string;
   kind: WorkKind;
   stack: string[];
   teaser: string;
   accent: string;
+  tier: WorkTier;
   featured?: boolean;
 };
 
 export const WORKS: Work[] = [
- 
   {
     id: "imean",
     slug: "imean",
     title: "iMean AI",
-    subtitle: "智能自动化平台",
-    desc: "对话匹配工作流，ReplaySDK DOM 回放，本地 / 云端 / 远程三种执行模式",
+    subtitle: "主项目 · AI 浏览器自动化",
+    hook: "说一句话，系统自动在真实浏览器里跑完业务流程",
+    desc: "对话匹配工作流 → 本地 / 云端 / 远程执行 → DOM 回放。微前端三件套：Builder + Agent + SDK。",
+    impact: "定位 70%→92%",
     period: "2025 — 今",
     kind: "automation-chat",
     stack: ["React Flow", "ReplaySDK", "Web Worker", "GraphQL"],
-    teaser: "说一句话 → 匹配流程 → 浏览器自动执行",
+    teaser: "输入「批量改价」→ 匹配流程 → 浏览器自动执行",
     accent: "#5eead4",
+    tier: "flagship",
     featured: true,
   },
   {
-    id: "clip-hub",
-    slug: "clip-hub",
-    title: "ClipHub",
-    subtitle: "网页片段 · 跳回原位",
-    desc: "Chrome / Edge 插件：右键保存选中文字与页面位置，点击列表精准跳回并高亮",
+    id: "skills",
+    slug: "skills",
+    title: "SkillForge",
+    subtitle: "Agent Skills 运行时",
+    hook: "Skill Runtime Lab — 路由矩阵 + MCP 流水线 + Performance/DOM 审计面板",
+    desc: "不是复制/假对话。Router Lab 可见 trigger 打分；三个 Skill 跑 http_probe · browser_snapshot · workflow_run，Trace 逐步展开 JSON。",
+    impact: "Skills + MCP Runtime",
     period: "2026",
-    kind: "product-tool",
-    stack: ["Chrome MV3", "文字匹配", "本地存储"],
-    teaser: "选中 → 右键保存 → 点击跳回原处",
-    accent: "#0d9488",
+    kind: "agent-skills",
+    stack: ["SKILL.md", "MCP", "Trigger Router", "Pipeline Trace"],
+    teaser: "explainDiscovery → runSkill → DevTools Dashboard",
+    accent: "#f59e0b",
+    tier: "flagship",
     featured: true,
   },
   {
     id: "agent",
     slug: "agent",
     title: "UniAgent",
-    subtitle: "SSE 流式 + MCP 工具链",
-    desc: "流式对话、Reasoning、Tool Call、noVNC；进程内 MCP Server — 真实 fetch、知识库检索、JSON-RPC",
+    subtitle: "企业 AI Agent · SSE + MCP",
+    hook: "流式 Reasoning + Tool Call + noVNC，底层 MCP 真实工具链",
+    desc: "上半产品体验，下半 MCP JSON-RPC：真实 fetch 探活、知识库检索、Trace 可对照。",
+    impact: "AI SDK 5 全链路",
     period: "2025 — 今",
     kind: "agent-chat",
     stack: ["AI SDK 5", "MCP", "SSE", "Tool Call"],
-    teaser: "流式对话 → MCP 工具 → Trace",
+    teaser: "发布前检查 → HTTP 探针 → 远程浏览器",
     accent: "#818cf8",
+    tier: "flagship",
+    featured: true,
+  },
+  {
+    id: "clip-hub",
+    slug: "clip-hub",
+    title: "ClipHub",
+    subtitle: "已上架 · Chrome 插件",
+    hook: "选中文字保存页面位置，一键跳回原处 — 我自己每天在用的工具",
+    desc: "Chrome MV3 扩展：右键保存片段 + 滚动位置，列表点击精准高亮跳回。",
+    impact: "真实产品",
+    period: "2026",
+    kind: "product-tool",
+    stack: ["Chrome MV3", "文字匹配", "本地存储"],
+    teaser: "选中 → 保存 → 跳回高亮",
+    accent: "#0d9488",
+    tier: "flagship",
     featured: true,
   },
   {
     id: "builder",
     slug: "builder",
     title: "Workflow Builder",
-    subtitle: "可视化编排器",
-    desc: "React Flow 拖拽编排，AI Copilot 改图，dagre 布局，节点模拟运行",
+    subtitle: "可视化流程编排",
+    hook: "拖拽编排 + AI Copilot 改图，非技术也能看懂流程",
+    desc: "React Flow 画布、dagre 自动布局、BFS 模拟运行，Copilot 自动插节点。",
+    impact: "128 节点流畅",
     period: "2025",
     kind: "flow-builder",
     stack: ["React Flow", "dagre", "Valtio", "Copilot"],
-    teaser: "拖节点 · Copilot 插节点 · 模拟跑路径",
+    teaser: "拖节点 · AI 改图 · 模拟跑路径",
     accent: "#a78bfa",
+    tier: "flagship",
     featured: true,
   },
   {
     id: "sse",
     slug: "sse",
     title: "GraphQL SSE",
-    subtitle: "AI SDK Provider",
-    desc: "SSE 原始流 ↔ UIMessage 对照，TTFB 打点，pause/resume 断线续传",
+    subtitle: "AI SDK Provider 实验室",
+    hook: "左原始 SSE 帧、右 UIMessage — 线上长流截断问题的调试台",
+    desc: "TTFB 打点、pause/resume 断线续传、node:http vs undici 对照。",
+    impact: "长流截断 → 0",
     period: "2025",
     kind: "sse-lab",
-    stack: ["SSE 帧解析", "UIMessage", "node:http", "useAutoResume"],
-    teaser: "左原始 SSE · 右 parse 结果 · 中间技术日志",
+    stack: ["SSE 帧解析", "UIMessage", "useAutoResume"],
+    teaser: "三栏对照 · 技术事件流",
     accent: "#34d399",
-    featured: true,
+    tier: "lab",
   },
   {
     id: "locator",
     slug: "locator",
     title: "Locator Engine",
-    subtitle: "元素定位引擎",
-    desc: "CSS / XPath / 文本 / Shadow DOM / IndexedDB 缓存，策略瀑布定位",
+    subtitle: "DOM 定位引擎",
+    hook: "CSS → XPath → 文本 → IDB 缓存，一种不行自动换策略",
+    desc: "ReplaySDK 核心：Shadow DOM 穿透、策略瀑布、优化前后命中率对比。",
+    impact: "92% 命中率",
     period: "2025",
     kind: "locator-lab",
-    stack: ["策略瀑布", "Shadow DOM", "IndexedDB", "dispatchEvent"],
-    teaser: "点元素 · 看策略 try/fail · 优化前后对比",
+    stack: ["策略瀑布", "Shadow DOM", "IndexedDB"],
+    teaser: "点元素 · 看 try/fail 链",
     accent: "#f0b429",
+    tier: "lab",
   },
   {
     id: "sdk",
     slug: "sdk",
     title: "iMean SDK",
     subtitle: "浏览器执行引擎",
-    desc: "TaskQueue 状态机，PostMessage 跨窗口调度，CompressionStream 队列持久化",
+    hook: "纯 TS 任务队列，任意页面注入即可回放",
+    desc: "TaskQueue 状态机、PostMessage 跨窗口 mutex、gzip 队列持久化。",
+    impact: "包体积 -30%",
     period: "2025",
     kind: "replay-sdk",
-    stack: ["TaskQueue", "PostMessage", "CompressionStream", "Operation 插件"],
-    teaser: "pause/skip · 多窗口 mutex · gzip 队列",
+    stack: ["TaskQueue", "PostMessage", "CompressionStream"],
+    teaser: "pause/skip · 多窗口调度",
     accent: "#f472b6",
+    tier: "lab",
   },
   {
     id: "extension",
     slug: "extension",
     title: "Playback Extension",
     subtitle: "Chrome 录制扩展",
-    desc: "MV3 Content Script 录制，isolated world 高亮，输出 steps.json",
+    hook: "录一遍操作，直接导出 steps.json 进 Builder",
+    desc: "MV3 Content Script 捕获、isolated world 高亮、实时 JSON 输出。",
     period: "2025",
     kind: "extension-demo",
-    stack: ["MV3", "Content Script", "chrome.storage", "steps.json"],
-    teaser: "录操作 · 实时出 JSON · 可导入 Builder",
+    stack: ["MV3", "Content Script", "steps.json"],
+    teaser: "录制 → JSON → 导入编排",
     accent: "#fb7185",
+    tier: "lab",
   },
 ];
 
 export function getWork(slug: string) {
   return WORKS.find((w) => w.slug === slug);
 }
+
+export const FLAGSHIP_WORKS = WORKS.filter((w) => w.tier === "flagship");
+export const LAB_WORKS = WORKS.filter((w) => w.tier === "lab");

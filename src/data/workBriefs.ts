@@ -74,6 +74,54 @@ export const WORK_NOTES: Record<string, WorkNote> = {
     siteNote: "成品演示：对话匹配 → 选模式 → 运行 → 浏览器 DOM 回放 + 流程图高亮。",
   },
 
+  skills: {
+    slug: "skills",
+    purpose:
+      "Skill Runtime Lab：SKILL.md 注册表 + 可见 Router + MCP 多步流水线 — Site Audit / DOM Probe / Workflow 入队。",
+    highlights: [
+      {
+        title: "SKILL.md manifest 注册表",
+        analysis:
+          "每个 Skill 带 frontmatter + 步骤定义，manifest 来自 src/skills/ 真实文件，可 fork 到 Cursor。",
+        metric: "3 技术 Skill · manifest 可 diff",
+      },
+      {
+        title: "Discover + trigger 路由",
+        analysis:
+          "访客自然语言 → trigger 加权 → 选中 Skill。Discover 阶段展示全 Registry 得分条。",
+        metric: "trigger 加权 · score 可观测",
+      },
+      {
+        title: "真实 MCP 流水线",
+        analysis:
+          "site-analyzer → http_probe + snapshot + Performance API；dom-probe → a11y 树分析；workflow → TaskQueue 入队。",
+        metric: "tools/call · 非 mock",
+      },
+      {
+        title: "Agent Turn 流水线",
+        analysis:
+          "Discover → Reason → Activate → Plan → Execute → Respond，对话区逐步展示，侧栏 Trace 可对照。",
+        metric: "7 阶段 · 可观测",
+      },
+    ],
+    content:
+      "Skills 把领域能力封装成可发现、可版本化的包。\n\n" +
+      "本页是 Skill Runtime Lab：可见路由算法 + MCP 多步流水线 + DevTools 风格审计面板。\n" +
+      "与 UniAgent 共用 mcpServer，Skills 是意图层，MCP 是工具层。",
+    techJots: [
+      { tag: "SKILL.md", text: "src/skills/ 仓库内真实文件；frontmatter + triggers。" },
+      { tag: "site-analyzer", text: "http_probe + Performance API + snapshot 合成审计。" },
+      { tag: "dom-probe", text: "browser_snapshot → role 分布 · Locator 同源。" },
+      { tag: "workflow-orchestrator", text: "workflow_run 入队 + 执行面 snapshot。" },
+      { tag: "MCP", text: "与 UniAgent 共用 JSON-RPC tools/call。" },
+    ],
+    scraps: [
+      "Cursor Skills 目录 ~/.cursor/skills — 同款 SKILL.md 格式",
+      "Router explainDiscovery() 算法可在侧栏 SKILL.md 对照",
+    ],
+    siteNote: "Site Audit 对本页发真实 fetch；DOM Probe 扫描当前 Lab DOM 树。",
+  },
+
   agent: {
     slug: "agent",
     purpose:

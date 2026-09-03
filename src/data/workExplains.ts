@@ -28,6 +28,22 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
     },
   },
 
+  skills: {
+    slug: "skills",
+    oneLiner: "Skill Runtime Lab：Router 可见打分 + Site Audit（fetch + Performance API）+ DOM Probe + Workflow 入队 — MCP 流水线 Trace 可展开 JSON。",
+    demoProves: "Router Lab 改意图看 score breakdown；Site Audit 看真实 latency/TTFB；DOM Probe 看 role 分布；MCP Console 发 JSON-RPC。",
+    steps: [
+      "Router Lab — 输入「分析性能 metrics」→ 看 trigger 加权矩阵 → Run site-analyzer",
+      "Site Audit — 流水线 http_probe → snapshot → Performance API → 指标面板",
+      "DOM Probe — browser_snapshot 全树 → role 分布 / 交互密度 → 跳转 Locator Lab",
+      "Workflow — workflow_run 入队 + 执行面 snapshot → 跳转 SDK Lab",
+    ],
+    compare: {
+      usual: { title: "Prompt 硬编码工具", desc: "Agent 换场景就要改 system prompt，难复用" },
+      here: { title: "SKILL.md + MCP", desc: "manifest 可版本化，trigger 自动路由，工具走统一协议" },
+    },
+  },
+
   agent: {
     slug: "agent",
     oneLiner: "企业 AI Agent：SSE 流式对话 + Reasoning + Tool Call + noVNC；下半页是进程内 MCP Server，工具走真实 fetch / 知识库 / DOM snapshot。",

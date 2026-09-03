@@ -76,6 +76,34 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
     },
   },
   {
+    ...projects.find((p) => p.id === "skills")!,
+    era: "current",
+    architecture:
+      "浏览器内 Skill Registry + matchSkill 路由器 + runSkill 步骤执行器。" +
+      "每个 Skill 含 SKILL.md manifest（frontmatter + triggers + tools）与 steps[]，逐步调用进程内 MCP Server。",
+    challenges: [
+      "意图路由准确性 — trigger 加权 vs embedding hybrid",
+      "浏览器内 MCP — fetch / DOM snapshot / workflow 入队",
+      "与 MCP 分层 — Skills 是意图层，MCP 是工具协议层",
+    ],
+    interviewTopics: [
+      "SKILL.md manifest 设计",
+      "Discover trigger 路由",
+      "真实 Action 执行",
+      "Agent Turn 流水线",
+    ],
+    narrative:
+      "SkillForge 是王旭个人站内置的 Agent Skills 运行时。\n\n" +
+      "访客在 Router Lab 输入意图 → explainDiscovery 展示 trigger 加权矩阵 → Run Skill 跑 MCP 流水线。\n\n" +
+      "内置 site-analyzer、dom-probe、workflow-orchestrator，SKILL.md 在仓库 src/skills/ 目录；Router Lab 可见 explainDiscovery 打分。",
+    aspects: {
+      架构: "Registry → Discover → runSkill → mcpServer.callTool · Trace 可观测。",
+      路由: "trigger 词加权打分；可扩展 embedding retrieval。",
+      Action: "http_probe · browser_snapshot · workflow_run · Performance API 合成。",
+      MCP: "与 UniAgent 共用 McpInProcessServer。",
+    },
+  },
+  {
     ...projects.find((p) => p.id === "sdk")!,
     era: "current",
     architecture:
@@ -103,6 +131,7 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
 const KEYWORDS: Record<string, string[]> = {
   imean: ["imean", "immean", "智能自动化", "builder", "回放引擎", "元素定位", "postmessage"],
   agent: ["agent", "uniagent", "对话系统", "ai sdk", "流恢复", "autoresume", "工具卡"],
+  skills: ["skill", "skills", "skillforge", "skill.md", "trigger", "manifest"],
   sdk: ["sdk", "replay", "回放", "调度", "队列", "indexeddb"],
   jianchi: ["剑池", "jianchi", "阿里", "重构", "虚拟滚动", "alife", "tr流程"],
   cmb: ["招行", "招商", "柜面", "远程见证", "远程银行", "pad"],

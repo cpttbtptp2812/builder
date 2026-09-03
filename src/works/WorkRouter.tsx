@@ -9,6 +9,7 @@ import { WorkImean } from "./WorkImean";
 import { WorkJianchi } from "./WorkJianchi";
 import { WorkLocator } from "./WorkLocator";
 import { WorkSdk } from "./WorkSdk";
+import { WorkSkills } from "./WorkSkills";
 import { WorkSse } from "./WorkSse";
 
 export function WorkRouter() {
@@ -21,6 +22,7 @@ export function WorkRouter() {
       return <Navigate to="/tools/clip-hub" replace />;
     case "automation-chat": return <WorkImean />;
     case "agent-chat": return <WorkAgent />;
+    case "agent-skills": return <WorkSkills />;
     case "flow-builder": return <WorkBuilder />;
     case "sse-lab": return <WorkSse />;
     case "locator-lab": return <WorkLocator />;
