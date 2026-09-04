@@ -161,7 +161,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       { tag: "ReadableStream", text: "SSE byte stream → UIMessage part；AbortController pause/resume。" },
       { tag: "MCP", text: "tools/list · tools/call · JSON Schema 校验 · structuredContent。" },
       { tag: "http_probe", text: "真实 fetch HEAD/GET · 记录 status + latencyMs。" },
-      { tag: "knowledge_search", text: "PROJECT_DETAILS 语料打分 · matchProject 加权。" },
+      { tag: "knowledge_search", text: "ragEngine 分块检索 · chunkId 引用 · ragHitsForMcp。" },
       { tag: "data-backend-tool", text: "自定义 data part，前端只渲染不 trigger function call。" },
       { tag: "useAutoResume", text: "pendingTurnId 续传 — 详见 SSE 实验室。" },
     ],
@@ -171,6 +171,54 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       "MCP 与 Agent 拆两页 → 合并一页上下层",
     ],
     siteNote: "上半：流式对话 + Tool Call + VNC。下半：MCP Server + JSON-RPC。底层 SSE 见 /work/sse。",
+  },
+
+  platform: {
+    slug: "platform",
+    purpose:
+      "补齐 Agent 架构师 JD：RAG 分块检索、Multi-Agent 协作 Trace、Eval Ops 回归、Memory 上下文工程 — 与 UniAgent/SkillForge 共用 MCP 与语料。",
+    highlights: [
+      {
+        title: "RAG Lab — 分块 + hybrid score + 引用",
+        analysis:
+          "PROJECT_DETAILS 拆成 desc/architecture/narrative/challenge/aspect chunks。retrieveRag 做关键词重叠 + 项目直匹配 + 段落加权，UI 展示 chunkId、score、matchedTerms 和 Agent 上下文注入预览。生产可换 embedding + 向量库，接口不变。",
+        metric: "40+ chunks · retrieve <5ms · chunkId 溯源",
+      },
+      {
+        title: "Multi-Agent — Planner / Executor / Reviewer",
+        analysis:
+          "Planner 解析意图并读 Memory 预览；Executor 调 knowledge_search + 条件 http_probe；Reviewer 合成带 [n] 引用的答复。每步 MultiAgentStep 含 toolCalls、ms，UI 按角色着色 Trace。",
+        metric: "3 Agent · 共用 MCP · 带 citation",
+      },
+      {
+        title: "Eval Ops — Router 回归 + P50/P99",
+        analysis:
+          "5 条 Skill Router 用例对比 expected vs predicted；一键跑全 Skill benchmark 聚合 tool success rate 和 latency 分位。对齐架构师 JD 里的 Eval / 可观测要求。",
+        metric: "Router Acc 可量化 · Tool P99 可见",
+      },
+      {
+        title: "Memory — IDB 长期 + Session 短期",
+        analysis:
+          "长期记忆 IndexedDB（agentMemory.ts），会话轮次 sessionStorage。buildMemoryContextBlock() 注入 Multi-Agent Planner；与 RAG 检索分工：RAG=项目知识，Memory=用户偏好。",
+        metric: "Context Engineering 可演示",
+      },
+    ],
+    content:
+      "Agent Platform Lab 不是新堆概念，而是把 JD 常问的 RAG / Multi-Agent / Eval / Memory 做成可在线验证的模块。\n\n" +
+      "与 UniAgent 的 Guest Agent、SkillForge 的 Router Lab 共用 mcpServer 和 knowledge 语料；knowledge_search 已切到 ragEngine 分块检索。",
+    techJots: [
+      { tag: "ragEngine", text: "buildRagCorpus → tokenize → hybrid-score → topK · ragHitsForMcp。" },
+      { tag: "multiAgentRuntime", text: "runMultiAgentPipeline · onStep 流式 Trace。" },
+      { tag: "evalHarness", text: "runRouterEval · runSkillBenchmark · aggregateToolMetrics。" },
+      { tag: "agentMemory", text: "idbCache 长期记忆 · sessionStorage 短期 · buildMemoryContextBlock。" },
+      { tag: "架构对照", text: "自研 MCP vs LangChain Tool vs Dify Workflow — 分层职责等价。" },
+    ],
+    scraps: [
+      "关键词 RAG → 分块 + chunkId 引用",
+      "单 Agent → 三角色 Trace 可观测",
+      "knowledge_search 升级 ragEngine",
+    ],
+    siteNote: "五 Tab：RAG / Multi-Agent / Eval / Memory / 架构对照。均可直接试，无需 API Key。",
   },
 
   builder: {

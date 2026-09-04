@@ -8,7 +8,7 @@ import { getWork } from "../data/works";
 export function WorkSkills() {
   const [params] = useSearchParams();
   const trySkillId = params.get("try") ?? params.get("skill");
-  const agent = getWork("agent");
+  const platform = getWork("platform");
 
   return (
     <div className="work-skills work-tech-lab">
@@ -16,10 +16,10 @@ export function WorkSkills() {
 
       <AgentSkillsDemo initialSkillId={trySkillId} trySkillId={trySkillId} />
 
-      {agent && (
+      {platform && (
         <WorkTechDeepLinks
-          intro="上面 Skill 流水线的 http_probe、browser_snapshot、workflow_run 走同一套 MCP tools/call。要看 SSE 流式对话 + 完整 JSON-RPC 报文对照 + Reasoning / Tool Call 产品体验："
-          links={[agent]}
+          intro="Skill 是 MCP 之上的意图层。再往上看平台层：RAG 怎么召回知识、三个 Agent 怎么分工、Router 准确率多少 — 在 Platform Lab 30 秒跑通："
+          links={[platform]}
         />
       )}
     </div>

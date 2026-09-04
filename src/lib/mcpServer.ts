@@ -1,6 +1,7 @@
 /** 进程内 MCP Server — JSON-RPC 2.0 · 真实工具实现（非 mock 定时器） */
 
-import { matchProject, PROJECT_DETAILS } from "../data/knowledge";
+import { matchProject } from "../data/knowledge";
+import { ragHitsForMcp } from "./ragEngine";
 import { REPLAY_STEPS, SCENARIOS } from "../data/scenarios";
 import { MCP_TOOLS, validateParams, type McpTool } from "./mcpBridgeLab";
 
@@ -38,35 +39,8 @@ export function nextRpcId() {
 }
 
 export function searchKnowledgeCorpus(query: string, topK = 3) {
-  const q = query.trim().toLowerCase();
-  const direct = matchProject(query);
-
-  const hits = PROJECT_DETAILS.map((p) => {
-    const corpus = `${p.name} ${p.desc} ${p.narrative} ${p.stack.join(" ")} ${p.interviewTopics.join(" ")}`.toLowerCase();
-    let score = 0;
-    for (const word of q.split(/\s+/).filter((w) => w.length > 1)) {
-      if (corpus.includes(word)) score += 0.12;
-    }
-    if (direct?.id === p.id) score += 0.45;
-    if (p.name.toLowerCase().includes(q) || q.includes(p.id)) score += 0.35;
-    return {
-      title: p.name,
-      projectId: p.id,
-      score: Math.min(0.99, score),
-      excerpt: p.desc,
-      topics: p.interviewTopics.slice(0, 2),
-    };
-  })
-    .filter((h) => h.score >= 0.25)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
-
-  return {
-    query,
-    topK,
-    hits,
-    source: "portfolio-knowledge.ts · PROJECT_DETAILS",
-  };
+  void matchProject(query);
+  return ragHitsForMcp(query, topK);
 }
 
 function buildA11ySnapshot(root: Element, compact = false) {

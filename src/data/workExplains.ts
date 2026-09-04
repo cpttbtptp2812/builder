@@ -46,17 +46,32 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   agent: {
     slug: "agent",
-    oneLiner: "完整 Agent 闭环：配置 LLM API → 真实 Tool Call Loop → MCP 真实执行（http_probe / knowledge_search / snapshot）→ 多轮 Replan 直到回复。",
-    demoProves: "配置 DeepSeek/OpenAI Key 后直接对话；Agent 自主选工具；右侧 Trace 逐步展开 JSON；workflow_run 触发 noVNC。",
+    oneLiner: "默认 Guest Agent 免配置：Router 选 Skill → MCP 真实执行。可选启用 LLM 完整 Tool Call Loop + Trace。",
+    demoProves: "Guest 开箱即用；knowledge_search 走 ragEngine 分块检索；右侧 Trace 展开 JSON；下半 MCP Console 对照协议。",
     steps: [
-      "配置 LLM — DeepSeek / OpenAI / Ollama，Key 存 sessionStorage",
-      "点「发布前检查」或输入问题 — LLM 流式 Reasoning + 自动 Tool Call",
-      "右侧 Agent Loop Trace — 每轮 tools/call 可展开真实 JSON",
-      "下半 MCP Console — 手动对照 JSON-RPC 协议",
+      "直接输入问题或点预设 — Guest 模式自动 Router + MCP",
+      "看 Agent Loop Trace — tools/call 真实 latency",
+      "上方架构分层图 — Agent / Skills / MCP / Knowledge",
+      "跳转 Platform Lab — RAG / Multi-Agent / Eval / Memory",
     ],
     compare: {
       usual: { title: "聊天 + 硬编码 tool", desc: "流和工具各做各的，协议说不清" },
-      here: { title: "SSE 消费 + MCP 协议", desc: "一层看产品体验，一层看工具工程" },
+      here: { title: "Guest + MCP 协议", desc: "点开就能用，一层产品一层工程" },
+    },
+  },
+
+  platform: {
+    slug: "platform",
+    oneLiner: "30 秒看懂 Agent 平台：知识检索 → 多 Agent 协作 → 质量评估。点「一键演示」自动跑完。",
+    demoProves: "RAG 看相关度条和 Top 命中；Multi-Agent 看三个角色依次亮起；Eval 看 Router 准确率与 P50/P99。",
+    steps: [
+      "点「▶ 一键跑完整演示」— 约 30 秒自动走完",
+      "或点 ①②③ 分步体验 RAG / 三 Agent / Eval",
+      "Memory、架构对照在页面底部「技术附录」",
+    ],
+    compare: {
+      usual: { title: "PPT 讲 RAG/Multi-Agent", desc: "面试官无法验证" },
+      here: { title: "可交互 Lab", desc: "chunk、Trace、Eval 指标均可在线跑" },
     },
   },
 

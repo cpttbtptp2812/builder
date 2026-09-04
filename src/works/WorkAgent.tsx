@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { AgentArchitectureDiagram } from "../components/fx/AgentArchitectureDiagram";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { McpBridgeDemo } from "../components/fx/McpBridgeDemo";
 import { WorkGuide } from "../components/WorkGuide";
@@ -20,6 +21,14 @@ export function WorkAgent() {
     <div className="work-agent work-agent-rich">
       <WorkGuide slug="agent" />
 
+      <section className="work-agent-arch">
+        <h3 className="work-subsection-title">Agent 平台分层</h3>
+        <p className="work-subsection-lead">
+          Agent Loop → Skills Router → MCP tools/call → RAG / SDK — 与 Platform Lab 模块一一对应。
+        </p>
+        <AgentArchitectureDiagram compact />
+      </section>
+
       <section className="work-agent-product">
         <h3 className="work-subsection-title">UniAgent · 对话 + MCP 配置</h3>
         <AgentProductDemo autoStart={auto} />
@@ -39,10 +48,10 @@ export function WorkAgent() {
           links={[sse]}
         />
       )}
-      {getWork("skills") && (
+      {getWork("platform") && getWork("skills") && (
         <WorkTechDeepLinks
-          intro="Skills 是 MCP 之上的意图路由层 — SKILL.md manifest + trigger 匹配 + 步骤编排。"
-          links={[getWork("skills")!]}
+          intro="Agent 相关模块互相衔接 — 按需点进："
+          links={[getWork("platform")!, getWork("skills")!]}
         />
       )}
     </div>

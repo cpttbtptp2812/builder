@@ -5,6 +5,7 @@ export type WorkKind =
   | "automation-chat"
   | "agent-chat"
   | "agent-skills"
+  | "agent-platform"
   | "replay-sdk"
   | "perf-lab"
   | "multi-channel"
@@ -60,13 +61,28 @@ export const WORKS: Work[] = [
     title: "SkillForge",
     subtitle: "Agent Skills 运行时",
     hook: "Skill Runtime Lab — 路由矩阵 + MCP 流水线 + Performance/DOM 审计面板",
-    desc: "不是复制/假对话。Router Lab 可见 trigger 打分；三个 Skill 跑 http_probe · browser_snapshot · workflow_run，Trace 逐步展开 JSON。",
+    desc: "Router Lab 可见 trigger 打分；三个 Skill 跑 http_probe · browser_snapshot · workflow_run，Trace 逐步展开 JSON。",
     impact: "Skills + MCP Runtime",
 
     kind: "agent-skills",
     stack: ["SKILL.md", "MCP", "Trigger Router", "Pipeline Trace"],
     teaser: "explainDiscovery → runSkill → DevTools Dashboard",
     accent: "#f59e0b",
+    tier: "flagship",
+    featured: true,
+  },
+  {
+    id: "platform",
+    slug: "platform",
+    title: "Agent Platform Lab",
+    subtitle: "RAG · Multi-Agent · Eval · Memory",
+    hook: "30 秒演示：知识检索 → 三 Agent 协作 → 质量评估",
+    desc: "点「一键演示」自动跑通。RAG 看召回和相关度；Multi-Agent 看规划/执行/汇总；Eval 看路由准确率。",
+    impact: "RAG + Multi-Agent",
+    kind: "agent-platform",
+    stack: ["RAG", "Multi-Agent", "Eval Ops", "IndexedDB Memory"],
+    teaser: "retrieve → 三 Agent Trace → Router Eval → IDB 记忆",
+    accent: "#6366f1",
     tier: "flagship",
     featured: true,
   },
