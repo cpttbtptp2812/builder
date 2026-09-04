@@ -46,13 +46,13 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   agent: {
     slug: "agent",
-    oneLiner: "企业 AI Agent：SSE 流式对话 + Reasoning + Tool Call + noVNC；下半页是进程内 MCP Server，工具走真实 fetch / 知识库 / DOM snapshot。",
-    demoProves: "上半：流式出字、思考链、工具流水线、发布检查 noVNC。下半：tools/list → call、JSON-RPC 报文对照、真实 latency Trace。",
+    oneLiner: "完整 Agent 闭环：配置 LLM API → 真实 Tool Call Loop → MCP 真实执行（http_probe / knowledge_search / snapshot）→ 多轮 Replan 直到回复。",
+    demoProves: "配置 DeepSeek/OpenAI Key 后直接对话；Agent 自主选工具；右侧 Trace 逐步展开 JSON；workflow_run 触发 noVNC。",
     steps: [
-      "上半 — 选「发布前检查」或「知识库问答」，点「开始对话」",
-      "看 Reasoning、Tool Call 流水线；发布检查场景弹出 noVNC",
-      "下半 — 选 MCP 场景，▶ tools/list → call",
-      "http_probe 真实请求本站；knowledge_search 检索作品集知识库",
+      "配置 LLM — DeepSeek / OpenAI / Ollama，Key 存 sessionStorage",
+      "点「发布前检查」或输入问题 — LLM 流式 Reasoning + 自动 Tool Call",
+      "右侧 Agent Loop Trace — 每轮 tools/call 可展开真实 JSON",
+      "下半 MCP Console — 手动对照 JSON-RPC 协议",
     ],
     compare: {
       usual: { title: "聊天 + 硬编码 tool", desc: "流和工具各做各的，协议说不清" },

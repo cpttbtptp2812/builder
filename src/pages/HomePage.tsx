@@ -39,7 +39,7 @@ export function HomePage() {
         <section className="works-section works-section-flagship">
           <div className="works-section-head">
             <h2 className="works-section-label">核心项目</h2>
-            <span className="works-section-hint">均可在线试玩 · 3 分钟看完</span>
+            <span className="works-section-hint">均可在线试用 · 3 分钟看完</span>
           </div>
           <div className="home-featured-grid home-featured-grid--flagship">
             {FLAGSHIP_WORKS.map((w) => (

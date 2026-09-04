@@ -88,7 +88,7 @@ npm run build
 | `#/demo/history` | 会话历史 |
 | `#/demo/features` | 与 agent / imean-ai 的能力对照 |
 
-## 试玩提示词
+## 试用提示词
 
 - `帮我找一个自动化工作流`
 - `查一下知识库文档`

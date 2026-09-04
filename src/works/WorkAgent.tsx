@@ -21,14 +21,14 @@ export function WorkAgent() {
       <WorkGuide slug="agent" />
 
       <section className="work-agent-product">
-        <h3 className="work-subsection-title">产品体验 · SSE 流式对话</h3>
+        <h3 className="work-subsection-title">UniAgent · 对话 + MCP 配置</h3>
         <AgentProductDemo autoStart={auto} />
       </section>
 
       <section className="work-agent-mcp">
-        <h3 className="work-subsection-title">MCP 工具协议层</h3>
+        <h3 className="work-subsection-title">MCP 工具协议层 · 手动调试</h3>
         <p className="work-subsection-lead">
-          上面是 Agent 消费 SSE 流；下面是 tools/list → tools/call 的 JSON-RPC 实现 — 真实 fetch、知识库、DOM snapshot。
+          上面 Agent 自动调用下列工具；这里可手动发 tools/list → tools/call，对照 JSON-RPC 报文与 Trace。
         </p>
         <McpBridgeDemo />
       </section>

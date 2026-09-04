@@ -42,7 +42,6 @@ export function WorkBriefModal({ slug, onClose }: Props) {
           <div className="note-head-main">
             <p className="note-label">个人笔记 · 非正式</p>
             <h2 id="note-title">{work.title}</h2>
-            <time className="note-time">{work.period}</time>
           </div>
           <button type="button" className="note-close" onClick={onClose} aria-label="关闭">
             ×

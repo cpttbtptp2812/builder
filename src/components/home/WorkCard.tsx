@@ -17,7 +17,7 @@ export function WorkCard({
       <Link to={`/work/${work.slug}`} className="home-work-card">
         <div className="home-work-card-top">
           <h3>{work.title}</h3>
-          <time>{work.period}</time>
+          {work.impact ? <span className="home-work-card-impact">{work.impact}</span> : null}
         </div>
         <p>{work.desc}</p>
         <span className="home-work-card-arrow">查看演示 →</span>

@@ -189,6 +189,7 @@ export class McpInProcessServer {
       case "browser_snapshot": {
         const root =
           ctx?.snapshotRoot ??
+          document.querySelector(".agent-product-live") ??
           document.querySelector(".skill-runtime-lab") ??
           document.querySelector(".mcp-preview-surface");
         if (!root) {

@@ -19,10 +19,10 @@ export const profile = {
   phone: "17376563937",
   /** 首页主 pitch — 站点第一眼介绍 */
   homePitch:
-    "主导 iMean AI 智能自动化平台：Agent Skills 运行时、MCP 工具链、SSE 流式对话、浏览器 DOM 回放全链路。作品全部可在线交互试玩。",
+    "主导 iMean AI 智能自动化平台：Agent Skills 运行时、MCP 工具链、SSE 流式对话、浏览器 DOM 回放全链路。作品全部可在线交互试用。",
   /** 首页一句话（兼容旧引用） */
   tagline:
-    "10 年前端 · React / TypeScript · AI Agent 与浏览器自动化 · 作品可在线试玩",
+    "10 年前端 · React / TypeScript · AI Agent 与浏览器自动化 · 作品可在线试用",
   /** 首页成果条 */
   homeMetrics: [
     { label: "元素定位", value: "70% → 92%" },

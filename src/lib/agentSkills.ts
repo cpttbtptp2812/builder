@@ -325,7 +325,7 @@ export async function runSkill(
   skill: AgentSkill,
   query: string,
   onStep?: (step: SkillTraceStep) => void,
-  opts?: { snapshotRoot?: Element | null },
+  opts?: { snapshotRoot?: Element | null; onStepStart?: (step: SkillStep) => void },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
   const ctx: SkillRunContext = { query, skillId: skill.id, vars: {} };
   const trace: SkillTraceStep[] = [];
@@ -333,6 +333,7 @@ export async function runSkill(
   const snapRoot = opts?.snapshotRoot ?? null;
 
   for (const step of skill.steps) {
+    opts?.onStepStart?.(step);
     const t0 = performance.now();
     const args = typeof step.args === "function" ? step.args(ctx) : step.args;
 

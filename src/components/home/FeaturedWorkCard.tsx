@@ -71,7 +71,7 @@ export function FeaturedWorkCard({
         ) : (
           <>
             <Link to={`/work/${work.slug}?demo=1`} className="home-featured-cta">
-              在线试玩
+              在线试用
               <span aria-hidden>→</span>
             </Link>
             <button type="button" className="home-note-btn" onClick={onBrief}>

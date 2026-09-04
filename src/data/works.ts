@@ -28,7 +28,6 @@ export type Work = {
   hook: string;
   /** 成果数字 — 卡片右上角 */
   impact?: string;
-  period: string;
   kind: WorkKind;
   stack: string[];
   teaser: string;
@@ -39,21 +38,22 @@ export type Work = {
 
 export const WORKS: Work[] = [
   {
-    id: "imean",
-    slug: "imean",
-    title: "iMean AI",
-    subtitle: "主项目 · AI 浏览器自动化",
-    hook: "说一句话，系统自动在真实浏览器里跑完业务流程",
-    desc: "对话匹配工作流 → 本地 / 云端 / 远程执行 → DOM 回放。微前端三件套：Builder + Agent + SDK。",
-    impact: "定位 70%→92%",
-    period: "2025 — 今",
-    kind: "automation-chat",
-    stack: ["React Flow", "ReplaySDK", "Web Worker", "GraphQL"],
-    teaser: "输入「批量改价」→ 匹配流程 → 浏览器自动执行",
-    accent: "#5eead4",
+    id: "agent",
+    slug: "agent",
+    title: "UniAgent",
+    subtitle: "企业 AI Agent · SSE + MCP",
+    hook: "开箱即用 Agent — Guest 模式免配置；可选接入 LLM 完整 Loop",
+    desc: "默认 Guest Agent：Router 选 Skill → MCP 真实执行，网站点开就能用。高级可勾选启用自有 LLM API。",
+    impact: "AI SDK 5 全链路",
+
+    kind: "agent-chat",
+    stack: ["AI SDK 5", "MCP", "SSE", "Tool Call"],
+    teaser: "发布前检查 → HTTP 探针 → 远程浏览器",
+    accent: "#818cf8",
     tier: "flagship",
     featured: true,
   },
+ 
   {
     id: "skills",
     slug: "skills",
@@ -62,7 +62,7 @@ export const WORKS: Work[] = [
     hook: "Skill Runtime Lab — 路由矩阵 + MCP 流水线 + Performance/DOM 审计面板",
     desc: "不是复制/假对话。Router Lab 可见 trigger 打分；三个 Skill 跑 http_probe · browser_snapshot · workflow_run，Trace 逐步展开 JSON。",
     impact: "Skills + MCP Runtime",
-    period: "2026",
+
     kind: "agent-skills",
     stack: ["SKILL.md", "MCP", "Trigger Router", "Pipeline Trace"],
     teaser: "explainDiscovery → runSkill → DevTools Dashboard",
@@ -71,21 +71,22 @@ export const WORKS: Work[] = [
     featured: true,
   },
   {
-    id: "agent",
-    slug: "agent",
-    title: "UniAgent",
-    subtitle: "企业 AI Agent · SSE + MCP",
-    hook: "流式 Reasoning + Tool Call + noVNC，底层 MCP 真实工具链",
-    desc: "上半产品体验，下半 MCP JSON-RPC：真实 fetch 探活、知识库检索、Trace 可对照。",
-    impact: "AI SDK 5 全链路",
-    period: "2025 — 今",
-    kind: "agent-chat",
-    stack: ["AI SDK 5", "MCP", "SSE", "Tool Call"],
-    teaser: "发布前检查 → HTTP 探针 → 远程浏览器",
-    accent: "#818cf8",
+    id: "imean",
+    slug: "imean",
+    title: "iMean AI",
+    subtitle: "主项目 · AI 浏览器自动化",
+    hook: "说一句话，系统自动在真实浏览器里跑完业务流程",
+    desc: "对话匹配工作流 → 本地 / 云端 / 远程执行 → DOM 回放。微前端三件套：Builder + Agent + SDK。",
+    impact: "定位 70%→92%",
+
+    kind: "automation-chat",
+    stack: ["React Flow", "ReplaySDK", "Web Worker", "GraphQL"],
+    teaser: "输入「批量改价」→ 匹配流程 → 浏览器自动执行",
+    accent: "#5eead4",
     tier: "flagship",
     featured: true,
   },
+ 
   {
     id: "clip-hub",
     slug: "clip-hub",
@@ -94,7 +95,7 @@ export const WORKS: Work[] = [
     hook: "选中文字保存页面位置，一键跳回原处 — 我自己每天在用的工具",
     desc: "Chrome MV3 扩展：右键保存片段 + 滚动位置，列表点击精准高亮跳回。",
     impact: "真实产品",
-    period: "2026",
+
     kind: "product-tool",
     stack: ["Chrome MV3", "文字匹配", "本地存储"],
     teaser: "选中 → 保存 → 跳回高亮",
@@ -110,7 +111,6 @@ export const WORKS: Work[] = [
     hook: "拖拽编排 + AI Copilot 改图，非技术也能看懂流程",
     desc: "React Flow 画布、dagre 自动布局、BFS 模拟运行，Copilot 自动插节点。",
     impact: "128 节点流畅",
-    period: "2025",
     kind: "flow-builder",
     stack: ["React Flow", "dagre", "Valtio", "Copilot"],
     teaser: "拖节点 · AI 改图 · 模拟跑路径",
@@ -126,7 +126,6 @@ export const WORKS: Work[] = [
     hook: "左原始 SSE 帧、右 UIMessage — 线上长流截断问题的调试台",
     desc: "TTFB 打点、pause/resume 断线续传、node:http vs undici 对照。",
     impact: "长流截断 → 0",
-    period: "2025",
     kind: "sse-lab",
     stack: ["SSE 帧解析", "UIMessage", "useAutoResume"],
     teaser: "三栏对照 · 技术事件流",
@@ -141,7 +140,6 @@ export const WORKS: Work[] = [
     hook: "CSS → XPath → 文本 → IDB 缓存，一种不行自动换策略",
     desc: "ReplaySDK 核心：Shadow DOM 穿透、策略瀑布、优化前后命中率对比。",
     impact: "92% 命中率",
-    period: "2025",
     kind: "locator-lab",
     stack: ["策略瀑布", "Shadow DOM", "IndexedDB"],
     teaser: "点元素 · 看 try/fail 链",
@@ -156,7 +154,6 @@ export const WORKS: Work[] = [
     hook: "纯 TS 任务队列，任意页面注入即可回放",
     desc: "TaskQueue 状态机、PostMessage 跨窗口 mutex、gzip 队列持久化。",
     impact: "包体积 -30%",
-    period: "2025",
     kind: "replay-sdk",
     stack: ["TaskQueue", "PostMessage", "CompressionStream"],
     teaser: "pause/skip · 多窗口调度",
@@ -170,7 +167,6 @@ export const WORKS: Work[] = [
     subtitle: "Chrome 录制扩展",
     hook: "录一遍操作，直接导出 steps.json 进 Builder",
     desc: "MV3 Content Script 捕获、isolated world 高亮、实时 JSON 输出。",
-    period: "2025",
     kind: "extension-demo",
     stack: ["MV3", "Content Script", "steps.json"],
     teaser: "录制 → JSON → 导入编排",

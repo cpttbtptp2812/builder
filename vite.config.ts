@@ -13,5 +13,13 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
+    proxy: {
+      "/llm-proxy": {
+        target: "https://api.deepseek.com",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/llm-proxy/, ""),
+        secure: true,
+      },
+    },
   },
 });

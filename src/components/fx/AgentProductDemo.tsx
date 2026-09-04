@@ -1,166 +1,331 @@
-import { useEffect, useRef, useState } from "react";
-import { ToolCallPipeline } from "../fx/ToolCallPipeline";
-import { VncFloat } from "../fx/VncFloat";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { AgentConfigBar } from "./AgentConfigBar";
+import { AgentLiveTrace } from "./AgentLiveTrace";
+import { AgentMarkdown } from "./agent/AgentMarkdown";
+import { AgentMcpRegistry, loadEnabledMcpTools } from "./agent/AgentMcpRegistry";
+import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
+import { AgentThink } from "./agent/AgentThink";
+import { AgentToolChip, type ToolChipState } from "./agent/AgentToolChip";
+import { AgentWelcome } from "./agent/AgentWelcome";
+import { VncFloat } from "./VncFloat";
 import {
-  AGENT_SSE_LINES,
-  createSSEByteStream,
-  parseUIMessageChunk,
-  readSSEStream,
-} from "../../lib/streams";
+  runAgentTurn,
+  type AgentChatMessage,
+  type AgentStreamEvent,
+  type AgentTurnTrace,
+} from "../../lib/agentRuntime";
+import { isAuthError, runGuestAgentTurn } from "../../lib/guestAgentRuntime";
+import { isLlmConfigured, loadLlmConfig, type LlmConfig } from "../../lib/llmConfig";
 
-const SCENES = [
-  {
-    id: "release" as const,
-    label: "发布前检查",
-    user: "帮我对 staging 环境做发布前检查",
-    variant: "release" as const,
-  },
-  {
-    id: "knowledge" as const,
-    label: "知识库问答",
-    user: "部署规范里 API 限流阈值是多少？",
-    variant: "knowledge" as const,
-  },
-];
+type UiMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  reasoning?: string;
+  mode?: "guest" | "llm";
+  tools?: ToolChipState[];
+};
 
-type ToolRow = { name: string; result?: string };
+function uid() {
+  return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
 
-/** UniAgent 产品演示 — 流式对话 + Reasoning + Tool Call + VNC */
+/** UniAgent 对话 — 对齐 tianyangAgent 产品体验 + tianyangbuilder MCP 配置 */
 export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean }) {
-  const [scene, setScene] = useState<(typeof SCENES)[number]["id"]>("release");
-  const [trigger, setTrigger] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+  const userScrolledRef = useRef(false);
+
+  const [llmConfig, setLlmConfig] = useState<LlmConfig>(() => loadLlmConfig());
+  const [enabledTools, setEnabledTools] = useState<string[]>(() => loadEnabledMcpTools());
+  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [history, setHistory] = useState<AgentChatMessage[]>([]);
+  const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
+  const [traces, setTraces] = useState<AgentTurnTrace[]>([]);
+  const [iteration, setIteration] = useState(0);
   const [showVnc, setShowVnc] = useState(false);
-  const [reasoning, setReasoning] = useState("");
-  const [reply, setReply] = useState("");
-  const [tools, setTools] = useState<ToolRow[]>([]);
-  const [chunks, setChunks] = useState(0);
-  const started = useRef(false);
+  const [streamReasoning, setStreamReasoning] = useState("");
+  const [streamText, setStreamText] = useState("");
+  const [liveTools, setLiveTools] = useState<ToolChipState[]>([]);
+  const [showScrollFab, setShowScrollFab] = useState(false);
+  const autoStarted = useRef(false);
 
-  const cur = SCENES.find((s) => s.id === scene)!;
+  const useLlm = isLlmConfigured(llmConfig);
+  const hasMessages = messages.length > 0 || running;
 
-  function runDemo() {
-    setTrigger((t) => t + 1);
-    setRunning(true);
-    setShowVnc(false);
-    setReasoning("");
-    setReply("");
-    setTools([]);
-    setChunks(0);
-
-    const stream = createSSEByteStream(AGENT_SSE_LINES, 480);
-    void readSSEStream(stream, (ev) => {
-      setChunks((c) => c + 1);
-      const part = parseUIMessageChunk(ev.data);
-      if (!part) return;
-      if (part.type === "reasoning") setReasoning((prev) => prev + part.text);
-      if (part.type === "text") setReply((prev) => prev + part.text);
-      if (part.type === "tool-call") setTools((prev) => [...prev, { name: part.name }]);
-      if (part.type === "tool-result") {
-        setTools((prev) => {
-          const next = [...prev];
-          const last = next[next.length - 1];
-          if (last) last.result = part.hits === 200 ? "200 OK · 42ms" : `${part.hits} 条命中`;
-          return next;
-        });
-      }
-      if (part.type === "done") setRunning(false);
-    });
-  }
+  const scrollToBottom = useCallback((smooth = true) => {
+    const el = threadRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, []);
 
   useEffect(() => {
-    if (!autoStart || started.current) return;
-    started.current = true;
-    const t = window.setTimeout(runDemo, 500);
+    if (!userScrolledRef.current) scrollToBottom();
+  }, [messages, streamText, streamReasoning, liveTools, scrollToBottom]);
+
+  const handleEvent = useCallback((ev: AgentStreamEvent, toolsAcc: ToolChipState[]) => {
+    if (ev.type === "iteration") setIteration(ev.n);
+    if (ev.type === "trace-sync") setTraces(ev.traces);
+    if (ev.type === "reasoning-delta") setStreamReasoning((s) => s + ev.text);
+    if (ev.type === "text-delta") setStreamText((s) => s + ev.text);
+    if (ev.type === "tool-start") {
+      toolsAcc.push({ id: ev.tool.id, name: ev.tool.name, state: "loading" });
+      setLiveTools([...toolsAcc]);
+    }
+    if (ev.type === "tool-end") {
+      const idx = toolsAcc.findIndex((t) => t.id === ev.tool.id);
+      const row: ToolChipState = {
+        id: ev.tool.id,
+        name: ev.tool.name,
+        state: ev.tool.ok === false ? "error" : "ok",
+        ms: ev.tool.ms,
+      };
+      if (idx >= 0) toolsAcc[idx] = row;
+      else toolsAcc.push(row);
+      setLiveTools([...toolsAcc]);
+      if (ev.tool.name === "workflow_run") setShowVnc(true);
+    }
+  }, []);
+
+  const send = useCallback(
+    async (text: string) => {
+      const q = text.trim();
+      if (!q || running) return;
+
+      abortRef.current?.abort();
+      const ac = new AbortController();
+      abortRef.current = ac;
+
+      const userMsg: UiMessage = { id: uid(), role: "user", content: q };
+      const assistantId = uid();
+      const mode: UiMessage["mode"] = useLlm ? "llm" : "guest";
+      const toolsAcc: ToolChipState[] = [];
+
+      userScrolledRef.current = false;
+      setMessages((prev) => [...prev, userMsg]);
+      setInput("");
+      setRunning(true);
+      setTraces([]);
+      setIteration(0);
+      setStreamReasoning("");
+      setStreamText("");
+      setLiveTools([]);
+      setShowVnc(false);
+
+      let fullReasoning = "";
+      let fullText = "";
+
+      const finish = (content: string, reasoning?: string) => {
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: assistantId,
+            role: "assistant",
+            content,
+            reasoning,
+            mode,
+            tools: [...toolsAcc],
+          },
+        ]);
+      };
+
+      try {
+        const onEv = (ev: AgentStreamEvent) => {
+          handleEvent(ev, toolsAcc);
+          if (ev.type === "reasoning-delta") fullReasoning += ev.text;
+          if (ev.type === "text-delta") fullText += ev.text;
+        };
+
+        if (useLlm) {
+          try {
+            const result = await runAgentTurn(
+              q,
+              history,
+              llmConfig,
+              { snapshotRoot: rootRef.current, signal: ac.signal },
+              onEv,
+            );
+            setTraces(result.traces);
+            setHistory(result.messages);
+            finish(result.assistantText || fullText, fullReasoning || undefined);
+            return;
+          } catch (err) {
+            if ((err as Error).name === "AbortError") return;
+            if (isAuthError(err)) {
+              finish(
+                "LLM Key 无效（401）。请关闭「启用我的 LLM」继续使用 Guest Agent。",
+                "Authentication failed",
+              );
+              return;
+            }
+            throw err;
+          }
+        }
+
+        const guest = await runGuestAgentTurn(
+          q,
+          { snapshotRoot: rootRef.current, signal: ac.signal },
+          onEv,
+        );
+        setTraces(guest.traces);
+        finish(guest.assistantText || fullText, fullReasoning || undefined);
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        finish(`请求失败：${err instanceof Error ? err.message : "未知错误"}`);
+      } finally {
+        setRunning(false);
+        setStreamReasoning("");
+        setStreamText("");
+        setLiveTools([]);
+        setIteration(0);
+      }
+    },
+    [running, useLlm, llmConfig, history, handleEvent],
+  );
+
+  useEffect(() => {
+    if (!autoStart || autoStarted.current) return;
+    autoStarted.current = true;
+    const t = window.setTimeout(() => void send("帮我对本站做发布前检查，探活并确认关键页面可访问"), 800);
     return () => clearTimeout(t);
-  }, [autoStart]);
+  }, [autoStart, send]);
+
+  function stop() {
+    abortRef.current?.abort();
+    setRunning(false);
+  }
+
+  function onThreadScroll() {
+    const el = threadRef.current;
+    if (!el) return;
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    userScrolledRef.current = dist > 80;
+    setShowScrollFab(dist > 120);
+  }
 
   return (
-    <div className="work-agent-rich agent-product-demo">
-      <div className="agent-feature-pills">
-        {["SSE 流式对话", "Reasoning 思考链", "Tool Call 卡片", "noVNC 远程桌面"].map((f) => (
-          <span key={f} className="agent-feature-pill">{f}</span>
-        ))}
+    <div className="work-agent-rich agent-product-demo agent-product-live agent-chat-shell" ref={rootRef}>
+      <div className="agent-shell-bg" aria-hidden />
+
+      <div className="agent-shell-header">
+        <div className="agent-shell-identity">
+          <span className="agent-shell-avatar">UA</span>
+          <div>
+            <strong>UniAgent</strong>
+            <span>{useLlm ? "LLM Agent Loop" : "Guest Agent · 开箱即用"}</span>
+          </div>
+        </div>
+        <div className="agent-feature-pills compact">
+          {["MCP", useLlm ? "LLM" : "Router", "Trace"].map((f) => (
+            <span key={f} className="agent-feature-pill">{f}</span>
+          ))}
+        </div>
       </div>
 
-      <div className="agent-strip">
-        {SCENES.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            className={scene === s.id ? "on" : ""}
-            onClick={() => setScene(s.id)}
-            disabled={running}
-          >
-            <strong>{s.label}</strong>
-            <span>切换演示场景</span>
-          </button>
-        ))}
-      </div>
+      <AgentMcpRegistry enabled={enabledTools} onChange={setEnabledTools} />
+      <AgentConfigBar onChange={setLlmConfig} />
 
-      <div className="work-demo-bar">
-        <button type="button" className="cta" onClick={runDemo} disabled={running}>
-          {running ? "对话进行中…" : "▶ 开始对话"}
-        </button>
-        {running && <span className="sse-live-chip">SSE 流式 · {chunks} chunks</span>}
-        {!running && showVnc && <span className="sse-live-chip vnc">noVNC 已连接</span>}
-      </div>
-
-      <div className="agent-demo-grid">
+      <div className="agent-demo-grid agent-shell-body">
         <div className="agent-chat-panel">
-          <header className="agent-chat-head">
-            <strong>对话界面</strong>
-            <span>AI SDK 5 · UIMessage 部件渲染</span>
-          </header>
-          <div className="agent-chat-thread">
-            <div className="chat-msg user">
-              <small>你</small>
-              <p>{cur.user}</p>
-            </div>
+          <div
+            ref={threadRef}
+            className="agent-chat-thread"
+            onScroll={onThreadScroll}
+          >
+            {!hasMessages && <AgentWelcome onPrompt={(t) => void send(t)} disabled={running} />}
 
-            {(reasoning || running) && (
-              <details className="chat-reasoning" open>
-                <summary>Reasoning 思考链</summary>
-                <p>{reasoning || "分析意图、匹配工具…"}</p>
-              </details>
-            )}
-
-            {tools.map((t, i) => (
-              <div key={`${t.name}-${i}`} className="chat-tool-card">
-                <span className="chat-tool-icon" aria-hidden>🔧</span>
-                <div>
-                  <strong>{t.name}</strong>
-                  {t.result ? <em>{t.result}</em> : running && <em className="live">running…</em>}
-                </div>
+            {messages.map((m) => (
+              <div key={m.id} className={`agent-message ${m.role}`}>
+                {m.role === "user" ? (
+                  <div className="chat-msg user">
+                    <p>{m.content}</p>
+                  </div>
+                ) : (
+                  <div className="chat-msg assistant">
+                    {m.reasoning && (
+                      <AgentReasoningBlock text={m.reasoning} thinking={false} defaultOpen={false} />
+                    )}
+                    {m.tools?.map((t) => (
+                      <AgentToolChip key={t.id} tool={{ ...t, state: t.state === "loading" ? "ok" : t.state }} />
+                    ))}
+                    <AgentMarkdown text={m.content} />
+                  </div>
+                )}
               </div>
             ))}
 
-            {(reply || (running && tools.length > 0)) && (
-              <div className="chat-msg assistant">
-                <small>助手</small>
-                <p>
-                  {reply}
-                  {running && <span className="caret">▍</span>}
-                </p>
+            {running && (
+              <div className="agent-message assistant">
+                <div className="chat-msg assistant streaming">
+                  {(streamReasoning || !streamText) && (
+                    <AgentReasoningBlock
+                      text={streamReasoning}
+                      thinking={!streamText && liveTools.length === 0}
+                      defaultOpen
+                    />
+                  )}
+                  <div className="agent-inline-tools">
+                    {liveTools.map((t) => (
+                      <AgentToolChip key={t.id} tool={t} />
+                    ))}
+                  </div>
+                  {streamText ? (
+                    <AgentMarkdown text={streamText} />
+                  ) : liveTools.length === 0 ? (
+                    <AgentThink />
+                  ) : null}
+                  {streamText && <span className="caret">▍</span>}
+                </div>
               </div>
             )}
-
-            {!running && trigger === 0 && (
-              <p className="agent-chat-empty">点「开始对话」— 看流式回复、思考链、工具卡依次出现</p>
-            )}
           </div>
+
+          {showScrollFab && (
+            <button type="button" className="agent-scroll-fab" onClick={() => { userScrolledRef.current = false; scrollToBottom(); }}>
+              ↓
+            </button>
+          )}
+
+          <form
+            className="agent-chat-compose agent-prompt-footer"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send(input);
+            }}
+          >
+            <textarea
+              value={input}
+              rows={1}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void send(input);
+                }
+              }}
+              placeholder="输入问题，Enter 发送 · Shift+Enter 换行"
+              disabled={running}
+            />
+            {running ? (
+              <button type="button" className="agent-stop-btn square" onClick={stop} title="停止">
+                ■
+              </button>
+            ) : (
+              <button type="submit" className="agent-send-btn" disabled={!input.trim()} title="发送">
+                ↑
+              </button>
+            )}
+          </form>
         </div>
 
         <div className="agent-side-panel">
           <header className="agent-chat-head">
-            <strong>Tool Call 流水线</strong>
-            <span>后端工具逐步执行</span>
+            <strong>Agent Loop Trace</strong>
+            <span>tools/call · JSON-RPC</span>
           </header>
-          <ToolCallPipeline
-            variant={cur.variant}
-            trigger={trigger}
-            onVnc={() => setShowVnc(true)}
-          />
+          <AgentLiveTrace traces={traces} running={running} iteration={iteration} />
         </div>
       </div>
 
