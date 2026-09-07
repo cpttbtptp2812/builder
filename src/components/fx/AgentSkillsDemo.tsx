@@ -13,6 +13,7 @@ import {
   type SkillTraceStep,
 } from "../../lib/agentSkills";
 import { explainDiscoveryAsync, runSkillAsync } from "../../lib/backendBridge";
+import { AgentFlowDiagram } from "./AgentFlowDiagram";
 import { McpBridgeDemo } from "./McpBridgeDemo";
 
 type LabTab = "router" | (typeof AGENT_SKILLS)[number]["id"] | "mcp";
@@ -372,8 +373,30 @@ export function AgentSkillsDemo({ initialSkillId = null }: { initialSkillId?: st
     setTab(id as LabTab);
   }
 
+  function selectFlowNode(id: string) {
+    if (id === "intent") {
+      setTab("router");
+      return;
+    }
+    if (id === "metrics") {
+      setTab(tab !== "router" && tab !== "mcp" ? tab : "site-analyzer");
+      return;
+    }
+    if (id === "mcp") {
+      setTab("mcp");
+      return;
+    }
+    if (getSkill(id)) {
+      setTab(id as LabTab);
+    }
+  }
+
+  const flowActive = tab === "mcp" ? "mcp" : tab === "router" ? "router" : tab;
+
   return (
     <div className="skill-runtime-lab" ref={(el) => setSnapshotRoot(el)}>
+      <AgentFlowDiagram variant="skills" activeId={flowActive} onSelect={selectFlowNode} compact />
+
       <nav className="skill-workbench-tabs" aria-label="Runtime Lab">
         <button type="button" className={tab === "router" ? "on" : ""} onClick={() => setTab("router")}>
           ◈ Router Lab

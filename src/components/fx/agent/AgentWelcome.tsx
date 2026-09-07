@@ -9,7 +9,7 @@ export function AgentWelcome({ onPrompt, disabled }: { onPrompt: (text: string) 
       </div>
       <h3 className="agent-welcome-title">UniAgent</h3>
       <p className="agent-welcome-desc">
-        内置 Guest Agent · MCP 真实执行。无需 API Key，路由 Skill 后调用 http_probe / knowledge_search / browser_snapshot。
+        Guest 模式免配置 — Router 选 Skill 后调用 http_probe、knowledge_search、browser_snapshot，右侧 Trace 同步展开。
       </p>
       <div className="agent-welcome-divider">
         <span>开始对话</span>

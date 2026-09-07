@@ -31,11 +31,19 @@ function uid() {
 }
 
 /** UniAgent 对话 — 对齐 tianyangAgent 产品体验 + tianyangbuilder MCP 配置 */
-export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean }) {
+export function AgentProductDemo({
+  autoStart = false,
+  onFlowActive,
+}: {
+  autoStart?: boolean;
+  onFlowActive?: (nodeId: string) => void;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const footerRef = useRef<HTMLFormElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const userScrolledRef = useRef(false);
+  const [footerHeight, setFooterHeight] = useState(72);
 
   const [llmConfig, setLlmConfig] = useState<LlmConfig>(() => loadLlmConfig());
   const [enabledTools, setEnabledTools] = useState<string[]>(() => loadEnabledMcpTools());
@@ -62,8 +70,17 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
   }, []);
 
   useEffect(() => {
-    if (!userScrolledRef.current) scrollToBottom();
-  }, [messages, streamText, streamReasoning, liveTools, scrollToBottom]);
+    const el = footerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setFooterHeight(el.offsetHeight));
+    ro.observe(el);
+    setFooterHeight(el.offsetHeight);
+    return () => ro.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!userScrolledRef.current && (messages.length > 0 || running)) scrollToBottom();
+  }, [messages, streamText, streamReasoning, liveTools, running, scrollToBottom]);
 
   const handleEvent = useCallback((ev: AgentStreamEvent, toolsAcc: ToolChipState[]) => {
     if (ev.type === "iteration") setIteration(ev.n);
@@ -71,6 +88,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
     if (ev.type === "reasoning-delta") setStreamReasoning((s) => s + ev.text);
     if (ev.type === "text-delta") setStreamText((s) => s + ev.text);
     if (ev.type === "tool-start") {
+      onFlowActive?.("mcp");
       toolsAcc.push({ id: ev.tool.id, name: ev.tool.name, state: "loading" });
       setLiveTools([...toolsAcc]);
     }
@@ -87,7 +105,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
       setLiveTools([...toolsAcc]);
       if (ev.tool.name === "workflow_run") setShowVnc(true);
     }
-  }, []);
+  }, [onFlowActive]);
 
   const send = useCallback(
     async (text: string) => {
@@ -104,6 +122,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
       const toolsAcc: ToolChipState[] = [];
 
       userScrolledRef.current = false;
+      onFlowActive?.("input");
       setMessages((prev) => [...prev, userMsg]);
       setInput("");
       setRunning(true);
@@ -113,6 +132,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
       setStreamText("");
       setLiveTools([]);
       setShowVnc(false);
+      onFlowActive?.("router");
 
       let fullReasoning = "";
       let fullText = "";
@@ -129,6 +149,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
             tools: [...toolsAcc],
           },
         ]);
+        onFlowActive?.("trace");
       };
 
       try {
@@ -182,7 +203,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
         setIteration(0);
       }
     },
-    [running, useLlm, llmConfig, history, handleEvent],
+    [running, useLlm, llmConfig, history, handleEvent, onFlowActive],
   );
 
   useEffect(() => {
@@ -232,6 +253,7 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
           <div
             ref={threadRef}
             className="agent-chat-thread"
+            style={{ paddingBottom: Math.max(footerHeight + 24, 96) }}
             onScroll={onThreadScroll}
           >
             {!hasMessages && <AgentWelcome onPrompt={(t) => void send(t)} disabled={running} />}
@@ -289,7 +311,8 @@ export function AgentProductDemo({ autoStart = false }: { autoStart?: boolean })
           )}
 
           <form
-            className="agent-chat-compose agent-prompt-footer"
+            ref={footerRef}
+            className="agent-chat-compose agent-prompt-footer agent-prompt-footer--fixed"
             onSubmit={(e) => {
               e.preventDefault();
               void send(input);

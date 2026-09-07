@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
-import type { MemoryEntry } from "../../lib/agentMemory";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { seedDefaultMemoriesIfEmpty, type MemoryEntry } from "../../lib/agentMemory";
 import {
   deleteMemoryAsync,
   retrieveRagAsync,
@@ -13,6 +13,7 @@ import { ROUTER_EVAL_CASES, routerEvalSummary, type RouterEvalRow, type ToolMetr
 import { getAgentMeta, type MultiAgentStep } from "../../lib/multiAgentRuntime";
 import { buildRagCorpus, type RagHit, type RagRetrieveResult } from "../../lib/ragEngine";
 import { AgentArchitectureDiagram } from "./AgentArchitectureDiagram";
+import { AgentFlowDiagram, PLATFORM_TOUR_NODES, platformNodeToScene } from "./AgentFlowDiagram";
 
 type Scene = "tour" | "rag" | "multi-agent" | "eval";
 
@@ -97,6 +98,7 @@ function MultiAgentTimeline({ steps, running }: { steps: MultiAgentStep[]; runni
 }
 
 export function AgentPlatformLab() {
+  const panelRef = useRef<HTMLDivElement>(null);
   const [scene, setScene] = useState<Scene>("tour");
 
   const [ragQuery, setRagQuery] = useState(DEMO_QUERY);
@@ -190,27 +192,59 @@ export function AgentPlatformLab() {
   }, [runRag, runMultiAgent]);
 
   useEffect(() => {
-    runRag(DEMO_QUERY);
-    seedDefaultMemoriesIfEmpty().then(refreshMemory);
-  }, [runRag, refreshMemory]);
-
-  useEffect(() => {
     void runRag(DEMO_QUERY);
-    void refreshMemory();
+    void seedDefaultMemoriesIfEmpty().then(refreshMemory);
     void runRouterEvalAsync().then((r) => setEvalRows(r.rows));
   }, [runRag, refreshMemory]);
 
   const topHit = ragResult?.hits[0];
 
+  const diagramActive = tourRunning || tourStep > 0
+    ? PLATFORM_TOUR_NODES[tourStep]?.active ?? null
+    : scene === "rag"
+      ? "rag"
+      : scene === "multi-agent"
+        ? "multi-agent"
+        : scene === "eval"
+          ? "eval"
+          : "query";
+
+  const diagramVisited = tourRunning || tourStep > 0
+    ? PLATFORM_TOUR_NODES[tourStep]?.visited ?? []
+    : [
+        ...(ragResult ? ["query", "corpus", "rag"] : []),
+        ...(maSteps.length ? ["multi-agent", "planner", "executor", "reviewer"] : []),
+        ...(evalSummary.pass > 0 ? ["eval"] : []),
+        ...(maAnswer ? ["answer"] : []),
+      ];
+
+  const diagramFlowEdge = tourRunning || tourStep > 0 ? PLATFORM_TOUR_NODES[tourStep]?.edge ?? null : null;
+
+  function selectFlowNode(nodeId: string) {
+    const next = platformNodeToScene(nodeId);
+    if (next) {
+      setScene(next);
+      requestAnimationFrame(() => panelRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" }));
+    }
+  }
+
   return (
     <div className="platform-lab platform-lab--guided">
+      <AgentFlowDiagram
+        variant="platform"
+        activeId={diagramActive}
+        visitedIds={diagramVisited}
+        flowEdge={diagramFlowEdge}
+        onSelect={selectFlowNode}
+      />
+
       {/* Hero — 这页在干嘛 */}
       <header className="platform-hero">
         <div className="platform-hero-copy">
-          <p className="platform-hero-eyebrow">架构师 JD 对齐 · 可在线验证</p>
-          <h3>Agent 平台能力演示</h3>
+          <p className="platform-hero-eyebrow">Agent 平台层 · 可在线验证</p>
+          <h3>RAG · Multi-Agent · Eval</h3>
           <p>
-            不是 PPT：输入一个问题，看<strong>知识怎么被召回</strong>、<strong>三个 Agent 怎么分工</strong>、<strong>路由和工具链指标是否达标</strong>。
+            先看上方<strong>模型图</strong>理解数据怎么走，再点节点或下方按钮进入各步演示。
           </p>
         </div>
         <button type="button" className="platform-hero-cta" onClick={() => void runFullTour()} disabled={tourRunning || maRunning}>
@@ -236,6 +270,7 @@ export function AgentPlatformLab() {
       </nav>
 
       {/* Scene: Tour / default landing */}
+      <div ref={panelRef}>
       {scene === "tour" && (
         <div className="platform-tour-panel">
           <div className="platform-split">
@@ -411,6 +446,8 @@ export function AgentPlatformLab() {
           </details>
         </div>
       )}
+
+      </div>
 
       {/* 高级附录 — 默认收起 */}
       <footer className="platform-advanced">

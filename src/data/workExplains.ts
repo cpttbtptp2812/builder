@@ -30,13 +30,13 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   skills: {
     slug: "skills",
-    oneLiner: "Skill Runtime Lab：Router 可见打分 + Site Audit（fetch + Performance API）+ DOM Probe + Workflow 入队 — MCP 流水线 Trace 可展开 JSON。",
-    demoProves: "Router Lab 改意图看 score breakdown；Site Audit 看真实 latency/TTFB；DOM Probe 看 role 分布；MCP Console 发 JSON-RPC。",
+    oneLiner: "SkillForge：SKILL.md 定义意图与工具链 — Router 可见打分，三个 Skill 跑真实 MCP 流水线并出指标面板。",
+    demoProves: "Router Lab 改意图看 score breakdown；Site Audit 看 fetch + Performance API；DOM Probe 看 role 分布；每步 Trace 可展开 JSON。",
     steps: [
-      "Router Lab — 输入「分析性能 metrics」→ 看 trigger 加权矩阵 → Run site-analyzer",
-      "Site Audit — 流水线 http_probe → snapshot → Performance API → 指标面板",
-      "DOM Probe — browser_snapshot 全树 → role 分布 / 交互密度 → 跳转 Locator Lab",
-      "Workflow — workflow_run 入队 + 执行面 snapshot → 跳转 SDK Lab",
+      "Router Lab — 输入「分析性能 metrics」→ 看 trigger 矩阵 → Run site-analyzer",
+      "Site Audit — http_probe → snapshot → Performance API → latency 面板",
+      "DOM Probe — browser_snapshot 全树 → role 分布 / 交互密度",
+      "Workflow — workflow_run 入队 + 执行面 snapshot",
     ],
     compare: {
       usual: { title: "Prompt 硬编码工具", desc: "Agent 换场景就要改 system prompt，难复用" },
@@ -46,31 +46,32 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   agent: {
     slug: "agent",
-    oneLiner: "默认 Guest Agent 免配置：Router 选 Skill → MCP 真实执行。可选启用 LLM 完整 Tool Call Loop + Trace。",
-    demoProves: "Guest 开箱即用；knowledge_search 走 ragEngine 分块检索；右侧 Trace 展开 JSON；下半 MCP Console 对照协议。",
+    oneLiner: "UniAgent：默认 Guest 免配置，Router 选 Skill 后走 MCP 真实执行；可选 LLM 开启完整 Tool Call Loop。",
+    demoProves: "输入或点预设即跑通；右侧 Agent Loop Trace 展开 tools/call JSON；下方 MCP Console 可手动对照协议。",
     steps: [
-      "直接输入问题或点预设 — Guest 模式自动 Router + MCP",
-      "看 Agent Loop Trace — tools/call 真实 latency",
-      "上方架构分层图 — Agent / Skills / MCP / Knowledge",
-      "跳转 Platform Lab — RAG / Multi-Agent / Eval / Memory",
+      "直接输入问题，或点欢迎区预设 — Guest 自动 Router + MCP",
+      "看右侧 Trace — 每步 tools/call  latency 与返回体",
+      "需要 LLM 时在配置栏勾选「启用我的 LLM」",
+      "展开「平台分层」对照 SkillForge / Platform Lab 模块",
     ],
     compare: {
       usual: { title: "聊天 + 硬编码 tool", desc: "流和工具各做各的，协议说不清" },
-      here: { title: "Guest + MCP 协议", desc: "点开就能用，一层产品一层工程" },
+      here: { title: "Guest + MCP 协议", desc: "点开就能用，产品体验与工程 Trace 同屏" },
     },
   },
 
   platform: {
     slug: "platform",
-    oneLiner: "30 秒看懂 Agent 平台：知识检索 → 多 Agent 协作 → 质量评估。点「一键演示」自动跑完。",
-    demoProves: "RAG 看相关度条和 Top 命中；Multi-Agent 看三个角色依次亮起；Eval 看 Router 准确率与 P50/P99。",
+    oneLiner: "Agent 平台层 Lab：RAG 召回 → 三 Agent 协作 → Router / 工具链 Eval，约 30 秒一键跑通。",
+    demoProves: "RAG 看相关度条与 Top chunk；Multi-Agent 看 Planner / Executor / Reviewer 依次亮起；Eval 看准确率与 P50/P99。",
     steps: [
       "点「▶ 一键跑完整演示」— 约 30 秒自动走完",
       "或点 ①②③ 分步体验 RAG / 三 Agent / Eval",
-      "Memory、架构对照在页面底部「技术附录」",
+      "改演示问题 — 看不同项目 chunk 召回变化",
+      "底部「技术附录」可读写 Memory、看架构对照",
     ],
     compare: {
-      usual: { title: "PPT 讲 RAG/Multi-Agent", desc: "面试官无法验证" },
+      usual: { title: "文档讲 RAG/Multi-Agent", desc: "只能看 PPT，无法验证行为" },
       here: { title: "可交互 Lab", desc: "chunk、Trace、Eval 指标均可在线跑" },
     },
   },

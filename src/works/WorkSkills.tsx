@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AgentSkillsDemo } from "../components/fx/AgentSkillsDemo";
 import { BackendStatusBar } from "../components/BackendStatusBar";
@@ -10,6 +11,10 @@ export function WorkSkills() {
   const [params] = useSearchParams();
   const trySkillId = params.get("try") ?? params.get("skill");
   const platform = getWork("platform");
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   return (
     <div className="work-skills work-tech-lab">

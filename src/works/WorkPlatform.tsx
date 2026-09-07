@@ -1,5 +1,7 @@
+import { useEffect } from "react";
 import { AgentPlatformLab } from "../components/fx/AgentPlatformLab";
 import { BackendStatusBar } from "../components/BackendStatusBar";
+import { WorkGuide } from "../components/WorkGuide";
 import { WorkTechDeepLinks } from "../components/WorkTechDeepLinks";
 import { getWork } from "../data/works";
 
@@ -7,9 +9,14 @@ import { getWork } from "../data/works";
 export function WorkPlatform() {
   const skills = getWork("skills");
 
+  useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
+
   return (
     <div className="work-platform work-tech-lab">
-      <BackendStatusBar />
+      <WorkGuide slug="platform" />
+      <BackendStatusBar compact />
       <AgentPlatformLab />
 
       {skills && (

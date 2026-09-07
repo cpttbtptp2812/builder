@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AgentArchitectureDiagram } from "../components/fx/AgentArchitectureDiagram";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
+import { AgentFlowDiagram } from "../components/fx/AgentFlowDiagram";
 import { McpBridgeDemo } from "../components/fx/McpBridgeDemo";
 import { WorkGuide } from "../components/WorkGuide";
 import { WorkTechDeepLinks } from "../components/WorkTechDeepLinks";
@@ -12,31 +12,42 @@ import { getWork } from "../data/works";
 export function WorkAgent() {
   const [params] = useSearchParams();
   const [auto, setAuto] = useState(false);
+  const [flowActive, setFlowActive] = useState<string>("input");
+  const chatRef = useRef<HTMLElement>(null);
+  const mcpRef = useRef<HTMLElement>(null);
   const sse = getWork("sse");
 
   useEffect(() => {
+    window.scrollTo({ top: 0, behavior: "auto" });
     if (params.get("demo") === "1" || params.get("demo") === "true") setAuto(true);
   }, [params]);
+
+  function selectAgentFlow(id: string) {
+    setFlowActive(id);
+    if (id === "input" || id === "router" || id === "trace") {
+      chatRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+    if (id === "mcp") {
+      mcpRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
 
   return (
     <div className="work-agent work-agent-rich">
       <WorkGuide slug="agent" />
       <BackendStatusBar compact />
 
-      <section className="work-agent-arch">
-        <h3 className="work-subsection-title">Agent 平台分层</h3>
+      <AgentFlowDiagram variant="agent" activeId={flowActive} onSelect={selectAgentFlow} compact />
+
+      <section ref={chatRef} className="work-agent-product work-agent-product--hero">
+        <h3 className="work-subsection-title">UniAgent · 开箱即用对话</h3>
         <p className="work-subsection-lead">
-          Agent Loop → Skills Router → MCP tools/call → RAG / SDK — 与 Platform Lab 模块一一对应。
+          默认 Guest 模式免配置；点预设或输入问题即可看 Router → MCP 工具链与右侧 Trace。
         </p>
-        <AgentArchitectureDiagram compact />
+        <AgentProductDemo autoStart={auto} onFlowActive={setFlowActive} />
       </section>
 
-      <section className="work-agent-product">
-        <h3 className="work-subsection-title">UniAgent · 对话 + MCP 配置</h3>
-        <AgentProductDemo autoStart={auto} />
-      </section>
-
-      <section className="work-agent-mcp">
+      <section ref={mcpRef} className="work-agent-mcp">
         <h3 className="work-subsection-title">MCP 工具协议层 · 手动调试</h3>
         <p className="work-subsection-lead">
           上面 Agent 自动调用下列工具；这里可手动发 tools/list → tools/call，对照 JSON-RPC 报文与 Trace。

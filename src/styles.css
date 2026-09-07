@@ -8086,6 +8086,7 @@ textarea {
 }
 
 .agent-chat-shell .agent-chat-panel {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-height: 520px;
@@ -8145,6 +8146,15 @@ textarea {
   background: rgba(255, 255, 255, 0.95);
   padding: 0.65rem;
   align-items: flex-end;
+}
+
+.agent-prompt-footer--fixed {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  backdrop-filter: blur(12px);
 }
 
 .agent-prompt-footer textarea {
@@ -13699,6 +13709,252 @@ input.replay-typing {
 
 .work-agent-arch {
   margin-bottom: 1.25rem;
+}
+
+.work-agent-product--hero {
+  margin-bottom: 1.25rem;
+}
+
+.work-agent-arch-collapsible {
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.65rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.work-agent-arch-collapsible summary {
+  cursor: pointer;
+  list-style: none;
+  margin-bottom: 0;
+}
+
+.work-agent-arch-collapsible summary::-webkit-details-marker {
+  display: none;
+}
+
+.work-agent-arch-collapsible summary::before {
+  content: "▸ ";
+  color: #64748b;
+}
+
+.work-agent-arch-collapsible[open] summary::before {
+  content: "▾ ";
+}
+
+.work-agent-arch-collapsible[open] summary {
+  margin-bottom: 0.65rem;
+}
+
+.work-agent-arch-collapsible .work-subsection-lead {
+  margin-bottom: 0.75rem;
+}
+
+/* —— Agent Flow Diagram (interactive model) —— */
+.agent-flow-diagram {
+  margin-bottom: 1rem;
+  border-radius: 0.75rem;
+  border: 1px solid #e2e8f0;
+  background: linear-gradient(180deg, #f8fafc 0%, #fff 100%);
+  overflow: hidden;
+}
+
+.agent-flow-diagram--compact {
+  margin-bottom: 0.85rem;
+}
+
+.agent-flow-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #e2e8f0;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.agent-flow-head strong {
+  display: block;
+  font-size: 0.82rem;
+  color: #1e293b;
+}
+
+.agent-flow-head span {
+  display: block;
+  font-size: 0.68rem;
+  color: #64748b;
+  margin-top: 0.1rem;
+}
+
+.agent-flow-canvas {
+  position: relative;
+  height: min(320px, 52vw);
+  min-height: 220px;
+  margin: 0.5rem;
+  border-radius: 0.55rem;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(99, 102, 241, 0.08), transparent 45%),
+    radial-gradient(circle at 80% 70%, rgba(245, 158, 11, 0.06), transparent 40%),
+    #0f172a;
+  overflow: hidden;
+}
+
+.agent-flow-diagram--compact .agent-flow-canvas {
+  height: min(240px, 48vw);
+  min-height: 180px;
+}
+
+.agent-flow-edges {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.agent-flow-edge {
+  stroke: rgba(148, 163, 184, 0.35);
+  stroke-width: 0.35;
+  fill: none;
+  transition: stroke 0.25s, stroke-width 0.25s;
+}
+
+.agent-flow-edge.lit {
+  stroke: rgba(129, 140, 248, 0.75);
+  stroke-width: 0.45;
+}
+
+.agent-flow-edge.flowing {
+  stroke: url(#flow-grad);
+  stroke-width: 0.55;
+  stroke-dasharray: 2 1.5;
+  animation: agent-flow-dash 0.8s linear infinite;
+}
+
+@keyframes agent-flow-dash {
+  to {
+    stroke-dashoffset: -8;
+  }
+}
+
+.agent-flow-packet {
+  fill: #a5b4fc;
+  filter: drop-shadow(0 0 4px rgba(165, 180, 252, 0.9));
+}
+
+.agent-flow-node {
+  position: absolute;
+  left: var(--node-x);
+  top: var(--node-y);
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  min-width: 4.5rem;
+  max-width: 6.5rem;
+  padding: 0.45rem 0.55rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(15, 23, 42, 0.72);
+  backdrop-filter: blur(8px);
+  color: #e2e8f0;
+  font: inherit;
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s, background 0.2s;
+}
+
+.agent-flow-node--link {
+  text-decoration: none;
+}
+
+.agent-flow-node:hover {
+  transform: translate(-50%, -50%) scale(1.04);
+  border-color: var(--node-color);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--node-color) 40%, transparent);
+}
+
+.agent-flow-node.active {
+  border-color: var(--node-color);
+  background: color-mix(in srgb, var(--node-color) 22%, rgba(15, 23, 42, 0.9));
+  box-shadow: 0 0 20px color-mix(in srgb, var(--node-color) 45%, transparent);
+  animation: agent-flow-node-pulse 1.6s ease-in-out infinite;
+}
+
+.agent-flow-node.visited {
+  border-color: color-mix(in srgb, var(--node-color) 55%, #64748b);
+}
+
+.agent-flow-node-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: inherit;
+  border: 1px solid transparent;
+  pointer-events: none;
+}
+
+.agent-flow-node.active .agent-flow-node-ring {
+  border-color: color-mix(in srgb, var(--node-color) 50%, transparent);
+  animation: agent-flow-ring 1.6s ease-out infinite;
+}
+
+@keyframes agent-flow-node-pulse {
+  0%,
+  100% {
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.03);
+  }
+}
+
+@keyframes agent-flow-ring {
+  0% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+.agent-flow-node-label {
+  font-size: 0.62rem;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  color: #f1f5f9;
+}
+
+.agent-flow-node-sub {
+  font-size: 0.52rem;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.25;
+}
+
+.agent-flow-node--link .agent-flow-node-label::after {
+  content: " ↗";
+  font-size: 0.55rem;
+  opacity: 0.7;
+}
+
+@media (max-width: 640px) {
+  .agent-flow-node {
+    min-width: 3.6rem;
+    max-width: 5rem;
+    padding: 0.35rem 0.4rem;
+  }
+
+  .agent-flow-node-label {
+    font-size: 0.55rem;
+  }
+
+  .agent-flow-node-sub {
+    display: none;
+  }
 }
 
 /* Agent architecture diagram */
