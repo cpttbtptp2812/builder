@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Lens</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="head">
+    <div class="logo">L</div>
+    <div><strong>Lens</strong><span>JSON 透镜</span></div>
+  </header>
+  <p class="lead">美化 JSON 页面，或格式化选中内容</p>
+  <button type="button" class="btn" id="format-page">美化当前页 JSON</button>
+  <button type="button" class="btn secondary" id="format-selection">美化选中 JSON</button>
+  <section class="paste">
+    <label for="input">粘贴 JSON</label>
+    <textarea id="input" rows="5" placeholder='{"hello":"world"}'></textarea>
+    <button type="button" class="btn" id="format-paste">格式化并复制</button>
+    <p id="msg" class="msg"></p>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>

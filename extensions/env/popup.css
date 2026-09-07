@@ -1,0 +1,54 @@
+* { box-sizing: border-box; }
+body {
+  width: 320px; margin: 0; padding-bottom: 0.85rem;
+  font: 13px/1.45 system-ui, sans-serif;
+  color: #e2e8f0; background: linear-gradient(165deg, #0f172a, #312e81);
+}
+.head {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.85rem 1rem; border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.logo {
+  width: 2rem; height: 2rem; border-radius: 0.5rem;
+  background: linear-gradient(135deg, #818cf8, #4f46e5);
+  display: grid; place-items: center; font-weight: 800; color: #fff;
+}
+.head strong { display: block; font-size: 0.88rem; }
+#host { font-size: 0.68rem; color: #94a3b8; word-break: break-all; }
+.toggle { margin-left: auto; position: relative; width: 2.25rem; height: 1.2rem; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle i {
+  position: absolute; inset: 0; border-radius: 999px;
+  background: #334155; cursor: pointer; transition: 0.2s;
+}
+.toggle i::before {
+  content: ""; position: absolute; width: 0.9rem; height: 0.9rem;
+  left: 0.15rem; top: 0.15rem; border-radius: 50%; background: #fff; transition: 0.2s;
+}
+.toggle input:checked + i { background: #6366f1; }
+.toggle input:checked + i::before { transform: translateX(1rem); }
+
+.hint {
+  margin: 0.65rem 1rem; font-size: 0.68rem; color: #94a3b8; line-height: 1.45;
+}
+label {
+  display: block; margin: 0.5rem 1rem 0.25rem; font-size: 0.72rem; font-weight: 600;
+}
+label em { display: block; font-weight: 400; color: #64748b; font-size: 0.62rem; }
+label.check {
+  display: flex; align-items: center; gap: 0.35rem; font-weight: 500; font-size: 0.68rem;
+}
+input, textarea {
+  width: calc(100% - 2rem); margin: 0 1rem;
+  padding: 0.45rem 0.55rem; border-radius: 0.4rem;
+  border: 1px solid rgba(255,255,255,0.12); background: rgba(0,0,0,0.25);
+  color: #e2e8f0; font: inherit;
+}
+.btn {
+  display: block; width: calc(100% - 2rem); margin: 0.75rem 1rem 0;
+  padding: 0.55rem; border: none; border-radius: 0.45rem;
+  background: linear-gradient(135deg, #818cf8, #4f46e5);
+  color: #fff; font-weight: 600; cursor: pointer;
+}
+.msg { margin: 0.45rem 1rem 0; font-size: 0.68rem; color: #34d399; min-height: 1em; }
+.msg.err { color: #f87171; }

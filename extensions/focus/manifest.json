@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Focus",
+  "version": "1.0.0",
+  "description": "沉浸式阅读模式 · 排版优化 · 护眼主题",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_title": "Focus",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    }
+  ]
+}

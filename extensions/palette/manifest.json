@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Palette",
+  "version": "1.0.0",
+  "description": "网页吸色 · 色板历史 · HEX / RGB / HSL 一键复制",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "action": {
+    "default_title": "Palette",
+    "default_popup": "popup.html"
+  }
+}

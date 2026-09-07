@@ -1,6 +1,5 @@
 import type { CSSProperties } from "react";
 import { Link } from "react-router-dom";
-import { getClipHubDownloadUrls } from "../../data/clipHubRelease";
 import { TechBadgeBar } from "../TechBadgeBar";
 import type { Work } from "../../data/works";
 import { MiniClipHubLive } from "./MiniClipHubLive";
@@ -10,7 +9,7 @@ import { MiniSkillsLive } from "./MiniSkillsLive";
 import { MiniToolLive } from "./MiniToolLive";
 
 function WorkMiniDemo({ work }: { work: Work }) {
-  if (work.slug === "clip-hub") return <MiniClipHubLive />;
+  if (work.slug === "extension-hub") return <MiniClipHubLive />;
   if (work.slug === "imean") return <MiniMatchLive />;
   if (work.slug === "skills") return <MiniSkillsLive />;
   if (work.slug === "agent") return <MiniToolLive />;
@@ -26,13 +25,12 @@ export function FeaturedWorkCard({
   compact?: boolean;
   onBrief: () => void;
 }) {
-  const isClipHub = work.slug === "clip-hub";
+  const isExtensionHub = work.slug === "extension-hub";
   const isFlagship = work.tier === "flagship";
-  const { extensionUrl } = isClipHub ? getClipHubDownloadUrls() : { extensionUrl: "" };
 
   return (
     <article
-      className={`home-featured-card${isFlagship ? " home-featured-card--flagship" : ""}${isClipHub ? " home-featured-card--product" : ""}${compact ? " home-featured-card--compact" : ""}`}
+      className={`home-featured-card${isFlagship ? " home-featured-card--flagship" : ""}${isExtensionHub ? " home-featured-card--product" : ""}${compact ? " home-featured-card--compact" : ""}`}
       style={{ "--card-accent": work.accent } as CSSProperties}
     >
       <div className="home-featured-top">
@@ -53,21 +51,11 @@ export function FeaturedWorkCard({
       )}
 
       <div className="home-featured-actions">
-        {isClipHub ? (
-          <>
-            <Link to="/tools/clip-hub" className="home-featured-cta">
-              下载插件
-              <span aria-hidden>→</span>
-            </Link>
-            <a
-              href={extensionUrl}
-              className="home-note-btn home-note-btn--dl"
-              download
-              rel="noopener noreferrer"
-            >
-              zip
-            </a>
-          </>
+        {isExtensionHub ? (
+          <Link to="/tools/extensions" className="home-featured-cta">
+            浏览插件集
+            <span aria-hidden>→</span>
+          </Link>
         ) : (
           <>
             <Link to={`/work/${work.slug}`} className="home-featured-cta">

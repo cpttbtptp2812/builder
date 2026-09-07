@@ -1,19 +1,30 @@
-/**
- * ClipHub 公开发布配置 — 仅浏览器插件 zip，不含源码
- * zip 放在 public/downloads/，随网站一起部署
- */
-export const clipHubRelease = {
-  name: "ClipHub",
-  version: "1.1.4",
-  tagline: "右键保存网页位置 · 点击跳回原处",
-  ready: true,
-};
-
-export function getClipHubDownloadUrls() {
-  const { version } = clipHubRelease;
-  const base = import.meta.env.BASE_URL;
-
-  return {
-    extensionUrl: `${base}downloads/ClipHub-Extension-v${version}.zip`,
-  };
-}
+import { EXTENSION_CATALOG } from "./clipHubExtensions";
+
+export const extensionHub = {
+  name: "插件集",
+  tagline: "自用 Chrome 扩展 · 下载解压即用 · 数据仅存本地",
+  ready: true,
+};
+
+/** @deprecated use extensionHub */
+export const clipHubRelease = {
+  name: extensionHub.name,
+  version: EXTENSION_CATALOG[0]?.version ?? "1.2.0",
+  tagline: extensionHub.tagline,
+  ready: extensionHub.ready,
+};
+
+export function getExtensionHubUrls() {
+  return { catalog: EXTENSION_CATALOG };
+}
+
+/** @deprecated */
+export function getClipHubDownloadUrls() {
+  const ext = EXTENSION_CATALOG[0]!;
+  return {
+    extensionUrl: `${import.meta.env.BASE_URL}downloads/${ext.zip}`,
+  };
+}
+
+export { EXTENSION_CATALOG };
+

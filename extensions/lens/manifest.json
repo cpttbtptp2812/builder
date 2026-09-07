@@ -1,0 +1,19 @@
+{
+  "manifest_version": 3,
+  "name": "Lens",
+  "version": "1.0.0",
+  "description": "JSON 美化 · 树形浏览 · 一键复制",
+  "permissions": ["storage", "activeTab", "scripting"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "action": {
+    "default_title": "Lens",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Palette</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="head">
+    <div class="logo">P</div>
+    <div>
+      <strong>Palette</strong>
+      <span>网页吸色器</span>
+    </div>
+  </header>
+
+  <section class="hero" id="hero">
+    <div class="hero-swatch" id="current-swatch"></div>
+    <div class="hero-meta">
+      <code id="current-hex">#000000</code>
+      <div class="hero-formats" id="formats"></div>
+    </div>
+  </section>
+
+  <button type="button" class="btn-primary" id="pick">从屏幕取色</button>
+
+  <section class="history">
+    <div class="history-head">
+      <strong>色板历史</strong>
+      <button type="button" class="btn-ghost" id="clear">清空</button>
+    </div>
+    <div class="swatch-grid" id="grid"></div>
+  </section>
+
+  <script src="popup.js"></script>
+</body>
+</html>

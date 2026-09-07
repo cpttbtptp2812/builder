@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { profile } from "../data/profile";
 
-/** 全站页脚 — 作品 / 简历 / ClipHub / 邮件 */
+/** 全站页脚 — 作品 / 简历 / 插件集 / 邮件 */
 export function SiteFooter() {
   return (
     <footer className="site-home-foot">
@@ -11,7 +11,7 @@ export function SiteFooter() {
       <nav className="site-home-foot-nav" aria-label="页脚导航">
         <Link to="/">全部作品</Link>
         <Link to="/resume">个人履历</Link>
-        <Link to="/tools/clip-hub">ClipHub 工具</Link>
+        <Link to="/tools/extensions">插件集</Link>
         <a href={`mailto:${profile.email}`}>邮件</a>
       </nav>
     </footer>

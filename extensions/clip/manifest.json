@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "ClipHub",
+  "version": "1.2.0",
+  "description": "右键保存网页选中位置，点击列表跳回原处",
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs",
+    "notifications"
+  ],
+  "host_permissions": ["http://127.0.0.1:38472/*", "http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "service-worker.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "ClipHub",
+    "default_popup": "popup.html"
+  }
+}

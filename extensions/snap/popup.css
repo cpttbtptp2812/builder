@@ -1,0 +1,74 @@
+* { box-sizing: border-box; }
+body {
+  width: 340px; margin: 0;
+  font: 13px/1.45 system-ui, sans-serif;
+  color: #e2e8f0;
+  background: linear-gradient(165deg, #0f172a, #1e3a5f);
+}
+.head {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.85rem 1rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+.logo {
+  width: 2rem; height: 2rem; border-radius: 0.55rem;
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  display: grid; place-items: center; font-weight: 800; color: #fff;
+}
+.head strong { display: block; font-size: 0.88rem; }
+.head span { font-size: 0.68rem; color: #94a3b8; }
+
+.btn-capture {
+  display: flex; align-items: center; justify-content: center; gap: 0.5rem;
+  width: calc(100% - 2rem); margin: 1rem;
+  padding: 0.75rem; border: none; border-radius: 0.65rem;
+  background: linear-gradient(135deg, #38bdf8, #0284c7);
+  color: #fff; font-weight: 600; font-size: 0.85rem; cursor: pointer;
+  box-shadow: 0 8px 24px rgba(56, 189, 248, 0.25);
+}
+.cap-icon { font-size: 1rem; animation: pulse 2s ease infinite; }
+@keyframes pulse { 50% { opacity: 0.5; } }
+
+.preview {
+  margin: 0 1rem 0.75rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(0,0,0,0.25);
+  min-height: 100px;
+  overflow: hidden;
+}
+.preview img { width: 100%; display: block; }
+.preview .empty {
+  margin: 0; padding: 2rem 1rem; text-align: center;
+  color: #64748b; font-size: 0.75rem;
+}
+
+.actions {
+  display: flex; gap: 0.5rem; padding: 0 1rem 0.75rem;
+}
+.btn {
+  flex: 1; padding: 0.5rem; border: none; border-radius: 0.45rem;
+  background: rgba(56,189,248,0.2); color: #7dd3fc; font-weight: 600; cursor: pointer;
+}
+.btn.secondary {
+  background: rgba(255,255,255,0.08);
+  color: #cbd5e1;
+}
+
+.gallery { padding: 0 1rem 1rem; border-top: 1px solid rgba(255,255,255,0.06); }
+.gallery-head {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 0.65rem 0 0.5rem;
+}
+.gallery-head strong { font-size: 0.72rem; color: #94a3b8; }
+.btn-ghost {
+  border: none; background: none; color: #64748b; font-size: 0.68rem; cursor: pointer;
+}
+.gallery-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.35rem;
+}
+.gallery-grid button {
+  border: 1px solid rgba(255,255,255,0.1); border-radius: 0.35rem;
+  padding: 0; overflow: hidden; cursor: pointer; background: none;
+}
+.gallery-grid img { width: 100%; display: block; aspect-ratio: 16/10; object-fit: cover; }

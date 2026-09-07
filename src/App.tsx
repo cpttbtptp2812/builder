@@ -1,6 +1,6 @@
 import { HashRouter, Navigate, Route, Routes } from "react-router-dom";
 import { WorkLayout } from "./components/WorkLayout";
-import { ClipHubDownloadPage } from "./pages/ClipHubDownloadPage";
+import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { HomePage } from "./pages/HomePage";
 import { ResumePage } from "./pages/ResumePage";
 import { SecretRomancePage } from "./pages/SecretRomancePage";
@@ -15,7 +15,8 @@ export default function App() {
           <Route index element={<WorkRouter />} />
         </Route>
         <Route path="/resume" element={<ResumePage />} />
-        <Route path="/tools/clip-hub" element={<ClipHubDownloadPage />} />
+        <Route path="/tools/extensions" element={<ExtensionsPage />} />
+        <Route path="/tools/clip-hub" element={<Navigate to="/tools/extensions" replace />} />
         <Route path="/for-you" element={<SecretRomancePage />} />
         <Route path="/about" element={<Navigate to="/resume" replace />} />
         <Route path="/demo/*" element={<Navigate to="/work/imean" replace />} />

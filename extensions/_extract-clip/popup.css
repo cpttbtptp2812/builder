@@ -1,0 +1,159 @@
+body {
+  width: 320px;
+  margin: 0;
+  font: 13px/1.45 "Segoe UI", system-ui, sans-serif;
+  color: #1e293b;
+  background: #f8fafc;
+}
+
+.pop-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0.75rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.status {
+  font-size: 0.72rem;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+
+.status.on {
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+}
+
+.status.local {
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+}
+
+.status.off {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.pop-token {
+  padding: 0.65rem 0.75rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pop-token label {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.pop-setup-title {
+  margin: 0 0 0.35rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #0f766e;
+}
+
+.pop-setup-note {
+  margin: 0 0 0.45rem;
+  font-size: 0.72rem;
+  color: #4338ca;
+  line-height: 1.45;
+}
+
+.pop-setup-steps {
+  margin: 0 0 0.55rem;
+  padding-left: 1.1rem;
+  font-size: 0.72rem;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.pop-setup-steps li + li {
+  margin-top: 0.15rem;
+}
+
+.token-row {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.token-row input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+}
+
+.token-row button {
+  border: none;
+  border-radius: 6px;
+  background: #0d9488;
+  color: #fff;
+  font-weight: 600;
+  padding: 0.35rem 0.55rem;
+  cursor: pointer;
+}
+
+.pop-list-wrap {
+  max-height: 280px;
+  overflow: auto;
+}
+
+.pop-list-label {
+  margin: 0;
+  padding: 0.55rem 0.75rem 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #0f766e;
+}
+
+.hint {
+  margin: 0;
+  padding: 0.75rem;
+  color: #94a3b8;
+  font-size: 0.78rem;
+}
+
+.pop-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem;
+}
+
+.pop-list li {
+  margin-bottom: 0.35rem;
+}
+
+.pop-list button {
+  width: 100%;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+}
+
+.pop-list button:hover {
+  border-color: #0d9488;
+  background: rgba(240, 253, 250, 0.8);
+}
+
+.pop-list strong {
+  display: block;
+  font-size: 0.82rem;
+  margin-bottom: 0.15rem;
+}
+
+.pop-list span {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Snap</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="head">
+    <div class="logo">S</div>
+    <div><strong>Snap</strong><span>屏幕快照</span></div>
+  </header>
+  <button type="button" class="btn-capture" id="capture">
+    <span class="cap-icon">◉</span>
+    截取当前可视区域
+  </button>
+  <div class="preview" id="preview">
+    <p class="empty">最新截图预览</p>
+  </div>
+  <div class="actions" id="actions" hidden>
+    <button type="button" class="btn" id="copy">复制图片</button>
+    <button type="button" class="btn secondary" id="download">下载 PNG</button>
+  </div>
+  <section class="gallery">
+    <div class="gallery-head">
+      <strong>历史</strong>
+      <button type="button" class="btn-ghost" id="clear">清空</button>
+    </div>
+    <div class="gallery-grid" id="grid"></div>
+  </section>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ClipHub</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="pop-head">
+      <strong>ClipHub</strong>
+      <span id="status" class="status off">未连接</span>
+    </header>
+
+    <section class="pop-token">
+      <p class="pop-setup-title">桌面端同步（可选）</p>
+      <p class="pop-setup-note">不配置也能用：右键保存后会立刻出现在下方列表</p>
+      <ol class="pop-setup-steps">
+        <li>运行 ClipHub 桌面端</li>
+        <li>复制连接令牌并粘贴到下方</li>
+      </ol>
+      <label for="token">连接令牌</label>
+      <div class="token-row">
+        <input id="token" type="password" placeholder="粘贴令牌…" />
+        <button type="button" id="save-token">保存令牌</button>
+      </div>
+    </section>
+
+    <section class="pop-list-wrap">
+      <p class="pop-list-label">已保存 — 点击跳回原页面位置</p>
+      <p id="hint" class="hint">加载中…</p>
+      <ul id="list" class="pop-list"></ul>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

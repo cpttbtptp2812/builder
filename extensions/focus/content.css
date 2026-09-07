@@ -1,0 +1,101 @@
+#focus-reader-root {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483645;
+  overflow: auto;
+  font-family: "Georgia", "Noto Serif SC", "Source Han Serif SC", serif;
+  line-height: 1.85;
+  animation: focus-in 0.35s ease;
+}
+
+@keyframes focus-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.focus-theme-dark {
+  background: #0c0f14;
+  color: #cbd5e1;
+}
+
+.focus-theme-light {
+  background: #faf8f5;
+  color: #334155;
+}
+
+.focus-bar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid rgba(128, 128, 128, 0.2);
+}
+
+.focus-theme-dark .focus-bar {
+  background: rgba(12, 15, 20, 0.92);
+}
+
+.focus-theme-light .focus-bar {
+  background: rgba(250, 248, 245, 0.92);
+}
+
+.focus-bar strong {
+  font-family: system-ui, sans-serif;
+  font-size: 0.85rem;
+  color: #34d399;
+}
+
+.focus-bar span {
+  font-family: system-ui, sans-serif;
+  font-size: 0.72rem;
+  opacity: 0.6;
+}
+
+.focus-bar button {
+  margin-left: auto;
+  padding: 0.3rem 0.65rem;
+  border-radius: 0.4rem;
+  border: 1px solid rgba(52, 211, 153, 0.35);
+  background: rgba(52, 211, 153, 0.12);
+  color: #34d399;
+  font: 600 0.72rem system-ui, sans-serif;
+  cursor: pointer;
+}
+
+.focus-bar button:last-child {
+  margin-left: 0.35rem;
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.1);
+  color: #f87171;
+}
+
+.focus-body {
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+  font-size: 1.05rem;
+}
+
+.focus-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+}
+
+.focus-body h1, .focus-body h2, .focus-body h3 {
+  font-family: system-ui, sans-serif;
+  line-height: 1.35;
+  margin-top: 1.75rem;
+}
+
+.focus-body a {
+  color: #34d399;
+}
+
+.focus-theme-light .focus-body a {
+  color: #059669;
+}

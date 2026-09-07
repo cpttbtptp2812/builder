@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "Snap",
+  "version": "1.0.0",
+  "description": "可视区域截图 · 本地图库 · 复制 / 下载",
+  "permissions": ["storage", "activeTab"],
+  "action": {
+    "default_title": "Snap",
+    "default_popup": "popup.html"
+  }
+}

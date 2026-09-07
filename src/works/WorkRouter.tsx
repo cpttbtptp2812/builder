@@ -20,7 +20,7 @@ export function WorkRouter() {
 
   switch (work.kind) {
     case "product-tool":
-      return <Navigate to="/tools/clip-hub" replace />;
+      return <Navigate to="/tools/extensions" replace />;
     case "automation-chat": return <WorkImean />;
     case "agent-chat": return <WorkAgent />;
     case "agent-skills": return <WorkSkills />;

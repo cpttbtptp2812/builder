@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Wire</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="head">
+    <div class="logo">W</div>
+    <div><strong>Wire</strong><span>SSE 帧调试</span></div>
+    <button type="button" class="btn-icon" id="clear">↻</button>
+  </header>
+  <p class="hint">自动捕获页面 EventSource 连接与 message 事件（对齐 GraphQL SSE / AI 流式场景）</p>
+  <ul class="frames" id="frames"></ul>
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <title>Env</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="head">
+    <div class="logo">E</div>
+    <div>
+      <strong>Env</strong>
+      <span id="host">—</span>
+    </div>
+    <label class="toggle">
+      <input type="checkbox" id="enabled" />
+      <i></i>
+    </label>
+  </header>
+
+  <p class="hint">为当前域名配置后，页面内 fetch 会自动带上 Token、重写 API 地址。刷新页面生效。</p>
+
+  <label>API Base <em>可选，如 https://api.staging.com</em></label>
+  <input id="apiBase" placeholder="https://api.example.com" />
+
+  <label class="check"><input type="checkbox" id="rewriteHost" /> 将 /api 请求重写到 API Base 主机</label>
+
+  <label>Bearer Token</label>
+  <input id="token" type="password" placeholder="粘贴 JWT 或 API Key" />
+
+  <label>额外 Header <em>JSON，如 {"X-Tenant":"dev"}</em></label>
+  <textarea id="headers" rows="2" placeholder="{}"></textarea>
+
+  <button type="button" class="btn" id="save">保存并应用</button>
+  <p id="msg" class="msg"></p>
+
+  <script src="popup.js"></script>
+</body>
+</html>
