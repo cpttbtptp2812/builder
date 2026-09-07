@@ -1,17 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  explainDiscovery as explainDiscoveryLocal,
+  runSkill as runSkillLocal,
   AGENT_SKILLS,
   ROUTER_EXAMPLES,
   SKILL_ROUTER_DOC,
-  explainDiscovery,
   getSkill,
-  runSkill,
   type AgentSkill,
   type SkillDiscoveryRow,
   type SkillResult,
   type SkillTraceStep,
 } from "../../lib/agentSkills";
+import { explainDiscoveryAsync, runSkillAsync } from "../../lib/backendBridge";
 import { McpBridgeDemo } from "./McpBridgeDemo";
 
 type LabTab = "router" | (typeof AGENT_SKILLS)[number]["id"] | "mcp";
@@ -207,8 +208,9 @@ function SkillRuntimePanel({
     setTrace([]);
     setResult(null);
     setExpanded(null);
-    const out = await runSkill(skill, skill.description, (step) => setTrace((prev) => [...prev, step]), {
+    const out = await runSkillAsync(skill, skill.description, {
       snapshotRoot,
+      onStep: (step) => setTrace((prev) => [...prev, step]),
     });
     setResult(out.result);
     setRunning(false);
@@ -234,7 +236,7 @@ function SkillRuntimePanel({
         </button>
       </div>
 
-      {running && trace.length === 0 && <div className="skill-runtime-loading">MCP tools/call · 进程内 Server</div>}
+      {running && trace.length === 0 && <div className="skill-runtime-loading">MCP tools/call · 服务端 SQLite 或进程内 Server</div>}
 
       <PipelineTrace trace={trace} expanded={expanded} onToggle={setExpanded} />
 
@@ -258,7 +260,12 @@ function RouterLab({
   onSelectSkill: (id: string) => void;
   selectedId: string | null;
 }) {
-  const rows = useMemo(() => explainDiscovery(query), [query]);
+  const [rows, setRows] = useState<SkillDiscoveryRow[]>(() => explainDiscoveryLocal(query));
+
+  useEffect(() => {
+    void explainDiscoveryAsync(query).then((r) => setRows(r.rows));
+  }, [query]);
+
   const winner = rows[0];
 
   return (

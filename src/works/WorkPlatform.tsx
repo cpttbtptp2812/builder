@@ -1,4 +1,5 @@
 import { AgentPlatformLab } from "../components/fx/AgentPlatformLab";
+import { BackendStatusBar } from "../components/BackendStatusBar";
 import { WorkTechDeepLinks } from "../components/WorkTechDeepLinks";
 import { getWork } from "../data/works";
 
@@ -8,6 +9,7 @@ export function WorkPlatform() {
 
   return (
     <div className="work-platform work-tech-lab">
+      <BackendStatusBar />
       <AgentPlatformLab />
 
       {skills && (

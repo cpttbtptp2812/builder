@@ -13254,6 +13254,76 @@ input.replay-typing {
   margin-top: 1.25rem;
 }
 
+.backend-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.45rem;
+  font-size: 0.72rem;
+  margin-bottom: 0.75rem;
+}
+
+.backend-status.compact {
+  margin-bottom: 0.5rem;
+}
+
+.backend-status--online {
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #047857;
+}
+
+.backend-status--offline {
+  background: rgba(245, 158, 11, 0.1);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #92400e;
+}
+
+.backend-status--loading {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+}
+
+.backend-status strong {
+  font-size: 0.72rem;
+}
+
+.backend-status code {
+  font-size: 0.65rem;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+}
+
+.platform-runtime-tag {
+  align-self: center;
+  font-size: 0.65rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(99, 102, 241, 0.12);
+  color: #4338ca;
+}
+
+.platform-hero {
+  position: relative;
+}
+
+.platform-hero .platform-runtime-tag {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+}
+
+@media (max-width: 640px) {
+  .platform-hero .platform-runtime-tag {
+    position: static;
+    margin-top: 0.5rem;
+  }
+}
+
 
 .platform-lab-tabs {
   display: flex;

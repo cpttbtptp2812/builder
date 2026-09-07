@@ -1,4 +1,4 @@
-/** Guest Agent — 免配置开箱即用：Router 选 Skill → MCP 真实执行 → 流式回复 */
+/** Guest Agent — 优先服务端 SQLite+MCP，回退浏览器内运行时 */
 
 import {
   explainDiscovery,
@@ -8,6 +8,7 @@ import {
   type SkillResult,
   type SkillTraceStep,
 } from "./agentSkills";
+import { runGuestAgentAsync } from "./backendBridge";
 import { mcpServer } from "./mcpServer";
 import type { AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
 
@@ -173,14 +174,28 @@ function synthesizeResponse(skill: AgentSkill, result: SkillResult): string {
   }
 }
 
-/** 免 API Key · 内置 Router + MCP 流水线 */
+/** 免 API Key · Router + MCP（服务端优先） */
 export async function runGuestAgentTurn(
   query: string,
   ctx: { snapshotRoot?: Element | null; signal?: AbortSignal },
   onEvent: (ev: AgentStreamEvent) => void,
-): Promise<{ assistantText: string; traces: AgentTurnTrace[] }> {
+): Promise<{ assistantText: string; traces: AgentTurnTrace[]; runtime?: "server" | "local" }> {
   const turnId = `guest-${Date.now().toString(36)}`;
   onEvent({ type: "turn-start", turnId });
+
+  const serverResult = await runGuestAgentAsync(query, ctx);
+  if (serverResult) {
+    onEvent({ type: "iteration", n: 1 });
+    onEvent({ type: "trace-sync", traces: serverResult.traces });
+    await streamReasoning(`Server Agent · SQLite + MCP\nSkill 路由与工具调用已持久化到服务端数据库。`, onEvent);
+    for (const t of serverResult.traces[0]?.tools ?? []) {
+      onEvent({ type: "tool-start", tool: t });
+      onEvent({ type: "tool-end", tool: t });
+    }
+    await streamText(serverResult.assistantText, onEvent);
+    onEvent({ type: "done", iterations: 1, toolCount: serverResult.traces[0]?.tools.length ?? 0 });
+    return { ...serverResult, runtime: "server" };
+  }
 
   const { skill, hits, score } = pickSkill(query);
 
@@ -247,7 +262,7 @@ export async function runGuestAgentTurn(
   await streamText(text, onEvent);
 
   onEvent({ type: "done", iterations: 1, toolCount: finalTraces[0]?.tools.length ?? 0 });
-  return { assistantText: text, traces: finalTraces };
+  return { assistantText: text, traces: finalTraces, runtime: "local" };
 }
 
 export function isAuthError(err: unknown): boolean {

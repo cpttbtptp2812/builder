@@ -1,28 +1,17 @@
 import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import type { MemoryEntry } from "../../lib/agentMemory";
 import {
-  appendSessionTurn,
-  buildMemoryContextBlock,
-  clearSessionTurns,
-  deleteMemory,
-  getMemorySnapshot,
-  seedDefaultMemoriesIfEmpty,
-  upsertMemory,
-  type MemoryEntry,
-} from "../../lib/agentMemory";
-import {
-  ROUTER_EVAL_CASES,
-  runRouterEval,
-  runSkillBenchmark,
-  routerEvalSummary,
-  type RouterEvalRow,
-  type ToolMetrics,
-} from "../../lib/evalHarness";
-import {
-  getAgentMeta,
-  runMultiAgentPipeline,
-  type MultiAgentStep,
-} from "../../lib/multiAgentRuntime";
-import { buildRagCorpus, retrieveRag, type RagHit, type RagRetrieveResult } from "../../lib/ragEngine";
+  deleteMemoryAsync,
+  retrieveRagAsync,
+  runMultiAgentAsync,
+  runRouterEvalAsync,
+  runSkillBenchmarkAsync,
+  saveMemoryAsync,
+  syncMemoryFromServer,
+} from "../../lib/backendBridge";
+import { ROUTER_EVAL_CASES, routerEvalSummary, type RouterEvalRow, type ToolMetrics } from "../../lib/evalHarness";
+import { getAgentMeta, type MultiAgentStep } from "../../lib/multiAgentRuntime";
+import { buildRagCorpus, type RagHit, type RagRetrieveResult } from "../../lib/ragEngine";
 import { AgentArchitectureDiagram } from "./AgentArchitectureDiagram";
 
 type Scene = "tour" | "rag" | "multi-agent" | "eval";
@@ -118,7 +107,8 @@ export function AgentPlatformLab() {
   const [maAnswer, setMaAnswer] = useState("");
   const [maRunning, setMaRunning] = useState(false);
 
-  const [evalRows, setEvalRows] = useState<RouterEvalRow[]>(() => runRouterEval());
+  const [evalRows, setEvalRows] = useState<RouterEvalRow[]>([]);
+  const [runtimeTag, setRuntimeTag] = useState<"server" | "local">("local");
   const [toolMetrics, setToolMetrics] = useState<ToolMetrics | null>(null);
 
   const [tourRunning, setTourRunning] = useState(false);
@@ -135,17 +125,19 @@ export function AgentPlatformLab() {
 
   const evalSummary = useMemo(() => routerEvalSummary(evalRows), [evalRows]);
 
-  const runRag = useCallback((q: string) => {
-    const result = retrieveRag(q, 3);
+  const runRag = useCallback(async (q: string) => {
+    const result = await retrieveRagAsync(q, 3);
     setRagResult(result);
     setRagQuery(q);
+    setRuntimeTag(result.runtime);
     return result;
   }, []);
 
   const refreshMemory = useCallback(async () => {
-    const snap = await getMemorySnapshot();
+    const snap = await syncMemoryFromServer();
     setMemories(snap.longTerm);
-    setMemPreview(await buildMemoryContextBlock());
+    setMemPreview(snap.preview);
+    setRuntimeTag(snap.runtime);
   }, []);
 
   const runMultiAgent = useCallback(
@@ -154,14 +146,15 @@ export function AgentPlatformLab() {
       setMaSteps([]);
       setMaAnswer("");
       setMaQuery(q);
-      appendSessionTurn("user", q);
 
       try {
-        const result = await runMultiAgentPipeline(q, (step) => {
+        const result = await runMultiAgentAsync(q, (step) => {
           setMaSteps((prev) => [...prev, step]);
         });
-        setMaAnswer(result.answer);
-        appendSessionTurn("assistant", result.answer.slice(0, 300));
+        if (result) {
+          setMaAnswer(result.answer);
+          setRuntimeTag(result.runtime);
+        }
         return result;
       } finally {
         setMaRunning(false);
@@ -185,14 +178,12 @@ export function AgentPlatformLab() {
     await new Promise((r) => setTimeout(r, 600));
 
     setTourStep(3);
-    setEvalRows(runRouterEval());
+    const evalRes = await runRouterEvalAsync();
+    setEvalRows(evalRes.rows);
+    setRuntimeTag(evalRes.runtime);
     setScene("eval");
-    try {
-      const { metrics } = await runSkillBenchmark();
-      setToolMetrics(metrics);
-    } catch {
-      /* benchmark optional */
-    }
+    const bench = await runSkillBenchmarkAsync();
+    if (bench) setToolMetrics(bench.metrics);
 
     setTourStep(4);
     setTourRunning(false);
@@ -201,6 +192,12 @@ export function AgentPlatformLab() {
   useEffect(() => {
     runRag(DEMO_QUERY);
     seedDefaultMemoriesIfEmpty().then(refreshMemory);
+  }, [runRag, refreshMemory]);
+
+  useEffect(() => {
+    void runRag(DEMO_QUERY);
+    void refreshMemory();
+    void runRouterEvalAsync().then((r) => setEvalRows(r.rows));
   }, [runRag, refreshMemory]);
 
   const topHit = ragResult?.hits[0];
@@ -216,9 +213,10 @@ export function AgentPlatformLab() {
             不是 PPT：输入一个问题，看<strong>知识怎么被召回</strong>、<strong>三个 Agent 怎么分工</strong>、<strong>路由和工具链指标是否达标</strong>。
           </p>
         </div>
-        <button type="button" className="platform-hero-cta" onClick={runFullTour} disabled={tourRunning || maRunning}>
+        <button type="button" className="platform-hero-cta" onClick={() => void runFullTour()} disabled={tourRunning || maRunning}>
           {tourRunning ? `演示中… 第 ${tourStep}/3 步` : "▶ 一键跑完整演示（约 30 秒）"}
         </button>
+        <span className="platform-runtime-tag">{runtimeTag === "server" ? "SQLite 服务端" : "浏览器离线"}</span>
       </header>
 
       {/* 三步导航 */}
@@ -387,10 +385,10 @@ export function AgentPlatformLab() {
             )}
           </div>
           <div className="platform-split-actions platform-split-actions--center">
-            <button type="button" onClick={() => setEvalRows(runRouterEval())}>↻ 重跑 Router 测试</button>
+            <button type="button" onClick={() => void runRouterEvalAsync().then((r) => setEvalRows(r.rows))}>↻ 重跑 Router 测试</button>
             <button type="button" className="platform-primary-btn" onClick={async () => {
-              const { metrics } = await runSkillBenchmark();
-              setToolMetrics(metrics);
+              const bench = await runSkillBenchmarkAsync();
+              if (bench) setToolMetrics(bench.metrics);
             }}>跑 Skill 压测</button>
           </div>
           <details className="platform-details">
@@ -423,12 +421,12 @@ export function AgentPlatformLab() {
           <div className="platform-advanced-body">
             <section className="platform-advanced-section">
               <h5>Memory · 上下文工程</h5>
-              <p className="platform-advanced-lead">长期记忆存 IndexedDB，Multi-Agent Planner 会读取；跑完演示后 Session 轮次会增加。</p>
+              <p className="platform-advanced-lead">长期记忆存 SQLite（服务端）或 IndexedDB（离线）；Multi-Agent Planner 会读取。</p>
               <ul className="platform-mem-list compact">
                 {memories.map((m) => (
                   <li key={m.key}>
                     <strong>{m.key}</strong> — {m.value}
-                    <button type="button" onClick={() => deleteMemory(m.key).then(refreshMemory)}>删</button>
+                    <button type="button" onClick={() => void deleteMemoryAsync(m.key).then(refreshMemory)}>删</button>
                   </li>
                 ))}
               </ul>
@@ -440,16 +438,15 @@ export function AgentPlatformLab() {
                   const k = String(fd.get("key") ?? "").trim();
                   const v = String(fd.get("value") ?? "").trim();
                   if (!k || !v) return;
-                  await upsertMemory(k, v);
+                  await saveMemoryAsync(k, v);
                   e.currentTarget.reset();
                   refreshMemory();
                 }}
               >
                 <input name="key" placeholder="键，如 preferred_stack" />
                 <input name="value" placeholder="值" />
-                <button type="submit">写入 IDB</button>
+                <button type="submit">写入记忆</button>
               </form>
-              <button type="button" className="platform-link-btn" onClick={() => { clearSessionTurns(); refreshMemory(); }}>清空 Session</button>
               <pre className="platform-mem-preview">{memPreview}</pre>
             </section>
             <section className="platform-advanced-section">

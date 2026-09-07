@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AgentArchitectureDiagram } from "../components/fx/AgentArchitectureDiagram";
+import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { McpBridgeDemo } from "../components/fx/McpBridgeDemo";
 import { WorkGuide } from "../components/WorkGuide";
@@ -20,6 +21,7 @@ export function WorkAgent() {
   return (
     <div className="work-agent work-agent-rich">
       <WorkGuide slug="agent" />
+      <BackendStatusBar compact />
 
       <section className="work-agent-arch">
         <h3 className="work-subsection-title">Agent 平台分层</h3>

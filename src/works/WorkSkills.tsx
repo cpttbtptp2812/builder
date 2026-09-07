@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { AgentSkillsDemo } from "../components/fx/AgentSkillsDemo";
+import { BackendStatusBar } from "../components/BackendStatusBar";
 import { WorkGuide } from "../components/WorkGuide";
 import { WorkTechDeepLinks } from "../components/WorkTechDeepLinks";
 import { getWork } from "../data/works";
@@ -13,6 +14,7 @@ export function WorkSkills() {
   return (
     <div className="work-skills work-tech-lab">
       <WorkGuide slug="skills" />
+      <BackendStatusBar compact />
 
       <AgentSkillsDemo initialSkillId={trySkillId} trySkillId={trySkillId} />
 
