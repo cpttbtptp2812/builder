@@ -125,7 +125,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   agent: {
     slug: "agent",
     purpose:
-      "Agent 完整链路验证页：上半 SSE 流式消费（GraphQL → AI SDK 5 UIMessage），下半 MCP 工具协议层（tools/list · Schema · 真实 handler）。两层在同一页，面试时一条线讲清楚。",
+      "Agent 对话 + MCP 工具层：上半 SSE 流式消费，下半 MCP JSON-RPC（tools/list · tools/call）。",
     highlights: [
       {
         title: "Web Streams pipeThrough 全链路",
@@ -153,10 +153,8 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       },
     ],
     content:
-      "AI 对话入口 + MCP 工具协议，合并在一个项目里讲。\n\n" +
-      "消费层：SSE → UIMessage，Reasoning、Tool Call、VNC。\n" +
-      "协议层：MCP tools/list / tools/call，Schema 校验，真实 fetch 和知识库检索。\n\n" +
-      "面试官问 Agent，可以从「用户看到什么」讲到「工具怎么接、协议长什么样」。",
+      "消费层：SSE → UIMessage，Reasoning、Tool Call。\n" +
+      "协议层：MCP tools/list / tools/call，真实 fetch 和知识库检索。",
     techJots: [
       { tag: "ReadableStream", text: "SSE byte stream → UIMessage part；AbortController pause/resume。" },
       { tag: "MCP", text: "tools/list · tools/call · JSON Schema 校验 · structuredContent。" },
@@ -170,7 +168,31 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       "硬编码 tool → MCP discover",
       "MCP 与 Agent 拆两页 → 合并一页上下层",
     ],
-    siteNote: "上半：流式对话 + Tool Call + VNC。下半：MCP Server + JSON-RPC。底层 SSE 见 /work/sse。",
+    siteNote: "流式对话 + MCP Server。SSE 细节见 /work/sse。",
+  },
+
+  eval: {
+    slug: "eval",
+    purpose: "Skill Router 固定用例回归，改路由逻辑后一键重跑对比。",
+    highlights: [
+      {
+        title: "Router 用例表",
+        analysis: "每条 query 有 expectedSkillId，跑 explainDiscovery 对比 predicted。",
+        metric: "通过率 % · 失败列表",
+      },
+      {
+        title: "工具链 latency",
+        analysis: "遍历 Skill 跑 MCP pipeline，聚合 P50/P99。",
+        metric: "byTool  breakdown",
+      },
+    ],
+    content: "开发 Skill 路由时用来回归，不是展示用。",
+    techJots: [
+      { tag: "evalHarness", text: "ROUTER_EVAL_CASES · runRouterEval。" },
+      { tag: "backendBridge", text: "server / local 双 runtime。" },
+    ],
+    scraps: [],
+    siteNote: "运行全部用例 → 看通过率与失败项。",
   },
 
   platform: {
@@ -191,10 +213,9 @@ export const WORK_NOTES: Record<string, WorkNote> = {
         metric: "3 Agent · 共用 MCP · 带 citation",
       },
       {
-        title: "Eval Ops — Router 回归 + P50/P99",
-        analysis:
-          "5 条 Skill Router 用例对比 expected vs predicted；一键跑全 Skill benchmark 聚合 tool success rate 和 latency 分位。对齐架构师 JD 里的 Eval / 可观测要求。",
-        metric: "Router Acc 可量化 · Tool P99 可见",
+        title: "Router 测试",
+        analysis: "固定用例回归在 /work/eval，Platform 页只管 RAG 与 Multi-Agent。",
+        metric: "/work/eval",
       },
       {
         title: "Memory — IDB 长期 + Session 短期",
@@ -218,7 +239,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       "单 Agent → 三角色 Trace 可观测",
       "knowledge_search 升级 ragEngine",
     ],
-    siteNote: "五 Tab：RAG / Multi-Agent / Eval / Memory / 架构对照。均可直接试，无需 API Key。",
+    siteNote: "RAG / Multi-Agent / Memory。",
   },
 
   builder: {

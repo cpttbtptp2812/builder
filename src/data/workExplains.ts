@@ -60,19 +60,49 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
     },
   },
 
-  platform: {
-    slug: "platform",
-    oneLiner: "Agent 平台层 Lab：RAG 召回 → 三 Agent 协作 → Router / 工具链 Eval，约 30 秒一键跑通。",
-    demoProves: "RAG 看相关度条与 Top chunk；Multi-Agent 看 Planner / Executor / Reviewer 依次亮起；Eval 看准确率与 P50/P99。",
+  "dev-debug": {
+    slug: "dev-debug",
+    oneLiner: "Agent 开发调试台：对话、Skills、RAG / Multi-Agent、路由回归，Tab 切换。",
+    demoProves: "一个入口替代原 UniAgent / SkillForge / Platform 三页；需 npm run dev:server 启 SQLite 后端。",
     steps: [
-      "点「▶ 一键跑完整演示」— 约 30 秒自动走完",
-      "或点 ①②③ 分步体验 RAG / 三 Agent / Eval",
-      "改演示问题 — 看不同项目 chunk 召回变化",
-      "底部「技术附录」可读写 Memory、看架构对照",
+      "Tab「对话」— Guest 模式输入问题，看 MCP Trace",
+      "Tab「Skills」— Router 矩阵 + 跑 Skill 流水线",
+      "Tab「Platform」— RAG 召回 + 三 Agent 协作",
+      "Tab「路由测试」— 固定用例回归",
     ],
     compare: {
-      usual: { title: "文档讲 RAG/Multi-Agent", desc: "只能看 PPT，无法验证行为" },
-      here: { title: "可交互 Lab", desc: "chunk、Trace、Eval 指标均可在线跑" },
+      usual: { title: "三个分散 Demo 页", desc: "来回跳，不知道先看哪" },
+      here: { title: "统一调试台", desc: "按模块 Tab 切换" },
+    },
+  },
+
+  eval: {
+    slug: "eval",
+    oneLiner: "Skill 路由回归：固定用例检查 Router 是否选对 Skill，并统计工具链延迟。",
+    demoProves: "运行用例后看通过率、失败列表、P50/P99。",
+    steps: [
+      "点「运行全部用例」",
+      "看 Router 准确率与工具延迟",
+      "展开失败样本或完整用例表",
+    ],
+    compare: {
+      usual: { title: "手动试几条 prompt", desc: "换一句就不知道还对不对" },
+      here: { title: "固定回归集", desc: "改 Router 后一键重跑" },
+    },
+  },
+
+  platform: {
+    slug: "platform",
+    oneLiner: "RAG 召回 + 三 Agent 协作 Trace。",
+    demoProves: "RAG 看 chunk 相关度；Multi-Agent 看各角色依次执行。",
+    steps: [
+      "跑 RAG 或 Multi-Agent 演示",
+      "改问题看召回变化",
+      "路由测试见 Skill 路由测试页",
+    ],
+    compare: {
+      usual: { title: "文档描述", desc: "难以验证行为" },
+      here: { title: "可交互 Lab", desc: "chunk 与 Trace 可在线看" },
     },
   },
 

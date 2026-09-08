@@ -164,6 +164,20 @@ export function ExtensionsPage() {
 
 
       <section className="clip-hub-panel clip-hub-panel-highlight">
+        <h2>片段库</h2>
+        <p>
+          安装 ClipHub 并配置同步 token 后，可在网页查看、搜索、导出 Markdown。
+          需运行 <code>npm run dev:clip</code> 或 <code>dev:full</code>。
+        </p>
+        <Link to="/tools/clips" className="clip-hub-dl-btn primary">
+          打开片段库
+          <span>标签 · 分组 · 导出</span>
+        </Link>
+      </section>
+
+
+
+      <section className="clip-hub-panel clip-hub-panel-highlight">
 
         <h2>安装步骤</h2>
 
@@ -193,7 +207,7 @@ export function ExtensionsPage() {
 
           所有扩展数据保存在浏览器本地（chrome.storage / sessionStorage），不会上传到任何服务器。
 
-          Mirror / Env / Wire 仅在当前标签页注入调试逻辑，不收集浏览历史。
+          Env / Wire 仅在当前标签页注入调试逻辑，不收集浏览历史。
 
         </p>
 

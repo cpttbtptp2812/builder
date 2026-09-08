@@ -18,16 +18,12 @@ export const profile = {
   email: "17301212105@163.com",
   phone: "17376563937",
   /** 首页主 pitch — 站点第一眼介绍 */
-  homePitch:
-    "主导 iMean AI 智能自动化平台：Agent Skills 运行时、MCP 工具链、SSE 流式对话、浏览器 DOM 回放全链路。作品全部可在线交互试用。",
-  /** 首页一句话（兼容旧引用） */
-  tagline:
-    "10 年前端 · React / TypeScript · AI Agent 与浏览器自动化 · 作品可在线试用",
-  /** 首页成果条 */
+  homePitch: "做前端和浏览器自动化。这里放的是自己在用的 Chrome 扩展，以及 iMean 平台相关的模块。",
+  tagline: "前端 · AI 自动化 · 浏览器工具",
   homeMetrics: [
-    { label: "元素定位", value: "70% → 92%" },
-    { label: "SDK 包体积", value: "-30%" },
-    { label: "AI 方向", value: "Skills + MCP + SSE" },
+    { label: "Chrome 扩展", value: "4 款" },
+    { label: "ClipHub", value: "片段库" },
+    { label: "iMean", value: "自动化平台" },
   ],
   /** 兼容旧页面 / 对话知识库 */
   summary:

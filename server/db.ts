@@ -60,7 +60,26 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_session_turns_session ON session_turns(session_id);
+
+  CREATE TABLE IF NOT EXISTS clip_snippets (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL DEFAULT '',
+    content TEXT NOT NULL,
+    page_url TEXT,
+    page_title TEXT,
+    text_fragment TEXT,
+    scroll_y REAL,
+    created_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_clip_snippets_created ON clip_snippets(created_at DESC);
 `);
+
+try {
+  db.exec(`ALTER TABLE clip_snippets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`);
+} catch {
+  /* column exists */
+}
 
 export function nowIso() {
   return new Date().toISOString();

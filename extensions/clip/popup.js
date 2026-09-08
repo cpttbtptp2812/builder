@@ -9,8 +9,15 @@ async function readLocalItems() {
 }
 
 async function loadToken() {
-  const { clipHubToken } = await chrome.storage.local.get("clipHubToken");
+  const { clipHubToken, clipHubPendingTags } = await chrome.storage.local.get([
+    "clipHubToken",
+    "clipHubPendingTags",
+  ]);
   if (clipHubToken) tokenInput.value = clipHubToken;
+  const tagsEl = document.getElementById("tags");
+  if (tagsEl && Array.isArray(clipHubPendingTags)) {
+    tagsEl.value = clipHubPendingTags.join(", ");
+  }
 }
 
 document.getElementById("save-token").addEventListener("click", async () => {
@@ -18,6 +25,15 @@ document.getElementById("save-token").addEventListener("click", async () => {
   await chrome.storage.local.set({ clipHubToken });
   await refresh();
 });
+
+async function savePendingTags() {
+  const raw = document.getElementById("tags")?.value ?? "";
+  const tags = raw.split(/[,，]/).map((s) => s.trim()).filter(Boolean);
+  await chrome.storage.local.set({ clipHubPendingTags: tags });
+}
+
+document.getElementById("tags")?.addEventListener("change", () => void savePendingTags());
+document.getElementById("tags")?.addEventListener("blur", () => void savePendingTags());
 
 function hostFrom(url) {
   try {

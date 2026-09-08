@@ -115,6 +115,13 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     /* 部分页面无法注入脚本 */
   }
 
+  const { clipHubPendingTags } = await chrome.storage.local.get("clipHubPendingTags");
+  const pendingTags = Array.isArray(clipHubPendingTags) ? clipHubPendingTags : [];
+  const hashTags = (info.selectionText.match(/#([\u4e00-\u9fa5\w-]+)/g) || []).map((t) =>
+    t.slice(1),
+  );
+  const tags = [...new Set([...pendingTags, ...hashTags])];
+
   const snippet = {
     id: crypto.randomUUID(),
     title: anchor.pageTitle?.slice(0, 40) || tab.title?.slice(0, 40) || "网页片段",
@@ -123,6 +130,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     pageTitle: anchor.pageTitle || tab.title || "",
     textFragment: anchor.textFragment || "",
     scrollY: anchor.scrollY ?? null,
+    tags,
     createdAt: new Date().toISOString(),
   };
 

@@ -18,6 +18,11 @@ export default defineConfig({
         target: "http://localhost:8787",
         changeOrigin: true,
       },
+      "/clip-api": {
+        target: "http://127.0.0.1:38472",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/clip-api/, ""),
+      },
       "/llm-proxy": {
         target: "https://api.deepseek.com",
         changeOrigin: true,

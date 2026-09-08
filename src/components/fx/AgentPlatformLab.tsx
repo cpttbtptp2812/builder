@@ -4,15 +4,13 @@ import {
   deleteMemoryAsync,
   retrieveRagAsync,
   runMultiAgentAsync,
-  runRouterEvalAsync,
-  runSkillBenchmarkAsync,
   saveMemoryAsync,
   syncMemoryFromServer,
 } from "../../lib/backendBridge";
-import { ROUTER_EVAL_CASES, routerEvalSummary, type RouterEvalRow, type ToolMetrics } from "../../lib/evalHarness";
 import { getAgentMeta, type MultiAgentStep } from "../../lib/multiAgentRuntime";
 import { buildRagCorpus, type RagHit, type RagRetrieveResult } from "../../lib/ragEngine";
 import { AgentArchitectureDiagram } from "./AgentArchitectureDiagram";
+import { EvalLabPanel } from "./EvalLabPanel";
 import { AgentFlowDiagram, PLATFORM_TOUR_NODES, platformNodeToScene } from "./AgentFlowDiagram";
 
 type Scene = "tour" | "rag" | "multi-agent" | "eval";
@@ -20,10 +18,10 @@ type Scene = "tour" | "rag" | "multi-agent" | "eval";
 const DEMO_QUERY = "iMean 架构设计和 PostMessage 调度";
 
 const SCENES: { id: Scene; step: string; title: string; subtitle: string }[] = [
-  { id: "tour", step: "开始", title: "30 秒看懂", subtitle: "一键跑通 RAG → Multi-Agent → Eval" },
+  { id: "tour", step: "开始", title: "快速了解", subtitle: "RAG → Multi-Agent（评测见 Eval Lab）" },
   { id: "rag", step: "①", title: "知识检索 RAG", subtitle: "问题拆成 chunk，按相关度召回" },
   { id: "multi-agent", step: "②", title: "多 Agent 协作", subtitle: "Planner 定计划 → Executor 调工具 → Reviewer 出答案" },
-  { id: "eval", step: "③", title: "质量评估 Eval", subtitle: "Skill 路由对不对、工具链快不快" },
+  { id: "eval", step: "→", title: "路由测试", subtitle: "Skill Router 回归" },
 ];
 
 function ScoreBar({ score }: { score: number }) {
@@ -109,9 +107,7 @@ export function AgentPlatformLab() {
   const [maAnswer, setMaAnswer] = useState("");
   const [maRunning, setMaRunning] = useState(false);
 
-  const [evalRows, setEvalRows] = useState<RouterEvalRow[]>([]);
   const [runtimeTag, setRuntimeTag] = useState<"server" | "local">("local");
-  const [toolMetrics, setToolMetrics] = useState<ToolMetrics | null>(null);
 
   const [tourRunning, setTourRunning] = useState(false);
   const [tourStep, setTourStep] = useState(0);
@@ -124,8 +120,6 @@ export function AgentPlatformLab() {
     const chunks = buildRagCorpus();
     return { chunks: chunks.length, projects: new Set(chunks.map((c) => c.projectId)).size };
   }, []);
-
-  const evalSummary = useMemo(() => routerEvalSummary(evalRows), [evalRows]);
 
   const runRag = useCallback(async (q: string) => {
     const result = await retrieveRagAsync(q, 3);
@@ -180,13 +174,7 @@ export function AgentPlatformLab() {
     await new Promise((r) => setTimeout(r, 600));
 
     setTourStep(3);
-    const evalRes = await runRouterEvalAsync();
-    setEvalRows(evalRes.rows);
-    setRuntimeTag(evalRes.runtime);
     setScene("eval");
-    const bench = await runSkillBenchmarkAsync();
-    if (bench) setToolMetrics(bench.metrics);
-
     setTourStep(4);
     setTourRunning(false);
   }, [runRag, runMultiAgent]);
@@ -194,7 +182,6 @@ export function AgentPlatformLab() {
   useEffect(() => {
     void runRag(DEMO_QUERY);
     void seedDefaultMemoriesIfEmpty().then(refreshMemory);
-    void runRouterEvalAsync().then((r) => setEvalRows(r.rows));
   }, [runRag, refreshMemory]);
 
   const topHit = ragResult?.hits[0];
@@ -214,7 +201,7 @@ export function AgentPlatformLab() {
     : [
         ...(ragResult ? ["query", "corpus", "rag"] : []),
         ...(maSteps.length ? ["multi-agent", "planner", "executor", "reviewer"] : []),
-        ...(evalSummary.pass > 0 ? ["eval"] : []),
+        ...(scene === "eval" ? ["eval"] : []),
         ...(maAnswer ? ["answer"] : []),
       ];
 
@@ -242,13 +229,14 @@ export function AgentPlatformLab() {
       <header className="platform-hero">
         <div className="platform-hero-copy">
           <p className="platform-hero-eyebrow">Agent 平台层 · 可在线验证</p>
-          <h3>RAG · Multi-Agent · Eval</h3>
+          <h3>RAG · Multi-Agent</h3>
           <p>
-            先看上方<strong>模型图</strong>理解数据怎么走，再点节点或下方按钮进入各步演示。
+            先看上方<strong>模型图</strong>理解数据怎么走。质量评测请用{" "}
+            <a href="#/work/dev-debug?tab=platform">开发调试</a>。
           </p>
         </div>
         <button type="button" className="platform-hero-cta" onClick={() => void runFullTour()} disabled={tourRunning || maRunning}>
-          {tourRunning ? `演示中… 第 ${tourStep}/3 步` : "▶ 一键跑完整演示（约 30 秒）"}
+          {tourRunning ? `演示中… 第 ${tourStep}/2 步` : "▶ 跑 RAG + Multi-Agent"}
         </button>
         <span className="platform-runtime-tag">{runtimeTag === "server" ? "SQLite 服务端" : "浏览器离线"}</span>
       </header>
@@ -288,7 +276,7 @@ export function AgentPlatformLab() {
               <ol className="platform-tour-checklist">
                 <li className={ragResult ? "done" : ""}>RAG 召回 Top3 chunk + 相关度条</li>
                 <li className={maSteps.length >= 3 ? "done" : ""}>Planner / Executor / Reviewer 依次亮起</li>
-                <li className={evalSummary.pass > 0 ? "done" : ""}>Router 准确率 + 工具 P50/P99</li>
+                <li>路由测试 → <a href="#/work/dev-debug?tab=eval">开发调试 · 路由</a></li>
               </ol>
               {topHit && (
                 <div className="platform-tour-preview">
@@ -389,61 +377,7 @@ export function AgentPlatformLab() {
       {/* Scene: Eval */}
       {scene === "eval" && (
         <div className="platform-scene-panel">
-          <div className="platform-scene-intro">
-            <strong>这一步在证明：</strong>
-            Skill 路由可量化回归；工具链 latency 有 P50/P99，不是「感觉挺快」。
-          </div>
-          <div className="platform-eval-cards">
-            <div className={`platform-eval-card ${evalSummary.accuracy >= 80 ? "ok" : "warn"}`}>
-              <span>Router 准确率</span>
-              <strong>{evalSummary.accuracy}%</strong>
-              <em>{evalSummary.pass}/{evalSummary.total} 通过</em>
-            </div>
-            <div className="platform-eval-card">
-              <span>平均路由分</span>
-              <strong>{evalSummary.avgScore}</strong>
-              <em>explainDiscovery 打分</em>
-            </div>
-            {toolMetrics && (
-              <>
-                <div className="platform-eval-card ok">
-                  <span>工具成功率</span>
-                  <strong>{toolMetrics.successRate}%</strong>
-                  <em>{toolMetrics.totalCalls} 次调用</em>
-                </div>
-                <div className="platform-eval-card">
-                  <span>延迟 P50 / P99</span>
-                  <strong>{toolMetrics.p50Ms} / {toolMetrics.p99Ms}</strong>
-                  <em>ms · Skill Benchmark</em>
-                </div>
-              </>
-            )}
-          </div>
-          <div className="platform-split-actions platform-split-actions--center">
-            <button type="button" onClick={() => void runRouterEvalAsync().then((r) => setEvalRows(r.rows))}>↻ 重跑 Router 测试</button>
-            <button type="button" className="platform-primary-btn" onClick={async () => {
-              const bench = await runSkillBenchmarkAsync();
-              if (bench) setToolMetrics(bench.metrics);
-            }}>跑 Skill 压测</button>
-          </div>
-          <details className="platform-details">
-            <summary>展开 {ROUTER_EVAL_CASES.length} 条用例明细</summary>
-            <table className="platform-eval-table">
-              <thead>
-                <tr><th>输入</th><th>期望 Skill</th><th>实际</th><th>结果</th></tr>
-              </thead>
-              <tbody>
-                {evalRows.map((row) => (
-                  <tr key={row.id} className={row.pass ? "pass" : "fail"}>
-                    <td>{row.query}</td>
-                    <td><code>{row.expectedSkillId}</code></td>
-                    <td><code>{row.predictedSkillId ?? "—"}</code></td>
-                    <td>{row.pass ? "✓" : "✗"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </details>
+          <EvalLabPanel compact />
         </div>
       )}
 

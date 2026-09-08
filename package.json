@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "dev:server": "tsx watch server/index.ts",
-    "dev:full": "concurrently -n web,api -c blue,green \"npm run dev\" \"npm run dev:server\"",
+    "dev:clip": "tsx watch server/clipServer.ts",
+    "dev:full": "concurrently -n web,api,clip -c blue,green,cyan \"npm run dev\" \"npm run dev:server\" \"npm run dev:clip\"",
     "build": "vite build",
     "build:extensions": "node scripts/build-extensions.mjs",
     "build:all": "npm run build:extensions && npm run build",

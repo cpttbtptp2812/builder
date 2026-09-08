@@ -103,7 +103,7 @@ export function AgentArchitectureDiagram({ showCompare = false, compact = false 
         <div className="agent-arch-compare">
           <h4>架构对照 · 自研运行时 vs 平台方案</h4>
           <p className="agent-arch-compare-lead">
-            非「用过 Dify/LangChain」背书，而是说明分层职责等价 — 面试时可对照讲迁移与选型。
+            说明分层职责与常见框架（Dify / LangChain 等）的对应关系，便于迁移与选型。
           </p>
           <div className="agent-arch-compare-scroll">
             <table className="agent-arch-compare-table">

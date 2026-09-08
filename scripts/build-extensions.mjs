@@ -10,7 +10,6 @@ const outDir = join(root, "public", "downloads");
 
 const PUBLISH = {
   clip: "ClipHub-Extension-v1.2.0.zip",
-  mirror: "Mirror-Extension-v1.0.0.zip",
   env: "Env-Extension-v1.0.0.zip",
   wire: "Wire-Extension-v1.0.0.zip",
 };

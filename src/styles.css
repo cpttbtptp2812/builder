@@ -14266,3 +14266,585 @@ input.replay-typing {
   white-space: nowrap;
 }
 
+/* ── Eval Lab + 首页评测条 ── */
+.eval-metrics-strip {
+  margin-top: 1.25rem;
+}
+
+.eval-metrics-strip-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08), rgba(13, 148, 136, 0.04));
+}
+
+.eval-metrics-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.eval-metrics-value {
+  font-size: 1.35rem;
+  color: #047857;
+  line-height: 1;
+}
+
+.eval-metrics-sub {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.eval-metrics-link {
+  margin-left: auto;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #059669;
+  text-decoration: none;
+}
+
+.eval-metrics-link:hover {
+  text-decoration: underline;
+}
+
+.home-featured-grid--eval,
+.home-featured-grid--agent {
+  grid-template-columns: 1fr;
+  max-width: 720px;
+}
+
+.eval-lab {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1rem 0;
+}
+
+.eval-lab-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.eval-lab-eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: #059669;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.eval-lab-head h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1.05rem;
+}
+
+.eval-lab-desc {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #64748b;
+  max-width: 52ch;
+  line-height: 1.5;
+}
+
+.eval-lab-runtime {
+  font-size: 0.65rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.eval-lab-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.eval-lab-btn {
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.45rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.eval-lab-btn.primary {
+  background: #059669;
+  border-color: #059669;
+  color: #fff;
+}
+
+.eval-lab-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.eval-lab-fails {
+  padding: 0.75rem 1rem;
+  border-radius: 0.55rem;
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  background: rgba(254, 242, 242, 0.6);
+}
+
+.eval-lab-fails h4 {
+  margin: 0 0 0.5rem;
+  font-size: 0.78rem;
+  color: #b91c1c;
+}
+
+.eval-lab-fails ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.eval-lab-fails li {
+  font-size: 0.72rem;
+  padding: 0.35rem 0;
+  border-top: 1px solid rgba(239, 68, 68, 0.12);
+}
+
+.eval-lab-fails li:first-child {
+  border-top: none;
+}
+
+.eval-lab-fails code {
+  font-size: 0.68rem;
+}
+
+.eval-lab-more {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+.eval-lab-more a {
+  color: #059669;
+  font-weight: 600;
+}
+
+.mini-eval-body {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+}
+
+.mini-eval-score strong {
+  display: block;
+  font-size: 1.5rem;
+  color: #059669;
+  line-height: 1;
+}
+
+.mini-eval-score span {
+  font-size: 0.62rem;
+  color: #64748b;
+}
+
+.mini-eval-meta {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.62rem;
+  color: #64748b;
+  line-height: 1.45;
+}
+
+.work-eval {
+  max-width: 900px;
+}
+
+/* ── 片段库 + 首页产品区 ── */
+.home-product-extra {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.home-product-extra-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border-radius: 0.65rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s;
+}
+
+.home-product-extra-link:hover {
+  border-color: #0d9488;
+}
+
+.home-product-extra-icon {
+  font-size: 1.25rem;
+}
+
+.home-product-extra-link strong {
+  display: block;
+  font-size: 0.85rem;
+  color: #1e293b;
+}
+
+.home-product-extra-link em {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+  font-style: normal;
+  margin-top: 0.1rem;
+}
+
+.home-product-extra-link > span:last-child {
+  margin-left: auto;
+  color: #0d9488;
+  font-weight: 600;
+}
+
+.site-clips-lib .clips-lib-head {
+  margin-bottom: 1rem;
+}
+
+.clips-lib-status {
+  font-size: 0.78rem;
+  margin: 0.5rem 0 0;
+}
+
+.clips-lib-status--online {
+  color: #059669;
+}
+
+.clips-lib-status--offline {
+  color: #b45309;
+}
+
+.clips-lib-status--loading {
+  color: #64748b;
+}
+
+.clips-lib-token-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.clips-lib-token-row label {
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.clips-lib-token-row input {
+  flex: 1 1 180px;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.clips-lib-hint {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.clips-lib-hint code {
+  font-size: 0.68rem;
+  background: #f1f5f9;
+  padding: 0.1rem 0.3rem;
+  border-radius: 0.25rem;
+}
+
+.clips-lib-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.clips-lib-search {
+  flex: 1 1 200px;
+  padding: 0.45rem 0.65rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.clips-lib-btn {
+  padding: 0.45rem 0.75rem;
+  border-radius: 0.4rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.clips-lib-btn.primary {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #fff;
+}
+
+.clips-lib-btn.ghost {
+  background: #f8fafc;
+}
+
+.clips-lib-empty {
+  font-size: 0.82rem;
+  color: #64748b;
+  line-height: 1.55;
+}
+
+.clips-lib-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.clips-lib-item {
+  padding: 0.85rem 1rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.55rem;
+  background: #fafbfc;
+}
+
+.clips-lib-item-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.72rem;
+  color: #64748b;
+  margin-bottom: 0.35rem;
+}
+
+.clips-lib-item-top strong {
+  color: #1e293b;
+  font-size: 0.82rem;
+}
+
+.clips-lib-item blockquote {
+  margin: 0 0 0.5rem;
+  padding-left: 0.65rem;
+  border-left: 3px solid #0d9488;
+  font-size: 0.82rem;
+  color: #334155;
+  line-height: 1.5;
+}
+
+.clips-lib-source {
+  font-size: 0.72rem;
+  color: #64748b;
+  margin: 0 0 0.5rem;
+  display: flex;
+  gap: 0.65rem;
+}
+
+.clips-lib-source a {
+  color: #0d9488;
+}
+
+.clips-lib-item-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.clips-lib-item-actions button {
+  padding: 0.25rem 0.55rem;
+  font-size: 0.68rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.35rem;
+  background: #fff;
+  cursor: pointer;
+}
+
+.clips-lib-item-actions button.danger {
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.3);
+}
+
+
+.clips-lib-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.3rem;
+  margin-bottom: 0.35rem;
+}
+
+.clips-lib-tag {
+  font-size: 0.62rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(13, 148, 136, 0.12);
+  color: #0f766e;
+}
+
+.clips-lib-tag-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.85rem;
+}
+
+.clips-lib-tag-filter {
+  font-size: 0.68rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+  cursor: pointer;
+}
+
+.clips-lib-tag-filter.on {
+  background: #0d9488;
+  border-color: #0d9488;
+  color: #fff;
+}
+
+.clips-lib-tag-edit {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.35rem;
+}
+
+.clips-lib-tag-edit input {
+  flex: 1 1 160px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.72rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.35rem;
+}
+
+.clips-lib-view-toggle {
+  display: flex;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.4rem;
+  overflow: hidden;
+}
+
+.clips-lib-view-toggle button {
+  padding: 0.4rem 0.65rem;
+  font-size: 0.72rem;
+  border: none;
+  background: #fff;
+  cursor: pointer;
+}
+
+.clips-lib-view-toggle button.on {
+  background: #f1f5f9;
+  font-weight: 600;
+}
+
+.clips-lib-site-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.clips-lib-site-group h3 {
+  font-size: 0.85rem;
+  margin: 0 0 0.5rem;
+  color: #334155;
+}
+
+.clips-lib-site-group h3 span {
+  font-weight: normal;
+  color: #94a3b8;
+  font-size: 0.72rem;
+}
+
+.clips-lib-btn.danger {
+  color: #b91c1c;
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+/* 开发调试台 */
+.work-dev-debug {
+  max-width: 1100px;
+}
+
+.dev-debug-tabs {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 0.4rem;
+  margin: 1rem 0;
+}
+
+.dev-debug-tab {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+
+.dev-debug-tab strong {
+  font-size: 0.82rem;
+  color: #1e293b;
+}
+
+.dev-debug-tab span {
+  font-size: 0.65rem;
+  color: #64748b;
+}
+
+.dev-debug-tab.active {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.06);
+}
+
+.dev-debug-panel {
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  padding: 1rem;
+  background: #fafbfc;
+}
+
+.dev-debug-panel-head {
+  margin-bottom: 1rem;
+}
+
+.dev-debug-panel-head h2 {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+}
+
+.dev-debug-panel-head p {
+  margin: 0;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.dev-debug-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+@media (max-width: 640px) {
+  .dev-debug-tabs {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
