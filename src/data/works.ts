@@ -40,14 +40,29 @@ export const WORKS: Work[] = [
     id: "extension-hub",
     slug: "extension-hub",
     title: "插件集",
-    subtitle: "4 款 Chrome 扩展",
-    hook: "片段保存、API 调试、环境切换、SSE 流式排查",
-    desc: "ClipHub / Mirror / Env / Wire — 我自己联调时在用的扩展，下载解压即可加载。",
+    subtitle: "3 款 Chrome 扩展",
+    hook: "片段保存、环境切换、SSE 流式排查",
+    desc: "ClipHub / Env / Wire — 日常联调在用的扩展，下载解压即可加载。",
     impact: "本地运行",
     kind: "product-tool",
-    stack: ["Chrome MV3", "Fetch 劫持", "EventSource"],
-    teaser: "ClipHub · Mirror · Env · Wire",
+    stack: ["Chrome MV3", "EventSource", "按域配置"],
+    teaser: "ClipHub · Env · Wire",
     accent: "#0d9488",
+    tier: "flagship",
+    featured: true,
+  },
+  {
+    id: "dev-debug",
+    slug: "dev-debug",
+    title: "AI Agent",
+    subtitle: "提问 · 编排 · 调度 · 工具",
+    hook: "理解问句 → 辨认意图 → 规划任务 → 运行 → 能力",
+    desc: "按图中步骤走完一轮。每个节点进不同能力，不是同一页。",
+    impact: "Agent 平台",
+    kind: "dev-debug",
+    stack: ["MCP", "RAG", "SKILL.md", "SSE"],
+    teaser: "对话 · 编排 · 运行 · 盯进度",
+    accent: "#6366f1",
     tier: "flagship",
     featured: true,
   },
@@ -80,19 +95,6 @@ export const WORKS: Work[] = [
     accent: "#a78bfa",
     tier: "flagship",
     featured: true,
-  },
-  {
-    id: "dev-debug",
-    slug: "dev-debug",
-    title: "开发调试",
-    subtitle: "Agent · Skills · Platform",
-    hook: "对话、Skill 路由、RAG、Multi-Agent、路由回归 — 一个入口",
-    desc: "本地 SQLite 后端，Guest 模式免 Key。按 Tab 切换模块，不再拆三个独立页。",
-    kind: "dev-debug",
-    stack: ["MCP", "RAG", "SKILL.md"],
-    teaser: "对话 · Skills · RAG · 测试",
-    accent: "#6366f1",
-    tier: "lab",
   },
   {
     id: "sse",
@@ -153,10 +155,8 @@ export function getWork(slug: string) {
 }
 
 export const FLAGSHIP_WORKS = WORKS.filter((w) => w.tier === "flagship");
+export const HOME_AGENT = WORKS.find((w) => w.slug === "dev-debug")!;
 export const LAB_WORKS = WORKS.filter((w) => w.tier === "lab");
-
-/** 首页主推：浏览器扩展 */
-export const HOME_PRODUCT = WORKS.find((w) => w.slug === "extension-hub")!;
 
 /** 首页：工作相关项目 */
 export const PROJECT_WORKS = WORKS.filter((w) => ["imean", "builder"].includes(w.slug));

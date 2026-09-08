@@ -18,10 +18,10 @@ export const profile = {
   email: "17301212105@163.com",
   phone: "17376563937",
   /** 首页主 pitch — 站点第一眼介绍 */
-  homePitch: "做前端和浏览器自动化。这里放的是自己在用的 Chrome 扩展，以及 iMean 平台相关的模块。",
-  tagline: "前端 · AI 自动化 · 浏览器工具",
+  homePitch: "做 AI Agent 和浏览器自动化。Agent 对话、Skills、RAG 合在一个工作台；另有 iMean 自动化与 Chrome 扩展。",
+  tagline: "前端 · AI Agent · 浏览器自动化",
   homeMetrics: [
-    { label: "Chrome 扩展", value: "4 款" },
+    { label: "AI Agent", value: "1 工作台" },
     { label: "ClipHub", value: "片段库" },
     { label: "iMean", value: "自动化平台" },
   ],

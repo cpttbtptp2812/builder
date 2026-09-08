@@ -11,6 +11,7 @@ export function SiteFooter() {
       <nav className="site-home-foot-nav" aria-label="页脚导航">
         <Link to="/">全部作品</Link>
         <Link to="/resume">个人履历</Link>
+        <Link to="/work/dev-debug">AI Agent</Link>
         <Link to="/tools/extensions">插件集</Link>
         <Link to="/tools/clips">片段库</Link>
         <a href={`mailto:${profile.email}`}>邮件</a>

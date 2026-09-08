@@ -33,9 +33,11 @@ function uid() {
 /** UniAgent 对话 — 对齐 tianyangAgent 产品体验 + tianyangbuilder MCP 配置 */
 export function AgentProductDemo({
   autoStart = false,
+  hubMode = false,
   onFlowActive,
 }: {
   autoStart?: boolean;
+  hubMode?: boolean;
   onFlowActive?: (nodeId: string) => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
@@ -132,7 +134,8 @@ export function AgentProductDemo({
       setStreamText("");
       setLiveTools([]);
       setShowVnc(false);
-      onFlowActive?.("router");
+      window.setTimeout(() => onFlowActive?.("router"), 240);
+      window.setTimeout(() => onFlowActive?.("skill"), 640);
 
       let fullReasoning = "";
       let fullText = "";
@@ -230,6 +233,7 @@ export function AgentProductDemo({
     <div className="work-agent-rich agent-product-demo agent-product-live agent-chat-shell" ref={rootRef}>
       <div className="agent-shell-bg" aria-hidden />
 
+      {!hubMode && (
       <div className="agent-shell-header">
         <div className="agent-shell-identity">
           <span className="agent-shell-avatar">UA</span>
@@ -244,6 +248,7 @@ export function AgentProductDemo({
           ))}
         </div>
       </div>
+      )}
 
       <AgentMcpRegistry enabled={enabledTools} onChange={setEnabledTools} />
       <AgentConfigBar onChange={setLlmConfig} />

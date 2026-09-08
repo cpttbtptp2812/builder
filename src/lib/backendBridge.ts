@@ -146,6 +146,7 @@ export async function runGuestAgentAsync(
 ): Promise<{ assistantText: string; traces: AgentTurnTrace[]; runtime: "server" | "local" } | null> {
   const remote = await apiFetch<{ assistantText: string; traces: AgentTurnTrace[] }>("/agent/guest", {
     method: "POST",
+    signal: AbortSignal.timeout(4000),
     body: JSON.stringify({
       query,
       sessionId: getSessionId(),

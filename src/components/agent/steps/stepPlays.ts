@@ -1,0 +1,196 @@
+import type { StepId } from "./registry";
+
+export type StepPlaySpec = {
+  ask: string;
+  offLabel: string;
+  onLabel: string;
+  cta: string;
+  reset: string;
+  kind: "stall" | "duel" | "fill" | "split" | "overflow" | "versus" | "race" | "lock" | "retry" | "blur" | "gate";
+  left: string;
+  right: string;
+  why: string;
+  chips?: string[];
+  scores?: { name: string; a: number; b: number }[];
+  slots?: { k: string; empty: string; filled: string }[];
+  tracks?: { name: string; ms: number }[];
+};
+
+export const STEP_PLAYS: Record<StepId, StepPlaySpec> = {
+  nlu: {
+    kind: "stall",
+    ask: "中文整句丢进「按空格切」会怎样？",
+    offLabel: "卡住时",
+    onLabel: "改切法后",
+    cta: "跳过 · 改按标点和字种切",
+    reset: "再卡一次",
+    left: "tokens = []  ·  整句是一块",
+    right: "对本站 / 做 / 发布前检查 / 探活",
+    why: "中文没有空格。只按空白切，后面意图表对不上任何词。",
+    chips: ["收原句", "按空格切", "标点切开", "数 CJK"],
+  },
+  intent: {
+    kind: "duel",
+    ask: "两条 Skill 分数咬死，点一下看谁胜出。",
+    offLabel: "平局",
+    onLabel: "只取第一名",
+    cta: "打破平局 · 长词加权",
+    reset: "再看平局",
+    left: "site-analyzer 0.62  ·  workflow 0.61",
+    right: "top-1 = site-analyzer（发布前检查 +3）",
+    why: "不打破平局会同时进两条流程。",
+    scores: [
+      { name: "site-analyzer", a: 62, b: 81 },
+      { name: "workflow", a: 61, b: 44 },
+    ],
+  },
+  entity: {
+    kind: "fill",
+    ask: "问句没写网址，槽位是空的。点一下看回落。",
+    offLabel: "空槽",
+    onLabel: "回落后",
+    cta: "用当前页 origin 填上",
+    reset: "再清空",
+    left: "url = null",
+    right: "url = 本页 origin  ·  site:self",
+    why: "没有地址，浏览器不知道打谁。",
+    slots: [
+      { k: "url", empty: "—", filled: "https://this.origin" },
+      { k: "site", empty: "—", filled: "self" },
+      { k: "action", empty: "—", filled: "probe" },
+    ],
+  },
+  plan: {
+    kind: "split",
+    ask: "整站检查被当成一步，还是拆开？",
+    offLabel: "揉成一团",
+    onLabel: "拆成三步",
+    cta: "拆开：探活 / 并行 / 汇总",
+    reset: "再揉回去",
+    left: "1 步「探活整站」· 失败不知道是哪页",
+    right: "①探活  ②三页并行  ③汇总",
+    why: "不拆就无法局部失败、也无法并行。",
+    chips: ["探活", "看首页", "看作品", "汇总"],
+  },
+  context: {
+    kind: "overflow",
+    ask: "12 轮会话 + 整页 HTML，窗口还装得下吗？",
+    offLabel: "爆掉",
+    onLabel: "裁完",
+    cta: "裁掉旧轮次和整页 DOM",
+    reset: "再塞爆",
+    left: "token 8120 / 8000  ·  模型拒收",
+    right: "本轮 + URL + 46 个节点摘要",
+    why: "不裁，后面每一步都会再爆一次。",
+  },
+  dsl: {
+    kind: "versus",
+    ask: "左右对照：没写出入参，和下一步接得上吗？",
+    offLabel: "只有步骤名",
+    onLabel: "有 schema",
+    cta: "补上入参 / 出参",
+    reset: "看没 schema 的那边",
+    left: "steps: probe, summarize  ·  下一步读不到结果",
+    right: "in: url  ·  out: { ok, pages[] }",
+    why: "名字能看懂，机器对不上字段。",
+  },
+  manage: {
+    kind: "versus",
+    ask: "同一次提交点两次，会不会打两遍？",
+    offLabel: "直接执行",
+    onLabel: "入队去重",
+    cta: "合并成 queue #28 / v3",
+    reset: "再重复提交",
+    left: "两份一模一样的探活在跑",
+    right: "只留一单  ·  版本 v3 可回放",
+    why: "不排队、不记版本，刷新就会再打一次。",
+  },
+  pattern: {
+    kind: "race",
+    ask: "三页互不依赖。哪条先到？",
+    offLabel: "顺序 4.8s",
+    onLabel: "并行 1.6s",
+    cta: "改成三路同时跑",
+    reset: "再看排队",
+    left: "一页完再打下一页",
+    right: "fan-out 后 fan-in，一页失败不影响另两页",
+    why: "卡住的是时间，不是逻辑。",
+    tracks: [
+      { name: "首页", ms: 1600 },
+      { name: "作品", ms: 1600 },
+      { name: "履历", ms: 1600 },
+    ],
+  },
+  engine: {
+    kind: "gate",
+    ask: "DSL 写 probe，运行时叫 http_probe。",
+    offLabel: "名字对不上",
+    onLabel: "别名映射后",
+    cta: "probe → http_probe 再 dispatch",
+    reset: "再对不上",
+    left: "pc=0  ·  tool not found",
+    right: "pc=1  ·  200  ·  210ms",
+    why: "不映射就停在第一步，看起来像内核坏了。",
+  },
+  mech: {
+    kind: "lock",
+    ask: "要往页面上写值。没人点头能不能写？",
+    offLabel: "沙箱锁住",
+    onLabel: "只读注入 / 写要批准",
+    cta: "允许注入只读变量",
+    reset: "再锁上",
+    left: "${url} 仍是空的  ·  拒写",
+    right: "url 可读  ·  写操作仍等人点",
+    why: "访客页上乱填是事故，不是功能。",
+    slots: [
+      { k: "${url}", empty: "locked", filled: "https://this.origin" },
+      { k: "${pages}", empty: "locked", filled: "read-only []" },
+    ],
+  },
+  ctrl: {
+    kind: "retry",
+    ask: "3 路里 1 路超时，整单要不要作废？",
+    offLabel: "整单红",
+    onLabel: "只重试那一页",
+    cta: "留下成功的两页，重试第 2 页",
+    reset: "再整单失败",
+    left: "3/3 标红  ·  已做的也丢了",
+    right: "2 页保留  ·  1 页重试中",
+    why: "没有局部回退，一次超时就白跑。",
+    chips: ["首页 200", "作品 超时", "履历 200"],
+  },
+  browser: {
+    kind: "blur",
+    ask: "页面还在转圈就 snapshot，能用吗？",
+    offLabel: "骨架屏",
+    onLabel: "网络空闲后",
+    cta: "等 idle 再拍",
+    reset: "再拍早了",
+    left: "可交互节点 4  ·  全是 placeholder",
+    right: "可交互节点 46  ·  真按钮",
+    why: "拍太早，后面实体抽取会把 loading 当内容。",
+  },
+  mcp: {
+    kind: "gate",
+    ask: "内核以为有这把工具，桥上没有。",
+    offLabel: "method not found",
+    onLabel: "tools/call ok",
+    cta: "在 registry 里打开 http_probe",
+    reset: "再关掉",
+    left: "JSON-RPC 报错  ·  协议不认",
+    right: "id=17  ·  结果回传内核",
+    why: "开关没开，看起来像模型不会调用。",
+  },
+  kb: {
+    kind: "versus",
+    ask: "52 段全塞进去，和只留 3 段，差在哪？",
+    offLabel: "整库倒进窗口",
+    onLabel: "top-3",
+    cta: "只留 Agent / 平台 / 评测 三段",
+    reset: "再倒进去",
+    left: "52 chunks  ·  窗口再次爆",
+    right: "3 段带出处  ·  能引用",
+    why: "检索不是搬家，是打分截断。",
+    chips: ["Agent 平台", "评测集", "技能路由", "…还有 49 段"],
+  },
+};

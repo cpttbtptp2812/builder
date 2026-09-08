@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { ExtensionHomeCard } from "../components/home/ExtensionHomeCard";
 import { FeaturedWorkCard } from "../components/home/FeaturedWorkCard";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { WorkTenureLive } from "../components/WorkTenureLive";
+import { EXTENSION_CATALOG } from "../data/clipHubExtensions";
 import { profile } from "../data/profile";
-import { HOME_PRODUCT, LAB_WORKS, PROJECT_WORKS } from "../data/works";
+import { HOME_AGENT, LAB_WORKS, PROJECT_WORKS } from "../data/works";
 
 export function HomePage() {
   const [briefSlug, setBriefSlug] = useState<string | null>(null);
@@ -34,23 +36,27 @@ export function HomePage() {
           </ul>
         </header>
 
-        <section className="works-section works-section-product">
+        <section className="works-section works-section-agent">
+          <div className="works-section-head">
+            <h2 className="works-section-label">AI Agent</h2>
+            <span className="works-section-hint">对话 · Skills · RAG · 路由回归</span>
+          </div>
+          <div className="home-featured-grid">
+            <FeaturedWorkCard work={HOME_AGENT} compact onBrief={() => setBriefSlug(HOME_AGENT.slug)} />
+          </div>
+        </section>
+
+        <section className="works-section works-section-extensions">
           <div className="works-section-head">
             <h2 className="works-section-label">浏览器扩展</h2>
-            <span className="works-section-hint">自用工具 · 可下载</span>
+            <span className="works-section-hint">
+              <Link to="/tools/extensions">安装说明</Link>
+            </span>
           </div>
-          <div className="home-featured-grid home-featured-grid--product">
-            <FeaturedWorkCard work={HOME_PRODUCT} onBrief={() => setBriefSlug(HOME_PRODUCT.slug)} />
-          </div>
-          <div className="home-product-extra">
-            <Link to="/tools/clips" className="home-product-extra-link">
-              <span className="home-product-extra-icon">📎</span>
-              <span>
-                <strong>片段库</strong>
-                <em>标签 · 全文搜索 · 按站点分组</em>
-              </span>
-              <span aria-hidden>→</span>
-            </Link>
+          <div className="home-featured-grid">
+            {EXTENSION_CATALOG.map((ext) => (
+              <ExtensionHomeCard key={ext.id} ext={ext} />
+            ))}
           </div>
         </section>
 
@@ -59,9 +65,9 @@ export function HomePage() {
             <h2 className="works-section-label">项目</h2>
             <span className="works-section-hint">iMean 自动化平台相关</span>
           </div>
-          <div className="home-featured-grid home-featured-grid--flagship">
+          <div className="home-featured-grid">
             {PROJECT_WORKS.map((w) => (
-              <FeaturedWorkCard key={w.id} work={w} onBrief={() => setBriefSlug(w.slug)} />
+              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
             ))}
           </div>
         </section>
@@ -69,9 +75,9 @@ export function HomePage() {
         <section className="works-section works-section-lab">
           <div className="works-section-head">
             <h2 className="works-section-label">更多</h2>
-            <span className="works-section-hint">Agent / SSE / 定位 / SDK 等模块</span>
+            <span className="works-section-hint">SSE / 定位 / SDK / 录制</span>
           </div>
-          <div className="home-featured-grid home-featured-grid--lab">
+          <div className="home-featured-grid">
             {LAB_WORKS.map((w) => (
               <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
             ))}

@@ -355,16 +355,27 @@ function RouterRow({
 }
 
 /** SkillForge Runtime Lab — 路由矩阵 + MCP 流水线 + DevTools 面板 */
-export function AgentSkillsDemo({ initialSkillId = null }: { initialSkillId?: string | null; trySkillId?: string | null }) {
+export function AgentSkillsDemo({
+  initialSkillId = null,
+  embedded = false,
+  hideFlow = false,
+}: {
+  initialSkillId?: string | null;
+  trySkillId?: string | null;
+  embedded?: boolean;
+  hideFlow?: boolean;
+}) {
   const [snapshotRoot, setSnapshotRoot] = useState<Element | null>(null);
   const [tab, setTab] = useState<LabTab>(() => {
+    if (initialSkillId === "mcp" || initialSkillId === "router") return initialSkillId;
     if (initialSkillId && getSkill(initialSkillId)) return initialSkillId as LabTab;
     return "router";
   });
   const [routerQuery, setRouterQuery] = useState(ROUTER_EXAMPLES[0]!.query);
 
   useEffect(() => {
-    if (initialSkillId && getSkill(initialSkillId)) setTab(initialSkillId as LabTab);
+    if (initialSkillId === "mcp" || initialSkillId === "router") setTab(initialSkillId);
+    else if (initialSkillId && getSkill(initialSkillId)) setTab(initialSkillId as LabTab);
   }, [initialSkillId]);
 
   const activeSkill = tab !== "router" && tab !== "mcp" ? getSkill(tab) : null;
@@ -394,12 +405,38 @@ export function AgentSkillsDemo({ initialSkillId = null }: { initialSkillId?: st
   const flowActive = tab === "mcp" ? "mcp" : tab === "router" ? "router" : tab;
 
   return (
-    <div className="skill-runtime-lab" ref={(el) => setSnapshotRoot(el)}>
-      <AgentFlowDiagram variant="skills" activeId={flowActive} onSelect={selectFlowNode} compact />
+    <div className={`skill-runtime-lab${embedded ? " skill-runtime-lab--embedded" : ""}`} ref={(el) => setSnapshotRoot(el)}>
+      {!hideFlow && (
+      <AgentFlowDiagram
+        variant="hub"
+        compact
+        activeId={
+          tab === "mcp"
+            ? "mcp"
+            : tab === "router"
+              ? "intent"
+              : tab === "dom-probe"
+                ? "entity"
+                : tab === "workflow-orchestrator"
+                  ? "pattern"
+                  : "browser"
+        }
+        visitedIds={["nlu", "intent", "plan", "browser", "mcp"]}
+        flowEdge={tab === "mcp" ? { from: "ctrl", to: "mcp" } : { from: "plan", to: "browser" }}
+        caption="能力层：浏览器 / 协议 / 知识，不是理解页"
+        onSelect={(id) => {
+          if (id === "browser") selectFlowNode("site-analyzer");
+          else if (id === "entity") selectFlowNode("dom-probe");
+          else if (id === "pattern" || id === "manage" || id === "dsl" || id === "plan") selectFlowNode("workflow-orchestrator");
+          else if (id === "mcp" || id === "mech") selectFlowNode("mcp");
+          else if (id === "intent" || id === "nlu") selectFlowNode("router");
+        }}
+      />
+      )}
 
       <nav className="skill-workbench-tabs" aria-label="Runtime Lab">
         <button type="button" className={tab === "router" ? "on" : ""} onClick={() => setTab("router")}>
-          ◈ Router Lab
+          辨认意图
         </button>
         {AGENT_SKILLS.map((s) => (
           <button key={s.id} type="button" className={tab === s.id ? "on" : ""} onClick={() => setTab(s.id)}>
@@ -407,7 +444,7 @@ export function AgentSkillsDemo({ initialSkillId = null }: { initialSkillId?: st
           </button>
         ))}
         <button type="button" className={tab === "mcp" ? "on" : ""} onClick={() => setTab("mcp")}>
-          MCP Console
+          协议工具
         </button>
       </nav>
 
@@ -458,7 +495,7 @@ export function AgentSkillsDemo({ initialSkillId = null }: { initialSkillId?: st
           )}
         </div>
 
-        <aside className="skill-workbench-aside">
+        <aside className={`skill-workbench-aside${embedded ? " skill-workbench-aside--compact" : ""}`}>
           <section className="skill-forge-panel skill-forge-manifest">
             <header>
               <strong>SKILL.md</strong>

@@ -11,28 +11,32 @@ import { WorkLocator } from "./WorkLocator";
 import { WorkSdk } from "./WorkSdk";
 import { WorkSse } from "./WorkSse";
 
-const LEGACY_DEV_SLUGS = new Set(["agent", "skills", "platform", "eval"]);
+const AGENT_SLUGS = new Set(["agent", "skills", "platform", "eval"]);
 
-/** 旧 slug → dev-debug tab */
-function legacyTab(slug: string, trySkill: string | null) {
-  if (slug === "skills" || trySkill) return "skills";
-  if (slug === "platform") return "platform";
-  if (slug === "eval") return "eval";
-  return "agent";
+/** 旧 Agent 独立页 → 合并入口 + Tab */
+function agentHubRedirect(slug: string, params: URLSearchParams): string | null {
+  if (!AGENT_SLUGS.has(slug)) return null;
+  const next = new URLSearchParams();
+  if (slug === "skills") {
+    next.set("panel", "skills");
+    const trySkill = params.get("try") ?? params.get("skill");
+    if (trySkill) next.set("try", trySkill);
+  } else if (slug === "platform") {
+    next.set("panel", "platform");
+  } else if (slug === "eval") {
+    next.set("panel", "eval");
+  } else {
+    next.set("step", "chat");
+  }
+  return `/work/dev-debug?${next.toString()}`;
 }
 
 export function WorkRouter() {
   const { slug } = useParams();
   const [params] = useSearchParams();
-  const trySkill = params.get("try") ?? params.get("skill");
 
-  if (slug && LEGACY_DEV_SLUGS.has(slug)) {
-    const tab = legacyTab(slug, trySkill);
-    const q = new URLSearchParams(params);
-    q.set("tab", tab);
-    if (trySkill && tab === "skills") q.set("try", trySkill);
-    return <Navigate to={`/work/dev-debug?${q.toString()}`} replace />;
-  }
+  const legacy = slug ? agentHubRedirect(slug, params) : null;
+  if (legacy) return <Navigate to={legacy} replace />;
 
   const work = slug ? getWork(slug) : null;
   if (!work) return <Navigate to="/" replace />;

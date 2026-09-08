@@ -95,9 +95,17 @@ function MultiAgentTimeline({ steps, running }: { steps: MultiAgentStep[]; runni
   );
 }
 
-export function AgentPlatformLab() {
+export function AgentPlatformLab({
+  embedded = false,
+  initialScene,
+  hideFlow = false,
+}: {
+  embedded?: boolean;
+  initialScene?: "rag" | "multi-agent" | "eval" | "tour";
+  hideFlow?: boolean;
+}) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const [scene, setScene] = useState<Scene>("tour");
+  const [scene, setScene] = useState<Scene>(initialScene ?? (embedded ? "rag" : "tour"));
 
   const [ragQuery, setRagQuery] = useState(DEMO_QUERY);
   const [ragResult, setRagResult] = useState<RagRetrieveResult | null>(null);
@@ -215,35 +223,47 @@ export function AgentPlatformLab() {
     }
   }
 
+  const navScenes = SCENES.filter((s) => {
+    if (embedded) return s.id === "rag" || s.id === "multi-agent";
+    return s.id !== "tour";
+  });
+
   return (
-    <div className="platform-lab platform-lab--guided">
+    <div className={`platform-lab platform-lab--guided${embedded ? " platform-lab--embedded" : ""}`}>
+      {!hideFlow && (
       <AgentFlowDiagram
         variant="platform"
+        compact={embedded}
         activeId={diagramActive}
         visitedIds={diagramVisited}
         flowEdge={diagramFlowEdge}
         onSelect={selectFlowNode}
       />
+      )}
 
-      {/* Hero — 这页在干嘛 */}
-      <header className="platform-hero">
-        <div className="platform-hero-copy">
-          <p className="platform-hero-eyebrow">Agent 平台层 · 可在线验证</p>
-          <h3>RAG · Multi-Agent</h3>
-          <p>
-            先看上方<strong>模型图</strong>理解数据怎么走。质量评测请用{" "}
-            <a href="#/work/dev-debug?tab=platform">开发调试</a>。
-          </p>
+      {!embedded ? (
+        <header className="platform-hero">
+          <div className="platform-hero-copy">
+            <p className="platform-hero-eyebrow">Agent 平台层 · 可在线验证</p>
+            <h3>RAG · Multi-Agent</h3>
+            <p>分块检索与三 Agent 协作 — 与上方对话共用 MCP 语料。</p>
+          </div>
+          <button type="button" className="platform-hero-cta" onClick={() => void runFullTour()} disabled={tourRunning || maRunning}>
+            {tourRunning ? `演示中… 第 ${tourStep}/2 步` : "▶ 跑 RAG + Multi-Agent"}
+          </button>
+          <span className="platform-runtime-tag">{runtimeTag === "server" ? "SQLite 服务端" : "浏览器离线"}</span>
+        </header>
+      ) : (
+        <div className="platform-embedded-bar">
+          <button type="button" className="platform-hero-cta" onClick={() => void runFullTour()} disabled={tourRunning || maRunning}>
+            {tourRunning ? "演示中…" : "▶ 一键 RAG + Multi-Agent"}
+          </button>
+          <span className="platform-runtime-tag">{runtimeTag === "server" ? "服务端" : "离线"}</span>
         </div>
-        <button type="button" className="platform-hero-cta" onClick={() => void runFullTour()} disabled={tourRunning || maRunning}>
-          {tourRunning ? `演示中… 第 ${tourStep}/2 步` : "▶ 跑 RAG + Multi-Agent"}
-        </button>
-        <span className="platform-runtime-tag">{runtimeTag === "server" ? "SQLite 服务端" : "浏览器离线"}</span>
-      </header>
+      )}
 
-      {/* 三步导航 */}
       <nav className="platform-scene-nav" aria-label="演示步骤">
-        {SCENES.filter((s) => s.id !== "tour").map((s) => (
+        {navScenes.map((s) => (
           <button
             key={s.id}
             type="button"
@@ -257,9 +277,8 @@ export function AgentPlatformLab() {
         ))}
       </nav>
 
-      {/* Scene: Tour / default landing */}
       <div ref={panelRef}>
-      {scene === "tour" && (
+      {!embedded && scene === "tour" && (
         <div className="platform-tour-panel">
           <div className="platform-split">
             <div className="platform-split-input">
@@ -276,7 +295,7 @@ export function AgentPlatformLab() {
               <ol className="platform-tour-checklist">
                 <li className={ragResult ? "done" : ""}>RAG 召回 Top3 chunk + 相关度条</li>
                 <li className={maSteps.length >= 3 ? "done" : ""}>Planner / Executor / Reviewer 依次亮起</li>
-                <li>路由测试 → <a href="#/work/dev-debug?tab=eval">开发调试 · 路由</a></li>
+                <li>路由测试 → 切到下方「回归」面板</li>
               </ol>
               {topHit && (
                 <div className="platform-tour-preview">
@@ -374,8 +393,7 @@ export function AgentPlatformLab() {
         </div>
       )}
 
-      {/* Scene: Eval */}
-      {scene === "eval" && (
+      {!embedded && scene === "eval" && (
         <div className="platform-scene-panel">
           <EvalLabPanel compact />
         </div>
@@ -383,7 +401,7 @@ export function AgentPlatformLab() {
 
       </div>
 
-      {/* 高级附录 — 默认收起 */}
+      {!embedded && (
       <footer className="platform-advanced">
         <button type="button" className="platform-advanced-toggle" onClick={() => setShowAdvanced((v) => !v)}>
           {showAdvanced ? "▾ 收起技术附录" : "▸ 技术附录：Memory · 架构对照"}
@@ -427,6 +445,7 @@ export function AgentPlatformLab() {
           </div>
         )}
       </footer>
+      )}
     </div>
   );
 }

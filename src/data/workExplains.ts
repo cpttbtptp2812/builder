@@ -62,17 +62,17 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   "dev-debug": {
     slug: "dev-debug",
-    oneLiner: "Agent 开发调试台：对话、Skills、RAG / Multi-Agent、路由回归，Tab 切换。",
-    demoProves: "一个入口替代原 UniAgent / SkillForge / Platform 三页；需 npm run dev:server 启 SQLite 后端。",
+    oneLiner: "AI Agent：提问先走流程图，再按节点进对话、编排、运行或盯进度。",
+    demoProves: "一条链路：读懂分流 → 编排步骤 → 调度内核 → 唤起工具 → 流式回复。",
     steps: [
-      "Tab「对话」— Guest 模式输入问题，看 MCP Trace",
-      "Tab「Skills」— Router 矩阵 + 跑 Skill 流水线",
-      "Tab「Platform」— RAG 召回 + 三 Agent 协作",
-      "Tab「路由测试」— 固定用例回归",
+      "看流程图自动走完一轮",
+      "点「对话入口」发消息，看 Trace",
+      "点「编排流程」看怎么拆步骤、怎么跑",
+      "点「运行 / 盯进度」看知识协作与回看",
     ],
     compare: {
-      usual: { title: "三个分散 Demo 页", desc: "来回跳，不知道先看哪" },
-      here: { title: "统一调试台", desc: "按模块 Tab 切换" },
+      usual: { title: "四个分散 Demo 页", desc: "对话、编排、运行各看各的，上下文断" },
+      here: { title: "一张流程图 + 按节点深入", desc: "先看链路，再进对应能力" },
     },
   },
 
