@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "步骤记录器",
+  "version": "1.2.0",
+  "description": "在网页上点、填、跳，自动记下步骤并截图。导出说明书给同事看、能演示；测出问题可发给开发对照定位，不必先起本地项目。",
+  "permissions": ["storage", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "步骤记录器",
+    "default_popup": "popup.html"
+  },
+  "commands": {
+    "toggle-record": {
+      "suggested_key": {
+        "default": "Alt+Shift+R"
+      },
+      "description": "开始 / 停止录制"
+    }
+  }
+}

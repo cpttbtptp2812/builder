@@ -12,6 +12,7 @@ const PUBLISH = {
   clip: "ClipHub-Extension-v1.2.0.zip",
   env: "Env-Extension-v1.0.0.zip",
   wire: "Wire-Extension-v1.0.0.zip",
+  skilltap: "SkillTap-Extension-v1.2.0.zip",
 };
 
 async function isDir(p) {

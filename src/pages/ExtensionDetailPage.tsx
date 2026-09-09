@@ -28,6 +28,12 @@ const STEPS: Record<string, string[]> = {
     "popup 实时列出 OPEN / MESSAGE / ERROR 帧",
     "调试 AI 流式输出、排查 SSE 断连时比 Network 更直观",
   ],
+  skilltap: [
+    "打开要教的页面，或打开出 bug 的页面；写标题。若是给开发看，填上「出了什么问题」",
+    "开始录制，按平时那样点击、填写、跳转；登录、验证码、选文件点「请你自己做」",
+    "停下来预览：同事路线导出 HTML，用浏览器打开即可阅读，也可点「演示一遍」",
+    "开发路线导出复现包。对方打开 HTML 的「给开发看」，或把 repro.json 导入步骤记录器，即可看分析并打开入口页，不必先起本地项目",
+  ],
 };
 
 function ExtensionHeader({ ext }: { ext: ExtensionItem }) {
@@ -54,6 +60,11 @@ function ExtensionHeader({ ext }: { ext: ExtensionItem }) {
         </a>
       </div>
       <p className="ext-detail-desc">{ext.desc}</p>
+      {ext.story?.map((p) => (
+        <p key={p.slice(0, 24)} className="ext-detail-desc ext-detail-desc--more">
+          {p}
+        </p>
+      ))}
     </header>
   );
 }
@@ -86,6 +97,11 @@ export function ExtensionDetailPage() {
         {ext.id === "clip-hub" && (
           <p className="ext-detail-extra">
             <Link to="/tools/clips">打开网页片段库 →</Link>
+          </p>
+        )}
+        {ext.id === "skilltap" && (
+          <p className="ext-detail-extra">
+            同事只发 HTML 即可。开发可打开同一份 HTML 里的「给开发看」，或导入 zip 中的 repro.json。微信打不开时，把文件拷到电脑再用 Chrome / Edge 打开。
           </p>
         )}
       </section>

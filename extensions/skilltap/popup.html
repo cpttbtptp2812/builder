@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>步骤记录器</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="head">
+      <div class="logo" aria-hidden="true">●</div>
+      <div>
+        <strong>步骤记录器</strong>
+        <span>把你在网页上的点击、填写记成说明书</span>
+      </div>
+      <span id="rec-pill" class="pill off">待机</span>
+    </header>
+
+    <p class="hint">在真实网页上走一遍流程。导出 HTML 给同事：用浏览器打开就是说明书，还能演示。测试测出问题或要改流程时，写上「出了什么问题」再导出复现包；开发导入后能看截图、选择器和报错分析，并打开当时的入口页，不必先把项目在自己电脑跑起来。</p>
+
+    <label for="name">标题 <em>中文即可</em></label>
+    <input id="name" maxlength="40" placeholder="提交按钮点了没反应" autocomplete="off" />
+
+    <label for="desc">给别人看的说明 <em>可空</em></label>
+    <textarea id="desc" rows="2" placeholder="在 HR 网页提交请假。照着点就行。"></textarea>
+
+    <label for="issue">给开发：出了什么问题 <em>测试填写。例如「点提交后一直转圈」</em></label>
+    <textarea id="issue" rows="2" placeholder="点提交后一直转圈，控制台有报错。"></textarea>
+
+    <div class="row">
+      <button type="button" class="btn rec" id="toggle">开始录制</button>
+      <button type="button" class="btn ghost" id="pause">插入「请你自己做」</button>
+    </div>
+    <p class="kbd">Alt+Shift+R · 登录/验证码请插入人工步骤</p>
+    <p id="msg" class="msg"></p>
+
+    <div class="list-head">
+      <span id="count">0 步</span>
+      <button type="button" class="text-btn" id="clear">清空</button>
+    </div>
+    <ul id="list" class="steps"></ul>
+
+    <p class="list-head">自动分析</p>
+    <ul id="findings" class="findings"></ul>
+
+    <div class="row export-row">
+      <button type="button" class="btn ghost" id="preview" disabled>预览</button>
+      <button type="button" class="btn ghost" id="open-url" disabled>打开入口页</button>
+    </div>
+    <div class="row export-row">
+      <button type="button" class="btn ghost" id="export" disabled>导出 HTML</button>
+      <button type="button" class="btn export" id="export-pack" disabled>导出复现包</button>
+    </div>
+    <label class="import">
+      开发导入 repro.json 或手册 HTML
+      <input id="import" type="file" accept=".json,.html,.htm,text/html,application/json" />
+    </label>
+    <p class="foot">复现包内含：操作手册 HTML、给开发.md、repro.json。同事只发 HTML；开发导入 json 或打开 HTML 里的「给开发看」。</p>
+
+    <script src="clean.js"></script>
+    <script src="analyze.js"></script>
+    <script src="pack.js"></script>
+    <script src="zip.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

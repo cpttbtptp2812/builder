@@ -17365,7 +17365,11 @@ input.replay-typing {
   font-size: 0.85rem;
   line-height: 1.55;
   color: #475569;
-  max-width: 62ch;
+  max-width: 68ch;
+}
+
+.ext-detail-desc--more {
+  margin-top: 0.55rem;
 }
 
 .ext-detail-demo-panel {
@@ -17738,9 +17742,165 @@ input.replay-typing {
   color: #cbd5e1;
 }
 
+.ext-demo--skilltap {
+  display: grid;
+  grid-template-columns: 1.15fr 0.85fr;
+  gap: 0.75rem;
+}
+
+.ext-demo-page--form {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.ext-demo-page--manual.is-dev {
+  background: #1c1410;
+  color: #f6f0e6;
+}
+
+.ext-demo-page--manual.is-dev .ext-demo-manual-step,
+.ext-demo-page--manual.is-dev .ext-demo-manual-shot {
+  color: #fdba74;
+  border-color: #44403c;
+  background: #292524;
+}
+
+.ext-demo-kicker {
+  margin: 0;
+  font-size: 0.58rem;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: #be123c;
+}
+
+.ext-demo-manual-step {
+  margin: 0;
+  font-size: 0.72rem;
+  color: #7c6a58;
+}
+
+.ext-demo-manual-shot {
+  position: relative;
+  margin-top: 0.2rem;
+  min-height: 4.2rem;
+  border: 1px solid #e7dcc8;
+  border-radius: 0.35rem;
+  background: #fff;
+  display: grid;
+  place-items: center;
+  font-size: 0.72rem;
+  color: #44403c;
+}
+
+.ext-demo-manual-shot .on {
+  background: #e11d48;
+  color: #fff;
+  padding: 0.2rem 0.65rem;
+  border-radius: 0.3rem;
+}
+
+.ext-demo-pin {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  right: 28%;
+  top: 42%;
+  border-radius: 50%;
+  background: #be123c;
+  box-shadow: 0 0 0 5px rgba(190, 18, 60, 0.25);
+}
+
+.ext-demo-page--form label {
+  display: grid;
+  gap: 0.25rem;
+  font-size: 0.68rem;
+  color: #64748b;
+}
+
+.ext-demo-page--form input {
+  border: 1px solid #cbd5e1;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.45rem;
+  font: inherit;
+  background: #fff;
+}
+
+.ext-demo-page--form button {
+  align-self: flex-start;
+  border: none;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.7rem;
+  background: #e2e8f0;
+  color: #0f172a;
+  font-weight: 650;
+}
+
+.ext-demo-page--form button.on {
+  background: #e11d48;
+  color: #fff;
+}
+
+.ext-demo-rec-dot {
+  position: absolute;
+  top: 0.45rem;
+  right: 0.45rem;
+  font-size: 0.58rem;
+  font-style: normal;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: #e11d48;
+  animation: ext-demo-blink 1s step-end infinite;
+}
+
+.ext-demo-panel--tap {
+  background: #161210;
+  color: #f4efe6;
+  border-color: #3f2a2c;
+}
+
+.ext-demo-panel--tap .ext-demo-panel-head span {
+  color: #fda4af;
+}
+
+.ext-demo-tap-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-height: 7.5rem;
+}
+
+.ext-demo-tap-list li {
+  font-size: 0.65rem;
+  padding: 0.22rem 0;
+  border-bottom: 1px solid rgba(244, 239, 230, 0.08);
+  color: #e7e5e4;
+}
+
+.ext-demo-tap-list .tap-hover {
+  color: #78716c;
+  text-decoration: line-through;
+}
+
+.ext-demo-tap-list .tap-pause {
+  color: #fdba74;
+}
+
+.ext-demo-tap-list .tap-goto {
+  color: #93c5fd;
+}
+
+.ext-demo-tap-zip {
+  margin: 0.45rem 0 0;
+  font-size: 0.62rem;
+  color: #fed7aa;
+}
+
 @media (max-width: 720px) {
   .ext-demo--clip,
-  .ext-demo--wire {
+  .ext-demo--wire,
+  .ext-demo--skilltap {
     grid-template-columns: 1fr;
   }
 
