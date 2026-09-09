@@ -17,23 +17,23 @@ export function HomePage() {
     <>
       <SiteShell footer={<SiteFooter />}>
         <header className="site-home-hero">
-          <p className="site-home-eyebrow">
+          {/* <p className="site-home-eyebrow">
             {profile.title}
             <span className="site-home-eyebrow-sep">·</span>
             {profile.careerStartLabel}
-          </p>
+          </p> */}
           <h1>{profile.name}</h1>
           <p className="site-home-pitch">{profile.homePitch}</p>
           <WorkTenureLive startDate={profile.careerStart} startLabel={profile.careerStartLabel} />
 
-          <ul className="site-home-metrics" aria-label="概要">
+          {/* <ul className="site-home-metrics" aria-label="概要">
             {profile.homeMetrics.map((m) => (
               <li key={m.label}>
                 <strong>{m.value}</strong>
                 <span>{m.label}</span>
               </li>
             ))}
-          </ul>
+          </ul> */}
         </header>
 
         <section className="works-section works-section-agent">
@@ -43,20 +43,6 @@ export function HomePage() {
           </div>
           <div className="home-featured-grid">
             <FeaturedWorkCard work={HOME_AGENT} compact onBrief={() => setBriefSlug(HOME_AGENT.slug)} />
-          </div>
-        </section>
-
-        <section className="works-section works-section-extensions">
-          <div className="works-section-head">
-            <h2 className="works-section-label">浏览器扩展</h2>
-            <span className="works-section-hint">
-              <Link to="/tools/extensions">安装说明</Link>
-            </span>
-          </div>
-          <div className="home-featured-grid">
-            {EXTENSION_CATALOG.map((ext) => (
-              <ExtensionHomeCard key={ext.id} ext={ext} />
-            ))}
           </div>
         </section>
 
@@ -71,6 +57,22 @@ export function HomePage() {
             ))}
           </div>
         </section>
+        
+        <section className="works-section works-section-extensions">
+          <div className="works-section-head">
+            <h2 className="works-section-label">浏览器扩展</h2>
+            <span className="works-section-hint">
+              <Link to="/tools/extensions">安装说明</Link>
+            </span>
+          </div>
+          <div className="home-featured-grid">
+            {EXTENSION_CATALOG.map((ext) => (
+              <ExtensionHomeCard key={ext.id} ext={ext} />
+            ))}
+          </div>
+        </section>
+
+       
 
         <section className="works-section works-section-lab">
           <div className="works-section-head">
