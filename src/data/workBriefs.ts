@@ -242,6 +242,95 @@ export const WORK_NOTES: Record<string, WorkNote> = {
     siteNote: "RAG / Multi-Agent / Memory。",
   },
 
+  "dev-debug": {
+    slug: "dev-debug",
+    purpose:
+      "AI Agent 这页要回答一件事：用户发出一句自然语言后，系统内部按什么顺序、经过哪些环节、每步产出什么、最后怎么变成可见答复。流程图是四列十四步——从左到右是「理解 → 编排 → 运行 → 能力」，列内自上而下还有细分步骤。横轴主链是 nlu → dsl → engine → browser，理解列走完后才进入编排，编排定稿后才进运行，运行再调能力。个人作品集里的 Agent 演示，不是 iMean 公司产品。",
+    highlights: [
+      {
+        title: "第一列 · 理解问句（5 步，不出工具）",
+        analysis:
+          "① 理解问句：按标点切词，统计中英数字占比，产出 token 列表——中文多问中文触发词，英文多问工具名。\n" +
+          "② 辨认意图：用 token 对每条 SKILL 的 triggers 加权打分（explainDiscovery），只让 Top-1 技能继续，避免两条流程并行打架。\n" +
+          "③ 抽出实体：从问句抠 url / target / actions；没写网址则用当前浏览页地址，「本站」映射到 origin。\n" +
+          "④ 规划任务：Multi-Agent 三角色（Planner 定序 → Executor 占位调工具 → Reviewer 汇总）把技能拆成可执行步骤清单，此时仍不开跑。\n" +
+          "⑤ 整理上下文：buildWorkingSet 裁掉用不上的 HTML 与旧对话，给工具结果和 RAG 预留 token 预算。",
+        metric: "nlu → intent → entity → plan → context",
+      },
+      {
+        title: "第二列 · 编排任务（3 步，只排不跑）",
+        analysis:
+          "理解列完成后，横跳进入编排列。\n" +
+          "⑥ 流程定义：读 SKILL.md，把任务单写成机器可执行的说明书——skillPath、triggers、steps[]、tools 白名单、每步入参/出参字段名。内核只认字段，不认口头描述。\n" +
+          "⑦ 流程管理：workflow_run 生成工单号，排队、去重、钉版本。同一句话连点两次应合并为一单；失败只改工单状态，不改 SKILL 原文。\n" +
+          "⑧ 执行模式：schedule 选 seq（顺序）/ par（并行）/ branch（失败分叉）。互不依赖的探活可并行；三页顺序打会慢三倍。",
+        metric: "dsl → manage → pattern",
+      },
+      {
+        title: "第三列 · 调度运行（3 步，真正开跑）",
+        analysis:
+          "编排列定稿后，横跳进入运行列。\n" +
+          "⑨ 运行内核：解释器读说明书，step() 一次推进一步，pc 计数可见。当前步 dispatch 到能力层工具，结果写回变量表；工具名必须与白名单一致（probe vs http_probe 对不上会卡死）。\n" +
+          "⑩ 落地机制：inject 把 ${url} 等模板替换成 entity 抽出的真实值；sandbox 预演；涉及写入或敏感操作走 HITL，等人点「允许」才真正 outbound。\n" +
+          "⑪ 运行管控：跟踪每步成败；runRouterEval 对照 expected vs predicted 技能；并行路里一路超时只重试该路，已成功的结果保留，不整单标红作废。",
+        metric: "engine → mech → ctrl",
+      },
+      {
+        title: "第四列 · 唤起能力（3 步 + 回复）",
+        analysis:
+          "运行列需要外部能力时，横跳进入能力列。\n" +
+          "⑫ 浏览器能力：http_probe 真实 fetch 得 status/latency；browser_snapshot 遍历当前页 DOM（须等页面稳定，否则拍到骨架屏）。\n" +
+          "⑬ 协议工具：MCP JSON-RPC tools/list → tools/call，对话区 Tool Call 与内核 dispatch 共用同一份工具名单。\n" +
+          "⑭ 知识检索：retrieveRag 在本站 PROJECT_DETAILS 分块语料里 hybrid 打分，返回 topK chunkId + score，Reviewer 写答案时带 [n] 引用。\n" +
+          "汇总后 SSE 流式推给用户；HubChatDock 可边切节点边对话，Trace 逐步对照。",
+        metric: "browser → mcp → kb → 流式回复",
+      },
+    ],
+    content:
+      "【主链怎么走】\n" +
+      "四列横轴：nlu ──→ dsl ──→ engine ──→ browser → mcp → kb。列内竖轴各自往下走。理解列必须走完（或至少产出技能+变量+上下文），才能有意义地写 SKILL、开工单；编排列不写清出入参，运行列第一步就对不上字段。\n\n" +
+      "【示例：「帮我检查一下这个站点」】\n" +
+      "1. nlu 切词：{帮我, 检查, 这个, 站点}，中文为主。\n" +
+      "2. intent 打分：site-analyzer 因「检查」「站点」触发词领先，dom-probe 次之；仅 site-analyzer 进入下游。\n" +
+      "3. entity：url = 当前页 https://…，actions = [检查]，target = 本站。\n" +
+      "4. plan：Planner 拆三步——探活 → 看 DOM → 汇总报告；Executor/Reviewer 角色在 Multi-Agent Trace 里可见。\n" +
+      "5. context：保留 origin/title + 最近 2 轮对话，裁掉长 HTML，budget 剩余约 6k token。\n" +
+      "6. dsl：加载 site-analyzer 的 SKILL.md，steps = [http_probe, browser_snapshot, summarize]，tools 白名单含 http_probe / browser_snapshot / knowledge_search。\n" +
+      "7. manage：workflowId = wf-8a3f，status = queued → running，version 钉住当前 SKILL。\n" +
+      "8. pattern：选 par——探活与 snapshot 无依赖时可同批发起（演示里也可 seq 便于逐步看）。\n" +
+      "9. engine：pc=0 调 http_probe；pc=1 调 browser_snapshot；每步结果写入 vars.probe / vars.snapshot。\n" +
+      "10. mech：${url} → 真实地址；探活为只读，无需 HITL；若步骤含「写入」则暂停等放行。\n" +
+      "11. ctrl：probe 200 OK / snapshot 847 nodes；若 probe 超时则仅重试 probe，snapshot 结果仍保留。\n" +
+      "12–14. browser/mcp/kb 返回结构化 JSON；Reviewer 引用 chunkId 写「本站响应 142ms，共 847 个可交互节点…」→ SSE 流出。\n\n" +
+      "【列与列之间传什么】\n" +
+      "理解 → 编排：skillId + slots(url,target,actions) + trimmedContext。\n" +
+      "编排 → 运行：SKILL manifest + workflowId + schedule(seq|par|branch) + vars 初始表。\n" +
+      "运行 → 能力：toolName + boundArgs（经 mech 填实）+ MCP session。\n" +
+      "能力 → 回复：toolResults[] + ragHits[] → Reviewer prompt → UIMessage parts。\n\n" +
+      "【和页内演示的分工】\n" +
+      "流程图负责可视化路径、自动高亮、点节点看该步入出参；本笔记讲十四步先后与数据怎么流。节点内的表格/按钮怎么点，见各 Stage 面板，此处不重复。\n\n" +
+      "【与 iMean 的关系】\n" +
+      "iMean 是在职主项目：生产调度、DOM 回放、多 Tab 执行。这页是个人侧 Agent 全链路「理解—编排—运行—能力」的教学索引，证明我能讲清分层，不等于公司产品线。",
+    techJots: [
+      { tag: "① nlu", text: "normalize → tokens + 字种计数，不调 LLM。" },
+      { tag: "② intent", text: "explainDiscovery · Top-1 only · breakdown 可观测。" },
+      { tag: "③ entity", text: "extractSlots · 缺 url 用 location.href。" },
+      { tag: "④ plan", text: "Planner/Executor/Reviewer · 出步骤清单。" },
+      { tag: "⑤ context", text: "buildWorkingSet · page + memory · budget。" },
+      { tag: "⑥–⑧", text: "SKILL.md manifest → workflowId → seq/par/branch。" },
+      { tag: "⑨–⑪", text: "step()/pc++ · inject+HITL · 局部重试+RouterEval。" },
+      { tag: "⑫–⑭", text: "http_probe/snapshot · MCP tools/call · retrieveRag+chunkId。" },
+    ],
+    scraps: [
+      "intent 并列第一仍只走一条 — 防双流程",
+      "SKILL 步骤名 ≠ MCP tool 名 → engine 卡第一步",
+      "context 不裁 → kb 检索 + 工具 JSON 爆窗口",
+      "snapshot 早于 load → 节点数虚低",
+      "ctrl 整单失败 vs 单路重试 — 默认保留已成功路",
+    ],
+    siteNote: "默认四列图；自动跑一轮看高亮路径。Dock 对话 Trace 与当前节点对照。SSE/Eval 深挖见实验室。",
+  },
+
   builder: {
     slug: "builder",
     purpose:

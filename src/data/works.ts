@@ -174,5 +174,11 @@ export const FLAGSHIP_WORKS = WORKS.filter((w) => w.tier === "flagship");
 export const HOME_AGENT = WORKS.find((w) => w.slug === "dev-debug")!;
 export const LAB_WORKS = WORKS.filter((w) => w.tier === "lab");
 
-/** 首页：工作相关项目 */
-export const PROJECT_WORKS = WORKS.filter((w) => ["imean", "builder"].includes(w.slug));
+/** 首页 — iMean 平台（在职） */
+export const IMEAN_WORKS = WORKS.filter((w) => ["imean", "builder"].includes(w.slug));
+
+/** 首页 — 个人产品（独立设计与开发） */
+export const PERSONAL_WORKS = WORKS.filter((w) => w.slug === "streamprobe");
+
+/** @deprecated use IMEAN_WORKS */
+export const PROJECT_WORKS = IMEAN_WORKS;

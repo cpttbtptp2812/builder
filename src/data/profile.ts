@@ -15,11 +15,11 @@ export const profile = {
   location: "可远程 / 面议",
   availability: "在职看机会",
   careerStart: "2016-06-01",
-  careerStartLabel: "9 年+ 经验",
   email: "17301212105@163.com",
   phone: "17376563937",
-  homePitch:
-    "React / TypeScript 深耕 9 年+，近年聚焦 AI 应用与浏览器侧能力：在职参与 iMean 自动化平台（调度 · Agent 流式对话 · DOM 回放）；业余独立发布 StreamProbe（流式调试）与步骤记录器（操作复现）。",
+  homePitchPrefix: "React / TypeScript 深耕",
+  homePitchBody:
+    "近年聚焦 AI 应用与浏览器侧能力：在职参与 iMean 自动化平台（调度 · Agent 流式对话 · DOM 回放）；独立发布 StreamProbe（流式调试）与步骤记录器（操作复现）。",
   tagline: "AI 应用前端 · 浏览器自动化 · 工程化",
   homeMetrics: [
     { label: "iMean", value: "自动化平台" },

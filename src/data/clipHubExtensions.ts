@@ -1,8 +1,10 @@
 /**
  * 浏览器扩展目录
  * - 前端联调工具包：ClipHub + Env + Wire（一个 zip）
- * - 步骤记录器：独立扩展
+ * - StreamProbe、步骤记录器：独立扩展
  */
+
+import { STREAM_PROBE } from "./streamProbe";
 
 export type ExtensionStatus = "shipped";
 
@@ -22,6 +24,10 @@ export type ExtensionItem = {
   accent: string;
   /** 属于联调工具包内的子工具，不单独主推下载 */
   toolkitMember?: boolean;
+  /** 个人独立项目标记 */
+  personal?: boolean;
+  /** 关联作品页 /work/:slug */
+  workSlug?: string;
 };
 
 export type DebugToolkit = {
@@ -115,33 +121,55 @@ export const DEBUG_TOOLKIT_TOOLS: ExtensionItem[] = [
   },
 ];
 
+const STREAMPROBE_EXTENSION: ExtensionItem = {
+  id: STREAM_PROBE.id,
+  name: STREAM_PROBE.name,
+  icon: STREAM_PROBE.icon,
+  tagline: STREAM_PROBE.tagline,
+  desc: STREAM_PROBE.desc,
+  status: STREAM_PROBE.status,
+  zip: STREAM_PROBE.zip,
+  version: STREAM_PROBE.version,
+  features: STREAM_PROBE.features,
+  useCases: STREAM_PROBE.users,
+  stack: STREAM_PROBE.stack,
+  accent: STREAM_PROBE.accent,
+  personal: true,
+  workSlug: "streamprobe",
+};
+
+const SKILLTAP_EXTENSION: ExtensionItem = {
+  id: "skilltap",
+  name: "步骤记录器",
+  icon: "⏺",
+  tagline: "在网页上点一遍，生成操作说明书；测出 bug 也能录给开发",
+  desc: "在真实页面上点、填、跳，扩展记下步骤并截图。普通人打开导出的 HTML 就是操作说明书；测试把复现路径录下来发给开发，对方不用先起本地项目，也能对照截图、选择器和报错定位问题。",
+  story: [
+    "同事或客户不会盯着你的屏幕：把常用后台操作录一次，发一个网页文件过去。对方用 Chrome / Edge 打开就能按步骤做。",
+    "测试测出问题或要改某段流程时，打开出问题的页面录一遍，写上「出了什么问题」，导出复现包给开发。",
+  ],
+  status: "shipped",
+  zip: "SkillTap-Extension-v1.2.0.zip",
+  version: "1.2.0",
+  features: [
+    "录点击、填写、跳转并截图",
+    "导出 HTML 操作手册，可演示翻页",
+    "导出复现包给开发对照定位",
+  ],
+  useCases: ["教同事走一遍内部后台", "测试把 bug 复现路径交给开发"],
+  stack: ["Chrome MV3", "截图", "HTML 手册", "repro.json"],
+  accent: "#e11d48",
+  personal: true,
+};
+
+/** 扩展页 · 独立扩展 */
 export const STANDALONE_EXTENSIONS: ExtensionItem[] = [
-  {
-    id: "skilltap",
-    name: "步骤记录器",
-    icon: "⏺",
-    tagline: "在网页上点一遍，生成操作说明书；测出 bug 也能录给开发",
-    desc: "在真实页面上点、填、跳，扩展记下步骤并截图。普通人打开导出的 HTML 就是操作说明书；测试把复现路径录下来发给开发，对方不用先起本地项目，也能对照截图、选择器和报错定位问题。",
-    story: [
-      "同事或客户不会盯着你的屏幕：把常用后台操作录一次，发一个网页文件过去。对方用 Chrome / Edge 打开就能按步骤做。",
-      "测试测出问题或要改某段流程时，打开出问题的页面录一遍，写上「出了什么问题」，导出复现包给开发。",
-    ],
-    status: "shipped",
-    zip: "SkillTap-Extension-v1.2.0.zip",
-    version: "1.2.0",
-    features: [
-      "录点击、填写、跳转并截图",
-      "导出 HTML 操作手册，可演示翻页",
-      "导出复现包给开发对照定位",
-    ],
-    useCases: [
-      "教同事走一遍内部后台",
-      "测试把 bug 复现路径交给开发",
-    ],
-    stack: ["Chrome MV3", "截图", "HTML 手册", "repro.json"],
-    accent: "#e11d48",
-  },
+  STREAMPROBE_EXTENSION,
+  SKILLTAP_EXTENSION,
 ];
+
+/** 首页 · 个人产品区扩展卡（StreamProbe 用作品卡，此处仅步骤记录器） */
+export const PERSONAL_EXTENSIONS: ExtensionItem[] = [SKILLTAP_EXTENSION];
 
 /** 全部可进详情页的扩展（含工具包子项） */
 export const EXTENSION_CATALOG: ExtensionItem[] = [

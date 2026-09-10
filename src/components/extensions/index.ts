@@ -8,7 +8,9 @@ export const EXTENSION_DEMOS: Record<string, ComponentType> = {
   "clip-hub": ClipHubDemo,
   env: EnvDemo,
   wire: WireDemo,
+  streamprobe: WireDemo,
   skilltap: SkillTapDemo,
 };
 
+export { ExtensionCatalogCard } from "./ExtensionCatalogCard";
 export { ClipHubDemo, EnvDemo, WireDemo, SkillTapDemo };

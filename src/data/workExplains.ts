@@ -170,6 +170,24 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
     },
   },
 
+  streamprobe: {
+    slug: "streamprobe",
+    oneLiner:
+      "StreamProbe：Chrome 扩展 hook EventSource / fetch stream，Side Panel 帧时间线 + Raw/Parsed 双栏，导出会话 JSON。",
+    demoProves:
+      "下方演示与扩展同源思路：逐帧展示 SSE 原始行与 AI SDK 语义字段，对照 Network 看不清的流式 body。",
+    steps: [
+      "▶ 播放 — 左侧 Raw 帧按时间追加，右侧 Parsed 映射 type 与内容",
+      "看 text-delta 逐字增长、tool-call / tool-result 成对出现",
+      "技术流同步打出 parse 与 metrics（TTFB、帧间隔）",
+      "真实扩展：MAIN world hook → Bridge → Background → Side Panel",
+    ],
+    compare: {
+      usual: { title: "Network 只有 pending", desc: "看不清 SSE 每一帧，断流难查" },
+      here: { title: "帧级 Side Panel", desc: "Raw + AI SDK 双栏，可导出 JSON" },
+    },
+  },
+
   extension: {
     slug: "extension",
     oneLiner: "MV3 录制扩展 demo：Content Script 捕获 click/input，isolated world 高亮，输出 steps.json。",

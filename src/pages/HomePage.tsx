@@ -1,87 +1,71 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
 import { ExtensionHomeCard } from "../components/home/ExtensionHomeCard";
 import { ToolkitHomeCard } from "../components/home/ToolkitHomeCard";
 import { FeaturedWorkCard } from "../components/home/FeaturedWorkCard";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
-import { WorkTenureLive } from "../components/WorkTenureLive";
-import { STANDALONE_EXTENSIONS } from "../data/clipHubExtensions";
+import { PERSONAL_EXTENSIONS } from "../data/clipHubExtensions";
 import { profile } from "../data/profile";
-import { HOME_AGENT, LAB_WORKS, PROJECT_WORKS } from "../data/works";
+import { HOME_AGENT, IMEAN_WORKS, LAB_WORKS, PERSONAL_WORKS } from "../data/works";
+import { formatWorkTenure, useWorkTenure } from "../lib/workTenure";
 
 export function HomePage() {
   const [briefSlug, setBriefSlug] = useState<string | null>(null);
+  const tenure = useWorkTenure(profile.careerStart);
 
   return (
     <>
-      <SiteShell footer={<SiteFooter />}>
-        <header className="site-home-hero">
-          {/* <p className="site-home-eyebrow">
+      <SiteShell pageClass="site-home-compact">
+        <header className="site-home-hero site-home-hero--compact">
+          <p className="site-home-eyebrow">
             {profile.title}
             <span className="site-home-eyebrow-sep">·</span>
-            {profile.careerStartLabel}
-          </p> */}
+            {profile.subtitle}
+          </p>
           <h1>{profile.name}</h1>
-          <p className="site-home-pitch">{profile.homePitch}</p>
-          <WorkTenureLive startDate={profile.careerStart} startLabel={profile.careerStartLabel} />
-
-          {/* <ul className="site-home-metrics" aria-label="概要">
-            {profile.homeMetrics.map((m) => (
-              <li key={m.label}>
-                <strong>{m.value}</strong>
-                <span>{m.label}</span>
-              </li>
-            ))}
-          </ul> */}
+          <p className="site-home-pitch">
+            {profile.homePitchPrefix}{" "}
+            <strong className="site-home-tenure-inline">{formatWorkTenure(tenure)}</strong>
+            ，{profile.homePitchBody}
+          </p>
         </header>
 
-        <section className="works-section works-section-agent">
+        <section className="works-section works-section-imean">
           <div className="works-section-head">
-            <h2 className="works-section-label">AI Agent</h2>
-            <span className="works-section-hint">对话 · Skills · RAG · 路由回归</span>
+            <h2 className="works-section-label">平台</h2>
+            <span className="works-section-hint">AI Agent · iMean 在职</span>
           </div>
-          <div className="home-featured-grid">
+          <div className="home-featured-grid home-featured-grid--platform">
             <FeaturedWorkCard work={HOME_AGENT} compact onBrief={() => setBriefSlug(HOME_AGENT.slug)} />
-          </div>
-        </section>
-
-        <section className="works-section works-section-projects">
-          <div className="works-section-head">
-            <h2 className="works-section-label">项目</h2>
-            <span className="works-section-hint">iMean 自动化平台相关</span>
-          </div>
-          <div className="home-featured-grid">
-            {PROJECT_WORKS.map((w) => (
+            {IMEAN_WORKS.map((w) => (
               <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
             ))}
           </div>
         </section>
-        
-        <section className="works-section works-section-extensions">
+
+        <section className="works-section works-section-personal">
           <div className="works-section-head">
-            <h2 className="works-section-label">浏览器扩展</h2>
-            <span className="works-section-hint">
-              <Link to="/tools/extensions">联调工具包</Link>
-            </span>
+            <h2 className="works-section-label">个人产品</h2>
+            <span className="works-section-hint">独立设计与开发</span>
           </div>
-          <div className="home-featured-grid">
-            <ToolkitHomeCard />
-            {STANDALONE_EXTENSIONS.map((ext) => (
+          <div className="home-featured-grid home-featured-grid--personal">
+            {PERSONAL_WORKS.map((w) => (
+              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
+            ))}
+            {PERSONAL_EXTENSIONS.map((ext) => (
               <ExtensionHomeCard key={ext.id} ext={ext} />
             ))}
+            <ToolkitHomeCard />
           </div>
         </section>
 
-       
-
         <section className="works-section works-section-lab">
           <div className="works-section-head">
-            <h2 className="works-section-label">更多</h2>
-            <span className="works-section-hint">SSE / 定位 / SDK / 录制</span>
+            <h2 className="works-section-label">技术实验室</h2>
+            <span className="works-section-hint">SSE · 定位 · SDK · 录制</span>
           </div>
-          <div className="home-featured-grid">
+          <div className="home-featured-grid home-featured-grid--lab">
             {LAB_WORKS.map((w) => (
               <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
             ))}

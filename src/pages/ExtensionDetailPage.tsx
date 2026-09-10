@@ -30,6 +30,12 @@ const STEPS: Record<string, string[]> = {
     "popup 实时列出 OPEN / MESSAGE / ERROR 帧",
     "调试 AI 流式输出、排查 SSE 断连时比 Network 更直观",
   ],
+  streamprobe: [
+    "安装后打开要调试的 AI 对话或 SSE 页面",
+    "页面内的 EventSource / fetch 流会被 MAIN world 脚本 hook",
+    "打开 Side Panel：连接列表 → 帧时间线 → Raw / Parsed 双栏详情",
+    "查看 TTFB、帧间隔；需要留档时导出 .streamprobe.json",
+  ],
   skilltap: [
     "打开要教的页面，或打开出 bug 的页面；写标题。若是给开发看，填上「出了什么问题」",
     "开始录制，按平时那样点击、填写、跳转；登录、验证码、选文件点「请你自己做」",
@@ -59,6 +65,8 @@ function ExtensionHeader({ ext }: { ext: ExtensionItem }) {
           <p>{ext.tagline}</p>
           {inToolkit ? (
             <p className="ext-detail-toolkit-note">属于 {FRONTEND_DEBUG_TOOLKIT.name}</p>
+          ) : ext.personal ? (
+            <p className="ext-detail-toolkit-note">个人独立项目</p>
           ) : null}
         </div>
         <a
@@ -91,6 +99,22 @@ export function ExtensionDetailPage() {
   return (
     <SiteShell pageClass="site-ext-detail">
       <ExtensionHeader ext={ext} />
+
+      {ext.features.length > 0 && (
+        <section className="ext-detail-features clip-hub-panel">
+          <h2>能力</h2>
+          <ul className="clip-hub-toolkit-features">
+            {ext.features.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+          {ext.workSlug ? (
+            <p className="ext-detail-extra">
+              <Link to={`/work/${ext.workSlug}`}>帧级演示与架构说明 →</Link>
+            </p>
+          ) : null}
+        </section>
+      )}
 
       <section className="ext-detail-demo-panel">
         <h2>怎么用</h2>

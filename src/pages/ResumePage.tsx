@@ -31,10 +31,7 @@ export function ResumePage() {
                 {profile.degree} · {profile.availability} · {profile.location}
               </p>
               <p className="resume-summary">{profile.summary}</p>
-              <WorkTenureLive
-                startDate={profile.careerStart}
-                startLabel={profile.careerStartLabel}
-              />
+              <WorkTenureLive startDate={profile.careerStart} />
               <ul className="resume-metrics">
                 {profile.highlights.map((h) => (
                   <li key={h}>{h}</li>

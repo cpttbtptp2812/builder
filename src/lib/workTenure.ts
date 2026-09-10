@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+
 export type WorkTenure = {
   years: number;
   months: number;
@@ -34,4 +36,23 @@ export function calcWorkTenure(startISO: string, now = new Date()): WorkTenure {
 
 export function formatWorkTenure(t: WorkTenure): string {
   return `${t.years} 年 ${t.months} 月 ${t.days} 天`;
+}
+
+/** 与 WorkTenureLive 展示一致 — 供简介等引用 */
+export function formatTenureExperience(t: WorkTenure): string {
+  return `${t.years} 年+ 经验`;
+}
+
+/** 工作年限 — 每分钟刷新，与 WorkTenureLive 同源 */
+export function useWorkTenure(startISO: string) {
+  const [tenure, setTenure] = useState(() => calcWorkTenure(startISO));
+
+  useEffect(() => {
+    const tick = () => setTenure(calcWorkTenure(startISO));
+    tick();
+    const id = window.setInterval(tick, 60_000);
+    return () => window.clearInterval(id);
+  }, [startISO]);
+
+  return tenure;
 }

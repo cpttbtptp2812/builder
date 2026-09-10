@@ -10,6 +10,7 @@ import { WorkJianchi } from "./WorkJianchi";
 import { WorkLocator } from "./WorkLocator";
 import { WorkSdk } from "./WorkSdk";
 import { WorkSse } from "./WorkSse";
+import { WorkStreamProbe } from "./WorkStreamProbe";
 
 const AGENT_SLUGS = new Set(["agent", "skills", "platform", "eval"]);
 
@@ -51,8 +52,9 @@ export function WorkRouter() {
     case "flow-builder":
       return <WorkBuilder />;
     case "sse-lab":
-    case "stream-probe":
       return <WorkSse />;
+    case "stream-probe":
+      return <WorkStreamProbe />;
     case "locator-lab":
       return <WorkLocator />;
     case "extension-demo":

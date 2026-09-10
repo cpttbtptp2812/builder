@@ -1,10 +1,6 @@
 import type { CSSProperties, MouseEvent } from "react";
 import { Link } from "react-router-dom";
-import {
-  DEBUG_TOOLKIT_TOOLS,
-  FRONTEND_DEBUG_TOOLKIT,
-  toolkitDownloadUrl,
-} from "../../data/clipHubExtensions";
+import { FRONTEND_DEBUG_TOOLKIT, toolkitDownloadUrl } from "../../data/clipHubExtensions";
 
 function triggerDownload(e: MouseEvent) {
   e.preventDefault();
@@ -16,7 +12,7 @@ function triggerDownload(e: MouseEvent) {
   a.click();
 }
 
-/** 首页 — 前端联调工具包卡片 */
+/** 首页 — 前端联调工具包（与个人扩展同款紧凑卡片） */
 export function ToolkitHomeCard() {
   const tk = FRONTEND_DEBUG_TOOLKIT;
 
@@ -28,13 +24,6 @@ export function ToolkitHomeCard() {
         </span>
         <h3>{tk.name}</h3>
         <p className="ext-home-tagline">{tk.tagline}</p>
-        <ul className="ext-home-toolkit-tools">
-          {DEBUG_TOOLKIT_TOOLS.map((t) => (
-            <li key={t.id}>
-              <span aria-hidden>{t.icon}</span> {t.name}
-            </li>
-          ))}
-        </ul>
         <span className="ext-home-enter">
           安装说明
           <span aria-hidden>→</span>
