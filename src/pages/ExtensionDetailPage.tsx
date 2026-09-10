@@ -4,8 +4,10 @@ import { EXTENSION_DEMOS } from "../components/extensions";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteShell } from "../components/SiteShell";
 import {
+  FRONTEND_DEBUG_TOOLKIT,
   extensionDownloadUrl,
   getExtension,
+  toolkitDownloadUrl,
   type ExtensionItem,
 } from "../data/clipHubExtensions";
 
@@ -37,10 +39,16 @@ const STEPS: Record<string, string[]> = {
 };
 
 function ExtensionHeader({ ext }: { ext: ExtensionItem }) {
+  const inToolkit = Boolean(ext.toolkitMember);
+  const dlHref = inToolkit ? toolkitDownloadUrl() : extensionDownloadUrl(ext);
+  const dlLabel = inToolkit
+    ? `下载工具包 v${FRONTEND_DEBUG_TOOLKIT.version}`
+    : `下载 v${ext.version}`;
+
   return (
     <header className="ext-detail-head">
       <Link to="/tools/extensions" className="ext-detail-back">
-        ← 全部扩展
+        ← {inToolkit ? FRONTEND_DEBUG_TOOLKIT.name : "全部扩展"}
       </Link>
       <div className="ext-detail-title" style={{ "--ext-accent": ext.accent } as CSSProperties}>
         <span className="ext-detail-icon" aria-hidden>
@@ -49,14 +57,17 @@ function ExtensionHeader({ ext }: { ext: ExtensionItem }) {
         <div>
           <h1>{ext.name}</h1>
           <p>{ext.tagline}</p>
+          {inToolkit ? (
+            <p className="ext-detail-toolkit-note">属于 {FRONTEND_DEBUG_TOOLKIT.name}</p>
+          ) : null}
         </div>
         <a
-          href={extensionDownloadUrl(ext)}
+          href={dlHref}
           className="ext-detail-dl"
           download
           rel="noopener noreferrer"
         >
-          下载 v{ext.version}
+          {dlLabel}
         </a>
       </div>
       <p className="ext-detail-desc">{ext.desc}</p>
@@ -109,9 +120,20 @@ export function ExtensionDetailPage() {
       <section className="ext-detail-install clip-hub-panel clip-hub-panel-muted">
         <h2>安装</h2>
         <ol className="clip-hub-steps">
-          <li>下载 zip 并解压到本地文件夹</li>
-          <li>Chrome → 扩展程序 → 开发者模式 → 加载已解压的扩展程序</li>
-          <li>刷新目标网页后开始使用</li>
+          {ext.toolkitMember ? (
+            <>
+              <li>下载 {FRONTEND_DEBUG_TOOLKIT.name} 并解压</li>
+              <li>Chrome → 扩展程序 → 开发者模式 → 加载已解压的扩展程序</li>
+              <li>选解压后的文件夹（根目录有 manifest.json，只加载一次）</li>
+              <li>点工具栏图标，切换到 <strong>{ext.name}</strong> 标签使用</li>
+            </>
+          ) : (
+            <>
+              <li>下载 zip 并解压到本地文件夹</li>
+              <li>Chrome → 扩展程序 → 开发者模式 → 加载已解压的扩展程序</li>
+              <li>刷新目标网页后开始使用</li>
+            </>
+          )}
         </ol>
       </section>
 

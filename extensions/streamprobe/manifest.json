@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "StreamProbe",
+  "version": "1.0.0",
+  "description": "AI 与流式 API 浏览器调试器 — 帧级查看 EventSource / fetch stream",
+  "permissions": ["storage", "activeTab", "sidePanel", "tabs"],
+  "host_permissions": ["http://*/*", "https://*/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "StreamProbe",
+    "default_popup": "popup.html"
+  },
+  "side_panel": {
+    "default_path": "sidepanel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["inject-event-source.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["inject-fetch-stream.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["bridge.js"],
+      "run_at": "document_start"
+    }
+  ]
+}

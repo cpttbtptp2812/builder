@@ -12,6 +12,7 @@ export type WorkKind =
   | "micro-frontend"
   | "flow-builder"
   | "sse-lab"
+  | "stream-probe"
   | "locator-lab"
   | "extension-demo"
   | "eval-lab"
@@ -37,16 +38,31 @@ export type Work = {
 
 export const WORKS: Work[] = [
   {
+    id: "streamprobe",
+    slug: "streamprobe",
+    title: "StreamProbe",
+    subtitle: "流式 API 浏览器调试器",
+    hook: "帧级看 SSE · AI 流 · 首 token 与断线",
+    desc: "个人开源 Chrome 扩展：hook EventSource / fetch stream，Side Panel 时间线 + Raw/Parsed 双栏，导出会话包。",
+    impact: "个人项目",
+    kind: "stream-probe",
+    stack: ["Chrome MV3", "ReadableStream", "SSE", "AI SDK"],
+    teaser: "See every frame",
+    accent: "#0891b2",
+    tier: "flagship",
+    featured: true,
+  },
+  {
     id: "extension-hub",
     slug: "extension-hub",
-    title: "插件集",
-    subtitle: "3 款 Chrome 扩展",
-    hook: "片段保存、环境切换、SSE 流式排查",
-    desc: "ClipHub / Env / Wire — 日常联调在用的扩展，下载解压即可加载。",
+    title: "前端联调工具包",
+    subtitle: "ClipHub · Env · Wire",
+    hook: "摘录、切环境、看 SSE — 一个 zip 装齐",
+    desc: "三个 Chrome 扩展打包发布：保存网页摘录并跳回、按域名切 API/Token、帧级调试 EventSource。前端日常联调用。",
     impact: "本地运行",
     kind: "product-tool",
     stack: ["Chrome MV3", "EventSource", "按域配置"],
-    teaser: "ClipHub · Env · Wire",
+    teaser: "联调三件套",
     accent: "#0d9488",
     tier: "flagship",
     featured: true,

@@ -12,7 +12,7 @@ import {
   skills,
 } from "../data/profile";
 
-/** 完整履历 — Boss 直聘结构 */
+/** 完整履历页 */
 export function ResumePage() {
   return (
     <SiteShell
@@ -25,8 +25,12 @@ export function ResumePage() {
             <div>
               <h1>{profile.name}</h1>
               <p className="resume-meta">
-                {profile.title} · {profile.degree} · {profile.availability} · {profile.location}
+                {profile.title} · {profile.subtitle}
               </p>
+              <p className="resume-meta resume-meta-sub">
+                {profile.degree} · {profile.availability} · {profile.location}
+              </p>
+              <p className="resume-summary">{profile.summary}</p>
               <WorkTenureLive
                 startDate={profile.careerStart}
                 startLabel={profile.careerStartLabel}
@@ -65,20 +69,24 @@ export function ResumePage() {
           </ul>
         </section>
 
-        <section className="resume-section">
-          <h2>工作经历</h2>
-          <div className="resume-jobs-list">
-            {experience.map((job) => (
-              <ResumeJobCard key={job.company} job={job} />
+        <section className="resume-section resume-section-projects">
+          <h2>项目经历</h2>
+          <p className="resume-section-lead">
+            三个代表作：在职 AI 自动化平台，以及 StreamProbe、步骤记录器两个个人 Chrome 产品。
+          </p>
+          <div className="resume-project-grid">
+            {resumeProjects.map((p) => (
+              <ResumeProjectCard key={p.id} project={p} />
             ))}
           </div>
         </section>
 
-        <section className="resume-section">
-          <h2>项目经历</h2>
-          <div className="resume-project-grid">
-            {resumeProjects.map((p) => (
-              <ResumeProjectCard key={p.id} project={p} />
+        <section className="resume-section resume-section-jobs">
+          <h2>工作经历</h2>
+          <p className="resume-section-lead">天阳 iMean · 阿里剑池（软通） · 招行薪福通 · 民生银行 · 北大软件</p>
+          <div className="resume-jobs-list">
+            {experience.map((job) => (
+              <ResumeJobCard key={job.company} job={job} />
             ))}
           </div>
         </section>

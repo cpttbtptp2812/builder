@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>StreamProbe</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="sp-head">
+      <div class="sp-brand">
+        <span class="sp-logo">SP</span>
+        <div>
+          <strong>StreamProbe</strong>
+          <span id="sp-tab-url">—</span>
+        </div>
+      </div>
+      <div class="sp-actions">
+        <button type="button" id="sp-export" title="导出会话">↓</button>
+        <button type="button" id="sp-clear" title="清空">↻</button>
+      </div>
+    </header>
+
+    <section class="sp-metrics" id="sp-metrics"></section>
+
+    <div class="sp-layout">
+      <aside class="sp-conn">
+        <h2>连接</h2>
+        <ul id="sp-connections"></ul>
+      </aside>
+      <section class="sp-timeline">
+        <h2>帧时间线</h2>
+        <ul id="sp-frames"></ul>
+      </section>
+      <section class="sp-detail">
+        <h2>帧详情</h2>
+        <div class="sp-split">
+          <div>
+            <h3>Raw</h3>
+            <pre id="sp-raw">选择左侧一帧</pre>
+          </div>
+          <div>
+            <h3>Parsed</h3>
+            <pre id="sp-parsed">—</pre>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <script type="module" src="sidepanel.js"></script>
+  </body>
+</html>

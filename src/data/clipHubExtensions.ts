@@ -1,5 +1,7 @@
 /**
- * 插件集 — 浏览器扩展目录
+ * 浏览器扩展目录
+ * - 前端联调工具包：ClipHub + Env + Wire（一个 zip）
+ * - 步骤记录器：独立扩展
  */
 
 export type ExtensionStatus = "shipped";
@@ -18,9 +20,54 @@ export type ExtensionItem = {
   useCases: string[];
   stack: string[];
   accent: string;
+  /** 属于联调工具包内的子工具，不单独主推下载 */
+  toolkitMember?: boolean;
 };
 
-export const EXTENSION_CATALOG: ExtensionItem[] = [
+export type DebugToolkit = {
+  id: string;
+  name: string;
+  icon: string;
+  tagline: string;
+  desc: string;
+  zip: string;
+  version: string;
+  accent: string;
+  features: string[];
+  useCases: string[];
+  installSteps: string[];
+};
+
+export const FRONTEND_DEBUG_TOOLKIT: DebugToolkit = {
+  id: "frontend-debug-toolkit",
+  name: "前端联调工具包",
+  icon: "🧰",
+  tagline: "摘录 · 切环境 · 看 SSE — 日常联调三件套，一次装齐",
+  desc: "一个 Chrome 扩展，三个面板：ClipHub 保存网页摘录并跳回高亮；Env 按域名切换 API 和 Token；Wire 帧级查看 EventSource 流。前端联调、读文档、查 AI 流式接口时随手用，数据在本地，不联网也能跑。",
+  zip: "Frontend-Debug-Toolkit-v1.1.3.zip",
+  version: "1.1.3",
+  accent: "#0d9488",
+  features: [
+    "一次安装，ClipHub / Env / Wire 三合一",
+    "按域名切 API、自动带 Token",
+    "SSE 帧级调试，比 Network 直观",
+    "选中文字保存位置，一键跳回",
+    "本地存储，解压后加载一次即可",
+  ],
+  useCases: [
+    "本地 / 测试 / 预发环境秒切",
+    "调试 AI 对话、流式接口",
+    "读长文做摘录、跨 Tab 找回原文",
+  ],
+  installSteps: [
+    "下载 zip 后先解压（不要直接选 zip 加载，会报错）",
+    "chrome://extensions → 开发者模式 → 加载已解压的扩展程序",
+    "选解压后的文件夹（根目录要有 manifest.json，只加载一次）",
+    "点工具栏图标，在 ClipHub / Env / Wire 标签间切换",
+  ],
+};
+
+export const DEBUG_TOOLKIT_TOOLS: ExtensionItem[] = [
   {
     id: "clip-hub",
     name: "ClipHub",
@@ -34,36 +81,7 @@ export const EXTENSION_CATALOG: ExtensionItem[] = [
     useCases: ["读长文做摘录", "调研标记引用", "跨 Tab 找回原文"],
     stack: ["Chrome MV3", "Content Script", "文字匹配"],
     accent: "#0d9488",
-  },
-  {
-    id: "skilltap",
-    name: "步骤记录器",
-    icon: "⏺",
-    tagline: "在网页上点一遍，生成操作说明书；测出 bug 也能录给开发",
-    desc: "在真实页面上点、填、跳，扩展记下步骤并截图。普通人打开导出的 HTML 就是操作说明书，还能点「演示一遍」跟着看；测试把复现路径录下来发给开发，对方不用先起本地项目，也能对照截图、选择器和报错定位问题。",
-    story: [
-      "同事或客户不会盯着你的屏幕：把常用后台操作录一次，发一个网页文件过去。对方用 Chrome / Edge 打开就能按步骤做，登录、验证码会标成「请你自己做」，密码不会写进手册。",
-      "测试测出问题或要改某一段流程时，打开出问题的页面录一遍，写上「出了什么问题」，导出复现包。里面有操作手册、给开发看的说明（选择器、接口 4xx、控制台报错、不稳定定位），以及可导入的 repro.json。开发导入后可一键打开当时的入口页（测试环境/预发），对照步骤看，不必每次把项目在自己电脑里跑起来再猜你点了哪里。",
-    ],
-    status: "shipped",
-    zip: "SkillTap-Extension-v1.2.0.zip",
-    version: "1.2.0",
-    features: [
-      "录点击、填写、跳转并截图",
-      "导出 HTML 操作手册，可演示翻页",
-      "导出复现包：手册 + 给开发.md + repro.json",
-      "自动标出脆弱选择器、动态 id、接口报错",
-      "开发导入后打开入口页，不必先起本地项目",
-      "登录 / 验证码 / 选文件写成人工步骤",
-    ],
-    useCases: [
-      "教同事走一遍内部后台",
-      "把操作说明发给不写代码的人",
-      "测试把 bug 复现路径交给开发",
-      "开发对照截图和选择器快速定位",
-    ],
-    stack: ["Chrome MV3", "截图", "HTML 手册", "repro.json"],
-    accent: "#e11d48",
+    toolkitMember: true,
   },
   {
     id: "env",
@@ -78,6 +96,7 @@ export const EXTENSION_CATALOG: ExtensionItem[] = [
     useCases: ["多环境前端联调", "免改代码切后端", "临时带 Token 调试"],
     stack: ["Fetch 重写", "chrome.storage", "按域隔离"],
     accent: "#f59e0b",
+    toolkitMember: true,
   },
   {
     id: "wire",
@@ -92,8 +111,42 @@ export const EXTENSION_CATALOG: ExtensionItem[] = [
     useCases: ["调试 AI 流式输出", "排查 SSE 断连", "查看原始 event data"],
     stack: ["EventSource 注入", "Bridge 通信", "实时面板"],
     accent: "#ec4899",
+    toolkitMember: true,
   },
- 
+];
+
+export const STANDALONE_EXTENSIONS: ExtensionItem[] = [
+  {
+    id: "skilltap",
+    name: "步骤记录器",
+    icon: "⏺",
+    tagline: "在网页上点一遍，生成操作说明书；测出 bug 也能录给开发",
+    desc: "在真实页面上点、填、跳，扩展记下步骤并截图。普通人打开导出的 HTML 就是操作说明书；测试把复现路径录下来发给开发，对方不用先起本地项目，也能对照截图、选择器和报错定位问题。",
+    story: [
+      "同事或客户不会盯着你的屏幕：把常用后台操作录一次，发一个网页文件过去。对方用 Chrome / Edge 打开就能按步骤做。",
+      "测试测出问题或要改某段流程时，打开出问题的页面录一遍，写上「出了什么问题」，导出复现包给开发。",
+    ],
+    status: "shipped",
+    zip: "SkillTap-Extension-v1.2.0.zip",
+    version: "1.2.0",
+    features: [
+      "录点击、填写、跳转并截图",
+      "导出 HTML 操作手册，可演示翻页",
+      "导出复现包给开发对照定位",
+    ],
+    useCases: [
+      "教同事走一遍内部后台",
+      "测试把 bug 复现路径交给开发",
+    ],
+    stack: ["Chrome MV3", "截图", "HTML 手册", "repro.json"],
+    accent: "#e11d48",
+  },
+];
+
+/** 全部可进详情页的扩展（含工具包子项） */
+export const EXTENSION_CATALOG: ExtensionItem[] = [
+  ...DEBUG_TOOLKIT_TOOLS,
+  ...STANDALONE_EXTENSIONS,
 ];
 
 export function getExtension(id: string) {
@@ -102,6 +155,10 @@ export function getExtension(id: string) {
 
 export function extensionDownloadUrl(ext: ExtensionItem) {
   return `${import.meta.env.BASE_URL}downloads/${ext.zip}`;
+}
+
+export function toolkitDownloadUrl() {
+  return `${import.meta.env.BASE_URL}downloads/${FRONTEND_DEBUG_TOOLKIT.zip}`;
 }
 
 export function extensionStatusLabel() {
@@ -126,4 +183,3 @@ export function clipHubStatusLabel() {
 export function clipHubDownloadUrl(ext: ExtensionItem) {
   return extensionDownloadUrl(ext);
 }
-

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>StreamProbe Demo</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        max-width: 40rem;
+        margin: 2rem auto;
+        padding: 0 1rem;
+      }
+      button {
+        margin-right: 0.5rem;
+        margin-bottom: 0.5rem;
+        padding: 0.5rem 0.75rem;
+      }
+      pre {
+        background: #f1f5f9;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.85rem;
+        max-height: 12rem;
+        overflow: auto;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>StreamProbe Demo</h1>
+    <p>安装 StreamProbe 后打开 Side Panel，再点击下方按钮（需联网）。</p>
+    <button type="button" id="es">EventSource（Wikimedia SSE）</button>
+    <button type="button" id="fetch">fetch stream（httpbin）</button>
+    <button type="button" id="mock">本地 NDJSON 模拟流</button>
+    <pre id="log"></pre>
+    <script>
+      const log = document.getElementById("log");
+      function append(s) {
+        log.textContent += s + "\n";
+      }
+
+      document.getElementById("es").addEventListener("click", () => {
+        log.textContent = "";
+        append("连接 EventSource…");
+        const es = new EventSource("https://stream.wikimedia.org/v2/stream/recentchange");
+        es.onmessage = (ev) => append("message: " + ev.data.slice(0, 80) + "…");
+        es.onerror = () => append("error / closed");
+        setTimeout(() => es.close(), 8000);
+      });
+
+      document.getElementById("fetch").addEventListener("click", async () => {
+        log.textContent = "";
+        append("fetch httpbin stream…");
+        try {
+          const res = await fetch("https://httpbin.org/stream/5");
+          const text = await res.text();
+          append("done, length=" + text.length);
+        } catch (e) {
+          append("fail: " + e.message);
+        }
+      });
+
+      function emit(detail) {
+        window.dispatchEvent(new CustomEvent("__streamprobe__", { detail }));
+      }
+
+      document.getElementById("mock").addEventListener("click", async () => {
+        log.textContent = "";
+        append("本地 AI NDJSON 模拟（走 Bridge 通道）…");
+        const cid = "demo-" + Date.now();
+        const url = location.href + "#mock";
+        emit({ phase: "open", kind: "fetch-stream", connectionId: cid, url, t: Date.now() });
+        const lines = [
+          '{"type":"start","turnId":"demo-1"}',
+          '{"type":"text-delta","text":"你好，"}',
+          '{"type":"text-delta","text":"StreamProbe！"}',
+          '{"type":"tool-call","toolName":"search","toolCallId":"tc-1"}',
+          '{"type":"tool-result","toolCallId":"tc-1","result":"ok"}',
+          '{"type":"finish"}',
+        ];
+        for (const line of lines) {
+          append("emit: " + line);
+          emit({
+            phase: "message",
+            kind: "fetch-stream",
+            connectionId: cid,
+            url,
+            raw: line,
+            t: Date.now(),
+          });
+          await new Promise((r) => setTimeout(r, 350));
+        }
+        emit({ phase: "close", kind: "fetch-stream", connectionId: cid, url, t: Date.now() });
+        append("done — 请看 Side Panel");
+      });
+    </script>
+  </body>
+</html>

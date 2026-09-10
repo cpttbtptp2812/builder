@@ -3,7 +3,7 @@ import { ResumeSections } from "./ResumeSections";
 
 export function ResumeJobCard({ job }: { job: JobExperienceEntry }) {
   return (
-    <article className="resume-job-card">
+    <article className="resume-job-card resume-job-card--compact">
       <header className="resume-job-card-head">
         <div>
           <strong>{job.company}</strong>
@@ -21,15 +21,6 @@ export function ResumeJobCard({ job }: { job: JobExperienceEntry }) {
       ) : null}
 
       <ResumeSections sections={job.sections} />
-
-      <div className="resume-project-block">
-        <h4>业绩</h4>
-        <ul>
-          {job.achievements.map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
-      </div>
     </article>
   );
 }

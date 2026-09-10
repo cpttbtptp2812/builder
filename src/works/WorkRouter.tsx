@@ -51,6 +51,7 @@ export function WorkRouter() {
     case "flow-builder":
       return <WorkBuilder />;
     case "sse-lab":
+    case "stream-probe":
       return <WorkSse />;
     case "locator-lab":
       return <WorkLocator />;

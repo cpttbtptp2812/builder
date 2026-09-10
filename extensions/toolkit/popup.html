@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>前端联调工具包</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <nav class="tabs" role="tablist">
+      <button type="button" class="tab active" data-tab="clip" role="tab" aria-selected="true">ClipHub</button>
+      <button type="button" class="tab" data-tab="env" role="tab" aria-selected="false">Env</button>
+      <button type="button" class="tab" data-tab="wire" role="tab" aria-selected="false">Wire</button>
+    </nav>
+
+    <section id="panel-clip" class="panel panel--clip active" role="tabpanel">
+      <header class="pop-head">
+        <strong>ClipHub</strong>
+        <span id="clip-status" class="status off">未连接</span>
+      </header>
+      <section class="pop-token">
+        <p class="pop-setup-title">桌面端同步（可选）</p>
+        <p class="pop-setup-note">不配置也能用：右键保存后会立刻出现在下方列表</p>
+        <label for="clip-token">连接令牌</label>
+        <div class="token-row">
+          <input id="clip-token" type="password" placeholder="clip-dev-token" />
+          <button type="button" id="clip-save-token">保存</button>
+        </div>
+        <label for="clip-tags">下次保存的标签（逗号分隔，可选）</label>
+        <input id="clip-tags" type="text" placeholder="调研, API, 待读" class="pop-tags" />
+      </section>
+      <section class="pop-list-wrap">
+        <p class="pop-list-label">已保存 — 点击跳回原页面位置</p>
+        <p id="clip-hint" class="hint">加载中…</p>
+        <ul id="clip-list" class="pop-list"></ul>
+      </section>
+    </section>
+
+    <section id="panel-env" class="panel panel--env" role="tabpanel" hidden>
+      <header class="head">
+        <div class="logo">E</div>
+        <div>
+          <strong>Env</strong>
+          <span id="env-host">—</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" id="env-enabled" />
+          <i></i>
+        </label>
+      </header>
+      <p class="hint">为当前域名配置后，页面内 fetch 会自动带上 Token、重写 API 地址。刷新页面生效。</p>
+      <label>API Base <em>可选，如 https://api.staging.com</em></label>
+      <input id="env-apiBase" placeholder="https://api.example.com" />
+      <label class="check"><input type="checkbox" id="env-rewriteHost" /> 将 /api 请求重写到 API Base 主机</label>
+      <label>Bearer Token</label>
+      <input id="env-token" type="password" placeholder="粘贴 JWT 或 API Key" />
+      <label>额外 Header <em>JSON，如 {"X-Tenant":"dev"}</em></label>
+      <textarea id="env-headers" rows="2" placeholder="{}"></textarea>
+      <button type="button" class="btn" id="env-save">保存并应用</button>
+      <p id="env-msg" class="msg"></p>
+    </section>
+
+    <section id="panel-wire" class="panel panel--wire" role="tabpanel" hidden>
+      <header class="head">
+        <div class="logo">W</div>
+        <div><strong>Wire</strong><span>SSE 帧调试</span></div>
+        <button type="button" class="btn-icon" id="wire-clear">↻</button>
+      </header>
+      <p class="hint">自动捕获页面 EventSource 连接与 message 事件</p>
+      <ul class="frames" id="wire-frames"></ul>
+    </section>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

@@ -1,12 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ExtensionHomeCard } from "../components/home/ExtensionHomeCard";
+import { ToolkitHomeCard } from "../components/home/ToolkitHomeCard";
 import { FeaturedWorkCard } from "../components/home/FeaturedWorkCard";
 import { SiteFooter } from "../components/SiteFooter";
 import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { WorkTenureLive } from "../components/WorkTenureLive";
-import { EXTENSION_CATALOG } from "../data/clipHubExtensions";
+import { STANDALONE_EXTENSIONS } from "../data/clipHubExtensions";
 import { profile } from "../data/profile";
 import { HOME_AGENT, LAB_WORKS, PROJECT_WORKS } from "../data/works";
 
@@ -62,11 +63,12 @@ export function HomePage() {
           <div className="works-section-head">
             <h2 className="works-section-label">浏览器扩展</h2>
             <span className="works-section-hint">
-              <Link to="/tools/extensions">安装说明</Link>
+              <Link to="/tools/extensions">联调工具包</Link>
             </span>
           </div>
           <div className="home-featured-grid">
-            {EXTENSION_CATALOG.map((ext) => (
+            <ToolkitHomeCard />
+            {STANDALONE_EXTENSIONS.map((ext) => (
               <ExtensionHomeCard key={ext.id} ext={ext} />
             ))}
           </div>

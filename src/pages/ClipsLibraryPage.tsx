@@ -292,7 +292,7 @@ export function ClipsLibraryPage() {
         {!filtered.length ? (
           <p className="clips-lib-empty">
             {status === "offline" ? "同步服务未连接。" : "暂无片段。"}{" "}
-            <Link to="/tools/extensions">安装 ClipHub</Link>
+            <Link to="/tools/extensions">安装联调工具包（含 ClipHub）</Link>
           </p>
         ) : viewMode === "list" ? (
           <ul className="clips-lib-list">
@@ -333,7 +333,7 @@ export function ClipsLibraryPage() {
       </section>
 
       <p className="clip-hub-back">
-        <Link to="/tools/extensions">← 插件集</Link>
+        <Link to="/tools/extensions">← 联调工具包</Link>
       </p>
       <SiteFooter />
     </SiteShell>

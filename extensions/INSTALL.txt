@@ -1,0 +1,32 @@
+前端联调工具包 — 安装说明
+
+================================
+
+
+
+【不要直接加载 zip！】
+
+Chrome 不能加载 .zip 文件，会提示：
+
+  Could not unzip extension for install
+
+
+
+请按下面做：
+
+
+
+1. 右键 Frontend-Debug-Toolkit-v1.1.3.zip → 解压
+
+2. chrome://extensions → 开发者模式 → 加载已解压的扩展程序
+
+3. 选解压后的文件夹（根目录要有 manifest.json）
+
+4. 刷新你要调试的网页
+
+5. 点工具栏图标，在 ClipHub / Env / Wire 三个标签间切换
+
+
+
+一个扩展包含三个功能，只需加载一次。
+

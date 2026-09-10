@@ -12,7 +12,7 @@ export function SiteFooter() {
         <Link to="/">全部作品</Link>
         <Link to="/resume">个人履历</Link>
         <Link to="/work/dev-debug">AI Agent</Link>
-        <Link to="/tools/extensions">插件集</Link>
+        <Link to="/tools/extensions">联调工具包</Link>
         <Link to="/tools/clips">片段库</Link>
         <a href={`mailto:${profile.email}`}>邮件</a>
       </nav>
