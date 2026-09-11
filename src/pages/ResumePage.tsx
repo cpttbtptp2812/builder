@@ -69,10 +69,15 @@ export function ResumePage() {
         <section className="resume-section resume-section-projects">
           <h2>项目经历</h2>
           <p className="resume-section-lead">
-            代表作：在职 iMean AI 自动化平台；个人 Agent Trace（Agent 语义链路可观测性）。
+            代表作三条：OwnAgent（Agent Loop / MCP / RAG）、iMean（调度 / 定位 / 流式）、剑池（虚拟滚动 / 渲染治理）。
           </p>
           <div className="resume-project-grid">
-            {resumeProjects.map((p) => (
+            {[...resumeProjects]
+              .sort((a, b) => {
+                const order = ["ownagent", "imean", "jianchi"];
+                return order.indexOf(a.id) - order.indexOf(b.id);
+              })
+              .map((p) => (
               <ResumeProjectCard key={p.id} project={p} />
             ))}
           </div>
@@ -80,7 +85,9 @@ export function ResumePage() {
 
         <section className="resume-section resume-section-jobs">
           <h2>工作经历</h2>
-          <p className="resume-section-lead">天阳 iMean · 阿里剑池（软通） · 招行薪福通 · 民生银行 · 北大软件</p>
+          <p className="resume-section-lead">
+            写公司职责与协作；代表作技术方案见上方项目经历。天阳 · 软通驻场阿里 · 招行薪福通 · 民生银行 · 北大软件
+          </p>
           <div className="resume-jobs-list">
             {experience.map((job) => (
               <ResumeJobCard key={job.company} job={job} />

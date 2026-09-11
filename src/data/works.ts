@@ -45,7 +45,7 @@ export const WORKS: Work[] = [
     title: "OwnAgent",
     subtitle: "浏览器内 AI Agent 平台",
     hook: "对话 · 技能路由 · MCP 工具 · 知识检索 · 运行追踪 · 回归评测",
-    desc: "个人从 0 实现的 Agent 平台：Agent Loop、进程内 MCP Server、RAG 分块检索、SKILL.md 路由、TraceSpan 可观测与 Eval，全部真实运行、免 API Key。",
+    desc: "自研 Agent Loop、进程内 MCP、SKILL.md 路由、分块 RAG 与 TraceSpan：用 SSE 累积 tool_call、JSON-RPC 调工具、打分选技能，调用链可对账、可回归。",
     impact: "个人项目",
     kind: "own-agent",
     stack: ["Agent Loop", "MCP", "RAG", "SKILL.md", "Eval"],
@@ -96,6 +96,21 @@ export const WORKS: Work[] = [
     stack: ["React Flow", "dagre", "Valtio", "Copilot"],
     teaser: "拖节点 · 连边 · 模拟运行",
     accent: "#a78bfa",
+    tier: "flagship",
+    featured: true,
+  },
+  {
+    id: "jianchi",
+    slug: "jianchi",
+    title: "剑池重构",
+    subtitle: "虚拟滚动 · 审批编排",
+    hook: "8000 行列表只渲染视口 · 首屏 3.2s → 1.4s",
+    desc: "阿里研发工具链前端重构：react-window 虚拟滚动、React DnD 审批流、Redux 派生缓存。站点上可对比重构前后 FPS 与 DOM 数量。",
+    impact: "驻场阿里",
+    kind: "perf-lab",
+    stack: ["react-window", "React DnD", "Redux"],
+    teaser: "3.2s → 1.4s",
+    accent: "#0ea5e9",
     tier: "flagship",
     featured: true,
   },
@@ -175,6 +190,9 @@ export const LAB_WORKS = WORKS.filter((w) => w.tier === "lab");
 
 /** 首页 — iMean 平台（在职） */
 export const IMEAN_WORKS = WORKS.filter((w) => ["imean", "builder"].includes(w.slug));
+
+/** 首页 — 工程实践（剑池重构） */
+export const ENGINEERING_WORKS = WORKS.filter((w) => w.slug === "jianchi");
 
 /** 首页 — 个人产品（独立设计与开发） */
 export const PERSONAL_WORKS = WORKS.filter((w) => w.slug === "ownagent");

@@ -523,7 +523,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   ownagent: {
     slug: "ownagent",
     purpose:
-      "把「听懂问题 → 选技能 → 调工具 → 流式作答 → 留下可追踪记录」整条 Agent 链路在浏览器里从 0 实现一遍。不依赖第三方 Agent 框架，打开网页就能跑，不用配 API Key。",
+      "把 Agent 的 Loop、工具协议、检索、路由和追踪拆开实现。SSE 碎片拼成完整 tool_call，工具走 JSON-RPC MCP，意图用 SKILL.md 打分，检索带 chunkId，运行写入 TraceSpan。",
     highlights: [
       {
         title: "Agent Loop + MCP",
@@ -552,12 +552,12 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       {
         title: "双运行时兜底",
         analysis:
-          "优先走 SQLite 服务端；服务端不可用时自动降级为纯浏览器内运行时，能力有裁剪但链路完整。这样 demo 在任何环境都打得开，不会因为后端没起就白屏。",
-        metric: "服务端优先 · 浏览器降级",
+          "优先走 Hono + SQLite；服务端不可用时降级浏览器内运行时，同一套 MCP 工具链不断。IndexedDB 存长期记忆，sessionStorage 存当次会话。",
+        metric: "SQLite 优先 · 浏览器降级",
       },
     ],
     content:
-      "站点上是一个入口页，下挂五个模块：对话、运行追踪、知识检索、技能路由、回归评测。全部真实运行，不是录像也不是 mock。",
+      "六个模块共用同一套运行时：对话、追踪、检索、路由、评测。Loop / MCP / RAG 是代码路径，不是分叉的假数据。",
     techJots: [
       { tag: "Loop", text: "tool_call 参数按 delta 累积，凑齐 JSON 才执行。" },
       { tag: "MCP", text: "进程内 JSON-RPC，Schema 校验 + isError 统一异常。" },
@@ -565,7 +565,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       { tag: "记忆", text: "IndexedDB 长期 + sessionStorage 会话态。" },
     ],
     scraps: ["后续：trace 导出 JSON", "接向量检索替换关键词打分"],
-    siteNote: "一个入口，五个模块，全部真实运行。",
+    siteNote: "Loop 累积 tool_call · MCP JSON-RPC · RAG chunkId · 路由打分。",
   },
 
   extension: {

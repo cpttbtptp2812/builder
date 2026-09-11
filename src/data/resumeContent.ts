@@ -46,14 +46,14 @@ export type JobExperienceEntry = {
   plain?: JobPlainFields;
 };
 
-// ─── 项目经历（2 条：在职 iMean + 个人 Agent Trace） ───
+// ─── 项目经历（3 条：个人 OwnAgent + 在职 iMean + 剑池重构） ───
 
 export const resumeProjectEntries: ResumeProjectEntry[] = [
   {
     id: "imean",
     name: "iMean AI 智能自动化操作平台",
     role: "前端开发工程师",
-    period: "2025.08 — 至今",
+    period: "2025.08 — 2026.05",
     workSlug: "imean",
     stack: [
       "Next.js 16",
@@ -67,7 +67,8 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
       {
         heading: "项目背景",
         paragraphs: [
-          "iMean 是创业团队自研的 AI 浏览器自动化平台：用户用自然语言描述任务，系统在真实浏览器中完成点击、填写、跳转等操作。产品采用微前端，含 Builder（流程编排）、Agent（AI 对话）、SDK（执行引擎）三个子系统，支持本地 / 云端 / 远程三种执行模式，形成「配置 → 对话 → 执行」闭环。",
+          "iMean 是创业团队自研的 AI 浏览器自动化平台：用户用自然语言描述任务，系统在真实浏览器里完成点击、填写、跳转。产品不是单一后台，而是微前端三件套——Builder 画流程、Agent 做流式对话和下发、SDK 注入业务页执行回放。三条线用 GraphQL 同步工作流定义，用 PostMessage 和全局任务队列把多窗口执行收成一条闭环。我主要做 SDK 调度、Builder 编排、Agent 流式消费，以及回放定位和包体积。",
+          "和常规中后台不同，难点在浏览器运行时：没有进程锁、DOM 会变、注入包有体积预算、对话里的进度必须和队列步数对齐。下面按模块写用了什么技术、解决什么问题。",
         ],
       },
       {
@@ -84,35 +85,38 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
           {
             heading: "SDK 任务调度系统",
             bullets: [
-              "设计基于队列的任务调度，支持暂停、恢复、跳过、失败重试，提升长流程可控性",
-              "PostMessage 跨窗口协调：窗口管理器追踪所有 Tab，主窗口维护全局队列，多窗口有序、无冲突",
-              "插件化任务类型：步骤、条件判断、循环、组件操作等，便于扩展新能力",
-              "CompressionStream 压缩队列持久化，IndexedDB 缓存任务状态",
+              "TaskQueue：pause / resume / skip / retry。长流程几十步，失败或用户暂停后从队列头继续，避免整段重跑",
+              "窗口管理器追踪打开的 Tab。主窗口持有全局队列，子窗口只上报就绪 / 完成 / 失败。消息带类型和序号，状态以主窗口为准",
+              "浏览器没有进程级互斥。用 PostMessage 做窗口间锁：同一时刻只允许一个窗口 execute，其他排队，解决多 Tab 抢跑和状态分叉",
+              "操作类型插件化。步骤、条件、循环、HTTP、DOM 各自 register({ type, execute })，调度循环不写死 switch，新能力只加插件",
+              "步骤 JSON 常 30～50KB。用 CompressionStream gzip 写入 IndexedDB，读取 DecompressionStream 解压并 round-trip 校验，刷新后可续跑",
             ],
           },
           {
             heading: "Builder 工作流编辑器",
             bullets: [
-              "React Flow 可视化编排：拖拽节点、连线，支持步骤 / 条件 / API 请求等节点",
-              "集成 dagre 力导向自动布局，优化复杂流程图可读性",
-              "与 GraphQL 后端同步工作流定义，支持 Copilot 辅助改图（探索中）",
+              "React Flow 拖拽节点、连边；节点类型包括步骤、条件、循环、API 请求",
+              "复杂图用 dagre 自动布局，避免拖着拖着交叉不可读，布局结果写回节点 position",
+              "画布状态与 GraphQL 工作流定义双向同步，保存后 Agent / SDK 读到的是同一份图",
             ],
           },
           {
             heading: "Agent AI 对话界面",
             bullets: [
-              "Vercel AI SDK 流式对话，UIMessage 映射与 Tool Call 渲染",
-              "GraphQL + Apollo 管理会话、历史记录、文件上传与定时任务",
-              "流式 SSE 对接后端，支持断线恢复与多轮上下文",
+              "Next.js App Router + Vercel AI SDK 消费 SSE，把流式 part 映射成 UIMessage，Tool Call 渲染成卡片",
+              "Apollo Client + GraphQL 管理会话、历史、文件上传、定时任务",
+              "流可能中断。AbortController 取消当前读取，已收帧缓存后重连拼回去，避免对话显示的步数和 SDK 队列脱节",
+              "Agent 下发任务后订阅执行进度，回放当前步与流程图高亮共用同一份 step id",
             ],
           },
           {
             heading: "回放引擎与性能",
             bullets: [
-              "多策略元素定位：CSS 优先级、表格索引、本地缓存，各策略独立重试后瀑布降级",
-              "定位成功率由约 70% 提升至 90%+，适配 Shadow DOM、异步渲染",
-              "代码分割、路由懒加载、gzip 队列压缩，SDK 首屏包体积减少约 30%",
-              "Playwright E2E 覆盖核心回放与对话链路",
+              "定位瀑布：CSS → XPath → 文本模糊 → 表格行列坐标 → IndexedDB 上次成功路径。每一层内部重试，失败再降级，成功立刻停",
+              "Shadow DOM 不能只 querySelector 轻 DOM，要递归进 shadowRoot；异步渲染先等节点出现再点",
+              "失败埋点看卡在哪一跳，针对性补策略。动态页回放成功率约 70% → 90%+",
+              "SDK 要注入宿主页。Vite manualChunks 把 scheduler 和引导 UI 拆开，Replay 懒加载；队列 gzip。初始包约 180KB → 125KB gzip（约 -30%）",
+              "Playwright 覆盖「匹配流程 → 回放点击 → 对话进度」主链路",
             ],
           },
         ],
@@ -120,17 +124,28 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
       {
         heading: "技术难点",
         bullets: [
-          "跨窗口执行顺序与状态同步：全局队列 + PostMessage 协议，避免多 Tab 并行抢执行",
-          "动态页面元素定位：页面跳转、懒加载、DOM 变更下的稳定性与重试策略",
-          "流式对话与自动化执行的状态一致性：Agent 下发任务与 SDK 执行反馈的闭环",
+          "多 Tab 无进程锁：用 PostMessage 序号 + 主窗口队列做互斥，避免抢执行",
+          "选择器失效：瀑布策略 + 缓存路径，而不是一条 CSS 写死",
+          "对话下发与 SDK 执行进度不一致：队列持久化 + 流式续传，刷新后仍能对齐步数",
+          "注入包体积：调度核心与回放引擎拆包，Replay 按需加载，队列 gzip 再进 IndexedDB",
         ],
       },
     ],
     achievements: [
-      "核心调度系统与 Agent 对话 UI 上线，跨窗口协调在生产环境稳定运行",
-      "回放定位成功率 90%+，SDK 包体积约 -30%，首屏加载明显缩短",
-      "建立 TypeScript 规范与 Playwright E2E，主链路质量可回归验证",
+      "全局队列 + PostMessage 解决多窗口抢跑，调度与对话 UI 在生产环境稳定运行",
+      "定位瀑布把回放成功率做到 90%+；分包与压缩把 SDK 初始包降约 30%",
+      "Playwright + TypeScript 把回放/对话主链路变成可回归的质量门禁",
     ],
+    plain: {
+      name: "iMean AI 智能自动化操作平台",
+      role: "前端开发工程师",
+      period: "2025.08 — 2026.05",
+      url: "https://cpttbtptp2812.github.io/builder/#/work/imean",
+      description:
+        "iMean 是创业团队自研的 AI 浏览器自动化平台：用户用自然语言描述任务，系统在真实浏览器里完成点击、填写、跳转。前端不是单一后台，而是微前端三件套——Builder 画流程、Agent 做流式对话和下发、SDK 注入业务页执行回放。三条线用 GraphQL 同步工作流定义，用 PostMessage 和全局任务队列把多窗口执行收成一条闭环。我主要负责 SDK 调度、Builder 编排、Agent 流式消费，以及回放定位和包体积。\n\n和常规中后台不同，难点在浏览器运行时：没有进程锁、DOM 会变、注入包有体积预算、对话里的进度必须和队列步数对齐。\n\n一、SDK 任务调度。TaskQueue 支持 pause / resume / skip / retry。长流程几十步，失败或用户暂停后从队列头继续，避免整段重跑。窗口管理器追踪打开的 Tab：主窗口持有全局队列，子窗口只上报就绪 / 完成 / 失败，消息带类型和序号，状态以主窗口为准。浏览器没有进程级互斥，用 PostMessage 做窗口间锁——同一时刻只允许一个窗口 execute，其他排队，解决多 Tab 抢跑和状态分叉。操作类型插件化：步骤、条件、循环、HTTP、DOM 各自 register({ type, execute })，调度循环不写死 switch，新能力只加插件。步骤 JSON 常 30～50KB，用 CompressionStream gzip 写入 IndexedDB，读取时 DecompressionStream 解压并 round-trip 校验，刷新后可续跑。\n\n二、Builder 工作流编辑器。React Flow 拖拽节点、连边，节点类型包括步骤、条件、循环、API 请求。复杂图用 dagre 自动布局，避免拖着拖着交叉不可读，布局结果写回节点 position。画布与 GraphQL 工作流定义双向同步，保存后 Agent / SDK 读到的是同一份图。\n\n三、Agent 对话。Next.js App Router + Vercel AI SDK 消费 SSE，把流式 part 映射成 UIMessage，Tool Call 渲染成卡片。Apollo + GraphQL 管会话、历史、文件上传、定时任务。流可能中断：AbortController 取消当前读取，已收帧缓存后重连拼回去，避免对话显示的步数和 SDK 队列脱节。下发任务后订阅执行进度，回放当前步与流程图高亮共用同一份 step id。\n\n四、回放定位与包体积。定位走瀑布：CSS → XPath → 文本模糊 → 表格行列坐标 → IndexedDB 上次成功路径。每一层内部重试，失败再降级，成功立刻停。Shadow DOM 不能只 querySelector 轻 DOM，要递归进 shadowRoot；异步渲染先等节点出现再点。失败埋点看卡在哪一跳。动态页回放成功率约 70% → 90%+。SDK 要注入宿主页：Vite manualChunks 把 scheduler 和引导 UI 拆开，Replay 懒加载，队列 gzip。初始包约 180KB → 125KB gzip（约 -30%）。Playwright 覆盖「匹配流程 → 回放点击 → 对话进度」主链路。\n\n技术栈：Next.js、React Flow、Vercel AI SDK、GraphQL / Apollo、Valtio、Vite、IndexedDB、PostMessage、Playwright。",
+      performance:
+        "1. 全局队列 + PostMessage 解决多窗口抢跑，调度与对话 UI 在生产环境稳定运行。\n2. 定位瀑布把动态页回放成功率做到 90%+；分包与 gzip 把 SDK 初始包降约 30%。\n3. Playwright + TypeScript 把回放 / 对话主链路变成可回归的质量门禁。",
+    },
   },
   {
     id: "ownagent",
@@ -144,36 +159,137 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
       {
         heading: "项目背景",
         paragraphs: [
-          "市面上的 Agent 框架大多把 Loop、工具协议、检索和评测藏在服务端 SDK 里，前端只剩一个聊天框。OwnAgent 反过来做：把「听懂问题 → 选技能 → 调工具 → 流式作答 → 留下可追踪的运行记录」整条链路在浏览器里从 0 实现一遍，打开网页即可运行，不需要配置 API Key。",
+          "常见 Agent 接入把 Loop、工具协议、检索封在服务端 SDK 里，前端只消费一段 SSE。出错时 Network 只有一条 pending 长请求，分不清是意图路由选错、工具入参还是半截 JSON、还是检索根本没召回。OwnAgent 是我独立设计实现的浏览器内 Agent 平台：把这几层在 TypeScript 里拆开，能看见每一步选了哪个技能、调了哪个工具、入参怎么拼起来、检索打到哪一块。不依赖 LangChain / LlamaIndex。",
+          "产品形态是同一工作台里的六块：对话、运行追踪、知识检索、技能路由、回归评测、能力全景。无后端时走浏览器内 Guest Runtime，有 Hono + SQLite 时走服务端 Loop，协议层保持一致。",
         ],
       },
       {
         heading: "核心模块",
-        bullets: [
-          "Agent Loop：OpenAI 兼容流式解析，增量累积 tool_call 参数，最多 8 轮工具迭代后收敛",
-          "MCP Server（进程内）：JSON-RPC 2.0 实现 tools/list、tools/call，按 JSON Schema 校验入参，异常统一包成 isError 结果",
-          "Skill 注册表：能力以 SKILL.md 声明 triggers / tools / steps，运行前按 trigger 加权打分选 Top-1，路由过程对用户可见",
-          "RAG 检索：项目文档分块建语料，关键词重叠 + 项目直匹配 + 段落加权混合打分，每条命中带 chunkId 可溯源",
-          "Multi-Agent：Planner / Executor / Reviewer 三角色协作，复杂请求先拆解再执行",
-          "可观测：TraceSpan 协议（kind / label / ms / status / payload）记录每一步，时间线展示并持久化历史会话",
-          "回归评测：路由用例集跑命中率与失败样本，工具 benchmark 统计真实耗时",
-        ],
-      },
-      {
-        heading: "工程取舍",
-        bullets: [
-          "双运行时：优先走 SQLite 服务端，不可用时自动降级为纯浏览器内运行，保证 demo 永远打得开",
-          "工具执行统一异常边界，单个工具失败不中断整轮对话，失败信息回流给模型继续决策",
-          "长期记忆用 IndexedDB、会话态用 sessionStorage，避免刷新即失忆又不污染跨会话上下文",
-          "能力全部收敛到一个入口页（对话 / 追踪 / 检索 / 路由 / 评测），而不是散成多个 demo",
+        subsections: [
+          {
+            heading: "Agent Loop · 流式工具调用",
+            bullets: [
+              "模型以 SSE 增量下发 tool_call。同一 index 的 name / arguments 会拆成多帧，按 index 累积，流结束或该 call 完整后再 JSON.parse，禁止半截参数进执行层",
+              "单轮最多 8 次「模型 → 工具 → 再模型」，超出直接停，防止工具互相回调死循环",
+              "工具结果写回 messages 再请求下一轮，循环收敛条件是：模型不再发 tool_call，或达到迭代上限",
+            ],
+          },
+          {
+            heading: "进程内 MCP",
+            bullets: [
+              "JSON-RPC 2.0：tools/list 列出能力，tools/call 执行，不走独立进程、不依赖外部 MCP 宿主",
+              "每个工具带 JSON Schema，入参校验失败不进 execute",
+              "运行时异常捕获后打成 isError 结构回流给模型，让它改参或换工具；单工具失败不中断整轮对话",
+            ],
+          },
+          {
+            heading: "SKILL.md 路由",
+            bullets: [
+              "技能文件声明 name、triggers、tools、steps。问句分词后对 trigger 加权：长词 2 分、短词 1 分，取 Top-1",
+              "全员零分则停住，不默认落到站点体检一类兜底技能——否则所有问题走同一条链，路由等于没做",
+              "explainDiscovery 返回完整打分矩阵，侧栏可对照 SKILL.md，改词能看见谁被抬高、谁被压掉",
+            ],
+          },
+          {
+            heading: "分块 RAG",
+            bullets: [
+              "文档按段落切块。检索叠关键词重叠、项目名称直匹配、段落位置加权，无向量库依赖，浏览器内可跑",
+              "命中结果带 chunkId，UI 能回到原文，避免「搜到了但说不清哪一段」",
+            ],
+          },
+          {
+            heading: "Trace · Eval · 运行时",
+            bullets: [
+              "TraceSpan 记录 user → route → tool → reply（kind / ms / status / payload 摘要），会话写入 localStorage，刷新可回看",
+              "Eval 用固定 query → expectedSkillId 回归路由命中率，输出失败样本；工具侧记真实耗时",
+              "优先 Hono + SQLite；失败降级 Guest Runtime。IndexedDB 长期记忆，sessionStorage 会话态，刷新不丢、跨会话不串",
+            ],
+          },
         ],
       },
     ],
     achievements: [
-      "从 0 实现 Agent Loop、MCP Server、RAG、Skill 路由、Trace、Eval 六个子系统，无第三方 Agent 框架",
-      "/work/ownagent 全部真实运行，面试可现场输入问题看完整调用链",
-      "运行链路可追踪 + 可回归，把「AI 应用怎么调试」讲清楚，而不只是接一个对话框",
+      "自研 Agent Loop / MCP Server / RAG / Skill 路由 / Trace / Eval，不依赖 LangChain 一类框架",
+      "SSE 增量累积 + Schema 校验 + isError 回流，把流式工具调用做成可收敛、单点失败可继续的循环",
+      "路由打分和 RAG chunkId 可对账，改触发词可用用例集回归，避免默认落到同一条工具链",
     ],
+    plain: {
+      name: "OwnAgent — 浏览器内 AI Agent 平台",
+      role: "独立设计与开发",
+      period: "2026.03 — 至今",
+      url: "https://cpttbtptp2812.github.io/builder/#/work/ownagent",
+      description:
+        "独立设计并实现浏览器内 AI Agent 平台 OwnAgent。常见做法是把 Loop、工具协议、检索封在服务端 SDK，前端只消费一段 SSE；出错时 Network 只有一条 pending 长请求，分不清是意图路由选错、工具入参还是半截 JSON、还是检索根本没召回。本项目把这几层在 TypeScript 里拆开实现，不依赖 LangChain / LlamaIndex。工作台包含对话、运行追踪、知识检索、技能路由、回归评测、能力全景。无后端走浏览器内 Guest Runtime，有服务时走 Hono + SQLite，协议层保持一致。\n\n一、Agent Loop。模型以 SSE 增量下发 tool_call。同一 index 的 name / arguments 会拆成多帧，实现上按 index 做累积缓冲区，流结束或该 call 完整后再 JSON.parse，禁止半截参数进执行层。单轮最多 8 次「模型 → 工具 → 再模型」，超出直接停，防止工具互相回调死循环。工具结果写回 messages 再请求下一轮，直到模型不再发 tool_call 或达到上限。\n\n二、进程内 MCP。JSON-RPC 2.0 实现 tools/list 与 tools/call，不走独立进程、不依赖外部 MCP 宿主。每个工具带 JSON Schema，入参校验失败不进 execute。运行时异常捕获后打成 isError 结构回流给模型，让它改参或换工具；单工具失败不中断整轮，避免一次调用错误导致整页白屏。\n\n三、Skill 路由。技能用 SKILL.md 声明 name、triggers、tools、steps。用户问句分词后对每条技能的 trigger 加权：长词 2 分、短词 1 分，取 Top-1。全员零分则停住，不默认落到「站点体检」一类兜底技能——否则所有问题都会走同一条链，路由等于没做。explainDiscovery 返回完整打分矩阵，改 trigger 时用固定用例集跑命中率并输出失败样本，避免修 A 伤 B。\n\n四、分块 RAG。文档按段落切块，检索叠关键词重叠、项目名称直匹配、段落位置加权。命中结果带 chunkId，界面能回到原文，避免「搜到了但说不清哪一段」。无向量库依赖，浏览器内可跑。\n\n五、Trace 与评测。TraceSpan 记录 user → route → tool → reply，字段含 kind、耗时 ms、status、payload 摘要；会话写入 localStorage，刷新后可回看。Eval 用固定 query → expectedSkillId 回归路由；工具侧记真实耗时。\n\n六、运行时降级。优先 Hono + SQLite；无后端时降级浏览器内运行时。IndexedDB 存长期记忆，sessionStorage 存会话态，刷新不丢、跨会话不串。\n\n技术栈：React 19、TypeScript、SSE、JSON-RPC 2.0 MCP、SKILL.md、分块 RAG、Hono、SQLite、IndexedDB。",
+      performance:
+        "1. 自研 Agent Loop / MCP Server / RAG / Skill 路由 / Trace / Eval，不依赖 LangChain 一类框架。\n2. SSE 增量累积 + Schema 校验 + isError 回流，流式工具调用可收敛，单点失败可继续。\n3. 路由打分和 RAG chunkId 可对账；改触发词用用例集回归，避免默认落到同一条工具链。",
+    },
+  },
+  {
+    id: "jianchi",
+    name: "阿里剑池 · 前端重构与性能优化",
+    role: "前端开发工程师（软通驻场）",
+    period: "2024.09 — 2025.05",
+    workSlug: "jianchi",
+    stack: ["React", "react-window", "React DnD", "Redux", "reselect", "Web Worker"],
+    sections: [
+      {
+        heading: "项目背景",
+        paragraphs: [
+          "剑池是阿里内部研发工具链，核心页面是超长列表、复杂表格和 TR 审批配置。业务同学日常打开的是几千到上万行的配置表：滚动、筛选、勾选、再拖审批节点。历史实现是类组件 + 全量 map 渲染——8000 行表格一次挂上几十上百个 DOM，滚动掉到十几帧，首屏大约 3.2 秒。store 里塞了整页大对象，connect 过宽，一次 setState 会把整表刷掉。",
+          "业务不能停服，不能 Big Bang 重写。驻场期间按模块渐进重构：先把列表从全量渲染改成虚拟滚动，再治理 Redux 订阅导致的无效重渲，同时把审批从静态表单改成可拖拽编排。每个迭代交付一块能回归的模块，新旧路由共存。",
+        ],
+      },
+      {
+        heading: "虚拟滚动",
+        bullets: [
+          "react-window FixedSizeList：itemSize 固定 36px，只 mount 视口高度 / 行高 + overscan 2 行。滚动时用 scrollTop 算 startIndex，绝对定位平移可见行，视口内 DOM 从约 80 个降到约 15 个，滚动 FPS 从约 18 回到 58+",
+          "行高可估计所以用定高列表。不定高要用 VariableSizeList，还要缓存每行测量高度；当时表格行高一致，上可变高度是过度设计",
+          "虚拟列表只渲染视口，滚动条高度必须用「行数 × 行高」撑起来，否则用户感觉列表被截断。overscan 取 2：少了快速滚动会闪白，多了白吃 DOM",
+          "对比页 /work/jianchi 可切换全量渲染与虚拟滚动，对照 FPS、DOM 数量和 startIndex",
+        ],
+      },
+      {
+        heading: "渲染与状态",
+        bullets: [
+          "列表项用 React.memo，行数据和回调用 useCallback 稳定引用，避免父组件一次 setState 把 8000 行全刷掉",
+          "Redux store 原先塞了整页大对象，组件 connect 过宽。按领域切片，列表只订列表 slice，审批只订审批 slice",
+          "map / filter / sort 的派生结果用 reselect createSelector 缓存，上游引用不变就不重算。组件复用率大约从 18% 提到 60%",
+          "TR 流程图节点坐标计算量大（DAG 拓扑 + 层级分配），放主线程会卡住滚动。丢进 Web Worker，postMessage 回主线程一次性绘制，主线程只负责渲染",
+        ],
+      },
+      {
+        heading: "TR 审批可视化",
+        bullets: [
+          "React DnD 拖拽审批节点，动态表单描述审批人规则和条件分支，把静态配置改成可编排",
+          "拖拽预览层和虚拟列表共存：列表只渲染视口行，drag preview 必须挂到固定层，否则一滚节点就从列表卸载、预览丢失",
+          "图上的节点顺序、条件边和表单 schema 双向同步，不能拖完图、提交还是旧配置",
+        ],
+      },
+      {
+        heading: "工程迁移",
+        bullets: [
+          "按业务模块切路由，新旧共存，每个迭代交付一块能回归的重构，拒绝一次性重写",
+          "类组件迁 Hooks，统一 useEffect 订阅和清理，给后续 TypeScript 化铺路",
+          "路由级 React.lazy + Suspense 拆包，降低首屏 JS",
+          "生产上修过部分浏览器右侧菜单渲染异常、多标签页状态不同步",
+        ],
+      },
+    ],
+    achievements: [
+      "列表首屏约 3.2s 降至 1.4s，滚动 FPS 约 18 → 58+",
+      "审批配置平均耗时约 -40%，自检错误约 -35%，评审耗时约 -25%",
+      "组件复用率约 18% → 60%，构建时间约 -35%",
+    ],
+    plain: {
+      name: "阿里剑池 · 前端重构与性能优化",
+      role: "前端开发工程师（软通驻场）",
+      period: "2024.09 — 2025.05",
+      url: "https://cpttbtptp2812.github.io/builder/#/work/jianchi",
+      description:
+        "剑池是阿里内部研发工具链，核心页面是超长列表、复杂表格和 TR 审批配置。业务同学日常打开的是几千到上万行的配置表：滚动、筛选、勾选、再拖审批节点。历史实现是类组件 + 全量 map 渲染——8000 行表格一次挂上几十上百个 DOM，滚动掉到十几帧，首屏大约 3.2 秒。Redux store 塞了整页大对象，connect 过宽，一次 setState 会把整表刷掉。业务不能停服，不能一次性重写。驻场期间按模块渐进重构：先把列表改成虚拟滚动，再治理无效重渲，同时把审批从静态表单改成可拖拽编排。\n\n一、虚拟滚动。用 react-window FixedSizeList，itemSize 固定 36px，只 mount「视口高度 / 行高 + overscan 2 行」。滚动时用 scrollTop 算 startIndex，绝对定位平移可见行。视口内 DOM 从约 80 个降到约 15 个，滚动 FPS 从约 18 回到 58+。行高可估计所以用定高列表；不定高要用 VariableSizeList 并缓存每行测量高度，当时表格行高一致，上可变高度是过度设计。滚动条高度用「行数 × 行高」撑起来，避免用户感觉列表被截断。overscan 取 2：少了快速滚动会闪白，多了白吃 DOM。\n\n二、渲染与状态。列表项 React.memo，行数据和回调用 useCallback 稳定引用，避免父组件一次 setState 把 8000 行全刷掉。store 按领域切片，列表只订列表 slice，审批只订审批 slice。map / filter / sort 的派生结果用 reselect createSelector 缓存，上游引用不变就不重算。组件复用率大约从 18% 提到 60%。TR 流程图节点坐标计算量大（DAG 拓扑 + 层级分配），放主线程会卡住滚动，丢进 Web Worker，postMessage 回主线程一次性绘制。\n\n三、TR 审批可视化。React DnD 拖拽审批节点，动态表单描述审批人规则和条件分支。难点是拖拽预览层和虚拟列表共存：列表只渲染视口行，drag preview 必须挂到固定层，否则一滚节点从列表卸载、预览丢失。图上的节点顺序、条件边和表单 schema 双向同步，不能拖完图、提交还是旧配置。\n\n四、工程迁移。按业务模块切路由，新旧共存，每个迭代交付一块能回归的重构。类组件迁 Hooks，统一 useEffect 订阅和清理。路由级 React.lazy + Suspense 拆包，降低首屏 JS。生产上修过部分浏览器右侧菜单渲染异常、多标签页状态不同步。\n\n技术栈：React、react-window、React DnD、Redux、reselect、Web Worker。",
+      performance:
+        "1. 列表首屏约 3.2s 降至 1.4s，滚动 FPS 约 18 → 58+。\n2. 审批配置平均耗时约 -40%，自检错误约 -35%，评审耗时约 -25%。\n3. 组件复用率约 18% → 60%，构建时间约 -35%。",
+    },
   },
 ];
 
@@ -183,68 +299,65 @@ export const jobExperienceEntries: JobExperienceEntry[] = [
   {
     company: "天阳宏业科技股份有限公司",
     role: "前端开发工程师",
-    period: "2025.05 — 至今",
-    stack: ["React", "TypeScript", "Next.js", "GraphQL", "Vercel AI SDK", "Playwright"],
+    period: "2025.08 — 2026.05",
+    stack: ["React", "TypeScript", "Next.js", "GraphQL", "Playwright"],
     plain: {
       description:
-        "负责创业公司自研项目 iMean AI 智能自动化平台的前端开发与核心模块交付。\n\n负责核心任务调度系统（SDK）的开发：\n设计并实现基于队列的任务调度，支持暂停、恢复、跳过和失败重试，提升系统稳定性与可控性；通过 PostMessage 实现跨窗口任务协调，设计窗口管理器追踪所有打开窗口，主窗口维护全局任务队列，保证多窗口环境下任务有序执行、互不冲突；支持步骤、条件判断、循环、组件操作等多种任务类型，采用插件化设计便于扩展。\n\n开发工作流编辑器（Builder）：\n基于 React Flow 实现可视化流程编排，支持拖拽配置步骤 / 条件 / API 请求等节点类型，集成力导向图自动布局，优化复杂流程的可读性与编辑效率。\n\n开发 AI 对话界面（Agent）：\n基于 Next.js 16 App Router 与 Vercel AI SDK 实现流式对话，对接 GraphQL + Apollo 完成会话管理，支持文件上传、定时任务等能力。\n\n优化回放引擎元素定位与性能：\n实现优先级 / 表格 / 缓存等多策略元素匹配与智能重试；推进代码分割、懒加载、gzip 队列压缩与智能缓存；参与 TypeScript 规范与 Playwright E2E 建设。",
+        "创业团队前端，参与自研产品 iMean AI 智能自动化平台。前端拆成 Builder / Agent / SDK 三条微前端，负责相关模块的需求交付、联调与上线；与产品、后端对齐 GraphQL 契约和发布节奏，保证画布、对话、执行读同一份工作流定义。参与 TypeScript 规范与 Playwright 主链路回归。\n\n任务队列、跨窗口调度、定位瀑布、包体积等实现与指标，见项目经历「iMean AI 智能自动化操作平台」，此处不重复。",
       performance:
-        "1. 完成核心任务调度系统与对话式 UI 开发，支持跨窗口协调与多种任务类型，系统稳定运行，解决多窗口环境下执行顺序与状态同步的技术难点。\n2. 通过多策略元素匹配机制，将复杂动态页面上的元素定位成功率从 70% 提升至 90% 以上，显著增强回放稳定性；通过代码分割、懒加载与数据压缩，SDK 初始包体积减少约 30%，首屏加载时间明显缩短。\n3. 参与代码规范化建设，使用 TypeScript 提升代码质量、减少类型相关缺陷；引入 Playwright E2E 测试，保障自动化主链路稳定性与用户体验。",
+        "1. 覆盖三条微前端的交付与联调，版本按期上线。\n2. 推动 TypeScript 与 Playwright 作为质量门禁，减少类型缺陷与主链路回归成本。\n3. 跨端对齐同一份工作流定义，降低画布 / 对话 / 执行状态分叉。",
     },
     sections: [
       {
         paragraphs: [
-          "创业公司核心产品 iMean AI：AI + 浏览器自动化。前端覆盖微前端 Builder / Agent / SDK 三条线。",
+          "创业团队前端，参与 iMean AI。产品拆 Builder / Agent / SDK 三条微前端，负责相关模块的交付与联调；技术方案与指标见上方项目经历。",
         ],
       },
       {
         heading: "主要工作",
         bullets: [
-          "SDK：队列调度、PostMessage 跨窗口、步骤 / 条件 / 循环插件化",
-          "Builder：React Flow 可视化编排与自动布局",
-          "Agent：Vercel AI SDK 流式对话、GraphQL 会话、文件与定时任务",
-          "回放引擎多策略定位、性能优化（分割 / 懒加载 / gzip 队列）",
-          "Playwright E2E、TypeScript 工程规范",
+          "三条微前端的需求交付、跨端联调与发版",
+          "与产品 / 后端对齐 GraphQL 契约，保证画布、对话、执行读同一份图",
+          "TypeScript 规范与 Playwright 主链路回归",
         ],
       },
     ],
     achievements: [
-      "调度 + 对话 UI 稳定上线",
-      "定位 90%+，包体积 -30%",
-      "E2E 保障核心自动化链路",
+      "三条线按期交付",
+      "契约对齐，减少跨端分叉",
+      "主链路可回归",
     ],
   },
   {
     company: "软通动力信息技术（集团）股份有限公司",
     role: "前端开发工程师",
     period: "2024.09 — 2025.05",
-    stack: ["React", "Redux", "react-window", "React DnD", "TypeScript"],
+    stack: ["React", "Redux", "TypeScript"],
     plain: {
       description:
-        "驻场阿里巴巴剑池系统，参与前端重构与持续迭代，保障核心研发工具链稳定可用。\n\n现有功能维护与优化：\n修复右侧定位菜单在部分浏览器下的渲染异常、多标签页状态不同步等生产缺陷；梳理高频报错路径，与后端协作定位接口与状态边界问题，缩短问题闭环周期。\n\n性能优化：\n针对超长列表与大数据量表格，引入 react-window FixedSizeList 虚拟滚动方案，减少 DOM 节点数量与无效渲染；结合 React.memo、useCallback 与 Redux store 结构优化，降低组件重复渲染，显著提升列表加载与滚动流畅度。\n\n功能迭代 — TR 审批流程：\n基于 React DnD 实现审批节点可视化拖拽配置，支持动态表单定义审批人规则与条件分支；将原本偏静态的配置流程改为可交互编排，降低业务同学理解与配置成本。\n\n技术债务治理：\n推动历史类组件向函数组件 + Hooks 迁移，统一状态管理与副作用写法；补充关键路径注释与类型约束，为后续 TypeScript 化打基础。",
+        "软通驻场阿里巴巴，参与剑池内部研发工具链前端。职责是日常迭代、生产保障和与阿里侧的协作：对接产品 / 后端拆需求、对接口、按模块迭代上线；历史系统不能停服，新旧路由共存交付。值班处理生产缺陷（部分浏览器菜单渲染异常、多标签页状态不同步等），梳理报错路径，缩短问题闭环。推动类组件向 Hooks 迁移、Code Review 与类型约束。\n\n超长列表虚拟滚动、TR 审批拖拽编排、Redux 渲染治理等实现与指标，见项目经历「阿里剑池 · 前端重构与性能优化」，此处不重复。",
       performance:
-        "1. TR 审批流程可视化配置上线后，审批配置平均耗时降低约 40%，自检错误率降低约 35%，评审环节耗时降低约 25%，业务配置效率明显提升。\n2. 列表场景引入虚拟滚动与渲染优化后，首屏加载时间由约 3.2s 降至 1.4s，大数据量列表滚动与切换流畅度显著改善，用户反馈加载等待问题明显减少。\n3. 组件复用率提升至约 60%，重复代码减少约 40%，构建时间缩短约 35%，为团队后续迭代与维护降低成本。",
+        "1. 驻场期间按迭代交付，新旧共存未造成停服。\n2. 生产缺陷可复现、可闭环，定位周期缩短。\n3. Hooks 迁移与工程规范落地，后续维护成本下降。",
     },
     sections: [
       {
         paragraphs: [
-          "阿里巴巴剑池系统 — 前端重构、性能优化与 TR 审批流程迭代（软通动力驻场）。",
+          "软通驻场阿里，参与剑池研发工具链前端。负责日常迭代、生产保障与阿里侧联调；虚拟滚动、审批编排、渲染治理见上方项目经历。",
         ],
       },
       {
         heading: "主要工作",
         bullets: [
-          "生产缺陷：菜单渲染异常、多 Tab 状态同步等",
-          "react-window 虚拟滚动，首屏 3.2s → 1.4s",
-          "React DnD 审批节点可视化 + 动态表单规则",
-          "类组件 → Hooks，Redux + memo 减渲染",
-          "组件复用与构建体积治理",
+          "对接阿里产品 / 后端：需求拆分、接口联调、按迭代上线",
+          "生产值班：菜单渲染、多 Tab 状态不同步等缺陷闭环",
+          "新旧路由共存迁移；推动类组件 → Hooks、Code Review、类型约束",
         ],
       },
     ],
     achievements: [
-      "审批配置 -40%，首屏 3.2s → 1.4s",
-      "复用率 60%，构建 -35%",
+      "重构按迭代交付，未停服",
+      "生产问题闭环周期缩短",
+      "Hooks 迁移与规范落地",
     ],
   },
   {

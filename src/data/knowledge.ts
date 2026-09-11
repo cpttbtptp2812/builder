@@ -173,6 +173,43 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
       扩展: "Operation 插件注册表，新增组件类型不改核心循环。",
     },
   },
+  {
+    ...projectBase("jianchi", {
+      name: "阿里剑池 · 前端重构与性能优化",
+      role: "前端开发工程师（软通驻场）",
+      period: "2024.09 — 2025.05",
+      desc: "超长列表虚拟滚动、Redux 派生缓存、React DnD 审批编排、Web Worker 布局。",
+      workSlug: "jianchi",
+    }),
+    era: "history",
+    architecture:
+      "列表层 react-window FixedSizeList（定高 36px + overscan）；状态层 Redux 按领域切片 + reselect 缓存派生；" +
+      "审批层 React DnD 与动态表单 schema 双向同步；TR 图布局在 Web Worker 里算完再回主线程绘制。",
+    challenges: [
+      "8000 行全量渲染导致 FPS 掉到约 18、首屏约 3.2s — 改虚拟滚动只 mount 视口行",
+      "connect 过宽导致一次 setState 整页重渲 — 切片订阅 + memo + reselect",
+      "虚拟列表和拖拽预览冲突 — drag preview 挂固定层，不跟滚动行走",
+      "业务不能停服 — 按路由模块渐进迁移，新旧共存",
+    ],
+    interviewTopics: [
+      "FixedSizeList 与 startIndex",
+      "reselect 派生缓存",
+      "DnD 与虚拟列表共存",
+      "Web Worker 布局",
+    ],
+    narrative:
+      "剑池是阿里内部研发工具链。我驻场做前端重构和性能治理。\n\n" +
+      "列表从全量 map 改成 FixedSizeList：scrollTop / itemSize 得到 startIndex，只渲染视口加 overscan。" +
+      "Redux 按领域切片，派生数据用 createSelector 缓存。TR 审批用 React DnD，图和表单 schema 双向同步。" +
+      "节点坐标计算放 Web Worker，避免卡住滚动。\n\n" +
+      "结果：首屏约 3.2s 到 1.4s，滚动约 58 帧，审批配置耗时大约降百分之四十。",
+    aspects: {
+      虚拟滚动: "FixedSizeList，itemSize=36，overscan=2。startIndex = floor(scrollTop / rowHeight)。不定高要用 VariableSizeList。",
+      状态: "列表只订列表 slice；reselect 缓存 map/filter/sort；行组件 memo。",
+      审批: "React DnD + 动态表单；preview 固定层，避免和虚拟行一起卸载。",
+      迁移: "按模块切路由，React.lazy 拆包，类组件迁 Hooks。",
+    },
+  },
 ];
 
 const KEYWORDS: Record<string, string[]> = {

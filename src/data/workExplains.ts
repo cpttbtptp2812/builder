@@ -188,8 +188,8 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   ownagent: {
     slug: "ownagent",
-    oneLiner: "浏览器内 AI Agent 平台：对话、技能路由、MCP 工具、知识检索、运行追踪、回归评测，一个入口全跑通。",
-    demoProves: "无需 API Key 即可真实运行；每步 intent / tool / 回复进时间线；RAG 命中带 chunkId；路由打分过程可见",
+    oneLiner: "SSE 累积 tool_call 做 Agent Loop；SKILL.md 打分选技能；进程内 MCP 执行工具；RAG 命中带 chunkId。",
+    demoProves: "路由打分可见；检索带 chunkId；时间线展开 tool 入参与返回；评测输出命中率与失败样本。",
     steps: [
       "「对话」提问 → 看流式回复与工具调用",
       "「运行追踪」跑一次 → 时间线逐步追加，可展开 payload",
@@ -198,8 +198,8 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
       "「回归评测」一键跑用例 → 命中率与工具耗时",
     ],
     compare: {
-      usual: { title: "接个对话框就叫 Agent", desc: "调用链是黑盒，出错只能靠猜" },
-      here: { title: "整条链路自己实现", desc: "路由 / 工具 / 检索 / 追踪 / 评测都能打开看" },
+      usual: { title: "SDK 封装成黑盒", desc: "出错只看到一条 pending SSE" },
+      here: { title: "Loop / MCP / RAG / Trace 拆开", desc: "路由分数、工具入参、chunkId 都能对账" },
     },
   },
 

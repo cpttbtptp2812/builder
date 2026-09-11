@@ -13,13 +13,13 @@ export const profile = {
   subtitle: "AI 应用 · 浏览器自动化 · Chrome 扩展",
   degree: "本科",
   location: "可远程 / 面议",
-  availability: "在职看机会",
+  availability: "离职 · 随时到岗",
   careerStart: "2016-06-01",
   email: "17301212105@163.com",
   phone: "17376563937",
   homePitchPrefix: "React / TypeScript 深耕",
   homePitchBody:
-    "近年聚焦 AI 应用与浏览器侧能力：在职参与 iMean 自动化平台（调度 · Agent 流式对话 · DOM 回放）；个人从 0 实现 OwnAgent 浏览器内 Agent 平台（Loop · MCP · RAG · 追踪 · 评测）。",
+    "近年聚焦 AI 应用与浏览器侧能力：曾参与 iMean 自动化平台（调度 · Agent 流式对话 · DOM 回放）；个人从 0 实现 OwnAgent 浏览器内 Agent 平台（Loop · MCP · RAG · 追踪 · 评测）。",
   tagline: "AI 应用前端 · 浏览器自动化 · 工程化",
   homeMetrics: [
     { label: "iMean", value: "自动化平台" },
@@ -27,7 +27,7 @@ export const profile = {
     { label: "定位成功率", value: "90%+" },
   ],
   summary:
-    "高级前端工程师，9 年+ 经验。现任职参与 iMean AI 浏览器自动化平台（任务调度、Agent 流式对话、回放引擎）；个人从 0 实现 OwnAgent 浏览器内 Agent 平台（Agent Loop、MCP Server、RAG、运行追踪、回归评测）。擅长 React / TypeScript、Chrome MV3、SSE / AI SDK、性能优化与 E2E。曾带前端小组，有银行与阿里系项目经验。",
+    "高级前端工程师，9 年+ 经验。曾参与 iMean AI 浏览器自动化平台（任务调度、Agent 流式对话、回放引擎）；个人从 0 实现 OwnAgent 浏览器内 Agent 平台（Agent Loop、MCP Server、RAG、运行追踪、回归评测）。擅长 React / TypeScript、Chrome MV3、SSE / AI SDK、性能优化与 E2E。曾带前端小组，有银行与阿里系项目经验。离职，随时到岗。",
   highlights: [
     "iMean：回放定位 70% → 90%+，SDK 包体积 -30%",
     "OwnAgent：自研 Agent Loop + MCP + RAG，运行链路可追踪可回归",
@@ -38,8 +38,8 @@ export const profile = {
 
 export const advantages = [
   "9 年+ 前端经验，React / TypeScript 熟练，有 Next.js、GraphQL、微前端 qiankun 生产实践；近年深入 AI 应用（Vercel AI SDK、SSE 流式对话）与浏览器侧能力（DOM 回放、Chrome MV3 扩展）。",
-  "在职参与 iMean AI 自动化平台：任务调度、跨窗口 PostMessage、React Flow 编排、回放多策略定位；有可量化结果（定位 90%+、包体积 -30%）。",
-  "个人侧从 0 实现 OwnAgent 浏览器内 Agent 平台（Agent Loop、进程内 MCP Server、RAG 检索、Skill 路由、TraceSpan 追踪、回归评测），与在职 Agent / 回放能力形成完整叙事。",
+  "曾参与 iMean AI 自动化平台：任务调度、跨窗口 PostMessage、React Flow 编排、回放多策略定位；有可量化结果（定位 90%+、包体积 -30%）。",
+  "个人实现 OwnAgent：SSE 累积 tool_call 的 Agent Loop、进程内 JSON-RPC MCP、SKILL.md 加权路由、分块 RAG 与 TraceSpan；iMean 做调度和回放，个人项目做 Agent 机制层。",
   "有前端组长经验（招行 4 人、民生 5 人），熟悉大型系统重构、虚拟滚动性能优化、E2E 与代码规范；Java 后端出身，理解全链路协作。",
 ];
 

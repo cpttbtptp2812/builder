@@ -36,7 +36,7 @@ export function ResumeProjectCard({ project }: { project: ResumeProjectEntry }) 
 
       {project.workSlug ? (
         <Link to={`/work/${project.workSlug}`} className="resume-project-link">
-          查看交互演示 →
+          查看实现 →
         </Link>
       ) : null}
     </article>

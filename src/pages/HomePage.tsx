@@ -7,7 +7,7 @@ import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { PERSONAL_EXTENSIONS } from "../data/clipHubExtensions";
 import { profile } from "../data/profile";
-import { IMEAN_WORKS, LAB_WORKS, PERSONAL_WORKS } from "../data/works";
+import { ENGINEERING_WORKS, IMEAN_WORKS, LAB_WORKS, PERSONAL_WORKS } from "../data/works";
 import { formatWorkTenure, useWorkTenure } from "../lib/workTenure";
 
 export function HomePage() {
@@ -56,6 +56,18 @@ export function HomePage() {
               <ExtensionHomeCard key={ext.id} ext={ext} />
             ))}
             <ToolkitHomeCard />
+          </div>
+        </section>
+
+        <section className="works-section works-section-engineering">
+          <div className="works-section-head">
+            <h2 className="works-section-label">工程实践</h2>
+            <span className="works-section-hint">阿里剑池 · 性能重构</span>
+          </div>
+          <div className="home-featured-grid home-featured-grid--solo">
+            {ENGINEERING_WORKS.map((w) => (
+              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
+            ))}
           </div>
         </section>
 

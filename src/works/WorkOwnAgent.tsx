@@ -51,9 +51,8 @@ export function WorkOwnAgent() {
           <p className="own-eyebrow">个人项目 · 独立设计与开发</p>
           <h1>OwnAgent</h1>
           <p className="own-tagline">
-            跑在浏览器里的 AI Agent 平台。
-            <strong>听懂问题 → 选技能 → 调工具 → 流式作答</strong>
-            ，整条链路可追踪、可回归测试，打开就能用，不需要 API Key。
+            SSE 累积 <code>tool_call</code>，MCP 用 JSON-RPC 调工具，SKILL.md 打分选技能，RAG 用 <code>chunkId</code> 对账。
+            工具失败打成 <code>isError</code> 回流，一轮最多 8 次迭代。
           </p>
           <BackendStatusBar compact />
         </div>

@@ -112,6 +112,12 @@ export function WorkJianchi() {
 
       <WorkGuide slug="jianchi" />
 
+      <p className="own-panel-lead">
+        重构前 8000 行一次 <code>map</code> 进 DOM，滚动大约 18 帧。重构后用定高虚拟列表：
+        <code>startIndex = floor(scrollTop / 36)</code>，只挂视口加 2 行缓冲。Redux 按领域切片，
+        派生数据用 reselect 缓存；审批拖拽的 preview 挂固定层，避免和虚拟行一起被卸掉。
+      </p>
+
       <TechBadgeBar items={["react-window", "FixedSizeList", "FPS", "reselect"]} />
 
 
