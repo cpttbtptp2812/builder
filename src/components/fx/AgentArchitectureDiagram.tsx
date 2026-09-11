@@ -6,7 +6,7 @@ const LAYERS = [
   {
     id: "ui",
     label: "Product UI",
-    items: ["UniAgent Chat", "SkillForge Lab", "Platform Lab"],
+    items: ["OwnAgent Chat", "SkillForge Lab", "Platform Lab"],
     color: "#818cf8",
   },
   {

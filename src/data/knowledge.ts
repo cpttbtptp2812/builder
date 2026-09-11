@@ -13,9 +13,38 @@ export type ProjectDetail = Project & {
   aspects: Record<string, string>;
 };
 
+/** 知识库条目不一定在简历项目列表里（简历只放代表作），缺失时用兜底元数据 */
+function projectBase(
+  id: string,
+  fallback: { name: string; role: string; period: string; desc: string; workSlug?: string },
+): Project {
+  const found = projects.find((p) => p.id === id);
+  if (found) return found;
+  return {
+    id,
+    name: fallback.name,
+    role: fallback.role,
+    period: fallback.period,
+    workSlug: fallback.workSlug,
+    stack: [],
+    sections: [],
+    achievements: [],
+    desc: fallback.desc,
+    highlights: [],
+    repo: `personal / ${id}`,
+    demo: Boolean(fallback.workSlug),
+  };
+}
+
 export const PROJECT_DETAILS: ProjectDetail[] = [
   {
-    ...projects.find((p) => p.id === "imean")!,
+    ...projectBase("imean", {
+      name: "iMean AI 智能自动化操作平台",
+      role: "前端开发工程师",
+      period: "2025.08 — 至今",
+      desc: "AI 浏览器自动化平台：自然语言描述任务，系统在真实浏览器中执行。",
+      workSlug: "imean",
+    }),
     era: "current",
     architecture:
       "微前端三件套：Builder（React Flow 工作流编辑）+ Agent（Next.js 对话）+ SDK（Vite 回放引擎）。" +
@@ -45,7 +74,13 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
     },
   },
   {
-    ...projects.find((p) => p.id === "agent")!,
+    ...projectBase("agent", {
+      name: "OwnAgent · 对话与 Agent Loop",
+      role: "独立设计与开发",
+      period: "2025 — 至今",
+      desc: "Next.js + Vercel AI SDK 流式对话，自定义 GraphQL Provider、工具卡与断线续传。",
+      workSlug: "ownagent",
+    }),
     era: "current",
     architecture:
       "Next.js 16 App Router + Vercel AI SDK v5 自定义 GraphQL Provider。" +
@@ -76,7 +111,13 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
     },
   },
   {
-    ...projects.find((p) => p.id === "skills")!,
+    ...projectBase("skills", {
+      name: "SkillForge Agent Skills 运行时",
+      role: "独立设计与开发",
+      period: "2025 — 至今",
+      desc: "浏览器内 Skill Registry + 意图路由 + 进程内 MCP 工具执行。",
+      workSlug: "ownagent",
+    }),
     era: "current",
     architecture:
       "浏览器内 Skill Registry + matchSkill 路由器 + runSkill 步骤执行器。" +
@@ -100,11 +141,17 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
       架构: "Registry → Discover → runSkill → mcpServer.callTool · Trace 可观测。",
       路由: "trigger 词加权打分；可扩展 embedding retrieval。",
       Action: "http_probe · browser_snapshot · workflow_run · Performance API 合成。",
-      MCP: "与 UniAgent 共用 McpInProcessServer。",
+      MCP: "与 OwnAgent 共用 McpInProcessServer。",
     },
   },
   {
-    ...projects.find((p) => p.id === "sdk")!,
+    ...projectBase("sdk", {
+      name: "iMean ReplaySDK 执行引擎",
+      role: "前端开发工程师",
+      period: "2025.08 — 至今",
+      desc: "不依赖 React 的回放执行引擎：TaskQueue 调度、多策略定位、gzip 队列持久化。",
+      workSlug: "sdk",
+    }),
     era: "current",
     architecture:
       "Vite + TS 纯 SDK，ReplayController 驱动步骤执行，插件化 Operation 注册，gzip 队列持久化。",
@@ -130,7 +177,7 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
 
 const KEYWORDS: Record<string, string[]> = {
   imean: ["imean", "immean", "智能自动化", "builder", "回放引擎", "元素定位", "postmessage"],
-  agent: ["agent", "uniagent", "对话系统", "ai sdk", "流恢复", "autoresume", "工具卡"],
+  agent: ["agent", "ownagent", "uniagent", "对话系统", "ai sdk", "流恢复", "autoresume", "工具卡"],
   skills: ["skill", "skills", "skillforge", "skill.md", "trigger", "manifest"],
   sdk: ["sdk", "replay", "回放", "调度", "队列", "indexeddb"],
   jianchi: ["剑池", "jianchi", "阿里", "重构", "虚拟滚动", "alife", "tr流程"],

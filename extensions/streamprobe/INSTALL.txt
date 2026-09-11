@@ -1,10 +1,12 @@
 StreamProbe — 安装说明
 ========================
 
-1. 解压 StreamProbe-Extension-v1.0.0.zip
+1. 解压 StreamProbe-Extension-v1.0.1.zip
 2. chrome://extensions → 开发者模式 → 加载已解压的扩展程序
 3. 选解压后的文件夹（根目录有 manifest.json）
-4. 打开任意网页，点击扩展图标 → 「打开 Side Panel」
-5. 本地测试：用浏览器打开包内 demo.html，点「模拟 fetch NDJSON 流」
+4. 打开 Side Panel → 点「打开测试页并模拟流」验证是否正常
+5. 再去 AI 对话 / SSE 页面，刷新后触发一次流式请求
 
-Side Panel 可看：连接列表 · 帧时间线 · Raw/Parsed 双栏 · 导出 JSON
+注意：Google 搜索等普通网页没有流式数据，Panel 为空是正常的。
+
+Side Panel：连接列表 · 帧时间线 · Raw/Parsed · 导出 JSON

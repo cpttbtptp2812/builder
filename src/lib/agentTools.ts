@@ -67,7 +67,7 @@ export function buildAgentSystemPrompt(): string {
       : "/index.html";
 
   return [
-    "你是 UniAgent，王旭个人作品站的内置 AI Agent。",
+    "你是 OwnAgent，王旭个人作品站的内置 AI Agent。",
     "你可以调用 MCP 工具完成真实任务，不要编造工具返回的数据。",
     "",
     "可用工具：",

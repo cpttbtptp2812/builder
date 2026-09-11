@@ -125,6 +125,21 @@ export class McpInProcessServer {
       return { content: { errors: valid.errors }, isError: true } satisfies McpToolResult;
     }
 
+    try {
+      return await this.execTool(name, args, ctx);
+    } catch (err) {
+      return {
+        content: { tool: name, error: err instanceof Error ? err.message : String(err) },
+        isError: true,
+      } satisfies McpToolResult;
+    }
+  }
+
+  private async execTool(
+    name: string,
+    args: Record<string, unknown>,
+    ctx?: { snapshotRoot?: Element | null },
+  ) {
     switch (name) {
       case "http_probe":
         return {

@@ -30,7 +30,7 @@ function uid() {
   return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** UniAgent 对话 — 对齐 tianyangAgent 产品体验 + tianyangbuilder MCP 配置 */
+/** OwnAgent 对话 — 对齐 tianyangAgent 产品体验 + tianyangbuilder MCP 配置 */
 export function AgentProductDemo({
   autoStart = false,
   hubMode = false,
@@ -238,7 +238,7 @@ export function AgentProductDemo({
         <div className="agent-shell-identity">
           <span className="agent-shell-avatar">UA</span>
           <div>
-            <strong>UniAgent</strong>
+            <strong>OwnAgent</strong>
             <span>{useLlm ? "LLM Agent Loop" : "Guest Agent · 开箱即用"}</span>
           </div>
         </div>

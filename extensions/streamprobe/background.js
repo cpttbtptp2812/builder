@@ -134,4 +134,61 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     })();
     return true;
   }
+
+  if (msg.type === "sp-inject-test") {
+    (async () => {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab?.id) {
+        sendResponse({ ok: false, error: "no-tab" });
+        return;
+      }
+      const session = buildSelfTestSession(tab.url || "");
+      await saveTabSession(tab.id, session);
+      if (tab.windowId != null) {
+        await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+      }
+      sendResponse({ ok: true, frameCount: session.frames.length });
+    })();
+    return true;
+  }
+
+  if (msg.type === "sp-open-demo") {
+    (async () => {
+      const url = chrome.runtime.getURL("demo.html");
+      const tab = await chrome.tabs.create({ url });
+      if (tab.windowId != null) {
+        await chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+      }
+      sendResponse({ ok: true });
+    })();
+    return true;
+  }
 });
+
+/** 往当前 Tab 注入模拟帧 — 任意页面（含 Google）可验证 Panel 是否正常 */
+function buildSelfTestSession(pageUrl) {
+  const session = emptySession();
+  const connectionId = crypto.randomUUID();
+  const url = `${pageUrl.split("#")[0]}#streamprobe-self-test`;
+  const base = Date.now();
+  const lines = [
+    { phase: "open", raw: "" },
+    { phase: "message", raw: '{"type":"start","turnId":"self-test"}' },
+    { phase: "message", raw: '{"type":"text-delta","text":"自检成功"}' },
+    { phase: "message", raw: '{"type":"text-delta","text":" — StreamProbe 正常"}' },
+    { phase: "message", raw: '{"type":"finish"}' },
+    { phase: "close", raw: "" },
+  ];
+  for (let i = 0; i < lines.length; i++) {
+    const item = lines[i];
+    pushFrame(session, {
+      phase: item.phase,
+      kind: "self-test",
+      connectionId,
+      url,
+      raw: item.raw,
+      t: base + i * 120,
+    });
+  }
+  return session;
+}

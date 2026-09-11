@@ -14,7 +14,7 @@ const PUBLISH = {
   wire: "Wire-Extension-v1.0.0.zip",
   skilltap: "SkillTap-Extension-v1.2.0.zip",
   toolkit: "Frontend-Debug-Toolkit-v1.1.3.zip",
-  streamprobe: "StreamProbe-Extension-v1.0.0.zip",
+  streamprobe: "StreamProbe-Extension-v1.0.2.zip",
 };
 
 async function isDir(p) {

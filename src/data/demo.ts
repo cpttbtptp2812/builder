@@ -59,7 +59,7 @@ export const AGENTS: Agent[] = [
   {
     id: "master",
     name: "默认助手",
-    desc: "通用对话、工具调用与工作流编排（参考 UniAgent）",
+    desc: "通用对话、工具调用与工作流编排（参考 OwnAgent）",
     opening: "你好，我可以聊天、查知识库，或在对话里触发工作流。",
     tags: ["对话", "工具", "工作流"],
   },

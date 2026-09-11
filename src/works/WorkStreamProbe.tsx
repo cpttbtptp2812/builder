@@ -1,25 +1,16 @@
-import { TechBadgeBar } from "../components/TechBadgeBar";
-import { WorkGuide } from "../components/WorkGuide";
-import { SseSplitView } from "../components/fx/SseSplitView";
-import { STREAM_PROBE } from "../data/streamProbe";
-import { getWork } from "../data/works";
+import { Link } from "react-router-dom";
 
-/** StreamProbe — 流式 API 浏览器调试器（作品页 · 技术演示） */
+/** StreamProbe 已归档 — 重定向说明 */
 export function WorkStreamProbe() {
-  const work = getWork("streamprobe");
-
   return (
-    <div className="work-streamprobe work-tech-lab">
-      <WorkGuide slug="streamprobe" />
-      <TechBadgeBar items={work?.stack ?? STREAM_PROBE.stack.slice(0, 4)} />
-
-      <div className="tech-lab">
-        <header className="tech-lab-head tech-lab-head--compact">
-          <h3>帧级观测演示</h3>
-          <p>左侧 Raw SSE 帧 · 右侧 AI SDK 语义解析</p>
-        </header>
-        <SseSplitView />
-      </div>
+    <div className="work-streamprobe sp-page" style={{ padding: "2rem 1rem", maxWidth: 560 }}>
+      <h1>StreamProbe 已归档</h1>
+      <p style={{ lineHeight: 1.6, color: "#57534e" }}>
+        流式 Chrome 扩展实验已停止主推。SSE 协议对照请看{" "}
+        <Link to="/work/sse">GraphQL SSE 实验室</Link>
+        ；Agent 语义链路请看{" "}
+        <Link to="/work/ownagent">OwnAgent</Link>。
+      </p>
     </div>
   );
 }

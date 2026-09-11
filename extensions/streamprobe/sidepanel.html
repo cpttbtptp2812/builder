@@ -22,6 +22,17 @@
 
     <section class="sp-metrics" id="sp-metrics"></section>
 
+    <section class="sp-empty-guide" id="sp-empty-guide" hidden>
+      <p><strong>当前页没有捕获到流式数据</strong></p>
+      <p id="sp-empty-reason">StreamProbe 只监测 <code>EventSource</code> 和 <code>fetch</code> 流式响应。普通搜索页、静态网页不会产生数据。</p>
+      <ol>
+        <li>先点下方「打开测试页」验证扩展是否正常</li>
+        <li>再到你的 AI 对话 / SSE 页面，<strong>刷新页面</strong>后重试</li>
+        <li>在页面上触发一次对话或流式请求</li>
+      </ol>
+      <button type="button" id="sp-open-demo" class="sp-demo-btn">打开测试页并模拟流</button>
+    </section>
+
     <div class="sp-layout">
       <aside class="sp-conn">
         <h2>连接</h2>

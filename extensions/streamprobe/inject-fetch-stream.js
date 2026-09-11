@@ -2,7 +2,6 @@
   if (window.__streamProbeFetchHooked) return;
   window.__streamProbeFetchHooked = true;
 
-  const CHANNEL = "__streamprobe__";
   const origFetch = window.fetch.bind(window);
 
   function isStreamContentType(ct) {
@@ -23,7 +22,7 @@
   }
 
   function emit(detail) {
-    window.dispatchEvent(new CustomEvent(CHANNEL, { detail }));
+    window.postMessage({ __streamprobe__: true, detail }, "*");
   }
 
   function flushLines(connectionId, url, buffer, carry) {

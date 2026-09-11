@@ -19,18 +19,18 @@ export const profile = {
   phone: "17376563937",
   homePitchPrefix: "React / TypeScript 深耕",
   homePitchBody:
-    "近年聚焦 AI 应用与浏览器侧能力：在职参与 iMean 自动化平台（调度 · Agent 流式对话 · DOM 回放）；独立发布 StreamProbe（流式调试）与步骤记录器（操作复现）。",
+    "近年聚焦 AI 应用与浏览器侧能力：在职参与 iMean 自动化平台（调度 · Agent 流式对话 · DOM 回放）；个人从 0 实现 OwnAgent 浏览器内 Agent 平台（Loop · MCP · RAG · 追踪 · 评测）。",
   tagline: "AI 应用前端 · 浏览器自动化 · 工程化",
   homeMetrics: [
     { label: "iMean", value: "自动化平台" },
-    { label: "StreamProbe", value: "个人开源" },
+    { label: "OwnAgent", value: "个人 Agent 平台" },
     { label: "定位成功率", value: "90%+" },
   ],
   summary:
-    "高级前端工程师，9 年+ 经验。现任职参与 iMean AI 浏览器自动化平台（任务调度、Agent 流式对话、回放引擎）；独立开发 StreamProbe 流式调试扩展与步骤记录器复现工具。擅长 React / TypeScript、Chrome MV3、SSE / AI SDK、性能优化与 E2E。曾带前端小组，有银行与阿里系项目经验。",
+    "高级前端工程师，9 年+ 经验。现任职参与 iMean AI 浏览器自动化平台（任务调度、Agent 流式对话、回放引擎）；个人从 0 实现 OwnAgent 浏览器内 Agent 平台（Agent Loop、MCP Server、RAG、运行追踪、回归评测）。擅长 React / TypeScript、Chrome MV3、SSE / AI SDK、性能优化与 E2E。曾带前端小组，有银行与阿里系项目经验。",
   highlights: [
     "iMean：回放定位 70% → 90%+，SDK 包体积 -30%",
-    "StreamProbe v1.0：SSE / fetch 流帧级 Chrome 调试",
+    "OwnAgent：自研 Agent Loop + MCP + RAG，运行链路可追踪可回归",
     "剑池重构：首屏 3.2s → 1.4s",
     "招行：qiankun 微前端 + 组件库 · 前端组长",
   ],
@@ -39,7 +39,7 @@ export const profile = {
 export const advantages = [
   "9 年+ 前端经验，React / TypeScript 熟练，有 Next.js、GraphQL、微前端 qiankun 生产实践；近年深入 AI 应用（Vercel AI SDK、SSE 流式对话）与浏览器侧能力（DOM 回放、Chrome MV3 扩展）。",
   "在职参与 iMean AI 自动化平台：任务调度、跨窗口 PostMessage、React Flow 编排、回放多策略定位；有可量化结果（定位 90%+、包体积 -30%）。",
-  "独立交付 2 个 Chrome 产品：StreamProbe（AI 流式帧级调试）、步骤记录器（操作复现与 HTML 手册），具备 0→1 产品、协议设计与发布能力。",
+  "个人侧从 0 实现 OwnAgent 浏览器内 Agent 平台（Agent Loop、进程内 MCP Server、RAG 检索、Skill 路由、TraceSpan 追踪、回归评测），与在职 Agent / 回放能力形成完整叙事。",
   "有前端组长经验（招行 4 人、民生 5 人），熟悉大型系统重构、虚拟滚动性能优化、E2E 与代码规范；Java 后端出身，理解全链路协作。",
 ];
 

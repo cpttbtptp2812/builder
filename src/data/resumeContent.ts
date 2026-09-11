@@ -46,7 +46,7 @@ export type JobExperienceEntry = {
   plain?: JobPlainFields;
 };
 
-// ─── 项目经历（3 条：在职 flagship + 2 个个人产品） ───
+// ─── 项目经历（2 条：在职 iMean + 个人 Agent Trace） ───
 
 export const resumeProjectEntries: ResumeProjectEntry[] = [
   {
@@ -133,145 +133,46 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
     ],
   },
   {
-    id: "streamprobe",
-    name: "StreamProbe — 流式 API 浏览器调试器",
+    id: "ownagent",
+    name: "OwnAgent — 浏览器内 AI Agent 平台",
     role: "独立设计与开发",
-    period: "2026.01 — 至今",
+    period: "2026.03 — 至今",
     personal: true,
-    workSlug: "streamprobe",
-    stack: [
-      "Chrome MV3",
-      "Side Panel",
-      "ReadableStream",
-      "SSE",
-      "AI SDK Data Stream",
-    ],
+    workSlug: "ownagent",
+    stack: ["React 19", "TypeScript", "Agent Loop", "MCP", "RAG", "SQLite"],
     sections: [
       {
         heading: "项目背景",
         paragraphs: [
-          "做 AI 对话前端时，Chrome Network 只能看到一条「进行中的请求」，看不清 EventSource / fetch 流式 body 的每一帧，断流、首 token 慢、tool-call 字段错都很难查。StreamProbe 是个人独立设计与开发的 Chrome 扩展，专注帧级观测：hook 页面流式 API，Side Panel 展示时间线、TTFB、Raw 与 AI SDK 语义对照，可导出 JSON 会话。与 iMean 的「执行」层互补，IP 归个人所有。",
+          "市面上的 Agent 框架大多把 Loop、工具协议、检索和评测藏在服务端 SDK 里，前端只剩一个聊天框。OwnAgent 反过来做：把「听懂问题 → 选技能 → 调工具 → 流式作答 → 留下可追踪的运行记录」整条链路在浏览器里从 0 实现一遍，打开网页即可运行，不需要配置 API Key。",
         ],
       },
       {
-        heading: "产品能力",
+        heading: "核心模块",
         bullets: [
-          "EventSource + fetch ReadableStream 双通道自动捕获",
-          "Side Panel：连接列表 · 帧时间线 · Raw / Parsed 双栏详情",
-          "TTFB、帧间隔、每连接帧数等指标",
-          "导出 streamprobe JSON，便于联调协作与留档",
-          "Popup 快捷入口 + demo.html 本地验证",
+          "Agent Loop：OpenAI 兼容流式解析，增量累积 tool_call 参数，最多 8 轮工具迭代后收敛",
+          "MCP Server（进程内）：JSON-RPC 2.0 实现 tools/list、tools/call，按 JSON Schema 校验入参，异常统一包成 isError 结果",
+          "Skill 注册表：能力以 SKILL.md 声明 triggers / tools / steps，运行前按 trigger 加权打分选 Top-1，路由过程对用户可见",
+          "RAG 检索：项目文档分块建语料，关键词重叠 + 项目直匹配 + 段落加权混合打分，每条命中带 chunkId 可溯源",
+          "Multi-Agent：Planner / Executor / Reviewer 三角色协作，复杂请求先拆解再执行",
+          "可观测：TraceSpan 协议（kind / label / ms / status / payload）记录每一步，时间线展示并持久化历史会话",
+          "回归评测：路由用例集跑命中率与失败样本，工具 benchmark 统计真实耗时",
         ],
       },
       {
-        heading: "技术实现",
-        subsections: [
-          {
-            heading: "采集层（MAIN world）",
-            bullets: [
-              "inject-event-source.js：包装 EventSource，派发 open / message / error 帧",
-              "inject-fetch-stream.js：检测 stream Content-Type，ReadableStream tee 按行切帧",
-              "保留原生原型链，单例防重复 hook，降低与业务脚本冲突",
-            ],
-          },
-          {
-            heading: "通信与存储",
-            bullets: [
-              "ISOLATED world Bridge：CustomEvent → chrome.runtime.sendMessage",
-              "Background 按 tabId 维护 connections + frames，环形缓冲上限 300 帧",
-              "chrome.storage.session，不上传云端",
-            ],
-          },
-          {
-            heading: "解析内核 core/parsers.js",
-            bullets: [
-              "SSE event/data 行解析，NDJSON 行解析",
-              "Vercel AI SDK 常见 type：text-delta、tool-call、tool-result、reasoning-delta 等",
-              "computeMetrics 计算 TTFB、帧间隔",
-            ],
-          },
-        ],
-      },
-      {
-        heading: "技术难点",
+        heading: "工程取舍",
         bullets: [
-          "MAIN world 不能调用 chrome API，采集与 UI 严格分层",
-          "fetch 流异步 tee 读 chunk，需限制单帧 8KB 与总帧数，避免长回复拖垮扩展",
-          "同一帧可能属于 sse / json / ai-sdk 多种形态，解析器需可扩展",
+          "双运行时：优先走 SQLite 服务端，不可用时自动降级为纯浏览器内运行，保证 demo 永远打得开",
+          "工具执行统一异常边界，单个工具失败不中断整轮对话，失败信息回流给模型继续决策",
+          "长期记忆用 IndexedDB、会话态用 sessionStorage，避免刷新即失忆又不污染跨会话上下文",
+          "能力全部收敛到一个入口页（对话 / 追踪 / 检索 / 路由 / 评测），而不是散成多个 demo",
         ],
       },
     ],
     achievements: [
-      "v1.0.0 已发布 StreamProbe-Extension-v1.0.0.zip，Side Panel 帧级调试可用",
-      "AI SDK 流式事件双栏解析，配套 PRODUCT 规格与 build 打包脚本",
-      "个人开源产品，从 0 完成定义、架构、实现与文档",
-    ],
-  },
-  {
-    id: "skilltap",
-    name: "步骤记录器 — Web 操作复现工具",
-    role: "独立设计与开发",
-    period: "2025.10 — 至今",
-    personal: true,
-    stack: ["Chrome MV3", "Content Script", "截图", "repro.json", "HTML 导出"],
-    sections: [
-      {
-        heading: "项目背景",
-        paragraphs: [
-          "测试测出 bug 往往只能口头描述 + 拼截图，开发还要自己猜路径；教同事走后台流程也缺少可交付的说明。步骤记录器是个人 Chrome 扩展：在真实网页录点击、填写、跳转并截图，一键导出 HTML 操作手册（非技术同事可打开演示）或复现包（repro.json + 给开发.md + 截图 + 选择器与报错信息），开发不必先起本地项目就能对照定位。",
-        ],
-      },
-      {
-        heading: "产品能力",
-        bullets: [
-          "录制：click / fill / navigation，viewport 截图，probe 采集 console 与 network 异常",
-          "步骤清洗：去噪、合并、选择器提取与可读标题",
-          "导出 HTML 手册：可翻页演示，适合培训与交付",
-          "导出 zip 复现包：手册 + 给开发.md + repro.json，可导入扩展回放",
-          "Popup：录制控制、问题描述、预览与双通道导出",
-        ],
-      },
-      {
-        heading: "技术实现",
-        subsections: [
-          {
-            heading: "录制引擎",
-            bullets: [
-              "Content Script 监听 DOM 事件，background 聚合步骤与截图",
-              "probe.js 注入 MAIN world 采集 console.error 与 failed fetch",
-              "session 存储录制态，支持暂停、清空、替换步骤",
-            ],
-          },
-          {
-            heading: "repro.json 协议",
-            bullets: [
-              "字段：steps、viewport、startUrl、userAgent、screenshots、findings、issue 描述",
-              "pack.js 生成 zip；analyze 辅助选择器与报错摘要",
-              "导入 repro.json 可在扩展内对照步骤与风险点",
-            ],
-          },
-          {
-            heading: "导出与受众",
-            bullets: [
-              "HTML 手册：面向实施 / 客户 / 非开发同事",
-              "复现包：面向前端 / 测试协作，降低复现沟通成本",
-            ],
-          },
-        ],
-      },
-      {
-        heading: "技术难点",
-        bullets: [
-          "动态 SPA 上稳定捕获步骤并生成仍可读的选择器",
-          "同一套录制数据同时服务「人读」与「机器读」两种导出格式",
-          "截图与步骤时序对齐，控制扩展包体积与 session 上限",
-        ],
-      },
-    ],
-    achievements: [
-      "SkillTap-Extension-v1.2.0.zip 已发布，HTML 手册与 repro 包双通道导出",
-      "repro.json 协议可导入扩展，配套站点扩展详情页与安装说明",
-      "与 iMean（自动执行）、StreamProbe（流观测）场景互补，个人 IP",
+      "从 0 实现 Agent Loop、MCP Server、RAG、Skill 路由、Trace、Eval 六个子系统，无第三方 Agent 框架",
+      "/work/ownagent 全部真实运行，面试可现场输入问题看完整调用链",
+      "运行链路可追踪 + 可回归，把「AI 应用怎么调试」讲清楚，而不只是接一个对话框",
     ],
   },
 ];

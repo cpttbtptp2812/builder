@@ -94,10 +94,10 @@ export function HubChatDock() {
         <div
           className={`hub-dock-panel${openUp ? " open-up" : " open-down"}${openLeft ? " open-left" : " open-right"}`}
           role="dialog"
-          aria-label="UniAgent 对话"
+          aria-label="OwnAgent 对话"
         >
           <header className="hub-dock-head">
-            <strong className="hub-dock-title">UniAgent 对话</strong>
+            <strong className="hub-dock-title">OwnAgent 对话</strong>
             <button type="button" className="hub-dock-close" onClick={() => setOpen(false)} aria-label="关闭">
               ×
             </button>
@@ -111,7 +111,7 @@ export function HubChatDock() {
         type="button"
         className={`hub-dock-fab${open ? " on" : ""}`}
         aria-expanded={open}
-        aria-label={open ? "收起对话" : "打开 UniAgent 对话，可拖到别处"}
+        aria-label={open ? "收起对话" : "打开 OwnAgent 对话，可拖到别处"}
         title="拖动换位置 · 单击打开"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}

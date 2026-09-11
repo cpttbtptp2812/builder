@@ -7,7 +7,7 @@ import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { PERSONAL_EXTENSIONS } from "../data/clipHubExtensions";
 import { profile } from "../data/profile";
-import { HOME_AGENT, IMEAN_WORKS, LAB_WORKS, PERSONAL_WORKS } from "../data/works";
+import { IMEAN_WORKS, LAB_WORKS, PERSONAL_WORKS } from "../data/works";
 import { formatWorkTenure, useWorkTenure } from "../lib/workTenure";
 
 export function HomePage() {
@@ -34,10 +34,9 @@ export function HomePage() {
         <section className="works-section works-section-imean">
           <div className="works-section-head">
             <h2 className="works-section-label">平台</h2>
-            <span className="works-section-hint">AI Agent · iMean 在职</span>
+            <span className="works-section-hint">iMean 在职</span>
           </div>
           <div className="home-featured-grid home-featured-grid--platform">
-            <FeaturedWorkCard work={HOME_AGENT} compact onBrief={() => setBriefSlug(HOME_AGENT.slug)} />
             {IMEAN_WORKS.map((w) => (
               <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
             ))}
@@ -63,7 +62,7 @@ export function HomePage() {
         <section className="works-section works-section-lab">
           <div className="works-section-head">
             <h2 className="works-section-label">技术实验室</h2>
-            <span className="works-section-hint">SSE · 定位 · SDK · 录制</span>
+            <span className="works-section-hint">Agent Trace · SSE · 定位 · SDK</span>
           </div>
           <div className="home-featured-grid home-featured-grid--lab">
             {LAB_WORKS.map((w) => (

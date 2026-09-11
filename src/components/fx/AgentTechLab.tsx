@@ -19,7 +19,7 @@ const TECH_BADGES = [
   "useAutoResume",
 ];
 
-/** UniAgent 技术实验室 — 暂停/续传时展示用了什么 API、断在哪一层 */
+/** OwnAgent 技术实验室 — 暂停/续传时展示用了什么 API、断在哪一层 */
 export function AgentTechLab({ autoStart = false }: { autoStart?: boolean }) {
   const [phase, setPhase] = useState<Phase>("idle");
   const [stage, setStage] = useState<PipelineStage>("source");

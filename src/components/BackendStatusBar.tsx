@@ -28,8 +28,10 @@ export function BackendStatusBar({ compact = false }: Props) {
   if (!health?.ok) {
     return (
       <div className={`backend-status backend-status--offline ${compact ? "compact" : ""}`}>
-        <strong>离线演示模式</strong>
-        <span>未检测到 API 服务 — 数据在浏览器内，刷新即丢失。本地请运行 <code>npm run dev:full</code></span>
+        <strong>浏览器内运行时</strong>
+        <span>
+          服务端未启动，已按设计降级 — 能力全部可用，数据存本机。跑全量：<code>npm run dev:full</code>
+        </span>
       </div>
     );
   }

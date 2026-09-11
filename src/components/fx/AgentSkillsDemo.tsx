@@ -485,7 +485,7 @@ export function AgentSkillsDemo({
               <header className="skill-workbench-head">
                 <div>
                   <code>tools/call</code>
-                  <h3>JSON-RPC 2.0 · 与 UniAgent 同一套 MCP Server</h3>
+                  <h3>JSON-RPC 2.0 · 与 OwnAgent 同一套 MCP Server</h3>
                 </div>
               </header>
               <div className="skill-mcp-embed">

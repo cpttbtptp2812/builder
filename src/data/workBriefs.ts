@@ -107,13 +107,13 @@ export const WORK_NOTES: Record<string, WorkNote> = {
     content:
       "Skills 把领域能力封装成可发现、可版本化的包。\n\n" +
       "本页是 Skill Runtime Lab：可见路由算法 + MCP 多步流水线 + DevTools 风格审计面板。\n" +
-      "与 UniAgent 共用 mcpServer，Skills 是意图层，MCP 是工具层。",
+      "与 OwnAgent 共用 mcpServer，Skills 是意图层，MCP 是工具层。",
     techJots: [
       { tag: "SKILL.md", text: "src/skills/ 仓库内真实文件；frontmatter + triggers。" },
       { tag: "site-analyzer", text: "http_probe + Performance API + snapshot 合成审计。" },
       { tag: "dom-probe", text: "browser_snapshot → role 分布 · Locator 同源。" },
       { tag: "workflow-orchestrator", text: "workflow_run 入队 + 执行面 snapshot。" },
-      { tag: "MCP", text: "与 UniAgent 共用 JSON-RPC tools/call。" },
+      { tag: "MCP", text: "与 OwnAgent 共用 JSON-RPC tools/call。" },
     ],
     scraps: [
       "Cursor Skills 目录 ~/.cursor/skills — 同款 SKILL.md 格式",
@@ -198,7 +198,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   platform: {
     slug: "platform",
     purpose:
-      "补齐 Agent 架构师 JD：RAG 分块检索、Multi-Agent 协作 Trace、Eval Ops 回归、Memory 上下文工程 — 与 UniAgent/SkillForge 共用 MCP 与语料。",
+      "补齐 Agent 架构师 JD：RAG 分块检索、Multi-Agent 协作 Trace、Eval Ops 回归、Memory 上下文工程 — 与 OwnAgent/SkillForge 共用 MCP 与语料。",
     highlights: [
       {
         title: "RAG Lab — 分块 + hybrid score + 引用",
@@ -226,7 +226,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
     ],
     content:
       "Agent Platform Lab 不是新堆概念，而是把 JD 常问的 RAG / Multi-Agent / Eval / Memory 做成可在线验证的模块。\n\n" +
-      "与 UniAgent 的 Guest Agent、SkillForge 的 Router Lab 共用 mcpServer 和 knowledge 语料；knowledge_search 已切到 ragEngine 分块检索。",
+      "与 OwnAgent 的 Guest Agent、SkillForge 的 Router Lab 共用 mcpServer 和 knowledge 语料；knowledge_search 已切到 ragEngine 分块检索。",
     techJots: [
       { tag: "ragEngine", text: "buildRagCorpus → tokenize → hybrid-score → topK · ragHitsForMcp。" },
       { tag: "multiAgentRuntime", text: "runMultiAgentPipeline · onStep 流式 Trace。" },
@@ -520,10 +520,58 @@ export const WORK_NOTES: Record<string, WorkNote> = {
     siteNote: "TaskQueue.run / pause / skip + CompressionStream 压缩 + 技术事件流。",
   },
 
+  ownagent: {
+    slug: "ownagent",
+    purpose:
+      "把「听懂问题 → 选技能 → 调工具 → 流式作答 → 留下可追踪记录」整条 Agent 链路在浏览器里从 0 实现一遍。不依赖第三方 Agent 框架，打开网页就能跑，不用配 API Key。",
+    highlights: [
+      {
+        title: "Agent Loop + MCP",
+        analysis:
+          "自己写流式解析：SSE 分片里增量累积 tool_call 的 name 和 arguments，凑齐再执行；工具走进程内 MCP Server，JSON-RPC 2.0 的 tools/list 与 tools/call，入参按 JSON Schema 校验，异常统一包成 isError 回流给模型，单个工具挂掉不中断整轮。最多 8 轮迭代兜底防死循环。",
+        metric: "无框架 · 8 轮收敛",
+      },
+      {
+        title: "技能路由为什么可解释",
+        analysis:
+          "每个能力写成 SKILL.md，声明 triggers / tools / steps。一句话进来先做加权打分：命中长词 2 分、短词 1 分，Top-1 才进执行。打分明细直接摊在页面上，路由错了能立刻看出是哪个 trigger 没覆盖到。",
+        metric: "打分可见 · 可回归",
+      },
+      {
+        title: "RAG 的召回是能对账的",
+        analysis:
+          "项目文档按段落分块建语料，混合打分 = 关键词重叠 + 项目直匹配 + 段落类型加权。每条命中带 chunkId，能回溯到具体来源块，避免「模型说了但不知道从哪来」。",
+        metric: "chunkId 溯源",
+      },
+      {
+        title: "TraceSpan 协议",
+        analysis:
+          "每步 { kind, label, detail, ms, status, payload }。kind 枚举 user/intent/plan/tool/stream/reply/error，status 用 ok/warn/err 标记跳过与失败。单步 ms 与累计 ms 并列显示，慢在哪一眼看到；会话写 localStorage，可回看历史运行。",
+        metric: "每步可展开 · 历史可回看",
+      },
+      {
+        title: "双运行时兜底",
+        analysis:
+          "优先走 SQLite 服务端；服务端不可用时自动降级为纯浏览器内运行时，能力有裁剪但链路完整。这样 demo 在任何环境都打得开，不会因为后端没起就白屏。",
+        metric: "服务端优先 · 浏览器降级",
+      },
+    ],
+    content:
+      "站点上是一个入口页，下挂五个模块：对话、运行追踪、知识检索、技能路由、回归评测。全部真实运行，不是录像也不是 mock。",
+    techJots: [
+      { tag: "Loop", text: "tool_call 参数按 delta 累积，凑齐 JSON 才执行。" },
+      { tag: "MCP", text: "进程内 JSON-RPC，Schema 校验 + isError 统一异常。" },
+      { tag: "Eval", text: "路由用例集算命中率，工具 benchmark 统计真实耗时。" },
+      { tag: "记忆", text: "IndexedDB 长期 + sessionStorage 会话态。" },
+    ],
+    scraps: ["后续：trace 导出 JSON", "接向量检索替换关键词打分"],
+    siteNote: "一个入口，五个模块，全部真实运行。",
+  },
+
   extension: {
     slug: "extension",
     purpose:
-      "自动化闭环第一环：「录」。扩展在真实页面录用户操作，输出 steps.json 给 Builder 编、SDK 放。这页是 MV3 交互 demo，测录制和高亮逻辑。",
+      "iMean 自动化闭环的「录」环节 demo，不是独立产品。扩展在真实页面录用户操作，输出 steps.json 给 Builder 编、SDK 放。",
     highlights: [
       {
         title: "Manifest V3 — service worker 生命周期",

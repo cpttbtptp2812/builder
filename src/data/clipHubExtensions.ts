@@ -1,7 +1,7 @@
 /**
  * 浏览器扩展目录
  * - 前端联调工具包：ClipHub + Env + Wire（一个 zip）
- * - StreamProbe、步骤记录器：独立扩展
+ * - StreamProbe / 步骤记录器：已归档，扩展页不再主推
  */
 
 import { STREAM_PROBE } from "./streamProbe";
@@ -134,8 +134,6 @@ const STREAMPROBE_EXTENSION: ExtensionItem = {
   useCases: STREAM_PROBE.users,
   stack: STREAM_PROBE.stack,
   accent: STREAM_PROBE.accent,
-  personal: true,
-  workSlug: "streamprobe",
 };
 
 const SKILLTAP_EXTENSION: ExtensionItem = {
@@ -159,17 +157,13 @@ const SKILLTAP_EXTENSION: ExtensionItem = {
   useCases: ["教同事走一遍内部后台", "测试把 bug 复现路径交给开发"],
   stack: ["Chrome MV3", "截图", "HTML 手册", "repro.json"],
   accent: "#e11d48",
-  personal: true,
 };
 
 /** 扩展页 · 独立扩展 */
-export const STANDALONE_EXTENSIONS: ExtensionItem[] = [
-  STREAMPROBE_EXTENSION,
-  SKILLTAP_EXTENSION,
-];
+export const STANDALONE_EXTENSIONS: ExtensionItem[] = [];
 
-/** 首页 · 个人产品区扩展卡（StreamProbe 用作品卡，此处仅步骤记录器） */
-export const PERSONAL_EXTENSIONS: ExtensionItem[] = [SKILLTAP_EXTENSION];
+/** 首页 · 个人产品区不再单独推扩展卡（StreamProbe 用作品页） */
+export const PERSONAL_EXTENSIONS: ExtensionItem[] = [];
 
 /** 全部可进详情页的扩展（含工具包子项） */
 export const EXTENSION_CATALOG: ExtensionItem[] = [

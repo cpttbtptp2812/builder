@@ -46,7 +46,7 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   agent: {
     slug: "agent",
-    oneLiner: "UniAgent：默认 Guest 免配置，Router 选 Skill 后走 MCP 真实执行；可选 LLM 开启完整 Tool Call Loop。",
+    oneLiner: "OwnAgent：默认 Guest 免配置，Router 选 Skill 后走 MCP 真实执行；可选 LLM 开启完整 Tool Call Loop。",
     demoProves: "输入或点预设即跑通；右侧 Agent Loop Trace 展开 tools/call JSON；下方 MCP Console 可手动对照协议。",
     steps: [
       "直接输入问题，或点欢迎区预设 — Guest 自动 Router + MCP",
@@ -172,15 +172,13 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   streamprobe: {
     slug: "streamprobe",
-    oneLiner:
-      "StreamProbe：Chrome 扩展 hook EventSource / fetch stream，Side Panel 帧时间线 + Raw/Parsed 双栏，导出会话 JSON。",
-    demoProves:
-      "下方演示与扩展同源思路：逐帧展示 SSE 原始行与 AI SDK 语义字段，对照 Network 看不清的流式 body。",
+    oneLiner: "Chrome 扩展：把 AI 流式接口的每一帧看清楚，Side Panel 对照 Raw 与 AI SDK 解析。",
+    demoProves: "点「播放模拟流」：左 Raw、右 Parsed，代替 Network 里只有 pending 的盲区。",
     steps: [
-      "▶ 播放 — 左侧 Raw 帧按时间追加，右侧 Parsed 映射 type 与内容",
-      "看 text-delta 逐字增长、tool-call / tool-result 成对出现",
-      "技术流同步打出 parse 与 metrics（TTFB、帧间隔）",
-      "真实扩展：MAIN world hook → Bridge → Background → Side Panel",
+      "点「播放模拟流」",
+      "左栏看 SSE 原始帧逐条出现",
+      "右栏看 text-delta、tool-call 等语义字段",
+      "需要真实环境时下载扩展 zip",
     ],
     compare: {
       usual: { title: "Network 只有 pending", desc: "看不清 SSE 每一帧，断流难查" },
@@ -188,10 +186,27 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
     },
   },
 
+  ownagent: {
+    slug: "ownagent",
+    oneLiner: "浏览器内 AI Agent 平台：对话、技能路由、MCP 工具、知识检索、运行追踪、回归评测，一个入口全跑通。",
+    demoProves: "无需 API Key 即可真实运行；每步 intent / tool / 回复进时间线；RAG 命中带 chunkId；路由打分过程可见",
+    steps: [
+      "「对话」提问 → 看流式回复与工具调用",
+      "「运行追踪」跑一次 → 时间线逐步追加，可展开 payload",
+      "「知识检索」搜关键词 → 看召回片段与打分",
+      "「技能路由」输入一句话 → 看 trigger 打分选中谁",
+      "「回归评测」一键跑用例 → 命中率与工具耗时",
+    ],
+    compare: {
+      usual: { title: "接个对话框就叫 Agent", desc: "调用链是黑盒，出错只能靠猜" },
+      here: { title: "整条链路自己实现", desc: "路由 / 工具 / 检索 / 追踪 / 评测都能打开看" },
+    },
+  },
+
   extension: {
     slug: "extension",
-    oneLiner: "MV3 录制扩展 demo：Content Script 捕获 click/input，isolated world 高亮，输出 steps.json。",
-    demoProves: "chrome.storage.session 持久化；capture 阶段监听；JSON schema 对齐 Builder / SDK",
+    oneLiner: "iMean 录制链路 demo：MV3 Content Script 捕获操作，输出 steps.json 给 Builder / SDK。",
+    demoProves: "chrome.storage.session 持久化；capture 阶段监听；录编放 schema 对齐",
     steps: [
       "▶ 录制此页 → 日志打出 addEventListener(capture)",
       "看页面高亮跟着步骤走",

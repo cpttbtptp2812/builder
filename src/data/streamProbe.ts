@@ -9,9 +9,9 @@ export const STREAM_PROBE = {
   icon: "📡",
   tagline: "帧级看 SSE / fetch 流，Side Panel 对照 Raw 与 AI SDK",
   desc: "Chrome Network 看不清流式 body 的每一帧。StreamProbe hook 页面 EventSource 与 fetch stream，在 Side Panel 按时间线展示，支持导出会话 JSON。个人独立设计与开发。",
-  version: "1.0.0",
+  version: "1.0.2",
   status: "shipped" as const,
-  zip: "StreamProbe-Extension-v1.0.0.zip",
+  zip: "StreamProbe-Extension-v1.0.2.zip",
   accent: "#0891b2",
   repo: "", // GitHub 开源后填写，同步到 resumeContent plain.url
   docsPath: "docs/streamprobe/PRODUCT.md",

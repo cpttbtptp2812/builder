@@ -21,7 +21,7 @@ export default function App() {
         <Route path="/tools/extensions/:extId" element={<ExtensionDetailPage />} />
         <Route path="/tools/clips" element={<ClipsLibraryPage />} />
         <Route path="/tools/mirror" element={<Navigate to="/tools/extensions" replace />} />
-        <Route path="/tools/eval" element={<Navigate to="/work/dev-debug?panel=eval" replace />} />
+        <Route path="/tools/eval" element={<Navigate to="/work/ownagent?panel=eval" replace />} />
         <Route path="/tools/clip-hub" element={<Navigate to="/tools/extensions" replace />} />
         <Route path="/for-you" element={<SecretRomancePage />} />
         <Route path="/about" element={<Navigate to="/resume" replace />} />

@@ -16,6 +16,8 @@ export type WorkKind =
   | "locator-lab"
   | "extension-demo"
   | "eval-lab"
+  | "agent-trace"
+  | "own-agent"
   | "dev-debug";
 
 export type WorkTier = "flagship" | "lab";
@@ -38,17 +40,17 @@ export type Work = {
 
 export const WORKS: Work[] = [
   {
-    id: "streamprobe",
-    slug: "streamprobe",
-    title: "StreamProbe",
-    subtitle: "流式 API 浏览器调试器",
-    hook: "帧级看 SSE · AI 流 · 首 token 与断线",
-    desc: "个人开源 Chrome 扩展：hook EventSource / fetch stream，Side Panel 时间线 + Raw/Parsed 双栏，导出会话包。",
+    id: "ownagent",
+    slug: "ownagent",
+    title: "OwnAgent",
+    subtitle: "浏览器内 AI Agent 平台",
+    hook: "对话 · 技能路由 · MCP 工具 · 知识检索 · 运行追踪 · 回归评测",
+    desc: "个人从 0 实现的 Agent 平台：Agent Loop、进程内 MCP Server、RAG 分块检索、SKILL.md 路由、TraceSpan 可观测与 Eval，全部真实运行、免 API Key。",
     impact: "个人项目",
-    kind: "stream-probe",
-    stack: ["Chrome MV3", "ReadableStream", "SSE", "AI SDK"],
-    teaser: "See every frame",
-    accent: "#0891b2",
+    kind: "own-agent",
+    stack: ["Agent Loop", "MCP", "RAG", "SKILL.md", "Eval"],
+    teaser: "Run · Trace · Eval",
+    accent: "#8b5cf6",
     tier: "flagship",
     featured: true,
   },
@@ -64,21 +66,6 @@ export const WORKS: Work[] = [
     stack: ["Chrome MV3", "EventSource", "按域配置"],
     teaser: "联调三件套",
     accent: "#0d9488",
-    tier: "flagship",
-    featured: true,
-  },
-  {
-    id: "dev-debug",
-    slug: "dev-debug",
-    title: "AI Agent",
-    subtitle: "提问 · 编排 · 调度 · 工具",
-    hook: "理解问句 → 辨认意图 → 规划任务 → 运行 → 能力",
-    desc: "按图中步骤走完一轮。每个节点进不同能力，不是同一页。",
-    impact: "Agent 平台",
-    kind: "dev-debug",
-    stack: ["MCP", "RAG", "SKILL.md", "SSE"],
-    teaser: "对话 · 编排 · 运行 · 盯进度",
-    accent: "#6366f1",
     tier: "flagship",
     featured: true,
   },
@@ -111,6 +98,19 @@ export const WORKS: Work[] = [
     accent: "#a78bfa",
     tier: "flagship",
     featured: true,
+  },
+  {
+    id: "streamprobe",
+    slug: "streamprobe",
+    title: "StreamProbe",
+    subtitle: "已归档",
+    hook: "流式 hook 实验 · 不再主推",
+    desc: "Chrome 流式调试扩展实验，已归档。站点 SSE 实验室仍可看协议对照 demo。",
+    kind: "stream-probe",
+    stack: ["Chrome MV3", "SSE"],
+    teaser: "archived",
+    accent: "#94a3b8",
+    tier: "lab",
   },
   {
     id: "sse",
@@ -154,10 +154,10 @@ export const WORKS: Work[] = [
   {
     id: "extension",
     slug: "extension",
-    title: "Playback Extension",
-    subtitle: "操作录制",
-    hook: "录一遍导出 steps.json",
-    desc: "MV3 Content Script 捕获操作序列。",
+    title: "录制 Demo",
+    subtitle: "iMean 录制链路",
+    hook: "MV3 录步骤 → steps.json → Builder / SDK",
+    desc: "iMean 自动化闭环的「录」环节演示，非独立产品。",
     kind: "extension-demo",
     stack: ["MV3", "Content Script"],
     teaser: "录制 → JSON",
@@ -171,14 +171,13 @@ export function getWork(slug: string) {
 }
 
 export const FLAGSHIP_WORKS = WORKS.filter((w) => w.tier === "flagship");
-export const HOME_AGENT = WORKS.find((w) => w.slug === "dev-debug")!;
 export const LAB_WORKS = WORKS.filter((w) => w.tier === "lab");
 
 /** 首页 — iMean 平台（在职） */
 export const IMEAN_WORKS = WORKS.filter((w) => ["imean", "builder"].includes(w.slug));
 
 /** 首页 — 个人产品（独立设计与开发） */
-export const PERSONAL_WORKS = WORKS.filter((w) => w.slug === "streamprobe");
+export const PERSONAL_WORKS = WORKS.filter((w) => w.slug === "ownagent");
 
 /** @deprecated use IMEAN_WORKS */
 export const PROJECT_WORKS = IMEAN_WORKS;

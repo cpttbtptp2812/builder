@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 const TOOLS = ["HTTP Probe", "Knowledge", "VNC Snapshot"];
 const PHASES = ["SSE", "Reasoning", "Tool", "VNC"];
 
-/** 首页 UniAgent — 产品界面预览 */
+/** 首页 OwnAgent — 产品界面预览 */
 export function MiniToolLive() {
   const [phase, setPhase] = useState(0);
   const [tool, setTool] = useState(0);
@@ -23,7 +23,7 @@ export function MiniToolLive() {
     <div className="mini-live mini-agent" onClick={(e) => e.stopPropagation()}>
       <div className="mini-live-head">
         <span className="live-pulse indigo">LIVE</span>
-        <span className="mini-live-label">UniAgent 对话</span>
+        <span className="mini-live-label">OwnAgent 对话</span>
       </div>
       <div className="mini-agent-body">
         <div className="mini-agent-chat">

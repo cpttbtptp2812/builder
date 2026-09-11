@@ -56,13 +56,22 @@ export function buildMemoryContextBlock(sessionId: string) {
   return parts.length ? parts.join("\n\n") : "（暂无持久化记忆）";
 }
 
-function pickSkill(query: string) {
+function pickSkill(query: string): { skillId: string | null; hits: string[]; score: number; kind: "skill" | "about" | "knowledge" | "none" } {
+  if (/检查|正不正常|正常吗|能不能打开|打得开|探活|健康|体检|性能|ttfb|latency|加载慢|慢不慢|可用吗/i.test(query)) {
+    return { skillId: "site-analyzer", hits: ["health-intent"], score: 2, kind: "skill" };
+  }
+  if (/是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|本站是干嘛|这个站是/i.test(query)) {
+    return { skillId: null, hits: [], score: 0, kind: "about" };
+  }
+  if (/介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent/i.test(query)) {
+    return { skillId: null, hits: [], score: 0, kind: "knowledge" };
+  }
   const rows = explainDiscovery(query);
   const top = rows[0];
-  if (top && top.score > 0) return { skillId: top.skill.id, hits: top.hits, score: top.score };
-  if (/dom|snapshot/i.test(query)) return { skillId: "dom-probe", hits: ["fallback"], score: 1 };
-  if (/workflow|流程/i.test(query)) return { skillId: "workflow-orchestrator", hits: ["fallback"], score: 1 };
-  return { skillId: "site-analyzer", hits: ["default"], score: 0 };
+  if (top && top.score > 0) return { skillId: top.skill.id, hits: top.hits, score: top.score, kind: "skill" };
+  if (/dom|snapshot/i.test(query)) return { skillId: "dom-probe", hits: ["fallback"], score: 1, kind: "skill" };
+  if (/workflow|流程/i.test(query)) return { skillId: "workflow-orchestrator", hits: ["fallback"], score: 1, kind: "skill" };
+  return { skillId: null, hits: [], score: 0, kind: "none" };
 }
 
 export async function runMultiAgentOnServer(
@@ -86,7 +95,7 @@ export async function runMultiAgentOnServer(
   const memoryBlock = buildMemoryContextBlock(sessionId);
   const planContent = [
     `1. 解析意图: ${query.slice(0, 48)}`,
-    `2. Skill 路由: ${picked.skillId} (score ${picked.score})`,
+    `2. Skill 路由: ${picked.kind === "skill" ? picked.skillId : picked.kind} (score ${picked.score})`,
     "3. Executor: knowledge_search + 条件 http_probe",
     "4. Reviewer: 带引用合成",
     "",
@@ -185,27 +194,38 @@ export async function runGuestAgentOnServer(
 ) {
   const picked = pickSkill(query);
 
-  if (/项目|知识|介绍|agent|做过|简历/i.test(query) && picked.skillId === "site-analyzer") {
-    const hits = ragHitsForMcp(query, 3);
+  if (picked.kind === "about" || picked.kind === "knowledge") {
+    const search = picked.kind === "about" ? "OwnAgent 浏览器内 AI Agent 平台" : query;
+    const hits = ragHitsForMcp(search, 3);
     appendSessionTurn(sessionId, "user", query);
-    const text =
-      hits.hits.length === 0
-        ? "知识库未命中。"
-        : hits.hits.map((h, i) => `${i + 1}. **${h.title}** (${Math.round(h.score * 100)}%)\n   ${h.excerpt}`).join("\n\n");
-    appendSessionTurn(sessionId, "assistant", text);
+    const body =
+      picked.kind === "about"
+        ? [
+            "**这是王旭的个人作品站，主项目是 OwnAgent。**",
+            "",
+            "OwnAgent 是一个跑在浏览器里的 AI Agent 平台：输入一句话，先做技能路由，再调 MCP 工具，最后流式作答。",
+            "",
+            hits.hits.length
+              ? "知识库片段：\n\n" + hits.hits.map((h, i) => `${i + 1}. **${h.title}**\n   ${h.excerpt}`).join("\n\n")
+              : "",
+          ].join("\n")
+        : hits.hits.length === 0
+          ? "知识库未命中。"
+          : hits.hits.map((h, i) => `${i + 1}. **${h.title}** (${Math.round(h.score * 100)}%)\n   ${h.excerpt}`).join("\n\n");
+    appendSessionTurn(sessionId, "assistant", body);
     return {
-      assistantText: `**知识库检索（SQLite）**\n\n${text}`,
+      assistantText: `> 「${query}」→ ${picked.kind === "about" ? "本站介绍" : "知识库检索"}\n\n${body}`,
       traces: [
         {
           iteration: 1,
           label: "Retrieve · SQLite RAG",
-          reasoning: "Server knowledge_search",
+          reasoning: picked.kind === "about" ? "问的是这个网站是什么" : "Server knowledge_search",
           text: "",
           tools: [
             {
               id: "srv-knowledge",
               name: "knowledge_search",
-              args: JSON.stringify({ query, topK: 3 }),
+              args: JSON.stringify({ query: search, topK: 3 }),
               result: hits,
               ok: true,
               iteration: 1,
@@ -215,6 +235,17 @@ export async function runGuestAgentOnServer(
       ],
       runtime: "server" as const,
     };
+  }
+
+  if (picked.kind === "none" || !picked.skillId) {
+    const text = [
+      `没有技能命中「${query}」，所以这轮没有调用任何工具。`,
+      "",
+      "可以这样问：检查网站正不正常 / 这个网站是干嘛的 / 分析页面 DOM / 跑一遍改价上架流程。",
+    ].join("\n");
+    appendSessionTurn(sessionId, "user", query);
+    appendSessionTurn(sessionId, "assistant", text);
+    return { assistantText: text, traces: [], runtime: "server" as const };
   }
 
   const skill = getSkill(picked.skillId)!;
@@ -232,11 +263,27 @@ export async function runGuestAgentOnServer(
       iteration: 1,
     }));
 
-  let assistantText = "任务已完成（服务端 MCP + SQLite 持久化）。";
   const dashboard = (result as { dashboard?: Record<string, unknown> })?.dashboard;
-  if (dashboard?.http) assistantText = `**服务端 Site Audit**\n\n${JSON.stringify(dashboard, null, 2).slice(0, 800)}`;
-  else if (dashboard?.domProbe) assistantText = `**服务端 DOM Probe**\n\n${JSON.stringify(dashboard.domProbe, null, 2)}`;
-  else if (dashboard?.workflow) assistantText = `**Workflow 已写入 SQLite**\n\nrunId: ${(dashboard.workflow as { runId?: string }).runId}`;
+  const http = dashboard?.http as { ok?: boolean; status?: number; latencyMs?: number } | undefined;
+  const perf = dashboard?.perf as { ttfbMs?: number; loadMs?: number; resourceCount?: number } | undefined;
+  const dom = dashboard?.domProbe as { totalNodes?: number; interactive?: number } | undefined;
+  const wf = dashboard?.workflow as { runId?: string; workflowId?: string; status?: string } | undefined;
+
+  let assistantText = `> 「${query}」→ 技能 **${skill.name}**\n\n任务已完成（服务端 MCP + SQLite）。`;
+  if (skill.id === "site-analyzer" && http) {
+    const ok = http.ok !== false;
+    assistantText = [
+      `> 「${query}」→ 技能 **site-analyzer**（站点体检）`,
+      "",
+      ok ? `**能打开，站点正常。** HTTP ${http.status ?? "—"}，探活 ${http.latencyMs ?? "—"}ms。` : `**探活失败。** status ${http.status ?? "—"}`,
+      "",
+      `- TTFB：${perf?.ttfbMs ?? "—"}ms · Load：${perf?.loadMs ?? "—"}ms · 资源：${perf?.resourceCount ?? "—"}`,
+    ].join("\n");
+  } else if (dom) {
+    assistantText = `> 「${query}」→ 技能 **dom-probe**\n\n总节点 ${dom.totalNodes ?? "—"}，可交互 ${dom.interactive ?? "—"}。`;
+  } else if (wf) {
+    assistantText = `> 「${query}」→ 技能 **workflow-orchestrator**\n\n已入队 ${wf.workflowId ?? "—"}，runId ${wf.runId ?? "—"}，状态 ${wf.status ?? "queued"}。`;
+  }
 
   appendSessionTurn(sessionId, "user", query);
   appendSessionTurn(sessionId, "assistant", assistantText.slice(0, 500));

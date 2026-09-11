@@ -1,4 +1,4 @@
-/** UniAgent 运行时 — LLM + MCP Tool Call Agent Loop */
+/** OwnAgent 运行时 — LLM + MCP Tool Call Agent Loop */
 
 import { isLlmConfigured, resolveLlmBaseUrl, type LlmConfig } from "./llmConfig";
 import { buildAgentSystemPrompt, executeAgentTool, mcpToolsToOpenAi } from "./agentTools";
@@ -257,8 +257,8 @@ export async function runAgentTurn(
 }
 
 export const AGENT_QUICK_PROMPTS = [
-  { label: "发布前检查", text: "帮我对本站做发布前检查，探活并确认关键页面可访问" },
-  { label: "项目检索", text: "我做过哪些 AI Agent 相关项目？用知识库检索后简要介绍" },
+  { label: "这个站是干嘛的", text: "这个网站是干嘛的" },
+  { label: "站点是否正常", text: "帮我检查一下这个网站正不正常" },
   { label: "DOM 分析", text: "分析当前页面的 DOM 结构，统计可交互元素" },
   { label: "自动化流程", text: "帮我入队一个改价上架的 workflow，并说明会执行哪些步骤" },
 ] as const;

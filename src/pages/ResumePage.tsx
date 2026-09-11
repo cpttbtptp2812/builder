@@ -69,7 +69,7 @@ export function ResumePage() {
         <section className="resume-section resume-section-projects">
           <h2>项目经历</h2>
           <p className="resume-section-lead">
-            三个代表作：在职 AI 自动化平台，以及 StreamProbe、步骤记录器两个个人 Chrome 产品。
+            代表作：在职 iMean AI 自动化平台；个人 Agent Trace（Agent 语义链路可观测性）。
           </p>
           <div className="resume-project-grid">
             {resumeProjects.map((p) => (

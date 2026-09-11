@@ -7,7 +7,7 @@ export function AgentWelcome({ onPrompt, disabled }: { onPrompt: (text: string) 
       <div className="agent-welcome-avatar" aria-hidden>
         UA
       </div>
-      <h3 className="agent-welcome-title">UniAgent</h3>
+      <h3 className="agent-welcome-title">OwnAgent</h3>
       <p className="agent-welcome-desc">
         Guest 模式免配置 — Router 选 Skill 后调用 http_probe、knowledge_search、browser_snapshot，右侧 Trace 同步展开。
       </p>

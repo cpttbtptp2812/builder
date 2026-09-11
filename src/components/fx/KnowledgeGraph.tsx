@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 const NODES = [
-  { id: "agent", label: "UniAgent", x: 50, y: 50, r: 28 },
+  { id: "agent", label: "OwnAgent", x: 50, y: 50, r: 28 },
   { id: "kb", label: "Knowledge", x: 20, y: 75, r: 22 },
   { id: "mcp", label: "MCP Tools", x: 80, y: 75, r: 22 },
   { id: "wf", label: "Workflows", x: 50, y: 95, r: 24 },

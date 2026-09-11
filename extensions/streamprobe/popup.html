@@ -10,13 +10,23 @@
       <span class="logo">SP</span>
       <div>
         <strong>StreamProbe</strong>
-        <span>流式 API 调试</span>
+        <span id="version">v—</span>
       </div>
     </header>
-    <p id="summary">加载中…</p>
-    <button type="button" id="open-panel" class="primary">打开 Side Panel</button>
-    <button type="button" id="clear">清空当前页</button>
-    <p class="hint">在 AI 对话 / SSE 页面使用。Side Panel 可看帧时间线与 Raw/Parsed 对照。</p>
+
+    <p class="what">调试 AI / SSE 流式接口 — 把 Network 里看不清的每一帧展开。</p>
+
+    <div class="status" id="status">
+      <span class="status-dot idle" id="status-dot"></span>
+      <span id="status-text">检测中…</span>
+    </div>
+
+    <button type="button" id="self-test" class="primary">▶ 一键自检（任意页面可点）</button>
+    <button type="button" id="open-panel">打开 Side Panel</button>
+    <button type="button" id="open-demo">打开测试页（真实 hook）</button>
+    <button type="button" id="clear" class="ghost">清空当前页数据</button>
+
+    <p class="hint" id="hint"></p>
     <script src="popup.js"></script>
   </body>
 </html>

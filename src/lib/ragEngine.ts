@@ -38,8 +38,8 @@ export function buildRagCorpus(): RagChunk[] {
 
   const chunks: RagChunk[] = [];
   for (const p of PROJECT_DETAILS) {
-    const push = (chunkId: string, section: RagSection, text: string, aspectKey?: string) => {
-      const trimmed = text.trim();
+    const push = (chunkId: string, section: RagSection, text: string | undefined, aspectKey?: string) => {
+      const trimmed = typeof text === "string" ? text.trim() : "";
       if (!trimmed) return;
       chunks.push({
         chunkId,
@@ -54,15 +54,15 @@ export function buildRagCorpus(): RagChunk[] {
 
     push(`${p.id}:desc`, "desc", p.desc);
     push(`${p.id}:arch`, "architecture", p.architecture);
-    push(`${p.id}:topics`, "topics", p.interviewTopics.join(" · "));
+    push(`${p.id}:topics`, "topics", (p.interviewTopics ?? []).join(" · "));
 
-    p.narrative.split(/\n\n+/).forEach((para, i) => {
+    (p.narrative ?? "").split(/\n\n+/).forEach((para, i) => {
       push(`${p.id}:narr-${i}`, "narrative", para);
     });
-    p.challenges.forEach((c, i) => {
+    (p.challenges ?? []).forEach((c, i) => {
       push(`${p.id}:chal-${i}`, "challenge", c);
     });
-    for (const [k, v] of Object.entries(p.aspects)) {
+    for (const [k, v] of Object.entries(p.aspects ?? {})) {
       push(`${p.id}:asp-${k}`, "aspect", v, k);
     }
   }

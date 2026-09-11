@@ -38,7 +38,7 @@ export const PLATFORM_FLOW: FlowDiagramSpec = {
     { id: "reviewer", label: "Reviewer", sub: "带引用汇总", color: "#e879f9" },
     { id: "eval", label: "Eval", sub: "路由 + 延迟", color: "#f59e0b" },
     { id: "answer", label: "最终答案", sub: "可验证输出", color: "#34d399" },
-    { id: "agent", label: "UniAgent", sub: "对话入口", color: "#818cf8", href: "/work/agent" },
+    { id: "agent", label: "OwnAgent", sub: "对话入口", color: "#818cf8", href: "/work/agent" },
     { id: "skills", label: "SkillForge", sub: "Skill 层", color: "#f59e0b", href: "/work/skills" },
   ],
   edges: [
@@ -69,7 +69,7 @@ export const PLATFORM_FLOW: FlowDiagramSpec = {
 
 /** 一次提问沿图里的步骤走：节点文案来自 STEP_REGISTRY */
 export const HUB_FLOW: FlowDiagramSpec = {
-  title: "UniAgent · 提问怎么被做完",
+  title: "OwnAgent · 提问怎么被做完",
   hint: "点节点，下方标题必须是同一个词",
   nodes: STEP_IDS.map((id) => {
     const s = STEP_REGISTRY[id];

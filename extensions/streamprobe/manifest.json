@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "StreamProbe",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "AI 与流式 API 浏览器调试器 — 帧级查看 EventSource / fetch stream",
   "permissions": ["storage", "activeTab", "sidePanel", "tabs"],
   "host_permissions": ["http://*/*", "https://*/*"],

@@ -83,8 +83,8 @@ function parseLine(line: string): Parsed | null {
 
 
 /** SSE 协议层：原始流 ↔ UIMessage + 技术事件流 */
-
-export function SseSplitView() {
+export function SseSplitView({ variant = "lab" }: { variant?: "lab" | "product" }) {
+  const product = variant === "product";
 
   const [rawLines, setRawLines] = useState<string[]>([]);
 
@@ -262,21 +262,40 @@ export function SseSplitView() {
 
   return (
 
-    <div className="sse-split">
+    <div className={`sse-split${product ? " sse-split--product" : ""}`}>
+
+      {product ? (
+        <p className="sse-split-lead">
+          {running
+            ? "正在模拟一次 AI 流式回复…看左边 Raw 帧、右边解析结果。"
+            : rawLines.length > 0
+              ? "播放完毕。左边是 Network 里看不清的每一帧，右边是 AI SDK 语义字段。"
+              : "点下面按钮，模拟 Network 里一条 SSE 流从开始到结束。"}
+        </p>
+      ) : null}
 
       <div className="sse-split-actions">
 
-        <button type="button" className="cta sm" onClick={() => start(false)} disabled={running}>
-
-          ▶ send()
-
+        <button
+          type="button"
+          className={product ? "sp-play-btn" : "cta sm"}
+          onClick={() => start(false)}
+          disabled={running}
+        >
+          {product ? "▶ 播放模拟流" : "▶ send()"}
         </button>
 
+        {!product ? (
         <button type="button" className="ghost-btn sm" onClick={() => start(true)} disabled={running}>
 
           ↻ useAutoResume
 
         </button>
+        ) : (
+        <button type="button" className="ghost-btn sm" onClick={() => start(true)} disabled={running} title="演示断线续传">
+          ↻ 断线续传
+        </button>
+        )}
 
         {running && (
 
@@ -320,7 +339,11 @@ export function SseSplitView() {
 
         )}
 
-        {resumeMode && <span className="sse-resume-banner">pendingTurnId → GET /api/chat/resume</span>}
+        {resumeMode && (
+          <span className="sse-resume-banner">
+            {product ? "模拟：刷新后续读未完成的流" : "pendingTurnId → GET /api/chat/resume"}
+          </span>
+        )}
 
       </div>
 
@@ -328,27 +351,31 @@ export function SseSplitView() {
 
       <div className="sse-metrics">
 
-        <div><span>TTFB</span><strong>{ttfb !== null ? `${ttfb}ms` : "—"}</strong></div>
+        <div><span>{product ? "首帧耗时" : "TTFB"}</span><strong>{ttfb !== null ? `${ttfb}ms` : "—"}</strong></div>
 
-        <div><span>Chunks</span><strong>{rawLines.length}</strong></div>
+        <div><span>{product ? "帧数" : "Chunks"}</span><strong>{rawLines.length}</strong></div>
 
-        <div><span>Bytes</span><strong>{bytes}</strong></div>
+        <div><span>{product ? "体积" : "Bytes"}</span><strong>{bytes}</strong></div>
 
+        {!product ? (
         <div><span>Transport</span><strong>node:http</strong></div>
+        ) : null}
 
       </div>
 
 
 
-      <div className="sse-split-grid">
+      <div className={`sse-split-grid${product ? " sse-split-grid--dual" : ""}`}>
 
+        {!product ? (
         <TechEventLog events={logs} empty="点 send() 或 useAutoResume，看协议层 API…" />
+        ) : null}
 
 
 
         <div className="sse-pane">
 
-          <header>GraphQL SSE 原始 chunk</header>
+          <header>{product ? "左 · 原始 SSE 帧（Network 里看不清）" : "GraphQL SSE 原始 chunk"}</header>
 
           <pre>
 
@@ -372,7 +399,7 @@ export function SseSplitView() {
 
         <div className="sse-pane parsed">
 
-          <header>AI SDK UIMessage parse 结果</header>
+          <header>{product ? "右 · AI SDK 解析结果（UI 真正用的）" : "AI SDK UIMessage parse 结果"}</header>
 
           <div className="sse-ui-parts">
 
@@ -411,6 +438,13 @@ export function SseSplitView() {
         </div>
 
       </div>
+
+      {product && logs.length > 0 ? (
+        <details className="sse-tech-details">
+          <summary>技术细节（hook / parse / 续传日志）</summary>
+          <TechEventLog events={logs} empty="" />
+        </details>
+      ) : null}
 
     </div>
 

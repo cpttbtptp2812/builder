@@ -8,7 +8,7 @@ import { WorkGuide } from "../components/WorkGuide";
 import { WorkTechDeepLinks } from "../components/WorkTechDeepLinks";
 import { getWork } from "../data/works";
 
-/** UniAgent — 流式对话 + MCP 工具协议层 */
+/** OwnAgent — 流式对话 + MCP 工具协议层 */
 export function WorkAgent() {
   const [params] = useSearchParams();
   const [auto, setAuto] = useState(false);
@@ -40,7 +40,7 @@ export function WorkAgent() {
       <AgentFlowDiagram variant="agent" activeId={flowActive} onSelect={selectAgentFlow} compact />
 
       <section ref={chatRef} className="work-agent-product work-agent-product--hero">
-        <h3 className="work-subsection-title">UniAgent · 开箱即用对话</h3>
+        <h3 className="work-subsection-title">OwnAgent · 开箱即用对话</h3>
         <p className="work-subsection-lead">
           默认 Guest 模式免配置；点预设或输入问题即可看 Router → MCP 工具链与右侧 Trace。
         </p>

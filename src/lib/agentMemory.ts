@@ -113,6 +113,6 @@ export async function seedDefaultMemoriesIfEmpty() {
   const existing = await listLongTermMemories();
   if (existing.length) return existing;
   await upsertMemory("tech_focus", "Agent · MCP · Skills 运行时 · DOM 回放 SDK", "preference");
-  await upsertMemory("demo_site", "个人站 builder 含 UniAgent / SkillForge / Platform Lab", "fact");
+  await upsertMemory("demo_site", "个人站 builder 含 OwnAgent / SkillForge / Platform Lab", "fact");
   return listLongTermMemories();
 }
