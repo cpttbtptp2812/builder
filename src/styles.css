@@ -18871,7 +18871,7 @@ input.replay-typing {
   top: 0;
   z-index: 5;
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 0.3rem;
   padding: 0.3rem;
   margin-bottom: 1rem;
@@ -19157,6 +19157,128 @@ input.replay-typing {
 .own-route-terms.empty {
   font-size: 0.7rem;
   color: #d6d3d1;
+}
+
+.own-guard-caps {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 0.85rem;
+}
+
+.own-guard-chip {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  border-radius: 999px;
+  padding: 0.18rem 0.6rem;
+  text-transform: uppercase;
+}
+
+.own-guard-chip.read {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.own-guard-chip.mutate {
+  background: #fff7ed;
+  color: #c2410c;
+}
+
+.own-guard-chip.abstain {
+  background: #f5f5f4;
+  color: #57534e;
+}
+
+.own-guard-caps em {
+  font-size: 0.8rem;
+  color: #78716c;
+}
+
+.own-guard-result pre {
+  white-space: pre-wrap;
+  font-size: 0.82rem;
+  line-height: 1.65;
+  background: #fafaf9;
+  border: 1px solid rgba(42, 36, 32, 0.08);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  margin: 0.75rem 0;
+}
+
+.own-guard-outcome {
+  font-size: 0.82rem;
+  margin: 0.75rem 0 0;
+}
+
+.own-guard-cites {
+  list-style: none;
+  margin: 0 0 0.75rem;
+  padding: 0;
+  font-size: 0.78rem;
+  color: #44403c;
+}
+
+.own-guard-cites li {
+  margin: 0.25rem 0;
+}
+
+.own-guard-hitl {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.own-guard-hitl button {
+  border: 0;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  background: #7c3aed;
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+}
+
+.own-guard-hitl button.ghost {
+  background: #e7e5e4;
+  color: #44403c;
+}
+
+.own-guard-eval {
+  margin-top: 1.25rem;
+}
+
+.own-guard-eval h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.85rem;
+}
+
+.own-guard-eval ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.own-guard-eval li {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  font-size: 0.75rem;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(42, 36, 32, 0.06);
+}
+
+.own-guard-eval li.pass strong {
+  color: #047857;
+}
+
+.own-guard-eval li.fail strong {
+  color: #b91c1c;
+}
+
+.own-guard-tickets {
+  font-size: 0.72rem;
+  color: #78716c;
+  margin: 0.75rem 0 0;
 }
 
 @media (max-width: 1000px) {

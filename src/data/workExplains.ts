@@ -188,18 +188,19 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   ownagent: {
     slug: "ownagent",
-    oneLiner: "SSE 累积 tool_call 做 Agent Loop；SKILL.md 打分选技能；进程内 MCP 执行工具；RAG 命中带 chunkId。",
-    demoProves: "路由打分可见；检索带 chunkId；时间线展开 tool 入参与返回；评测输出命中率与失败样本。",
+    oneLiner: "SSE 累积 tool_call 做 Agent Loop；SKILL.md 打分选技能；进程内 MCP 执行工具；问句先锁 read / mutate / abstain。",
+    demoProves: "路由打分可见；检索带 chunkId；开通 VPN 只出工单；评测输出命中率与误开通次数。",
     steps: [
       "「对话」提问 → 看流式回复与工具调用",
       "「运行追踪」跑一次 → 时间线逐步追加，可展开 payload",
       "「知识检索」搜关键词 → 看召回片段与打分",
       "「技能路由」输入一句话 → 看 trigger 打分选中谁",
       "「回归评测」一键跑用例 → 命中率与工具耗时",
+      "「能力锁」问年假 / 开通 VPN → 看出处编号或工单预演",
     ],
     compare: {
       usual: { title: "SDK 封装成黑盒", desc: "出错只看到一条 pending SSE" },
-      here: { title: "Loop / MCP / RAG / Trace 拆开", desc: "路由分数、工具入参、chunkId 都能对账" },
+      here: { title: "Loop / MCP / 能力锁拆开", desc: "路由分数、条款编号、工单状态都能对账" },
     },
   },
 

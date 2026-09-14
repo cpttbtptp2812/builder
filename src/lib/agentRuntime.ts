@@ -261,4 +261,6 @@ export const AGENT_QUICK_PROMPTS = [
   { label: "站点是否正常", text: "帮我检查一下这个网站正不正常" },
   { label: "DOM 分析", text: "分析当前页面的 DOM 结构，统计可交互元素" },
   { label: "自动化流程", text: "帮我入队一个改价上架的 workflow，并说明会执行哪些步骤" },
+  { label: "年假几天", text: "满一年年假几天" },
+  { label: "开通 VPN", text: "帮我开通公司 VPN" },
 ] as const;

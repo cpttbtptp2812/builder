@@ -1,11 +1,13 @@
 /** Agent Skills — 技术向 Skill 注册表 + 流水线运行时 */
 
 import { mcpServer } from "./mcpServer";
+import { runPolicyDesk } from "./policyDesk";
 
 import domProbeMd from "../skills/dom-probe/SKILL.md?raw";
 import siteAnalyzerMd from "../skills/site-analyzer/SKILL.md?raw";
 import skillRouterMd from "../skills/skill-router/SKILL.md?raw";
 import workflowOrchestratorMd from "../skills/workflow-orchestrator/SKILL.md?raw";
+import policyDeskMd from "../skills/policy-desk/SKILL.md?raw";
 
 export type SkillStep = {
   id: string;
@@ -169,6 +171,27 @@ export const AGENT_SKILLS: AgentSkill[] = [
       },
     ],
   },
+  {
+    id: "policy-desk",
+    name: "policy-desk",
+    skillPath: "src/skills/policy-desk/SKILL.md",
+    description: "制度值班 — 能力信封 · 出处锁 · 工单预演",
+    triggers: [
+      "年假", "休假", "报销", "加班", "vpn", "开通", "权限", "工单", "制度", "手册",
+      "请假", "抵假", "发票",
+    ],
+    tools: ["policy_search", "ticket_draft", "ticket_commit"],
+    plan: ["能力信封分流", "policy_search 出处锁", "mutate 则 ticket_draft", "人点允许才提交"],
+    manifest: policyDeskMd,
+    steps: [
+      {
+        id: "desk",
+        label: "policy-desk · 信封 + 出处 / 工单",
+        tool: "__run_policy_desk__",
+        args: (ctx) => ({ query: ctx.query }),
+      },
+    ],
+  },
 ];
 
 export const SKILL_ROUTER_DOC = skillRouterMd;
@@ -177,6 +200,7 @@ export const ROUTER_EXAMPLES = [
   { label: "站点性能审计", query: "分析本站性能和探活 metrics" },
   { label: "DOM 定位探针", query: "dom snapshot 元素定位 a11y" },
   { label: "自动化 workflow", query: "执行 workflow 自动化回放流程" },
+  { label: "制度值班", query: "满一年年假几天" },
 ] as const;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -294,6 +318,25 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
         content: {
           dashboard: { domProbe: analysis },
           meta: { skill: "dom-probe", locatorLab: "/work/locator" },
+        },
+      };
+    }
+
+    case "__run_policy_desk__": {
+      const desk = runPolicyDesk(String(args.query ?? ""));
+      return {
+        content: {
+          dashboard: {
+            policy: {
+              capability: desk.capability.cap,
+              outcome: desk.outcome,
+              ticketId: desk.ticket?.id,
+              ticketStatus: desk.ticket?.status,
+              citations: desk.citations.map((c) => c.id),
+            },
+          },
+          markdown: desk.markdown,
+          meta: { skill: "policy-desk", outcome: desk.outcome },
         },
       };
     }

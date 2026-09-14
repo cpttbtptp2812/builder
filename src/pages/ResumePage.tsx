@@ -69,7 +69,7 @@ export function ResumePage() {
         <section className="resume-section resume-section-projects">
           <h2>项目经历</h2>
           <p className="resume-section-lead">
-            代表作三条：OwnAgent（Agent Loop / MCP / RAG）、iMean（调度 / 定位 / 流式）、剑池（虚拟滚动 / 渲染治理）。
+            代表作三条：OwnAgent（Agent Loop / MCP / 能力锁）、iMean（调度 / 定位 / 流式）、剑池（虚拟滚动 / 渲染治理）。
           </p>
           <div className="resume-project-grid">
             {[...resumeProjects]

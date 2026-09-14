@@ -68,6 +68,41 @@ export const MCP_TOOLS: McpTool[] = [
       required: ["url"],
     },
   },
+  {
+    name: "policy_search",
+    description: "Search policy handbook; hits include clause id for citation lock",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "制度问句" },
+        topK: { type: "number", description: "Max clauses" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "ticket_draft",
+    description: "Dry-run a mutate action as a ticket; does not provision anything",
+    inputSchema: {
+      type: "object",
+      properties: {
+        action: { type: "string", description: "vpn.provision 等" },
+        title: { type: "string" },
+      },
+      required: ["action"],
+    },
+  },
+  {
+    name: "ticket_commit",
+    description: "Commit a drafted ticket; rejected unless HITL allow() already happened",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticketId: { type: "string" },
+      },
+      required: ["ticketId"],
+    },
+  },
 ];
 
 export function getMcpTool(name: string) {

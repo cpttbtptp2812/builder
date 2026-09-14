@@ -3,6 +3,7 @@
 import { dbAll, dbRun, nowIso } from "./db.ts";
 import { formatRagContext, retrieveRagFromDb } from "./rag.ts";
 import { explainDiscovery, runSkillOnServer, getSkill } from "./skills.ts";
+import { classifyCapability } from "../src/lib/policyDesk.ts";
 import { ragHitsForMcp } from "./rag.ts";
 
 export function listMemories(sessionId: string) {
@@ -62,6 +63,10 @@ function pickSkill(query: string): { skillId: string | null; hits: string[]; sco
   }
   if (/是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|本站是干嘛|这个站是/i.test(query)) {
     return { skillId: null, hits: [], score: 0, kind: "about" };
+  }
+  const cap = classifyCapability(query);
+  if (cap.matched) {
+    return { skillId: "policy-desk", hits: [cap.cap], score: 3, kind: "skill" };
   }
   if (/介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent/i.test(query)) {
     return { skillId: null, hits: [], score: 0, kind: "knowledge" };

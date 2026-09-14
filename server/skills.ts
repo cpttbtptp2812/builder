@@ -5,6 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dbRun, nowIso } from "./db.ts";
 import { ragHitsForMcp } from "./rag.ts";
+import { runPolicyDesk, searchPolicy, draftTicket, commitTicket } from "../src/lib/policyDesk.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "src", "skills");
@@ -87,6 +88,17 @@ export const AGENT_SKILLS: AgentSkill[] = [
       { id: "snap", label: "browser_snapshot 执行面", tool: "browser_snapshot", args: { compact: true } },
       { id: "summary", label: "TaskQueue 入队摘要", tool: "__compose_workflow_trace__", args: "dynamic" },
     ],
+  },
+  {
+    id: "policy-desk",
+    name: "policy-desk",
+    skillPath: "src/skills/policy-desk/SKILL.md",
+    description: "制度值班 — 能力信封 · 出处锁 · 工单预演",
+    triggers: ["年假", "休假", "报销", "加班", "vpn", "开通", "权限", "工单", "制度", "手册"],
+    tools: ["policy_search", "ticket_draft", "ticket_commit"],
+    plan: ["能力信封分流", "policy_search 出处锁", "mutate 则 ticket_draft"],
+    manifest: readSkillMd("policy-desk"),
+    steps: [{ id: "desk", label: "policy-desk", tool: "__run_policy_desk__", args: "dynamic" }],
   },
 ];
 
@@ -235,6 +247,29 @@ async function callTool(
           meta: { skill: "dom-probe", runtime: "server" },
         },
       };
+    case "policy_search":
+      return {
+        content: {
+          query: String(args.query ?? ""),
+          hits: searchPolicy(String(args.query ?? ""), Number(args.topK ?? 4)),
+        },
+      };
+    case "ticket_draft":
+      return { content: draftTicket(String(args.action ?? "vpn.provision"), String(args.title ?? "权限变更（预演）")) };
+    case "ticket_commit": {
+      const out = commitTicket(String(args.ticketId ?? ""));
+      return out.ok ? { content: out } : { content: out, isError: true as const };
+    }
+    case "__run_policy_desk__": {
+      const desk = runPolicyDesk(String(args.query ?? ctx.vars.query ?? ""), { persistTicket: false });
+      return {
+        content: {
+          dashboard: { policy: { capability: desk.capability.cap, outcome: desk.outcome } },
+          markdown: desk.markdown,
+          meta: { skill: "policy-desk", outcome: desk.outcome },
+        },
+      };
+    }
     case "__compose_workflow_trace__": {
       const wf = ctx.vars.workflowResult as Record<string, unknown>;
       const snap = ctx.vars.snapshotResult as ClientCtx["clientSnapshot"];
@@ -262,6 +297,7 @@ function resolveArgs(step: AgentSkill["steps"][0], ctx: { vars: Record<string, u
     if (step.tool === "__compose_workflow_trace__") {
       return { workflow: ctx.vars.workflowResult, snapshot: ctx.vars.snapshotResult };
     }
+    if (step.tool === "__run_policy_desk__") return { query: ctx.vars.query ?? "" };
     return {};
   }
   return step.args;
@@ -276,7 +312,7 @@ export async function runSkillOnServer(
   const skill = getSkill(skillId);
   if (!skill) throw new Error(`Unknown skill: ${skillId}`);
 
-  const ctx = { vars: {} as Record<string, unknown>, ...clientCtx };
+  const ctx = { vars: { query } as Record<string, unknown>, ...clientCtx };
   const trace: SkillTraceStep[] = [];
   const t0 = performance.now();
   let lastResult: unknown = null;
@@ -327,6 +363,8 @@ export const ROUTER_EVAL_CASES = [
   { id: "r3", query: "workflow 入队执行 replay", expectedSkillId: "workflow-orchestrator" },
   { id: "r4", query: "http_probe 探活健康检查", expectedSkillId: "site-analyzer" },
   { id: "r5", query: "a11y snapshot 浏览器快照", expectedSkillId: "dom-probe" },
+  { id: "r6", query: "满一年年假几天制度怎么规定", expectedSkillId: "policy-desk" },
+  { id: "r7", query: "帮我开通公司 VPN 权限", expectedSkillId: "policy-desk" },
 ];
 
 export function runRouterEval() {

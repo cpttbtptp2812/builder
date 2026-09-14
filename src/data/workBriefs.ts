@@ -1,4 +1,4 @@
-/** 各项目个人笔记 — 随手记风格，首页弹框用 */
+﻿/** 各项目个人笔记 — 随手记风格，首页弹框用 */
 
 export type TechHighlight = {
   title: string;

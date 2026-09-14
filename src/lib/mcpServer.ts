@@ -4,6 +4,7 @@ import { matchProject } from "../data/knowledge";
 import { ragHitsForMcp } from "./ragEngine";
 import { REPLAY_STEPS, SCENARIOS } from "../data/scenarios";
 import { MCP_TOOLS, validateParams, type McpTool } from "./mcpBridgeLab";
+import { commitTicket, draftTicket, searchPolicy } from "./policyDesk";
 
 export type JsonRpcRequest = {
   jsonrpc: "2.0";
@@ -174,6 +175,32 @@ export class McpInProcessServer {
             hint: "iframe 将加载该 URL（受 CORS / X-Frame-Options 限制）",
           },
         };
+
+      case "policy_search":
+        return {
+          content: {
+            query: String(args.query ?? ""),
+            hits: searchPolicy(String(args.query ?? ""), Number(args.topK ?? 4)).map((h) => ({
+              chunkId: h.id,
+              text: h.text,
+              score: h.score,
+              status: h.status,
+              slot: h.slot,
+              value: h.value,
+            })),
+          },
+        };
+
+      case "ticket_draft":
+        return {
+          content: draftTicket(String(args.action ?? "vpn.provision"), String(args.title ?? "权限变更（预演）")),
+        };
+
+      case "ticket_commit": {
+        const out = commitTicket(String(args.ticketId ?? ""));
+        if (!out.ok) return { content: out, isError: true };
+        return { content: { ...out, committed: true } };
+      }
 
       case "browser_snapshot": {
         const root =

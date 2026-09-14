@@ -6,6 +6,8 @@ const PRESETS = [
   "看看页面里可交互元素的 dom 定位分布",
   "跑一遍改价上架的自动化流程",
   "今天天气怎么样",
+  "满一年年假几天",
+  "帮我开通公司 VPN",
 ];
 
 /** OwnAgent · 技能路由 — trigger 加权打分，看清为什么选中这个技能 */
@@ -61,7 +63,7 @@ export function SkillRoutePanel() {
                 <code>{winner.skill.tools.join(" → ")}</code>
               </>
             ) : (
-              <>没有技能命中（都是 0 分），会兜底走 site-analyzer</>
+              <>没有技能命中（都是 0 分），停住不执行</>
             )}
           </p>
           <ul className="own-route-list">

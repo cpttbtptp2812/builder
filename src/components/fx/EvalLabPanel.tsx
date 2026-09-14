@@ -7,6 +7,7 @@ import {
   type RouterEvalRow,
   type ToolMetrics,
 } from "../../lib/evalHarness";
+import { policyEvalSummary, runPolicyEval } from "../../lib/policyDesk";
 
 type Props = {
   compact?: boolean;
@@ -22,6 +23,8 @@ export function EvalLabPanel({ compact = false }: Props) {
 
   const summary = useMemo(() => routerEvalSummary(evalRows), [evalRows]);
   const fails = useMemo(() => evalRows.filter((r) => !r.pass), [evalRows]);
+  const policyRows = useMemo(() => runPolicyEval(), []);
+  const policySummary = useMemo(() => policyEvalSummary(policyRows), [policyRows]);
 
   const runRouter = useCallback(async () => {
     setRunning(true);
@@ -175,6 +178,25 @@ export function EvalLabPanel({ compact = false }: Props) {
           </table>
         </details>
       )}
+
+      {!compact ? (
+        <section className="eval-lab-fails">
+          <h4>
+            能力锁评测 {policySummary.pass}/{policySummary.total} · 误开通 {policySummary.leakedCommit}
+          </h4>
+          <ul>
+            {policyRows.map((row) => (
+              <li key={row.id}>
+                <strong>{row.query}</strong>
+                <span>
+                  {row.expectedCap}/{row.expectedOutcome} → {row.predictedCap}/{row.predictedOutcome}{" "}
+                  {row.pass ? "✓" : "✗"}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {compact && (
         <p className="eval-lab-more">

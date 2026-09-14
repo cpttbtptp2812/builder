@@ -6,8 +6,9 @@ import { EvalLabPanel } from "../components/fx/EvalLabPanel";
 import { RagPanel } from "../components/ownagent/RagPanel";
 import { SkillRoutePanel } from "../components/ownagent/SkillRoutePanel";
 import { TracePanel } from "../components/ownagent/TracePanel";
+import { GuardPanel } from "../components/ownagent/GuardPanel";
 
-type PanelId = "chat" | "trace" | "rag" | "skills" | "eval" | "arch";
+type PanelId = "chat" | "trace" | "rag" | "skills" | "eval" | "guard" | "arch";
 
 const PANELS: { id: PanelId; label: string; hint: string }[] = [
   { id: "chat", label: "对话", hint: "流式回复 + 工具调用" },
@@ -15,6 +16,7 @@ const PANELS: { id: PanelId; label: string; hint: string }[] = [
   { id: "rag", label: "知识检索", hint: "分块召回 · chunkId 溯源" },
   { id: "skills", label: "技能路由", hint: "trigger 打分 · Top-1" },
   { id: "eval", label: "回归评测", hint: "路由用例 · 工具指标" },
+  { id: "guard", label: "能力锁", hint: "信封分流 · 工单预演" },
   { id: "arch", label: "能力全景", hint: "整条链路流程图" },
 ];
 
@@ -22,8 +24,8 @@ const CAPS = [
   { k: "Agent Loop", v: "流式解析 · tool_call 累积 · 最多 8 轮迭代" },
   { k: "MCP Server", v: "进程内 JSON-RPC 2.0 · Schema 校验" },
   { k: "RAG", v: "文档分块 · 混合打分 · chunkId 引用" },
-  { k: "Skills", v: "SKILL.md manifest · trigger 加权路由" },
-  { k: "可观测", v: "TraceSpan 时间线 · 本地历史" },
+  { k: "Skills", v: "SKILL.md · 含制度值班 policy-desk" },
+  { k: "能力锁", v: "read / mutate / abstain · HITL 工单" },
   { k: "双运行时", v: "SQLite 优先 · 失败降级浏览器内" },
 ];
 
@@ -52,7 +54,7 @@ export function WorkOwnAgent() {
           <h1>OwnAgent</h1>
           <p className="own-tagline">
             SSE 累积 <code>tool_call</code>，MCP 用 JSON-RPC 调工具，SKILL.md 打分选技能，RAG 用 <code>chunkId</code> 对账。
-            工具失败打成 <code>isError</code> 回流，一轮最多 8 次迭代。
+            问句先锁 <code>read / mutate / abstain</code>，改权限只预演工单。
           </p>
           <BackendStatusBar compact />
         </div>
@@ -87,6 +89,7 @@ export function WorkOwnAgent() {
         {active === "trace" ? <TracePanel /> : null}
         {active === "rag" ? <RagPanel /> : null}
         {active === "skills" ? <SkillRoutePanel /> : null}
+        {active === "guard" ? <GuardPanel /> : null}
         {active === "eval" ? (
           <div className="own-panel">
             <p className="own-panel-lead">

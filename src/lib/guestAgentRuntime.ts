@@ -12,6 +12,7 @@ import { runGuestAgentAsync } from "./backendBridge";
 import { mcpServer } from "./mcpServer";
 import type { AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
+import { classifyCapability } from "./policyDesk";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -74,6 +75,12 @@ function pickSkill(query: string): SkillPick {
   if (ABOUT_SITE_INTENT.test(query)) {
     return { kind: "about-site", reason: "问的是这个网站是什么，不是让它去探活" };
   }
+
+  const cap = classifyCapability(query);
+  if (cap.matched && getSkill("policy-desk")) {
+    return { kind: "skill", skill: getSkill("policy-desk")!, hits: [cap.cap], score: 3 };
+  }
+
   if (KNOWLEDGE_INTENT.test(query)) {
     return { kind: "knowledge", reason: "问的是项目 / 经历类信息，走知识库检索" };
   }
@@ -100,11 +107,12 @@ function synthesizeNoMatch(query: string): string {
     "",
     "路由规则是：每个技能在 SKILL.md 里声明 triggers，命中长词记 2 分、短词 1 分，Top-1 才进入执行；一个都没命中就停在这里，不猜。",
     "",
-    "现在装了三个技能，可以这样问：",
+    "现在装了四个技能，可以这样问：",
     "",
     "- **site-analyzer** — 「帮我检查一下这个网站正不正常」「分析本站性能和 ttfb」",
     "- **dom-probe** — 「分析当前页面的 DOM 结构」「统计可交互元素」",
     "- **workflow-orchestrator** — 「跑一遍改价上架的自动化流程」",
+    "- **policy-desk** — 「满一年年假几天」「帮我开通 VPN」「公司什么时候上市」",
     "",
     "想了解项目本身，直接问「介绍一下 iMean 项目」会走知识库检索。",
   ].join("\n");
@@ -222,7 +230,7 @@ function synthesizeAboutSite(hits: { title: string; score: number; excerpt: stri
   const lines = [
     "**这是王旭的个人作品站，主项目是 OwnAgent。**",
     "",
-    "OwnAgent 是一个跑在浏览器里的 AI Agent 平台：你输入一句话，它先做技能路由，再调 MCP 工具，最后流式作答。上面六个 Tab 分别是对话、运行追踪、知识检索、技能路由、回归评测、能力全景。",
+    "OwnAgent 是一个跑在浏览器里的 AI Agent 平台：你输入一句话，它先做技能路由，再调 MCP 工具，最后流式作答。上面 Tab 有对话、运行追踪、知识检索、技能路由、回归评测、能力锁、能力全景。",
     "",
     "它**不是**聊天套壳。打开就能跑，不需要 API Key；每一步的耗时和工具返回都能在「运行追踪」里展开。",
   ];
@@ -253,6 +261,8 @@ function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: strin
       return synthesizeDomProbe(result);
     case "workflow-orchestrator":
       return synthesizeWorkflow(result);
+    case "policy-desk":
+      return result.markdown ?? "制度值班已完成，详见能力锁面板。";
     default:
       return "任务已完成，详见右侧 MCP Trace。";
   }
