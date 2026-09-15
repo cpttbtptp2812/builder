@@ -34,6 +34,21 @@ app.use(
 
 seedRagCorpus();
 
+app.post("/api/visits", async (c) => {
+  const body = await c.req.json<{ vid?: string }>().catch(() => ({ vid: "" }));
+  const vid = String(body.vid ?? "").slice(0, 80);
+  dbRun("UPDATE site_visits SET pv = pv + 1 WHERE id = 1");
+  if (vid) {
+    const existed = dbGet<{ vid: string }>("SELECT vid FROM site_visitors WHERE vid = ?", [vid]);
+    if (!existed) {
+      dbRun("INSERT INTO site_visitors (vid, first_seen) VALUES (?, ?)", [vid, new Date().toISOString()]);
+      dbRun("UPDATE site_visits SET uv = uv + 1 WHERE id = 1");
+    }
+  }
+  const row = dbGet<{ uv: number; pv: number }>("SELECT uv, pv FROM site_visits WHERE id = 1");
+  return c.json({ uv: row?.uv ?? 0, pv: row?.pv ?? 0 });
+});
+
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");
   const workflows = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM workflow_runs");

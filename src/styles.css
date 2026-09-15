@@ -4723,6 +4723,20 @@ textarea {
   font-variant-numeric: tabular-nums;
 }
 
+.site-home-visitor {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.5;
+  color: #64748b;
+  font-weight: 500;
+}
+
+.site-home-visitor strong {
+  color: #0d9488;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
 .site-home-compact .works-section-head {
   margin-bottom: 0.65rem;
 }
