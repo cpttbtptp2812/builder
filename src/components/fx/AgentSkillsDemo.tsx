@@ -22,6 +22,8 @@ const SKILL_LABELS: Record<string, string> = {
   "site-analyzer": "Site Audit",
   "dom-probe": "DOM Probe",
   "workflow-orchestrator": "Workflow",
+  "policy-desk": "Policy Desk",
+  "knowledge-lookup": "Knowledge",
 };
 
 function MetricCard({ label, value, unit, tone = "neutral" }: { label: string; value: string | number | null | undefined; unit?: string; tone?: "ok" | "fail" | "neutral" }) {

@@ -1,6 +1,7 @@
 /** Guest Agent — 优先服务端 SQLite+MCP，回退浏览器内运行时 */
 
 import {
+  AGENT_SKILLS,
   explainDiscovery,
   getSkill,
   runSkill,
@@ -107,12 +108,9 @@ function synthesizeNoMatch(query: string): string {
     "",
     "路由规则是：每个技能在 SKILL.md 里声明 triggers，命中长词记 2 分、短词 1 分，Top-1 才进入执行；一个都没命中就停在这里，不猜。",
     "",
-    "现在装了四个技能，可以这样问：",
+    `现在装了 ${AGENT_SKILLS.length} 个可运行技能，可以这样问：`,
     "",
-    "- **site-analyzer** — 「帮我检查一下这个网站正不正常」「分析本站性能和 ttfb」",
-    "- **dom-probe** — 「分析当前页面的 DOM 结构」「统计可交互元素」",
-    "- **workflow-orchestrator** — 「跑一遍改价上架的自动化流程」",
-    "- **policy-desk** — 「满一年年假几天」「帮我开通 VPN」「公司什么时候上市」",
+    ...AGENT_SKILLS.map((s) => `- **${s.name}** — ${s.description}`),
     "",
     "想了解项目本身，直接问「介绍一下 iMean 项目」会走知识库检索。",
   ].join("\n");
@@ -263,6 +261,8 @@ function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: strin
       return synthesizeWorkflow(result);
     case "policy-desk":
       return result.markdown ?? "制度值班已完成，详见能力锁面板。";
+    case "knowledge-lookup":
+      return result.markdown ?? "检索完成，详见技能平台轨迹。";
     default:
       return "任务已完成，详见右侧 MCP Trace。";
   }

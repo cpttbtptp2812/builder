@@ -73,30 +73,12 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_clip_snippets_created ON clip_snippets(created_at DESC);
-
-  CREATE TABLE IF NOT EXISTS site_visits (
-    id INTEGER PRIMARY KEY CHECK (id = 1),
-    uv INTEGER NOT NULL DEFAULT 0,
-    pv INTEGER NOT NULL DEFAULT 0
-  );
-  INSERT OR IGNORE INTO site_visits (id, uv, pv) VALUES (1, 164, 0);
-
-  CREATE TABLE IF NOT EXISTS site_visitors (
-    vid TEXT PRIMARY KEY,
-    first_seen TEXT NOT NULL
-  );
 `);
 
 try {
   db.exec(`ALTER TABLE clip_snippets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`);
 } catch {
   /* column exists */
-}
-
-try {
-  db.exec(`UPDATE site_visits SET uv = 164 WHERE id = 1 AND uv < 164`);
-} catch {
-  /* table missing on very old files */
 }
 
 export function nowIso() {

@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { ExtensionHomeCard } from "../components/home/ExtensionHomeCard";
-import { HomeVisitorLine } from "../components/home/HomeVisitorLine";
 import { ToolkitHomeCard } from "../components/home/ToolkitHomeCard";
 import { FeaturedWorkCard } from "../components/home/FeaturedWorkCard";
 import { SiteFooter } from "../components/SiteFooter";
@@ -30,7 +29,6 @@ export function HomePage() {
             <strong className="site-home-tenure-inline">{formatWorkTenure(tenure)}</strong>
             ，{profile.homePitchBody}
           </p>
-          <HomeVisitorLine />
         </header>
 
         <section className="works-section works-section-imean">

@@ -1,8 +1,30 @@
 ---
 name: policy-desk
 description: 制度值班 — 能力信封分流，出处锁回答，改权限只预演工单
-triggers: 年假 · 休假 · 报销 · 加班 · VPN · 开通 · 权限 · 工单 · 制度
-tools: [policy_search, ticket_draft, ticket_commit]
+triggers:
+  - 年假
+  - 休假
+  - 报销
+  - 加班
+  - vpn
+  - 开通
+  - 权限
+  - 工单
+  - 制度
+  - 手册
+  - 请假
+  - 抵假
+  - 发票
+tools:
+  - policy_search
+  - ticket_draft
+  - ticket_commit
+steps:
+  - id: desk
+    label: policy-desk · 信封 + 出处 / 工单
+    tool: __run_policy_desk__
+    args:
+      query: "{{query}}"
 ---
 
 # policy-desk

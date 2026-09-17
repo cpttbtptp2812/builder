@@ -13,8 +13,9 @@ import {
 } from "./agent.ts";
 import { getChunkCount, seedRagCorpus } from "./seed.ts";
 import { retrieveRagFromDb } from "./rag.ts";
-import { explainDiscovery, runRouterEval, runSkillBenchmark, runSkillOnServer, AGENT_SKILLS } from "./skills.ts";
-import { dbGet, dbRun } from "./db.ts";
+import { explainDiscovery, runRouterEval, runSkillBenchmark, runSkillOnServer, SKILL_CATALOG } from "./skills.ts";
+import { parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
+import { dbGet } from "./db.ts";
 
 const app = new Hono();
 
@@ -33,21 +34,6 @@ app.use(
 );
 
 seedRagCorpus();
-
-app.post("/api/visits", async (c) => {
-  const body = await c.req.json<{ vid?: string }>().catch(() => ({ vid: "" }));
-  const vid = String(body.vid ?? "").slice(0, 80);
-  dbRun("UPDATE site_visits SET pv = pv + 1 WHERE id = 1");
-  if (vid) {
-    const existed = dbGet<{ vid: string }>("SELECT vid FROM site_visitors WHERE vid = ?", [vid]);
-    if (!existed) {
-      dbRun("INSERT INTO site_visitors (vid, first_seen) VALUES (?, ?)", [vid, new Date().toISOString()]);
-      dbRun("UPDATE site_visits SET uv = uv + 1 WHERE id = 1");
-    }
-  }
-  const row = dbGet<{ uv: number; pv: number }>("SELECT uv, pv FROM site_visits WHERE id = 1");
-  return c.json({ uv: row?.uv ?? 0, pv: row?.pv ?? 0 });
-});
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");
@@ -98,7 +84,25 @@ app.post("/api/skills/run", async (c) => {
   return c.json(result);
 });
 
-app.get("/api/skills/list", (c) => c.json({ skills: AGENT_SKILLS.map((s) => ({ id: s.id, name: s.name, plan: s.plan })) }));
+app.get("/api/skills/list", (c) =>
+  c.json({
+    skills: SKILL_CATALOG.map((s) => ({
+      id: s.id,
+      name: s.name,
+      description: s.description,
+      runnable: s.runnable,
+      plan: s.plan,
+      triggers: s.triggers,
+      tools: s.tools,
+      issues: s.parsed.issues,
+    })),
+  }),
+);
+
+app.post("/api/skills/parse", async (c) => {
+  const body = await c.req.json<{ markdown?: string }>().catch(() => ({ markdown: "" }));
+  return c.json(parseSkillMarkdown(body.markdown ?? ""));
+});
 
 app.post("/api/agent/guest", async (c) => {
   const body = await c.req.json<{

@@ -37,9 +37,12 @@ export function collectClientPerf(): Record<string, unknown> {
 export function captureDomSnapshot(root?: Element | null, compact = true) {
   const el =
     root ??
+    document.querySelector(".own-skill-forge") ??
+    document.querySelector(".own-agent") ??
     document.querySelector(".agent-product-live") ??
     document.querySelector(".skill-runtime-lab") ??
-    document.querySelector(".platform-lab");
+    document.querySelector(".platform-lab") ??
+    document.body;
   if (!el) return null;
 
   const nodes: { role: string; name: string; tag: string }[] = [];

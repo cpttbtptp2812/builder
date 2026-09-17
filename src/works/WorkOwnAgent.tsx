@@ -1,10 +1,11 @@
+import { useEffect, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { EvalLabPanel } from "../components/fx/EvalLabPanel";
 import { RagPanel } from "../components/ownagent/RagPanel";
-import { SkillRoutePanel } from "../components/ownagent/SkillRoutePanel";
+import { SkillPlatformPanel } from "../components/ownagent/SkillPlatformPanel";
 import { TracePanel } from "../components/ownagent/TracePanel";
 import { GuardPanel } from "../components/ownagent/GuardPanel";
 
@@ -14,7 +15,7 @@ const PANELS: { id: PanelId; label: string; hint: string }[] = [
   { id: "chat", label: "对话", hint: "流式回复 + 工具调用" },
   { id: "trace", label: "运行追踪", hint: "每步耗时 · 状态 · payload" },
   { id: "rag", label: "知识检索", hint: "分块召回 · chunkId 溯源" },
-  { id: "skills", label: "技能路由", hint: "trigger 打分 · Top-1" },
+  { id: "skills", label: "技能平台", hint: "跑技能 · 导入导出" },
   { id: "eval", label: "回归评测", hint: "路由用例 · 工具指标" },
   { id: "guard", label: "能力锁", hint: "信封分流 · 工单预演" },
   { id: "arch", label: "能力全景", hint: "整条链路流程图" },
@@ -24,7 +25,7 @@ const CAPS = [
   { k: "Agent Loop", v: "流式解析 · tool_call 累积 · 最多 8 轮迭代" },
   { k: "MCP Server", v: "进程内 JSON-RPC 2.0 · Schema 校验" },
   { k: "RAG", v: "文档分块 · 混合打分 · chunkId 引用" },
-  { k: "Skills", v: "SKILL.md · 含制度值班 policy-desk" },
+  { k: "Skills", v: "SKILL.md 解析 · 目录 · MCP 轨迹" },
   { k: "能力锁", v: "read / mutate / abstain · HITL 工单" },
   { k: "双运行时", v: "SQLite 优先 · 失败降级浏览器内" },
 ];
@@ -36,9 +37,15 @@ function isPanel(v: string | null): v is PanelId {
 /** OwnAgent — 浏览器内 AI Agent 平台（统一入口） */
 export function WorkOwnAgent() {
   const [params, setParams] = useSearchParams();
+  const stageRef = useRef<HTMLElement>(null);
   const raw = params.get("panel");
   const active: PanelId = isPanel(raw) ? raw : "chat";
   const current = PANELS.find((p) => p.id === active)!;
+
+  useEffect(() => {
+    if (!raw) return;
+    stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [active, raw]);
 
   function select(id: PanelId) {
     const next = new URLSearchParams(params);
@@ -84,11 +91,11 @@ export function WorkOwnAgent() {
         ))}
       </nav>
 
-      <section className="own-stage" aria-label={current.label}>
+      <section className="own-stage" aria-label={current.label} ref={stageRef}>
         {active === "chat" ? <AgentProductDemo /> : null}
         {active === "trace" ? <TracePanel /> : null}
         {active === "rag" ? <RagPanel /> : null}
-        {active === "skills" ? <SkillRoutePanel /> : null}
+        {active === "skills" ? <SkillPlatformPanel /> : null}
         {active === "guard" ? <GuardPanel /> : null}
         {active === "eval" ? (
           <div className="own-panel">

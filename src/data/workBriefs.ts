@@ -532,10 +532,10 @@ export const WORK_NOTES: Record<string, WorkNote> = {
         metric: "无框架 · 8 轮收敛",
       },
       {
-        title: "技能路由为什么可解释",
+        title: "技能目录从 SKILL.md 解析",
         analysis:
-          "每个能力写成 SKILL.md，声明 triggers / tools / steps。一句话进来先做加权打分：命中长词 2 分、短词 1 分，Top-1 才进执行。打分明细直接摊在页面上，路由错了能立刻看出是哪个 trigger 没覆盖到。",
-        metric: "打分可见 · 可回归",
+          "每个能力写成 SKILL.md。解析器抽出 YAML frontmatter（name / triggers / tools / steps）和正文，目录里对照原文与 AST。运行时把 {{query}} / {{probeUrl}} / $上一步结果 替换后再走 MCP。一句话进来先做加权打分：命中长词 2 分、短词 1 分，Top-1 才进执行。打分明细摊在页面上。",
+        metric: "文件即技能 · 解析可见 · 可运行",
       },
       {
         title: "RAG 的召回是能对账的",

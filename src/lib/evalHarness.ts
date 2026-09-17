@@ -34,6 +34,7 @@ export const ROUTER_EVAL_CASES: RouterEvalCase[] = [
   { id: "r5", query: "a11y snapshot 浏览器快照", expectedSkillId: "dom-probe", note: "快照 → DOM Skill" },
   { id: "r6", query: "满一年年假几天制度怎么规定", expectedSkillId: "policy-desk", note: "制度值班" },
   { id: "r7", query: "帮我开通公司 VPN 权限", expectedSkillId: "policy-desk", note: "改权限走工单" },
+  { id: "r8", query: "检索 iMean 定位语料 chunkId", expectedSkillId: "knowledge-lookup", note: "知识检索技能" },
 ];
 
 export function runRouterEval(): RouterEvalRow[] {

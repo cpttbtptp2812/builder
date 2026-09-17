@@ -205,9 +205,12 @@ export class McpInProcessServer {
       case "browser_snapshot": {
         const root =
           ctx?.snapshotRoot ??
+          document.querySelector(".own-skill-forge") ??
+          document.querySelector(".own-agent") ??
           document.querySelector(".agent-product-live") ??
           document.querySelector(".skill-runtime-lab") ??
-          document.querySelector(".mcp-preview-surface");
+          document.querySelector(".mcp-preview-surface") ??
+          document.body;
         if (!root) {
           return { content: { error: "snapshot root not found" }, isError: true };
         }

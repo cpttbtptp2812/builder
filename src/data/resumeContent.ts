@@ -185,7 +185,7 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
           {
             heading: "SKILL.md 路由",
             bullets: [
-              "技能文件声明 name、triggers、tools、steps。问句分词后对 trigger 加权：长词 2 分、短词 1 分，取 Top-1",
+              "技能文件声明 name、triggers、tools、steps。目录从 src/skills/*/SKILL.md 解析 frontmatter 成 AST，对照原文后按 steps 跑 MCP；问句对 trigger 加权：长词 2 分、短词 1 分，Top-1 才进入执行",
               "全员零分则停住，不默认落到站点体检一类兜底技能——否则所有问题走同一条链，路由等于没做",
               "explainDiscovery 返回完整打分矩阵，侧栏可对照 SKILL.md，改词能看见谁被抬高、谁被压掉",
               "业务技能 policy-desk：年假 / 报销 / 开通 VPN 走制度值班，不再全是站点体检",

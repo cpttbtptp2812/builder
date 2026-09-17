@@ -30,7 +30,7 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   skills: {
     slug: "skills",
-    oneLiner: "SkillForge：SKILL.md 定义意图与工具链 — Router 可见打分，三个 Skill 跑真实 MCP 流水线并出指标面板。",
+    oneLiner: "SkillForge：SKILL.md 解析成目录 — 对照原文与 AST，可运行技能走 MCP 流水线并出轨迹。",
     demoProves: "Router Lab 改意图看 score breakdown；Site Audit 看 fetch + Performance API；DOM Probe 看 role 分布；每步 Trace 可展开 JSON。",
     steps: [
       "Router Lab — 输入「分析性能 metrics」→ 看 trigger 矩阵 → Run site-analyzer",
@@ -188,13 +188,13 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   ownagent: {
     slug: "ownagent",
-    oneLiner: "SSE 累积 tool_call 做 Agent Loop；SKILL.md 打分选技能；进程内 MCP 执行工具；问句先锁 read / mutate / abstain。",
-    demoProves: "路由打分可见；检索带 chunkId；开通 VPN 只出工单；评测输出命中率与误开通次数。",
+    oneLiner: "SSE 累积 tool_call 做 Agent Loop；SKILL.md 解析成目录并打分选技能；进程内 MCP 执行工具；问句先锁 read / mutate / abstain。",
+    demoProves: "技能目录对照原文与 AST；路由打分可见；检索带 chunkId；开通 VPN 只出工单；评测输出命中率与误开通次数。",
     steps: [
       "「对话」提问 → 看流式回复与工具调用",
       "「运行追踪」跑一次 → 时间线逐步追加，可展开 payload",
       "「知识检索」搜关键词 → 看召回片段与打分",
-      "「技能路由」输入一句话 → 看 trigger 打分选中谁",
+      "「技能平台」打开一份 SKILL.md → 看解析 / 对照原文 / 运行轨迹",
       "「回归评测」一键跑用例 → 命中率与工具耗时",
       "「能力锁」问年假 / 开通 VPN → 看出处编号或工单预演",
     ],

@@ -274,6 +274,7 @@ export async function runGuestAgentOnServer(
   const dom = dashboard?.domProbe as { totalNodes?: number; interactive?: number } | undefined;
   const wf = dashboard?.workflow as { runId?: string; workflowId?: string; status?: string } | undefined;
 
+  const md = (result as { markdown?: string })?.markdown;
   let assistantText = `> 「${query}」→ 技能 **${skill.name}**\n\n任务已完成（服务端 MCP + SQLite）。`;
   if (skill.id === "site-analyzer" && http) {
     const ok = http.ok !== false;
@@ -288,6 +289,8 @@ export async function runGuestAgentOnServer(
     assistantText = `> 「${query}」→ 技能 **dom-probe**\n\n总节点 ${dom.totalNodes ?? "—"}，可交互 ${dom.interactive ?? "—"}。`;
   } else if (wf) {
     assistantText = `> 「${query}」→ 技能 **workflow-orchestrator**\n\n已入队 ${wf.workflowId ?? "—"}，runId ${wf.runId ?? "—"}，状态 ${wf.status ?? "queued"}。`;
+  } else if (md) {
+    assistantText = `> 「${query}」→ 技能 **${skill.name}**\n\n${md}`;
   }
 
   appendSessionTurn(sessionId, "user", query);

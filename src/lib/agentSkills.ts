@@ -1,13 +1,8 @@
-/** Agent Skills — 技术向 Skill 注册表 + 流水线运行时 */
+/** Agent Skills — SKILL.md 解析注册表 + 流水线运行时 */
 
 import { mcpServer } from "./mcpServer";
 import { runPolicyDesk } from "./policyDesk";
-
-import domProbeMd from "../skills/dom-probe/SKILL.md?raw";
-import siteAnalyzerMd from "../skills/site-analyzer/SKILL.md?raw";
-import skillRouterMd from "../skills/skill-router/SKILL.md?raw";
-import workflowOrchestratorMd from "../skills/workflow-orchestrator/SKILL.md?raw";
-import policyDeskMd from "../skills/policy-desk/SKILL.md?raw";
+import { hydrateSkill, resolveStepArgs, skillIdFromPath, type SkillManifest } from "./skillMarkdown";
 
 export type SkillStep = {
   id: string;
@@ -16,17 +11,7 @@ export type SkillStep = {
   args: Record<string, unknown> | ((ctx: SkillRunContext) => Record<string, unknown>);
 };
 
-export type AgentSkill = {
-  id: string;
-  name: string;
-  description: string;
-  skillPath: string;
-  triggers: string[];
-  tools: string[];
-  steps: SkillStep[];
-  manifest: string;
-  plan: string[];
-};
+export type AgentSkill = SkillManifest & { steps: SkillStep[] };
 
 export type SkillRunContext = {
   query: string;
@@ -64,149 +49,53 @@ const PROBE_URL =
     ? `${window.location.origin}${import.meta.env.BASE_URL}index.html`
     : "/index.html";
 
-export const AGENT_SKILLS: AgentSkill[] = [
-  {
-    id: "site-analyzer",
-    name: "site-analyzer",
-    skillPath: "src/skills/site-analyzer/SKILL.md",
-    description: "本站技术审计 — http_probe + DOM snapshot + Performance API",
-    triggers: [
-      "分析", "审计", "性能", "探活", "健康", "体检", "检查", "正常", "可用",
-      "打得开", "响应", "速度", "加载", "慢", "metrics", "latency", "ttfb", "probe", "status",
-    ],
-    tools: ["http_probe", "browser_snapshot"],
-    plan: ["http_probe HEAD", "browser_snapshot", "Performance API", "合成指标面板"],
-    manifest: siteAnalyzerMd,
-    steps: [
-      {
-        id: "probe",
-        label: "http_probe · 真实 fetch",
-        tool: "http_probe",
-        args: { url: PROBE_URL, method: "HEAD" },
-      },
-      {
-        id: "snapshot",
-        label: "browser_snapshot · a11y tree",
-        tool: "browser_snapshot",
-        args: { compact: true },
-      },
-      {
-        id: "perf",
-        label: "Performance API · Navigation Timing",
-        tool: "__perf_metrics__",
-        args: {},
-      },
-      {
-        id: "audit",
-        label: "合成 Site Audit Dashboard",
-        tool: "__compose_site_audit__",
-        args: (ctx) => ({
-          probe: ctx.vars.probeResult,
-          snapshot: ctx.vars.snapshotResult,
-          perf: ctx.vars.perfResult,
-        }),
-      },
-    ],
-  },
-  {
-    id: "dom-probe",
-    name: "dom-probe",
-    skillPath: "src/skills/dom-probe/SKILL.md",
-    description: "DOM 定位探针 — 可交互节点分布 · 树深度 · Locator 同源",
-    triggers: [
-      "dom", "定位", "snapshot", "a11y", "元素", "locator", "shadow",
-      "节点", "可交互", "页面结构", "结构", "选择器", "无障碍",
-    ],
-    tools: ["browser_snapshot"],
-    plan: ["browser_snapshot 全树", "节点角色统计", "深度 / 交互密度"],
-    manifest: domProbeMd,
-    steps: [
-      {
-        id: "snap",
-        label: "browser_snapshot · full tree",
-        tool: "browser_snapshot",
-        args: { compact: false },
-      },
-      {
-        id: "analyze",
-        label: "DOM 树分析 · role 分布",
-        tool: "__analyze_dom_tree__",
-        args: (ctx) => ({ snapshot: ctx.vars.snapshotResult }),
-      },
-    ],
-  },
-  {
-    id: "workflow-orchestrator",
-    name: "workflow-orchestrator",
-    skillPath: "src/skills/workflow-orchestrator/SKILL.md",
-    description: "iMean workflow 入队 + 执行面 snapshot — TaskQueue 上游",
-    triggers: [
-      "workflow", "自动化", "流程", "回放", "改价", "上架", "taskqueue",
-      "入队", "编排", "跑一遍", "执行任务",
-    ],
-    tools: ["workflow_run", "browser_snapshot"],
-    plan: ["workflow_run 入队", "browser_snapshot 执行面", "runId + steps 摘要"],
-    manifest: workflowOrchestratorMd,
-    steps: [
-      {
-        id: "run",
-        label: "workflow_run · cloud",
-        tool: "workflow_run",
-        args: { workflowId: "price-update", mode: "cloud" },
-      },
-      {
-        id: "snap",
-        label: "browser_snapshot 执行面",
-        tool: "browser_snapshot",
-        args: { compact: true },
-      },
-      {
-        id: "summary",
-        label: "TaskQueue 入队摘要",
-        tool: "__compose_workflow_trace__",
-        args: (ctx) => ({
-          workflow: ctx.vars.workflowResult,
-          snapshot: ctx.vars.snapshotResult,
-        }),
-      },
-    ],
-  },
-  {
-    id: "policy-desk",
-    name: "policy-desk",
-    skillPath: "src/skills/policy-desk/SKILL.md",
-    description: "制度值班 — 能力信封 · 出处锁 · 工单预演",
-    triggers: [
-      "年假", "休假", "报销", "加班", "vpn", "开通", "权限", "工单", "制度", "手册",
-      "请假", "抵假", "发票",
-    ],
-    tools: ["policy_search", "ticket_draft", "ticket_commit"],
-    plan: ["能力信封分流", "policy_search 出处锁", "mutate 则 ticket_draft", "人点允许才提交"],
-    manifest: policyDeskMd,
-    steps: [
-      {
-        id: "desk",
-        label: "policy-desk · 信封 + 出处 / 工单",
-        tool: "__run_policy_desk__",
-        args: (ctx) => ({ query: ctx.query }),
-      },
-    ],
-  },
+const SKILL_ORDER = [
+  "site-analyzer",
+  "dom-probe",
+  "workflow-orchestrator",
+  "policy-desk",
+  "knowledge-lookup",
+  "skill-router",
 ];
 
-export const SKILL_ROUTER_DOC = skillRouterMd;
+const skillFiles = import.meta.glob("../skills/*/SKILL.md", {
+  eager: true,
+  query: "?raw",
+  import: "default",
+}) as Record<string, string>;
+
+function loadCatalog(): AgentSkill[] {
+  const loaded = Object.entries(skillFiles).map(([filePath, raw]) => {
+    const id = skillIdFromPath(filePath);
+    return hydrateSkill(raw, { id, skillPath: `src/skills/${id}/SKILL.md` });
+  });
+  return loaded.sort((a, b) => {
+    const ia = SKILL_ORDER.indexOf(a.id);
+    const ib = SKILL_ORDER.indexOf(b.id);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
+}
+
+/** 目录里所有 SKILL.md（含仅解析、不可运行） */
+export const SKILL_CATALOG: AgentSkill[] = loadCatalog();
+
+/** 进入路由 / 执行链的技能：解析成功且有 steps */
+export const AGENT_SKILLS: AgentSkill[] = SKILL_CATALOG.filter((s) => s.runnable);
+
+export const SKILL_ROUTER_DOC = SKILL_CATALOG.find((s) => s.id === "skill-router")?.manifest ?? "";
 
 export const ROUTER_EXAMPLES = [
   { label: "站点性能审计", query: "分析本站性能和探活 metrics" },
   { label: "DOM 定位探针", query: "dom snapshot 元素定位 a11y" },
   { label: "自动化 workflow", query: "执行 workflow 自动化回放流程" },
   { label: "制度值班", query: "满一年年假几天" },
+  { label: "知识检索", query: "检索 iMean 定位语料 chunkId" },
 ] as const;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function getSkill(id: string) {
-  return AGENT_SKILLS.find((s) => s.id === id);
+  return SKILL_CATALOG.find((s) => s.id === id);
 }
 
 function scoreSkillDetailed(skill: AgentSkill, q: string): SkillDiscoveryRow {
@@ -243,9 +132,9 @@ export function discoverSkills(query: string): SkillCandidate[] {
 }
 
 type ProbeResult = { ok?: boolean; status?: number; latencyMs?: number; url?: string; error?: string };
-
 type SnapNode = { role: string; name: string; tag: string };
 type SnapResult = { nodes?: SnapNode[]; nodeCount?: number };
+type KnowledgeHit = { title?: string; chunkId?: string; score?: number; excerpt?: string };
 
 function collectPerfMetrics() {
   if (typeof performance === "undefined") return {};
@@ -279,10 +168,12 @@ function analyzeDomTree(snapshot: SnapResult | undefined) {
 }
 
 function storeStepResult(ctx: SkillRunContext, step: SkillStep, result: unknown) {
+  ctx.vars[step.id] = result;
   if (step.tool === "http_probe") ctx.vars.probeResult = result;
   if (step.tool === "browser_snapshot") ctx.vars.snapshotResult = result;
   if (step.tool === "workflow_run") ctx.vars.workflowResult = result;
   if (step.tool === "__perf_metrics__") ctx.vars.perfResult = result;
+  if (step.tool === "knowledge_search") ctx.vars.searchResult = result;
 }
 
 async function runInternalTool(name: string, args: Record<string, unknown>): Promise<{ content: unknown; isError?: boolean }> {
@@ -360,6 +251,29 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
       };
     }
 
+    case "__compose_knowledge__": {
+      const payload = args.hits as { hits?: KnowledgeHit[]; source?: string } | KnowledgeHit[] | undefined;
+      const hits = Array.isArray(payload) ? payload : payload?.hits ?? [];
+      const source = Array.isArray(payload) ? "" : payload?.source ?? "";
+      const lines = hits.map(
+        (h, i) => `${i + 1}. **${h.title ?? "hit"}** \`${h.chunkId ?? ""}\` score ${h.score ?? "—"} — ${h.excerpt ?? ""}`,
+      );
+      return {
+        content: {
+          dashboard: {
+            knowledge: {
+              query: args.query,
+              hitCount: hits.length,
+              source,
+              hits,
+            },
+          },
+          markdown: [`检索「${args.query ?? ""}」命中 ${hits.length} 块。`, "", ...lines].join("\n"),
+          meta: { skill: "knowledge-lookup" },
+        },
+      };
+    }
+
     default:
       return { content: { error: `unknown: ${name}` }, isError: true };
   }
@@ -387,7 +301,8 @@ export async function runSkill(
   for (const step of skill.steps) {
     opts?.onStepStart?.(step);
     const t0 = performance.now();
-    const args = typeof step.args === "function" ? step.args(ctx) : step.args;
+    const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
+    const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl: PROBE_URL, vars: ctx.vars });
 
     const out = step.tool.startsWith("__")
       ? await runInternalTool(step.tool, args)
