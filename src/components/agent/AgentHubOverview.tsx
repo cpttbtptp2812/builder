@@ -60,10 +60,10 @@ function HubStudio() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "uniagent-flow.json";
+    a.download = "ownagent-flow.json";
     a.click();
     URL.revokeObjectURL(url);
-    setNote("已导出 uniagent-flow.json");
+    setNote("已导出 ownagent-flow.json");
   }
 
   async function importFlow(file: File) {

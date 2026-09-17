@@ -228,7 +228,7 @@ function synthesizeAboutSite(hits: { title: string; score: number; excerpt: stri
   const lines = [
     "**这是王旭的个人作品站，主项目是 OwnAgent。**",
     "",
-    "OwnAgent 是一个跑在浏览器里的 AI Agent 平台：你输入一句话，它先做技能路由，再调 MCP 工具，最后流式作答。上面 Tab 有对话、运行追踪、知识检索、技能路由、回归评测、能力锁、能力全景。",
+    "OwnAgent 是跑在浏览器里的 Agent：你说一句话，先经过意图路由、MCP 工具、检索和能力锁，再流式作答。能力全景是底图，对话、追踪、评测是同一条链上的一层。",
     "",
     "它**不是**聊天套壳。打开就能跑，不需要 API Key；每一步的耗时和工具返回都能在「运行追踪」里展开。",
   ];
@@ -262,7 +262,7 @@ function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: strin
     case "policy-desk":
       return result.markdown ?? "制度值班已完成，详见能力锁面板。";
     case "knowledge-lookup":
-      return result.markdown ?? "检索完成，详见技能平台轨迹。";
+      return result.markdown ?? "检索完成，详见知识检索面板。";
     default:
       return "任务已完成，详见右侧 MCP Trace。";
   }

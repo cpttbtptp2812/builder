@@ -142,8 +142,8 @@ export function AgentHubFlowCanvas({
     <div className="hub-rf">
       <header className="hub-rf-head">
         <div>
-          <strong>工作流</strong>
-          <span>点节点看这一步 · 从起点到这里的线会动 · 拖手柄连线</span>
+          <strong>能力全景</strong>
+          <span>点节点看这一层 · 到这里的线会动</span>
         </div>
         <div className="hub-rf-modes">
           <button type="button" className={dirty ? "hub-rf-save" : "ghost"} onClick={onSave}>

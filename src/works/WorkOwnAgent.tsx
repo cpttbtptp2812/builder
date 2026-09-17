@@ -4,42 +4,33 @@ import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { EvalLabPanel } from "../components/fx/EvalLabPanel";
-import { RagPanel } from "../components/ownagent/RagPanel";
-import { SkillPlatformPanel } from "../components/ownagent/SkillPlatformPanel";
-import { TracePanel } from "../components/ownagent/TracePanel";
 import { GuardPanel } from "../components/ownagent/GuardPanel";
+import { RagPanel } from "../components/ownagent/RagPanel";
+import { TracePanel } from "../components/ownagent/TracePanel";
 
-type PanelId = "chat" | "trace" | "rag" | "skills" | "eval" | "guard" | "arch";
+type PanelId = "arch" | "chat" | "trace" | "rag" | "guard" | "eval";
 
 const PANELS: { id: PanelId; label: string; hint: string }[] = [
-  { id: "chat", label: "对话", hint: "流式回复 + 工具调用" },
-  { id: "trace", label: "运行追踪", hint: "每步耗时 · 状态 · payload" },
-  { id: "rag", label: "知识检索", hint: "分块召回 · chunkId 溯源" },
-  { id: "skills", label: "技能平台", hint: "跑技能 · 导入导出" },
-  { id: "eval", label: "回归评测", hint: "路由用例 · 工具指标" },
-  { id: "guard", label: "能力锁", hint: "信封分流 · 工单预演" },
-  { id: "arch", label: "能力全景", hint: "整条链路流程图" },
+  { id: "arch", label: "能力全景", hint: "点节点看这一层" },
+  { id: "chat", label: "对话", hint: "流式回复 + 工具" },
+  { id: "trace", label: "运行追踪", hint: "每步 payload" },
+  { id: "rag", label: "知识检索", hint: "chunkId 溯源" },
+  { id: "guard", label: "能力锁", hint: "工单预演" },
+  { id: "eval", label: "回归评测", hint: "路由命中率" },
 ];
 
-const CAPS = [
-  { k: "Agent Loop", v: "流式解析 · tool_call 累积 · 最多 8 轮迭代" },
-  { k: "MCP Server", v: "进程内 JSON-RPC 2.0 · Schema 校验" },
-  { k: "RAG", v: "文档分块 · 混合打分 · chunkId 引用" },
-  { k: "Skills", v: "SKILL.md 解析 · 目录 · MCP 轨迹" },
-  { k: "能力锁", v: "read / mutate / abstain · HITL 工单" },
-  { k: "双运行时", v: "SQLite 优先 · 失败降级浏览器内" },
-];
-
-function isPanel(v: string | null): v is PanelId {
-  return PANELS.some((p) => p.id === v);
+function resolvePanel(v: string | null): PanelId {
+  if (v === "skills" || v === "codrive") return "arch";
+  if (PANELS.some((p) => p.id === v)) return v as PanelId;
+  return "arch";
 }
 
-/** OwnAgent — 浏览器内 AI Agent 平台（统一入口） */
+/** OwnAgent — 能力全景图是产品主界面 */
 export function WorkOwnAgent() {
   const [params, setParams] = useSearchParams();
   const stageRef = useRef<HTMLElement>(null);
   const raw = params.get("panel");
-  const active: PanelId = isPanel(raw) ? raw : "chat";
+  const active = resolvePanel(raw);
   const current = PANELS.find((p) => p.id === active)!;
 
   useEffect(() => {
@@ -55,27 +46,15 @@ export function WorkOwnAgent() {
 
   return (
     <div className="own-agent">
-      <header className="own-hero">
-        <div className="own-hero-main">
-          <p className="own-eyebrow">个人项目 · 独立设计与开发</p>
+      <header className="own-bar">
+        <div>
+          <p className="own-eyebrow">个人项目</p>
           <h1>OwnAgent</h1>
-          <p className="own-tagline">
-            SSE 累积 <code>tool_call</code>，MCP 用 JSON-RPC 调工具，SKILL.md 打分选技能，RAG 用 <code>chunkId</code> 对账。
-            问句先锁 <code>read / mutate / abstain</code>，改权限只预演工单。
-          </p>
-          <BackendStatusBar compact />
         </div>
-        <ul className="own-caps">
-          {CAPS.map((c) => (
-            <li key={c.k}>
-              <strong>{c.k}</strong>
-              <span>{c.v}</span>
-            </li>
-          ))}
-        </ul>
+        <BackendStatusBar compact />
       </header>
 
-      <nav className="own-tabs" aria-label="OwnAgent 模块">
+      <nav className="own-tabs" aria-label="OwnAgent">
         {PANELS.map((p, i) => (
           <button
             key={p.id}
@@ -92,27 +71,16 @@ export function WorkOwnAgent() {
       </nav>
 
       <section className="own-stage" aria-label={current.label} ref={stageRef}>
-        {active === "chat" ? <AgentProductDemo /> : null}
-        {active === "trace" ? <TracePanel /> : null}
-        {active === "rag" ? <RagPanel /> : null}
-        {active === "skills" ? <SkillPlatformPanel /> : null}
-        {active === "guard" ? <GuardPanel /> : null}
-        {active === "eval" ? (
-          <div className="own-panel">
-            <p className="own-panel-lead">
-              固定用例跑一遍<strong>技能路由</strong>，看命中率和失败样本；再跑工具 benchmark 看真实耗时。
-            </p>
-            <EvalLabPanel />
-          </div>
-        ) : null}
         {active === "arch" ? (
           <div className="own-panel agent-hub">
-            <p className="own-panel-lead">
-              一句话从进来到答完，中间经过哪些层。点节点看这一步做了什么，右下角可以直接对话。
-            </p>
             <AgentHubOverview />
           </div>
         ) : null}
+        {active === "chat" ? <AgentProductDemo /> : null}
+        {active === "trace" ? <TracePanel /> : null}
+        {active === "rag" ? <RagPanel /> : null}
+        {active === "guard" ? <GuardPanel /> : null}
+        {active === "eval" ? <EvalLabPanel /> : null}
       </section>
     </div>
   );

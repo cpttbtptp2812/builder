@@ -3,6 +3,7 @@ import { AgentPlatformLab } from "../fx/AgentPlatformLab";
 import { AgentSkillsDemo } from "../fx/AgentSkillsDemo";
 import { EvalLabPanel } from "../fx/EvalLabPanel";
 import { FlowOrchestrator } from "./FlowOrchestrator";
+import { StepParseTrace } from "./steps/StepParseTrace";
 import { StepPlay } from "./steps/StepPlay";
 import { STEP_TECH } from "./steps/stepTech";
 import { getStep, isStepId, STEP_DEMOS, STEP_REGISTRY, type StepId } from "./steps";
@@ -75,9 +76,8 @@ export function AgentStepStage({
           </button>
         </div>
         <p className="agent-step-sub">
-          {meta.sub}
-          {prev ? ` · 上一口是「${prev}」` : " · 整条链路从这里开始"}
-          {` · 做完交给「${next}」`}
+          {prev ? `上一口「${prev}」` : "链路从这里开始"}
+          {` → 做完交给「${next}」`}
         </p>
         <code>{meta.api}</code>
       </header>
@@ -100,49 +100,38 @@ export function AgentStepStage({
         </aside>
       )}
 
-      <div className="agent-step-brief">
-        <div className="agent-step-purpose">
-          <div>
-            <b>做什么</b>
-            <p>{meta.job}</p>
-          </div>
-          <div>
-            <b>为了什么</b>
-            <p>{meta.why}</p>
-          </div>
-          <div>
-            <b>解决什么</b>
-            <p>{meta.problem}</p>
-          </div>
+      <div className="agent-step-io">
+        <div>
+          <b>吃进去</b>
+          <code>{meta.io.in}</code>
         </div>
-        <p>{meta.explain}</p>
-        <div className="agent-step-io">
-          <div>
-            <b>吃进去</b>
-            <code>{meta.io.in}</code>
-          </div>
-          <div>
-            <b>吐出来</b>
-            <code>{meta.io.out}</code>
-          </div>
+        <div>
+          <b>吐出来</b>
+          <code>{meta.io.out}</code>
         </div>
-        <ul className="agent-step-points">
-          {meta.points.map((p) => (
-            <li key={p}>{p}</li>
-          ))}
-        </ul>
       </div>
 
       <div className="agent-step-lab">
-        <b>动手对照</b>
-        <p>左边是没做好 / 做错的样子，点按钮看做对之后差在哪。这是帮助理解，不是把图改掉。</p>
+        <b>这一步怎么走</b>
+        <StepParseTrace key={`${id}-parse-${playTick}`} stepId={id} playTick={playTick} />
+      </div>
+
+      <div className="agent-step-lab">
+        <b>当场解析</b>
+        <Demo />
+      </div>
+
+      <div className="agent-step-lab">
+        <b>做错对照</b>
         <StepPlay key={`${id}-${playTick}`} stepId={id} />
       </div>
 
-      <div className="agent-step-lab">
-        <b>这一步的实验室</b>
-        {Lab ? <Lab /> : <Demo />}
-      </div>
+      {Lab ? (
+        <div className="agent-step-lab">
+          <b>接到运行时</b>
+          <Lab />
+        </div>
+      ) : null}
     </section>
   );
 }

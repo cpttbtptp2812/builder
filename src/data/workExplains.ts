@@ -188,19 +188,18 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   ownagent: {
     slug: "ownagent",
-    oneLiner: "SSE 累积 tool_call 做 Agent Loop；SKILL.md 解析成目录并打分选技能；进程内 MCP 执行工具；问句先锁 read / mutate / abstain。",
-    demoProves: "技能目录对照原文与 AST；路由打分可见；检索带 chunkId；开通 VPN 只出工单；评测输出命中率与误开通次数。",
+    oneLiner: "一句话进来，经过意图路由、MCP、检索、能力锁再回答。能力全景是底图，其它页签是同一条链上的一层。",
+    demoProves: "全景上点「意图路由」能当场打分；对话会真的调工具；能力锁问 VPN 只出工单；评测给出路由命中率。",
     steps: [
-      "「对话」提问 → 看流式回复与工具调用",
-      "「运行追踪」跑一次 → 时间线逐步追加，可展开 payload",
-      "「知识检索」搜关键词 → 看召回片段与打分",
-      "「技能平台」打开一份 SKILL.md → 看解析 / 对照原文 / 运行轨迹",
-      "「回归评测」一键跑用例 → 命中率与工具耗时",
-      "「能力锁」问年假 / 开通 VPN → 看出处编号或工单预演",
+      "先看「能力全景」——点一层，看这一层做什么",
+      "在路由层点「开通 VPN」和「今天天气怎么样」，对照打分",
+      "点「去对话里跑一句」看同一条链真正执行",
+      "「能力锁」再问一遍开通 VPN，只出工单",
+      "「回归评测」一键跑路由用例",
     ],
     compare: {
-      usual: { title: "SDK 封装成黑盒", desc: "出错只看到一条 pending SSE" },
-      here: { title: "Loop / MCP / 能力锁拆开", desc: "路由分数、条款编号、工单状态都能对账" },
+      usual: { title: "SDK 封成黑盒", desc: "前端只消费一条 pending SSE" },
+      here: { title: "链路上每一层可点开", desc: "路由分数、条款编号、工单状态都能对账" },
     },
   },
 

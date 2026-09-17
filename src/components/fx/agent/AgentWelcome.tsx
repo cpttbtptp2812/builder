@@ -9,7 +9,7 @@ export function AgentWelcome({ onPrompt, disabled }: { onPrompt: (text: string) 
       </div>
       <h3 className="agent-welcome-title">OwnAgent</h3>
       <p className="agent-welcome-desc">
-        Guest 模式免配置 — Router 选 Skill 后调用 http_probe、knowledge_search、browser_snapshot，右侧 Trace 同步展开。
+        说一句话。先看它选了哪个技能、调了哪个工具，再看它怎么答。不开模型也能跑。
       </p>
       <div className="agent-welcome-divider">
         <span>开始对话</span>

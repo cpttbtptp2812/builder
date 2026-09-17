@@ -523,7 +523,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   ownagent: {
     slug: "ownagent",
     purpose:
-      "把 Agent 的 Loop、工具协议、检索、路由和追踪拆开实现。SSE 碎片拼成完整 tool_call，工具走 JSON-RPC MCP，意图用 SKILL.md 打分，检索带 chunkId，运行写入 TraceSpan。",
+      "能力全景是底图：一句话经过意图路由、MCP、检索、能力锁。对话、追踪、评测是同一条链上的切片，不是并列的实验室。",
     highlights: [
       {
         title: "Agent Loop + MCP",
@@ -557,7 +557,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       },
     ],
     content:
-      "六个模块共用同一套运行时：对话、追踪、检索、路由、评测。Loop / MCP / RAG 是代码路径，不是分叉的假数据。",
+      "能力全景是底图。对话、追踪、检索、能力锁、评测都是同一条链上的一层，不是并列的五个小产品。",
     techJots: [
       { tag: "Loop", text: "tool_call 参数按 delta 累积，凑齐 JSON 才执行。" },
       { tag: "MCP", text: "进程内 JSON-RPC，Schema 校验 + isError 统一异常。" },
@@ -565,7 +565,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       { tag: "记忆", text: "IndexedDB 长期 + sessionStorage 会话态。" },
     ],
     scraps: ["后续：trace 导出 JSON", "接向量检索替换关键词打分"],
-    siteNote: "Loop 累积 tool_call · MCP JSON-RPC · RAG chunkId · 路由打分。",
+    siteNote: "先看能力全景，再下钻对话 / 追踪 / 能力锁 / 评测。",
   },
 
   extension: {

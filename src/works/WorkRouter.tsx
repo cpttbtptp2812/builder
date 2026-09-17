@@ -17,7 +17,7 @@ import { WorkStreamProbe } from "./WorkStreamProbe";
 const LEGACY_PANEL: Record<string, string> = {
   agent: "chat",
   "dev-debug": "arch",
-  skills: "skills",
+  skills: "chat",
   platform: "rag",
   eval: "eval",
   "agent-trace": "trace",
@@ -28,7 +28,7 @@ function ownAgentRedirect(slug: string, params: URLSearchParams): string | null 
   if (!panel) return null;
   const next = new URLSearchParams({ panel });
   const trySkill = params.get("try") ?? params.get("skill");
-  if (panel === "skills" && trySkill) next.set("try", trySkill);
+  if (panel === "chat" && trySkill) next.set("try", trySkill);
   return `/work/ownagent?${next.toString()}`;
 }
 
