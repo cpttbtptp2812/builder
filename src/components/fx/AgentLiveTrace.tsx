@@ -14,9 +14,9 @@ export function AgentLiveTrace({
   if (traces.length === 0 && !running) {
     return (
       <div className="agent-live-trace idle">
-        <p>Agent Loop</p>
-        <span>Plan → Tool Call → Observe → Respond</span>
-        <small>发送消息后，每轮 LLM 推理与 MCP 工具执行会在这里逐步出现</small>
+        <p>Inspector</p>
+        <span>本轮工具调用会写在这里</span>
+        <small>Ctrl+I 开关 · 点工具行可看 JSON</small>
       </div>
     );
   }

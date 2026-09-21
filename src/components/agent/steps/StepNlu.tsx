@@ -4,7 +4,7 @@ import { StepShell } from "./StepShell";
 const SAMPLES = [
   "对本站做发布前检查，探活并确认关键页面可访问",
   "analyze site metrics and TTFB latency",
-  "帮我入队一个改价上架的 workflow",
+  "帮我入队一个网页调研的 workflow",
 ];
 
 function tokenize(q: string) {

@@ -1,4 +1,4 @@
-/** LLM 连接配置 — sessionStorage + 可选 .env.local（仅本地开发） */
+/** LLM 连接配置 — localStorage + 可选 .env.local（仅本地开发） */
 
 export type LlmPresetId = "deepseek" | "openai" | "ollama" | "custom";
 
@@ -65,9 +65,17 @@ export function getEnvApiKey(): string {
   return ENV_API_KEY;
 }
 
+function readStoredConfig(): string | null {
+  try {
+    return localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 export function loadLlmConfig(): LlmConfig {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = readStoredConfig();
     const base = defaultLlmConfig();
     if (!raw) return base;
     const saved = JSON.parse(raw) as Partial<LlmConfig>;
@@ -83,7 +91,13 @@ export function loadLlmConfig(): LlmConfig {
 }
 
 export function saveLlmConfig(config: LlmConfig) {
-  sessionStorage.setItem(STORAGE_KEY, JSON.stringify(config));
+  const raw = JSON.stringify(config);
+  localStorage.setItem(STORAGE_KEY, raw);
+  try {
+    sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isLlmConfigured(config: LlmConfig): boolean {

@@ -200,7 +200,7 @@ export function EvalLabPanel({ compact = false }: Props) {
 
       {compact && (
         <p className="eval-lab-more">
-          <Link to="/work/ownagent?panel=eval">打开完整路由测试 →</Link>
+          <Link to="/work/ownagent?tab=product&view=eval">打开完整路由测试 →</Link>
         </p>
       )}
     </div>

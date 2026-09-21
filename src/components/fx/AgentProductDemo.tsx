@@ -1,38 +1,86 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { AgentConfigBar } from "./AgentConfigBar";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AgentLiveTrace } from "./AgentLiveTrace";
 import { AgentMarkdown } from "./agent/AgentMarkdown";
-import { AgentMcpRegistry, loadEnabledMcpTools } from "./agent/AgentMcpRegistry";
-import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentThink } from "./agent/AgentThink";
-import { AgentToolChip, type ToolChipState } from "./agent/AgentToolChip";
+import { UserMessageBubble } from "./agent/UserMessageBubble";
+import { formatMsgTime } from "../../lib/formatMsgTime";
+import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
+import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
-import { VncFloat } from "./VncFloat";
+import { HitlTicketCard } from "./agent/HitlTicketCard";
+import { PolicyTrustCard } from "./agent/PolicyTrustCard";
+import { InlineEvalCard, runInlineEval } from "./agent/InlineEvalCard";
+import { ArtifactPanel } from "./agent/ArtifactPanel";
+import { ResultLocator } from "./agent/ResultLocator";
+import { TurnFlowPanel } from "./agent/TurnFlowPanel";
+import { explainDiscovery } from "../../lib/agentSkills";
+import {
+  loadOrchestrationMode,
+  OwnSettingsSheet,
+  type OrchestrationMode,
+} from "./agent/OwnSettingsSheet";
+import { loadEnabledMcpTools } from "./agent/AgentMcpRegistry";
 import {
   runAgentTurn,
   type AgentChatMessage,
   type AgentStreamEvent,
   type AgentTurnTrace,
 } from "../../lib/agentRuntime";
-import { isAuthError, runGuestAgentTurn } from "../../lib/guestAgentRuntime";
+import { isAuthError, runGuestAgentTurn, toolPreviewFromResult } from "../../lib/guestAgentRuntime";
+import { appendSessionTurn, clearSessionTurns } from "../../lib/agentMemory";
 import { isLlmConfigured, loadLlmConfig, type LlmConfig } from "../../lib/llmConfig";
-
-type UiMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  reasoning?: string;
-  mode?: "guest" | "llm";
-  tools?: ToolChipState[];
-};
+import { downloadText } from "../../lib/importedSkills";
+import { runMultiAgentPipeline, type MultiAgentStep } from "../../lib/multiAgentRuntime";
+import { buildWorkingSet, type WorkingSet } from "../../lib/workingSet";
+import {
+  activateFlowNode,
+  addFlowChip,
+  addFlowEvidence,
+  createFlowJournal,
+  evidenceFromKnowledgeResult,
+  evidenceFromTool,
+  finishFlowJournal,
+  normalizeFlowJournal,
+  setFlowChips,
+  setFlowEvidence,
+  type FlowEvidence,
+  type FlowJournalId,
+  type FlowJournalNode,
+} from "../../lib/turnFlowJournal";
+import type { TicketDraft } from "../../lib/policyDesk";
+import { followUpsFor, type PolicyTrustView, type RouteScoreView, type InlineEvalView } from "../../lib/chatFrontier";
+import { buildAnswerInsight } from "../../lib/answerInsight";
+import { normalizeFollowUps } from "../../lib/followUpPrompts";
+import { AnswerInsightBar } from "./agent/AnswerInsightBar";
+import { FollowUpRail } from "./agent/FollowUpRail";
+import { buildTurnArtifacts, synthesizeCompareTable, type ChatArtifact } from "../../lib/chatArtifacts";
+import {
+  emptySession,
+  loadSessionStore,
+  persistSessionStore,
+  sessionToMarkdown,
+  upsertActive,
+  type OwnChatMessage,
+  type OwnSession,
+} from "../../lib/ownagentSessions";
+import { parseSlash, slashSuggestions } from "../../lib/slashCommands";
+import { OwnCommandPalette, type PaletteItem } from "../ownagent/OwnCommandPalette";
+import { getMcpTool } from "../../lib/mcpBridgeLab";
+import { useThreadScroll } from "../../hooks/useThreadScroll";
 
 function uid() {
   return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
-/** OwnAgent 对话 — 对齐 tianyangAgent 产品体验 + tianyangbuilder MCP 配置 */
+type ToolChipState = NonNullable<OwnChatMessage["tools"]>[number];
+
+function toolLabel(name: string) {
+  return getMcpTool(name)?.labelZh ?? name;
+}
+
+/** OwnAgent 对话 — UniAgent 布局 + 理论流水线 / HITL / 多代理 */
 export function AgentProductDemo({
-  autoStart = false,
+  autoStart: _autoStart = false,
   hubMode = false,
   onFlowActive,
 }: {
@@ -41,35 +89,75 @@ export function AgentProductDemo({
   onFlowActive?: (nodeId: string) => void;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
-  const threadRef = useRef<HTMLDivElement>(null);
-  const footerRef = useRef<HTMLFormElement>(null);
+  const footerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
-  const userScrolledRef = useRef(false);
-  const [footerHeight, setFooterHeight] = useState(72);
+  const [footerHeight, setFooterHeight] = useState(120);
+  const latestAnswerIdRef = useRef<string | null>(null);
 
   const [llmConfig, setLlmConfig] = useState<LlmConfig>(() => loadLlmConfig());
   const [enabledTools, setEnabledTools] = useState<string[]>(() => loadEnabledMcpTools());
-  const [messages, setMessages] = useState<UiMessage[]>([]);
-  const [history, setHistory] = useState<AgentChatMessage[]>([]);
+  const [orchMode, setOrchMode] = useState<OrchestrationMode>(() => loadOrchestrationMode());
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState<"knowledge" | "runtime">("runtime");
+  const [kbRev, setKbRev] = useState(0);
+  const boot = useRef(loadSessionStore());
+  const [store, setStore] = useState(boot.current);
+  const active = store.sessions.find((s) => s.id === store.activeId) ?? store.sessions[0]!;
+  const [messages, setMessages] = useState<OwnChatMessage[]>(() => active.messages);
+  const [history, setHistory] = useState<AgentChatMessage[]>(() => active.history);
+  const historyRef = useRef(history);
+  historyRef.current = history;
   const [input, setInput] = useState("");
   const [running, setRunning] = useState(false);
   const [traces, setTraces] = useState<AgentTurnTrace[]>([]);
   const [iteration, setIteration] = useState(0);
-  const [showVnc, setShowVnc] = useState(false);
   const [streamReasoning, setStreamReasoning] = useState("");
   const [streamText, setStreamText] = useState("");
   const [liveTools, setLiveTools] = useState<ToolChipState[]>([]);
-  const [showScrollFab, setShowScrollFab] = useState(false);
-  const autoStarted = useRef(false);
+  const [flowJournal, setFlowJournal] = useState<FlowJournalNode[]>([]);
+  const [flowTurnStartedAt, setFlowTurnStartedAt] = useState<number | null>(null);
+  const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
+  const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
+  const [inspector, setInspector] = useState(false);
+  const [sessionsOpen, setSessionsOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [pinned, setPinned] = useState("");
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [resultFlash, setResultFlash] = useState(false);
+
+  const {
+    threadRef,
+    contentRef,
+    sentinelRef,
+    away,
+    focusId,
+    scrollToBottom,
+    scrollToMessage,
+    onThreadScroll,
+    stickRef,
+  } = useThreadScroll([messages.length, streamText, streamReasoning, liveTools.length, flowJournal, liveMulti, running, footerHeight]);
 
   const useLlm = isLlmConfigured(llmConfig);
-  const hasMessages = messages.length > 0 || running;
+  const emptyMessage = messages.length === 0 && !running;
+  const slashMenu = slashSuggestions(input);
 
-  const scrollToBottom = useCallback((smooth = true) => {
-    const el = threadRef.current;
-    if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
-  }, []);
+  const railItems = useMemo(
+    () =>
+      messages.map((m) => ({
+        id: m.id,
+        role: m.role,
+        label: m.content.replace(/\s+/g, " ").slice(0, 28) || m.role,
+      })),
+    [messages],
+  );
+
+  useEffect(() => {
+    setStore((prev) => {
+      const next = upsertActive(prev, { messages, history });
+      persistSessionStore(next);
+      return next;
+    });
+  }, [messages, history]);
 
   useEffect(() => {
     const el = footerRef.current;
@@ -79,10 +167,6 @@ export function AgentProductDemo({
     setFooterHeight(el.offsetHeight);
     return () => ro.disconnect();
   }, []);
-
-  useEffect(() => {
-    if (!userScrolledRef.current && (messages.length > 0 || running)) scrollToBottom();
-  }, [messages, streamText, streamReasoning, liveTools, running, scrollToBottom]);
 
   const handleEvent = useCallback((ev: AgentStreamEvent, toolsAcc: ToolChipState[]) => {
     if (ev.type === "iteration") setIteration(ev.n);
@@ -95,106 +179,343 @@ export function AgentProductDemo({
       setLiveTools([...toolsAcc]);
     }
     if (ev.type === "tool-end") {
-      const idx = toolsAcc.findIndex((t) => t.id === ev.tool.id);
+      const preview = toolPreviewFromResult(ev.tool.name, ev.tool.result);
       const row: ToolChipState = {
         id: ev.tool.id,
         name: ev.tool.name,
         state: ev.tool.ok === false ? "error" : "ok",
         ms: ev.tool.ms,
+        preview: preview || undefined,
       };
+      const idx = toolsAcc.findIndex((t) => t.id === ev.tool.id);
       if (idx >= 0) toolsAcc[idx] = row;
       else toolsAcc.push(row);
       setLiveTools([...toolsAcc]);
-      if (ev.tool.name === "workflow_run") setShowVnc(true);
     }
   }, [onFlowActive]);
 
   const send = useCallback(
     async (text: string) => {
-      const q = text.trim();
+      const parsed = parseSlash(text);
+      const q = parsed.query.trim();
       if (!q || running) return;
 
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
 
-      const userMsg: UiMessage = { id: uid(), role: "user", content: q };
+      const userMsg: OwnChatMessage = { id: uid(), role: "user", content: text.trim(), createdAt: Date.now() };
       const assistantId = uid();
-      const mode: UiMessage["mode"] = useLlm ? "llm" : "guest";
       const toolsAcc: ToolChipState[] = [];
+      const t0 = performance.now();
+      const journalRef = { current: createFlowJournal(q) };
+      const syncJournal = () => setFlowJournal([...journalRef.current]);
+      const jActivate = (id: FlowJournalId) => {
+        journalRef.current = activateFlowNode(journalRef.current, id);
+        syncJournal();
+      };
+      const jChip = (id: FlowJournalId, chip: string) => {
+        journalRef.current = addFlowChip(journalRef.current, id, chip);
+        syncJournal();
+      };
+      syncJournal();
+      setFlowTurnStartedAt(Date.now());
+      setHighlightTerm(null);
+      setLiveMulti([]);
 
-      userScrolledRef.current = false;
+      stickRef.current = true;
+      scrollToBottom(false);
       onFlowActive?.("input");
       setMessages((prev) => [...prev, userMsg]);
       setInput("");
       setRunning(true);
+      setResultFlash(false);
       setTraces([]);
       setIteration(0);
       setStreamReasoning("");
       setStreamText("");
       setLiveTools([]);
-      setShowVnc(false);
       window.setTimeout(() => onFlowActive?.("router"), 240);
-      window.setTimeout(() => onFlowActive?.("skill"), 640);
 
       let fullReasoning = "";
       let fullText = "";
+      let hitl: TicketDraft | undefined;
+      let multiSteps: MultiAgentStep[] = [];
+      let workingSet: WorkingSet | undefined;
+      let policyTrust: PolicyTrustView | undefined;
+      let route: RouteScoreView | undefined;
+      let inlineEval: InlineEvalView | undefined;
+      let artifacts: ChatArtifact[] = [];
+      let mode: OwnChatMessage["mode"] = useLlm ? "llm" : "guest";
+
+      const bindStreamJournal = (ev: AgentStreamEvent) => {
+        if (ev.type === "reasoning-delta") {
+          const line = ev.text.split("\n").pop()?.trim();
+          if (line) jChip("route", line.slice(0, 72));
+        }
+        if (ev.type === "tool-start") {
+          jActivate("fetch");
+          jChip("fetch", `正在调用 ${toolLabel(ev.tool.name)}…`);
+        }
+        if (ev.type === "tool-end") {
+          if (ev.tool.name === "knowledge_search") {
+            journalRef.current = setFlowEvidence(
+              journalRef.current,
+              "fetch",
+              evidenceFromKnowledgeResult(ev.tool.result),
+            );
+            syncJournal();
+          } else {
+            journalRef.current = addFlowEvidence(
+              journalRef.current,
+              "fetch",
+              evidenceFromTool(ev.tool.name, ev.tool.result, toolPreviewFromResult(ev.tool.name, ev.tool.result)),
+            );
+            syncJournal();
+          }
+        }
+      };
 
       const finish = (content: string, reasoning?: string) => {
+        journalRef.current = finishFlowJournal(journalRef.current);
+        if (content.trim()) {
+          journalRef.current = setFlowEvidence(journalRef.current, "write", [
+            {
+              id: "answer",
+              kind: "stream",
+              title: "答复已生成",
+              excerpt: content.replace(/\s+/g, " ").trim().slice(0, 140),
+              meta: `${content.length} 字`,
+            },
+          ]);
+        }
+        syncJournal();
+        setFlowTurnStartedAt(null);
+        const ms = Math.round(performance.now() - t0);
+        const built = buildTurnArtifacts({
+          content,
+          inlineEval,
+          policyTrust,
+          tools: toolsAcc,
+          ms,
+        });
+        const merged = [...artifacts, ...built].filter(
+          (a, i, arr) => arr.findIndex((x) => x.id === a.id && x.kind === a.kind) === i,
+        );
+        // 避免 markdown 表与显式工件重复
+        const deduped =
+          artifacts.some((a) => a.kind === "table" && a.surface === "sheet")
+            ? merged.filter((a) => !(a.kind === "table" && a.id.startsWith("md-table-")))
+            : merged;
+        const asked = [...messages.map((m) => m.content), q, text.trim()];
+        const followUps = followUpsFor({
+          policyTrust,
+          route,
+          mode,
+          exclude: asked,
+          query: q,
+          flowJournal: journalRef.current,
+          limit: 3,
+        });
+        const answerInsight = buildAnswerInsight({
+          flowJournal: journalRef.current,
+          ms,
+          mode,
+          route,
+          toolCount: toolsAcc.length,
+        });
+        latestAnswerIdRef.current = assistantId;
         setMessages((prev) => [
           ...prev,
           {
             id: assistantId,
             role: "assistant",
+            createdAt: Date.now(),
             content,
             reasoning,
             mode,
             tools: [...toolsAcc],
+            ms,
+            flowJournal: [...journalRef.current],
+            hitl,
+            multiAgent: multiSteps.length ? multiSteps : undefined,
+            workingSet,
+            policyTrust,
+            route,
+            inlineEval,
+            followUps,
+            answerInsight,
+            artifacts: deduped.length ? deduped : undefined,
           },
         ]);
+        appendSessionTurn("user", q || text.trim());
+        appendSessionTurn("assistant", content);
         onFlowActive?.("trace");
+        setResultFlash(true);
+        window.setTimeout(() => {
+          scrollToMessage(assistantId, true);
+          setResultFlash(false);
+        }, 48);
+        window.setTimeout(() => scrollToBottom(false), 320);
       };
 
       try {
+        jActivate("route");
+        const topSkill = explainDiscovery(parsed.evalKind ? `eval ${parsed.evalKind}` : q)[0];
+        if (topSkill && topSkill.score > 0) {
+          jChip("route", `技能倾向：${topSkill.skill.name}（${topSkill.score} 分）`);
+        }
+
+        const ws = await buildWorkingSet(parsed.evalKind ? `eval ${parsed.evalKind}` : q);
+        workingSet = ws;
+        if (ws.skillHint) jChip("route", ws.skillHint);
+
+        const sheet = synthesizeCompareTable(q);
+        if (sheet && !parsed.force && !parsed.evalKind) {
+          mode = "sheet";
+          route = {
+            skillId: "ai-sheet",
+            skillName: "AI 表格引擎",
+            score: 5,
+            hits: ["结构化", "对照矩阵"],
+            path: "skill",
+          };
+          artifacts = [sheet.artifact];
+          jChip("route", "结构化对照表");
+          jActivate("write");
+          setStreamText(sheet.markdown);
+          finish(sheet.markdown, "AI 表格引擎 · 结构化对照");
+          return;
+        }
+
+        if (parsed.evalKind) {
+          mode = "eval";
+          const data = runInlineEval(parsed.evalKind);
+          inlineEval = data;
+          route = {
+            skillId: "eval",
+            skillName: data.kind === "policy" ? "制度评测" : "路由评测",
+            score: 5,
+            hits: ["/eval", data.kind],
+            path: "eval",
+          };
+          jChip("route", data.kind === "policy" ? "制度评测" : "路由评测");
+          jActivate("write");
+          const summary = `本轮${data.kind === "policy" ? "制度" : "路由"}评测准确率 **${data.accuracy}%**（${data.pass}/${data.total}）。`;
+          setStreamText(summary);
+          finish(summary, "对话内评测");
+          return;
+        }
+
         const onEv = (ev: AgentStreamEvent) => {
           handleEvent(ev, toolsAcc);
           if (ev.type === "reasoning-delta") fullReasoning += ev.text;
-          if (ev.type === "text-delta") fullText += ev.text;
+          if (ev.type === "text-delta") {
+            fullText += ev.text;
+            jActivate("write");
+            const preview = fullText.replace(/\s+/g, " ").trim();
+            journalRef.current = setFlowChips(journalRef.current, "write", [
+              preview.length > 96 ? `…${preview.slice(-96)}` : preview || "正在写入…",
+            ]);
+            syncJournal();
+          }
+          bindStreamJournal(ev);
         };
+
+        if (orchMode === "multi" && !parsed.force) {
+          mode = "multi";
+          route = { skillId: "multi-agent", skillName: "多代理编排", score: 4, hits: ["planner", "executor", "reviewer"], path: "multi" };
+          jChip("route", "多代理：Planner → Executor → Reviewer");
+          jActivate("fetch");
+          setStreamReasoning("多代理编排 · Planner → Executor → Reviewer\n");
+          const result = await runMultiAgentPipeline(q, (step) => {
+            multiSteps = [...multiSteps, step];
+            setLiveMulti([...multiSteps]);
+            setStreamReasoning((s) => s + `\n[${step.agentLabel}] ${step.phase}`);
+            jChip("fetch", `[${step.agentLabel}] ${step.phase}`);
+            if (step.toolCalls?.length) {
+              for (const tc of step.toolCalls) {
+                toolsAcc.push({
+                  id: `ma-${step.id}-${tc.tool}`,
+                  name: tc.tool,
+                  state: tc.ok ? "ok" : "error",
+                  ms: tc.ms,
+                  preview: tc.preview,
+                });
+                jChip("fetch", `${toolLabel(tc.tool)}：${tc.preview ?? "完成"}`);
+              }
+              setLiveTools([...toolsAcc]);
+            }
+          });
+          jActivate("write");
+          fullText = result.answer;
+          setStreamText(result.answer);
+          finish(result.answer, fullReasoning || "多代理流水线完成");
+          return;
+        }
 
         if (useLlm) {
           try {
+            mode = "llm";
+            route = { skillId: "llm-loop", skillName: llmConfig.model, score: 4, hits: ["tool-call"], path: "llm" };
+            jChip("route", `大模型：${llmConfig.model}`);
+            jActivate("fetch");
             const result = await runAgentTurn(
               q,
-              history,
+              historyRef.current,
               llmConfig,
-              { snapshotRoot: rootRef.current, signal: ac.signal },
+              {
+                snapshotRoot: rootRef.current,
+                signal: ac.signal,
+                enabledTools,
+                memoryBlock: ws.memoryBlock,
+              },
               onEv,
             );
             setTraces(result.traces);
+            historyRef.current = result.messages;
             setHistory(result.messages);
             finish(result.assistantText || fullText, fullReasoning || undefined);
             return;
           } catch (err) {
             if ((err as Error).name === "AbortError") return;
             if (isAuthError(err)) {
-              finish(
-                "LLM Key 无效（401）。请关闭「启用我的 LLM」继续使用 Guest Agent。",
-                "Authentication failed",
-              );
+              finish("LLM Key 无效。请在「设置」关闭接入 LLM，继续使用内置 Agent。");
               return;
             }
             throw err;
           }
         }
 
+        jActivate("fetch");
         const guest = await runGuestAgentTurn(
           q,
-          { snapshotRoot: rootRef.current, signal: ac.signal },
+          {
+            snapshotRoot: rootRef.current,
+            signal: ac.signal,
+            enabledTools,
+            history: historyRef.current,
+            force: parsed.force,
+            pinned: pinned || undefined,
+          },
           onEv,
         );
         setTraces(guest.traces);
-        finish(guest.assistantText || fullText, fullReasoning || undefined);
+        hitl = guest.hitl;
+        policyTrust = guest.policyTrust;
+        route = guest.route;
+        if (route) {
+          jChip("route", `${route.skillName}${route.hits.length ? ` · ${route.hits[0]}` : ""}`);
+        }
+        const reply = guest.assistantText || fullText;
+        const nextHistory: AgentChatMessage[] = [
+          ...historyRef.current.filter((m) => m.role === "user" || m.role === "assistant"),
+          { role: "user" as const, content: q },
+          { role: "assistant" as const, content: reply },
+        ].slice(-24);
+        historyRef.current = nextHistory;
+        setHistory(nextHistory);
+        finish(reply, fullReasoning || undefined);
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
         finish(`请求失败：${err instanceof Error ? err.message : "未知错误"}`);
@@ -203,161 +524,493 @@ export function AgentProductDemo({
         setStreamReasoning("");
         setStreamText("");
         setLiveTools([]);
+        setLiveMulti([]);
         setIteration(0);
       }
     },
-    [running, useLlm, llmConfig, history, handleEvent, onFlowActive],
+    [running, useLlm, llmConfig, enabledTools, handleEvent, onFlowActive, pinned, orchMode, scrollToBottom, scrollToMessage, stickRef],
   );
-
-  useEffect(() => {
-    if (!autoStart || autoStarted.current) return;
-    autoStarted.current = true;
-    const t = window.setTimeout(() => void send("帮我对本站做发布前检查，探活并确认关键页面可访问"), 800);
-    return () => clearTimeout(t);
-  }, [autoStart, send]);
 
   function stop() {
     abortRef.current?.abort();
     setRunning(false);
   }
 
-  function onThreadScroll() {
-    const el = threadRef.current;
-    if (!el) return;
-    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
-    userScrolledRef.current = dist > 80;
-    setShowScrollFab(dist > 120);
+  function updateHitl(msgId: string, ticket: TicketDraft, note: string) {
+    setMessages((prev) =>
+      prev.map((m) =>
+        m.id === msgId
+          ? { ...m, hitl: ticket, content: `${m.content}\n\n---\n${note}` }
+          : m,
+      ),
+    );
   }
 
+  function applySession(next: OwnSession, all: OwnSession[]) {
+    abortRef.current?.abort();
+    setRunning(false);
+    setMessages(next.messages);
+    setHistory(next.history);
+    historyRef.current = next.history;
+    setTraces([]);
+    setStore({ activeId: next.id, sessions: all });
+    persistSessionStore({ activeId: next.id, sessions: all });
+    setSessionsOpen(false);
+  }
+
+  function newChat() {
+    const created = emptySession();
+    const sessions = [created, ...store.sessions].slice(0, 24);
+    applySession(created, sessions);
+    clearSessionTurns();
+    setPinned("");
+  }
+
+  function switchSession(id: string) {
+    const next = store.sessions.find((s) => s.id === id);
+    if (!next || next.id === store.activeId) return;
+    const flushed = upsertActive(store, { messages, history });
+    applySession(next, flushed.sessions);
+  }
+
+  function retryLast() {
+    if (running) return;
+    const last = [...messages].reverse().find((m) => m.role === "user");
+    if (!last) return;
+    let cut = messages.length;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      if (messages[i]?.role === "assistant") {
+        cut = i;
+        break;
+      }
+    }
+    setMessages((prev) => prev.slice(0, cut));
+    void send(last.content);
+  }
+
+  async function copyMsg(m: OwnChatMessage) {
+    try {
+      await navigator.clipboard.writeText(m.content);
+      setCopiedId(m.id);
+      window.setTimeout(() => setCopiedId(null), 1200);
+    } catch {
+      /* ignore */
+    }
+  }
+
+  function exportActive() {
+    const session = { ...active, messages, history };
+    downloadText(`${session.title || "ownagent"}.md`, sessionToMarkdown(session));
+  }
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setPaletteOpen((o) => !o);
+      }
+      if (meta && e.key.toLowerCase() === "n") {
+        e.preventDefault();
+        newChat();
+      }
+      if (meta && e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        setInspector((o) => !o);
+      }
+      if (meta && e.key.toLowerCase() === ",") {
+        e.preventDefault();
+        setSettingsOpen(true);
+      }
+      if (e.key === "Escape" && running) stop();
+    }
+    function onPalette() {
+      setPaletteOpen(true);
+    }
+    window.addEventListener("keydown", onKey);
+    window.addEventListener("ownagent:palette", onPalette);
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      window.removeEventListener("ownagent:palette", onPalette);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, store, messages, history]);
+
+  const paletteItems: PaletteItem[] = useMemo(() => {
+    return [
+      { id: "new", group: "会话", label: "新对话", kbd: "⌘N", run: newChat },
+      { id: "settings", group: "会话", label: "运行设置", kbd: "⌘,", run: () => setSettingsOpen(true) },
+      { id: "export", group: "会话", label: "导出 Markdown", run: exportActive },
+      { id: "retry", group: "会话", label: "重试上一问", run: retryLast },
+      { id: "eval", group: "编排", label: "对话内评测 /eval", run: () => void send("/eval") },
+      {
+        id: "multi",
+        group: "编排",
+        label: orchMode === "multi" ? "切换到单 Agent" : "切换到多代理",
+        run: () => setOrchMode((m) => (m === "multi" ? "single" : "multi")),
+      },
+      { id: "inspector", group: "视图", label: inspector ? "收起运行详情" : "打开运行详情", kbd: "⌘I", run: () => setInspector((o) => !o) },
+      { id: "skills", group: "视图", label: "技能", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "skills" } })) },
+      { id: "rag", group: "视图", label: "知识", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } })) },
+      { id: "theory", group: "视图", label: "理论 / 能力全景", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { tab: "theory" } })) },
+      ...store.sessions.slice(0, 8).map((s) => ({
+        id: `sess-${s.id}`,
+        group: "最近会话",
+        label: s.title,
+        run: () => switchSession(s.id),
+      })),
+    ];
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inspector, store.sessions, messages, history, orchMode]);
+
+  const toolCount = traces.reduce((n, t) => n + t.tools.length, 0);
+  const modeHint = useLlm ? llmConfig.model : "本地运行";
+
+  const lastAsst = useMemo(() => [...messages].reverse().find((m) => m.role === "assistant"), [messages]);
+  const displayJournal = useMemo(() => {
+    const raw =
+      running && flowJournal.length
+        ? flowJournal
+        : lastAsst?.flowJournal?.length
+          ? lastAsst.flowJournal
+          : flowJournal;
+    return normalizeFlowJournal(raw);
+  }, [running, flowJournal, lastAsst?.flowJournal]);
+
+  const handleEvidenceClick = useCallback(
+    (ev: FlowEvidence) => {
+      const id = latestAnswerIdRef.current;
+      if (!id) return;
+      setHighlightTerm(ev.title);
+      scrollToMessage(id, true);
+      window.setTimeout(() => setHighlightTerm(null), 2400);
+    },
+    [scrollToMessage],
+  );
+
   return (
-    <div className="work-agent-rich agent-product-demo agent-product-live agent-chat-shell" ref={rootRef}>
-      <div className="agent-shell-bg" aria-hidden />
-
-      {!hubMode && (
-      <div className="agent-shell-header">
-        <div className="agent-shell-identity">
-          <span className="agent-shell-avatar">UA</span>
-          <div>
-            <strong>OwnAgent</strong>
-            <span>{useLlm ? "LLM Agent Loop" : "Guest Agent · 开箱即用"}</span>
-          </div>
+    <div className={`ua-shell ua-shell-flow${hubMode ? " hub" : ""}${inspector ? " with-side" : ""}`} ref={rootRef}>
+      <header className="ua-topbar">
+        <button type="button" className="ua-icon-btn" onClick={() => setSessionsOpen(true)} title="历史会话">
+          ☰
+        </button>
+        <div className="ua-topbar-title">
+          <strong>{active.title || "新对话"}</strong>
+          <span>OwnAgent</span>
         </div>
-        <div className="agent-feature-pills compact">
-          {["MCP", useLlm ? "LLM" : "Router", "Trace"].map((f) => (
-            <span key={f} className="agent-feature-pill">{f}</span>
-          ))}
-        </div>
-      </div>
-      )}
-
-      <AgentMcpRegistry enabled={enabledTools} onChange={setEnabledTools} />
-      <AgentConfigBar onChange={setLlmConfig} />
-
-      <div className="agent-demo-grid agent-shell-body">
-        <div className="agent-chat-panel">
-          <div
-            ref={threadRef}
-            className="agent-chat-thread"
-            style={{ paddingBottom: Math.max(footerHeight + 24, 96) }}
-            onScroll={onThreadScroll}
-          >
-            {!hasMessages && <AgentWelcome onPrompt={(t) => void send(t)} disabled={running} />}
-
-            {messages.map((m) => (
-              <div key={m.id} className={`agent-message ${m.role}`}>
-                {m.role === "user" ? (
-                  <div className="chat-msg user">
-                    <p>{m.content}</p>
-                  </div>
-                ) : (
-                  <div className="chat-msg assistant">
-                    {m.reasoning && (
-                      <AgentReasoningBlock text={m.reasoning} thinking={false} defaultOpen={false} />
-                    )}
-                    {m.tools?.map((t) => (
-                      <AgentToolChip key={t.id} tool={{ ...t, state: t.state === "loading" ? "ok" : t.state }} />
-                    ))}
-                    <AgentMarkdown text={m.content} />
-                  </div>
-                )}
-              </div>
-            ))}
-
-            {running && (
-              <div className="agent-message assistant">
-                <div className="chat-msg assistant streaming">
-                  {(streamReasoning || !streamText) && (
-                    <AgentReasoningBlock
-                      text={streamReasoning}
-                      thinking={!streamText && liveTools.length === 0}
-                      defaultOpen
-                    />
-                  )}
-                  <div className="agent-inline-tools">
-                    {liveTools.map((t) => (
-                      <AgentToolChip key={t.id} tool={t} />
-                    ))}
-                  </div>
-                  {streamText ? (
-                    <AgentMarkdown text={streamText} />
-                  ) : liveTools.length === 0 ? (
-                    <AgentThink />
-                  ) : null}
-                  {streamText && <span className="caret">▍</span>}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {showScrollFab && (
-            <button type="button" className="agent-scroll-fab" onClick={() => { userScrolledRef.current = false; scrollToBottom(); }}>
-              ↓
-            </button>
-          )}
-
-          <form
-            ref={footerRef}
-            className="agent-chat-compose agent-prompt-footer agent-prompt-footer--fixed"
-            onSubmit={(e) => {
-              e.preventDefault();
-              void send(input);
+        <div className="ua-topbar-actions">
+          <button type="button" className="ua-text-btn" onClick={newChat} disabled={running}>
+            新对话
+          </button>
+          <button type="button" className={`ua-text-btn${inspector ? " on" : ""}`} onClick={() => setInspector((o) => !o)}>
+            {inspector ? "收起详情" : "运行记录"}
+          </button>
+          <button
+            type="button"
+            className="ua-text-btn"
+            onClick={() => {
+              setSettingsTab("knowledge");
+              setSettingsOpen(true);
             }}
           >
-            <textarea
-              value={input}
-              rows={1}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void send(input);
-                }
+            知识库
+          </button>
+          <button
+            type="button"
+            className="ua-text-btn"
+            onClick={() => {
+              setSettingsTab("runtime");
+              setSettingsOpen(true);
+            }}
+          >
+            设置
+          </button>
+        </div>
+      </header>
+
+      <div className="ua-body">
+        <div className={`ua-chat${emptyMessage ? " empty" : ""}`}>
+          {!emptyMessage && (
+            <div
+              ref={threadRef}
+              className="ua-thread"
+              style={{ paddingBottom: Math.max(footerHeight + 28, 140) }}
+              onScroll={onThreadScroll}
+            >
+              <div ref={contentRef} className="ua-thread-content">
+              {messages.map((m, idx) => (
+                <div
+                  key={m.id}
+                  data-msg-id={m.id}
+                  className={`ua-row group/message ${m.role}${focusId === m.id ? " focus-result" : ""}${
+                    m.id === latestAnswerIdRef.current && resultFlash ? " result-flash" : ""
+                  }${highlightTerm && m.id === latestAnswerIdRef.current ? " citation-pulse" : ""}`}
+                >
+                  {m.role === "assistant" ? (
+                    <div className="ua-avatar ua-avatar-agent" aria-hidden>
+                      OA
+                    </div>
+                  ) : null}
+                  <div className="ua-bubble-wrap">
+                    {formatMsgTime(m.createdAt) && (
+                      <div className={`ua-msg-time ${m.role}`}>{formatMsgTime(m.createdAt)}</div>
+                    )}
+                    {m.role === "user" ? (
+                      <UserMessageBubble text={m.content} />
+                    ) : (
+                      <div className="ua-bubble assistant ua-prose">
+                        <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
+                      </div>
+                    )}
+                    {m.role === "assistant" && m.answerInsight && (
+                      <AnswerInsightBar insight={m.answerInsight} />
+                    )}
+                    {m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
+                      <ArtifactPanel artifacts={m.artifacts} />
+                    )}
+                    {m.role === "assistant" && m.policyTrust && <PolicyTrustCard trust={m.policyTrust} />}
+                    {m.role === "assistant" && m.hitl && (
+                      <HitlTicketCard
+                        ticket={m.hitl}
+                        onUpdate={(ticket, note) => updateHitl(m.id, ticket, note)}
+                      />
+                    )}
+                    {inspector && m.role === "assistant" && m.inlineEval && <InlineEvalCard eval={m.inlineEval} />}
+                    {inspector && m.role === "assistant" && m.tools && m.tools.length > 0 && (
+                      <div className="ua-tools">
+                        {m.tools.map((t) => (
+                          <AgentToolChip
+                            key={t.id}
+                            sticky
+                            tool={{ ...t, name: toolLabel(t.name), state: t.state === "loading" ? "ok" : t.state }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {inspector && m.role === "assistant" && m.reasoning && (
+                      <AgentReasoningBlock text={m.reasoning} thinking={false} defaultOpen={false} />
+                    )}
+                    {m.role === "assistant" && (() => {
+                      const prompts = normalizeFollowUps(m.followUps);
+                      if (!prompts.length && m.content) {
+                        const priorUser = messages.slice(0, idx).filter((x) => x.role === "user").map((x) => x.content);
+                        const uq = messages[idx - 1]?.role === "user" ? messages[idx - 1]!.content : "";
+                        return (
+                          <FollowUpRail
+                            prompts={followUpsFor({
+                              exclude: priorUser,
+                              query: uq,
+                              flowJournal: m.flowJournal,
+                              limit: 3,
+                            })}
+                            disabled={running}
+                            onPick={(t) => void send(t)}
+                          />
+                        );
+                      }
+                      return (
+                        <FollowUpRail
+                          prompts={prompts}
+                          disabled={running}
+                          onPick={(t) => void send(t)}
+                        />
+                      );
+                    })()}
+                    <div className="ua-msg-actions">
+                      <button type="button" className="ua-msg-act" title="复制" onClick={() => void copyMsg(m)}>
+                        {copiedId === m.id ? "✓" : "⎘"}
+                      </button>
+                      {m.role === "assistant" && idx === messages.length - 1 && (
+                        <button type="button" className="ua-msg-act" title="重试" disabled={running} onClick={retryLast}>
+                          ↻
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {m.role === "user" ? (
+                    <div className="ua-avatar ua-avatar-user" aria-hidden>
+                      我
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+
+              {running && (
+                <div className="ua-row assistant live-turn group/message" data-msg-id="__live__">
+                  <div className="ua-avatar ua-avatar-agent live" aria-hidden>
+                    OA
+                  </div>
+                  <div className="ua-bubble-wrap">
+                    {inspector && liveTools.length > 0 && (
+                      <div className="ua-tools">
+                        {liveTools.map((t) => (
+                          <AgentToolChip key={t.id} sticky tool={{ ...t, name: toolLabel(t.name) }} />
+                        ))}
+                      </div>
+                    )}
+                    {streamText ? (
+                      <div className="ua-bubble assistant streaming ink">
+                        <AgentMarkdown text={streamText} />
+                        <span className="ua-caret" />
+                      </div>
+                    ) : (
+                      <AgentThink />
+                    )}
+                  </div>
+                </div>
+              )}
+              <div ref={sentinelRef} className="ua-thread-sentinel" aria-hidden />
+              </div>
+            </div>
+          )}
+
+          {emptyMessage && (
+            <div className="ua-empty" style={{ paddingBottom: Math.max(footerHeight + 16, 120) }}>
+              <AgentWelcome
+                kbRev={kbRev}
+                onPrompt={(t) => void send(t)}
+                disabled={running}
+                onOpenKnowledge={() => {
+                  setSettingsTab("knowledge");
+                  setSettingsOpen(true);
+                }}
+              />
+            </div>
+          )}
+
+          <div ref={footerRef} className="ua-footer">
+            <ResultLocator
+              visible={away && !running && !emptyMessage}
+              label="最新一条"
+              onLocate={() => {
+                const id = latestAnswerIdRef.current;
+                if (id) scrollToMessage(id, true);
+                else scrollToBottom(true);
               }}
-              placeholder="输入问题，Enter 发送 · Shift+Enter 换行"
-              disabled={running}
             />
-            {running ? (
-              <button type="button" className="agent-stop-btn square" onClick={stop} title="停止">
-                ■
-              </button>
-            ) : (
-              <button type="submit" className="agent-send-btn" disabled={!input.trim()} title="发送">
-                ↑
-              </button>
+            {pinned && (
+              <div className="ua-pin">
+                <span>已钉住上下文</span>
+                <em>{pinned.slice(0, 60)}</em>
+                <button type="button" onClick={() => setPinned("")}>
+                  ×
+                </button>
+              </div>
             )}
-          </form>
+            {slashMenu.length > 0 && (
+              <ul className="ua-slash">
+                {slashMenu.map((s) => (
+                  <li key={s.token}>
+                    <button type="button" onClick={() => setInput(`${s.token} `)}>
+                      <code>{s.token}</code>
+                      <span>{s.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <form
+              className="ua-compose"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void send(input);
+              }}
+            >
+              <textarea
+                value={input}
+                rows={1}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  e.target.style.height = "auto";
+                  e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    void send(input);
+                  }
+                }}
+                placeholder="输入问题，例如：介绍一下 iMean 的架构"
+                disabled={running}
+              />
+              <div className="ua-compose-bar">
+                <span className="ua-compose-hint">
+                  {modeHint} · Enter 发送
+                </span>
+                <button
+                  type={running ? "button" : "submit"}
+                  className={running ? "ua-compose-btn ua-stop" : "ua-compose-btn ua-send"}
+                  disabled={!running && !input.trim()}
+                  onClick={running ? stop : undefined}
+                  title={running ? "停止" : "发送"}
+                >
+                  {running ? "■" : "↑"}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
 
-        <div className="agent-side-panel">
-          <header className="agent-chat-head">
-            <strong>Agent Loop Trace</strong>
-            <span>tools/call · JSON-RPC</span>
-          </header>
-          <AgentLiveTrace traces={traces} running={running} iteration={iteration} />
-        </div>
+        <TurnFlowPanel
+          journal={displayJournal}
+          running={running}
+          turnStartedAt={flowTurnStartedAt}
+          onEvidenceClick={handleEvidenceClick}
+        />
+
+        {inspector && (
+          <aside className="ua-side">
+            <header>
+              <strong>运行详情</strong>
+              <span>{toolCount} 次调用</span>
+              <button type="button" onClick={exportActive}>
+                导出
+              </button>
+            </header>
+            <AgentLiveTrace traces={traces} running={running} iteration={iteration} />
+          </aside>
+        )}
       </div>
 
-      {showVnc && <VncFloat />}
+      {sessionsOpen && (
+        <div className="ua-session-sheet-back" onClick={() => setSessionsOpen(false)} role="presentation">
+          <aside className="ua-session-sheet" onClick={(e) => e.stopPropagation()}>
+            <header>
+              <strong>历史会话</strong>
+              <button type="button" onClick={() => setSessionsOpen(false)}>
+                ×
+              </button>
+            </header>
+            <button type="button" className="ua-session-sheet-new" onClick={newChat}>
+              + 新对话
+            </button>
+            <ul>
+              {store.sessions.map((s) => (
+                <li key={s.id}>
+                  <button type="button" className={s.id === store.activeId ? "on" : ""} onClick={() => switchSession(s.id)}>
+                    <strong>{s.title}</strong>
+                    <em>{s.updatedAt.slice(0, 16).replace("T", " ")}</em>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        </div>
+      )}
+
+      <OwnSettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        initialTab={settingsTab}
+        enabledTools={enabledTools}
+        onToolsChange={setEnabledTools}
+        orchMode={orchMode}
+        onOrchModeChange={setOrchMode}
+        onLlmChange={setLlmConfig}
+        onKnowledgeChange={() => setKbRev((n) => n + 1)}
+      />
+
+      <OwnCommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
     </div>
   );
 }

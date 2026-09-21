@@ -64,6 +64,7 @@ async function streamChatCompletion(
   messages: AgentChatMessage[],
   signal: AbortSignal,
   onDelta: (delta: StreamDelta) => void,
+  enabledTools?: string[],
 ): Promise<{ content: string; reasoning: string; toolCalls: OpenAiToolCall[] }> {
   const baseUrl = resolveLlmBaseUrl(config.baseUrl);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -76,7 +77,7 @@ async function streamChatCompletion(
     body: JSON.stringify({
       model: config.model,
       messages,
-      tools: mcpToolsToOpenAi(),
+      tools: mcpToolsToOpenAi(enabledTools),
       tool_choice: "auto",
       stream: true,
       temperature: 0.4,
@@ -157,7 +158,7 @@ export async function runAgentTurn(
   userMessage: string,
   history: AgentChatMessage[],
   config: LlmConfig,
-  ctx: { snapshotRoot?: Element | null; signal?: AbortSignal },
+  ctx: { snapshotRoot?: Element | null; signal?: AbortSignal; enabledTools?: string[]; memoryBlock?: string },
   onEvent: (ev: AgentStreamEvent) => void,
 ): Promise<{ assistantText: string; traces: AgentTurnTrace[]; messages: AgentChatMessage[] }> {
   if (!isLlmConfigured(config)) {
@@ -170,7 +171,13 @@ export async function runAgentTurn(
   onEvent({ type: "turn-start", turnId });
 
   const messages: AgentChatMessage[] = [
-    { role: "system", content: buildAgentSystemPrompt() },
+    {
+      role: "system",
+      content: buildAgentSystemPrompt({
+        memoryBlock: ctx.memoryBlock,
+        enabledTools: ctx.enabledTools,
+      }),
+    },
     ...history.filter((m) => m.role !== "system"),
     { role: "user", content: userMessage },
   ];
@@ -203,7 +210,7 @@ export async function runAgentTurn(
         trace.text += delta.content;
         onEvent({ type: "text-delta", text: delta.content });
       }
-    });
+    }, ctx.enabledTools);
 
     trace.reasoning = result.reasoning || trace.reasoning;
     trace.text = result.content || trace.text;
@@ -260,7 +267,7 @@ export const AGENT_QUICK_PROMPTS = [
   { label: "这个站是干嘛的", text: "这个网站是干嘛的" },
   { label: "站点是否正常", text: "帮我检查一下这个网站正不正常" },
   { label: "DOM 分析", text: "分析当前页面的 DOM 结构，统计可交互元素" },
-  { label: "自动化流程", text: "帮我入队一个改价上架的 workflow，并说明会执行哪些步骤" },
+  { label: "自动化流程", text: "帮我入队一个网页调研的 workflow，并说明会执行哪些步骤" },
   { label: "年假几天", text: "满一年年假几天" },
   { label: "开通 VPN", text: "帮我开通公司 VPN" },
 ] as const;

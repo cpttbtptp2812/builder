@@ -74,8 +74,7 @@ function pickSkill(query: string): { skillId: string | null; hits: string[]; sco
   const rows = explainDiscovery(query);
   const top = rows[0];
   if (top && top.score > 0) return { skillId: top.skill.id, hits: top.hits, score: top.score, kind: "skill" };
-  if (/dom|snapshot/i.test(query)) return { skillId: "dom-probe", hits: ["fallback"], score: 1, kind: "skill" };
-  if (/workflow|流程/i.test(query)) return { skillId: "workflow-orchestrator", hits: ["fallback"], score: 1, kind: "skill" };
+  if (/dom|元素|snapshot/i.test(query)) return { skillId: "dom-probe", hits: ["fallback"], score: 1, kind: "skill" };
   return { skillId: null, hits: [], score: 0, kind: "none" };
 }
 
@@ -243,14 +242,35 @@ export async function runGuestAgentOnServer(
   }
 
   if (picked.kind === "none" || !picked.skillId) {
-    const text = [
-      `没有技能命中「${query}」，所以这轮没有调用任何工具。`,
-      "",
-      "可以这样问：检查网站正不正常 / 这个网站是干嘛的 / 分析页面 DOM / 跑一遍改价上架流程。",
-    ].join("\n");
+    const hits = ragHitsForMcp(query, 5);
     appendSessionTurn(sessionId, "user", query);
-    appendSessionTurn(sessionId, "assistant", text);
-    return { assistantText: text, traces: [], runtime: "server" as const };
+    const body =
+      hits.hits.length === 0
+        ? `知识库没有足够依据回答「${query}」。可以问项目、探活、或制度。`
+        : hits.hits.map((h) => `${h.excerpt}\n\n来源：${h.title}`).join("\n\n---\n\n");
+    appendSessionTurn(sessionId, "assistant", body);
+    return {
+      assistantText: body,
+      traces: [
+        {
+          iteration: 1,
+          label: "Act · knowledge_search",
+          reasoning: "未命中强技能，检索知识库",
+          text: "",
+          tools: [
+            {
+              id: "srv-open-knowledge",
+              name: "knowledge_search",
+              args: JSON.stringify({ query, topK: 5 }),
+              result: hits,
+              ok: true,
+              iteration: 1,
+            },
+          ],
+        },
+      ],
+      runtime: "server" as const,
+    };
   }
 
   const skill = getSkill(picked.skillId)!;

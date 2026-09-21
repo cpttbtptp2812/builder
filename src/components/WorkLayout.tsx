@@ -8,22 +8,36 @@ import { getWork } from "../data/works";
 export function WorkLayout() {
   const { slug } = useParams();
   const work = slug ? getWork(slug) : null;
+  const productApp = slug === "ownagent";
 
   return (
-    <div className="work-shell site-work" style={{ "--work-accent": work?.accent ?? "#5eead4" } as CSSProperties}>
-      <SiteAmbient />
-      <CursorParticles />
+    <div
+      className={`work-shell site-work${productApp ? " own-app-shell" : ""}`}
+      style={{ "--work-accent": work?.accent ?? "#5eead4" } as CSSProperties}
+    >
+      {productApp ? null : (
+        <>
+          <SiteAmbient />
+          <CursorParticles />
+        </>
+      )}
       <div className="site-work-inner">
-        <SiteHeader />
-        <div className="work-subhead">
-          <Link to="/" className="work-back">← 全部作品</Link>
-          {work && (
-            <div className="work-title">
-              <strong>{work.title}</strong>
-              <span>{work.subtitle}</span>
+        {productApp ? null : (
+          <>
+            <SiteHeader />
+            <div className="work-subhead">
+              <Link to="/" className="work-back">
+                ← 全部作品
+              </Link>
+              {work && (
+                <div className="work-title">
+                  <strong>{work.title}</strong>
+                  <span>{work.subtitle}</span>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
         <main className="work-body">
           <Outlet />
         </main>

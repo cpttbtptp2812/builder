@@ -1,7 +1,6 @@
-/** Guest Agent — 优先服务端 SQLite+MCP，回退浏览器内运行时 */
+/** Guest Agent — 浏览器内开放工具循环（不依赖固定演示句） */
 
 import {
-  AGENT_SKILLS,
   explainDiscovery,
   getSkill,
   runSkill,
@@ -9,25 +8,180 @@ import {
   type SkillResult,
   type SkillTraceStep,
 } from "./agentSkills";
-import { runGuestAgentAsync } from "./backendBridge";
 import { mcpServer } from "./mcpServer";
-import type { AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
+import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
-import { classifyCapability } from "./policyDesk";
+import { classifyCapability, getTicket, type TicketDraft } from "./policyDesk";
+import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+export type GuestForce = "knowledge" | "probe" | "dom" | "policy";
+
+export type GuestTurnCtx = {
+  snapshotRoot?: Element | null;
+  signal?: AbortSignal;
+  enabledTools?: string[];
+  history?: AgentChatMessage[];
+  force?: GuestForce;
+  pinned?: string;
+};
+
+type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
+type PolicyHit = { text?: string; chunkId?: string; score?: number; slot?: string; value?: string };
+type HttpProbe = {
+  url?: string;
+  status?: number;
+  ok?: boolean;
+  latencyMs?: number;
+  error?: string;
+  contentType?: string;
+};
+type SnapResult = {
+  nodeCount?: number;
+  nodes?: { role: string; name: string; tag: string }[];
+};
+
+type PlannedCall = { name: string; args: Record<string, unknown> };
+type ToolPack = { name: string; content: unknown; ok: boolean };
+
+export function toolPreviewFromResult(name: string, content: unknown): string {
+  if (content == null) return "";
+  const c = content as Record<string, unknown>;
+  if (name === "http_probe") {
+    return `${c.status ?? "—"} · ${c.latencyMs ?? "—"}ms${c.ok === false ? " · fail" : ""}`;
+  }
+  if (name === "knowledge_search") {
+    if (c.error) return `error · ${String(c.error).slice(0, 40)}`;
+    const hits = (c.hits as unknown[] | undefined)?.length ?? 0;
+    const chunks = c.chunkCount ?? c.chunks;
+    return chunks != null ? `${hits} hits · ${chunks} chunks` : `${hits} hits`;
+  }
+  if (name === "browser_snapshot") {
+    return `${c.nodeCount ?? (c.nodes as unknown[] | undefined)?.length ?? "—"} nodes`;
+  }
+  if (name === "policy_search") {
+    const hits = (c.hits as unknown[] | undefined)?.length ?? 0;
+    return `${hits} clauses`;
+  }
+  if (name === "ticket_draft" || name === "ticket_commit") {
+    return String(c.id ?? c.ticketId ?? c.status ?? "ticket");
+  }
+  if (name === "workflow_run") {
+    return String(c.runId ?? c.workflowId ?? "queued");
+  }
+  return typeof content === "string" ? content.slice(0, 48) : "ok";
+}
+
+const HEALTH_INTENT = /检查|正不正常|正常吗|能不能打开|打得开|探活|健康|体检|性能|ttfb|latency|加载慢|慢不慢|可用吗/i;
+const ABOUT_SITE_INTENT =
+  /是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|看一下这个站|本站是干嘛|这个站是/i;
+const KNOWLEDGE_INTENT = /介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent|剑池|难点|挑战|架构/i;
+const DOM_INTENT = /dom|元素|定位|snapshot|a11y|页面结构|可交互|有多少按钮|当前页/i;
+const POLICY_INTENT = /制度|年假|加班|vpn|工单|请假|报销|开通/i;
+const URL_RE = /https?:\/\/[^\s)）"'<>]+/i;
+
+type SkillPick =
+  | { kind: "skill"; skill: AgentSkill; hits: string[]; score: number }
+  | { kind: "about-site"; reason: string }
+  | { kind: "knowledge"; reason: string }
+  | { kind: "open" };
+
+function toolAllowed(name: string, enabled?: string[]) {
+  if (!enabled?.length) return true;
+  return enabled.includes(name);
+}
+
+function expandQuery(query: string, history?: AgentChatMessage[]): string {
+  const turns = (history ?? []).filter((m) => m.role === "user" || m.role === "assistant");
+  const compact = query.replace(/\s/g, "");
+  if (compact.length > 18 || turns.length < 2) return query;
+  const lastUser = [...turns].reverse().find((m) => m.role === "user" && m.content.trim() !== query.trim());
+  if (!lastUser) return query;
+  return `${lastUser.content}\n追问：${query}`;
+}
+
+function pickSkill(query: string): SkillPick {
+  if (URL_RE.test(query)) {
+    return { kind: "open" };
+  }
+  if (HEALTH_INTENT.test(query) && getSkill("site-analyzer")) {
+    return { kind: "skill", skill: getSkill("site-analyzer")!, hits: ["health-intent"], score: 2 };
+  }
+  if (ABOUT_SITE_INTENT.test(query)) {
+    return { kind: "about-site", reason: "问的是这个网站是什么" };
+  }
+
+  const cap = classifyCapability(query);
+  if (cap.matched && getSkill("policy-desk")) {
+    return { kind: "skill", skill: getSkill("policy-desk")!, hits: [cap.cap], score: 3 };
+  }
+
+  if (KNOWLEDGE_INTENT.test(query)) {
+    return { kind: "knowledge", reason: "项目 / 经历类问题，检索知识库" };
+  }
+
+  const top = explainDiscovery(query)[0];
+  if (top && top.score >= 2) {
+    return { kind: "skill", skill: top.skill, hits: top.hits, score: top.score };
+  }
+
+  return { kind: "open" };
+}
+
+function planOpenTools(query: string, enabled?: string[], force?: GuestForce): PlannedCall[] {
+  const allow = (n: string) => toolAllowed(n, enabled);
+  const origin = typeof location !== "undefined" ? location.origin : "";
+  const url = query.match(URL_RE)?.[0] ?? (force === "probe" ? origin : undefined);
+
+  if (force === "probe") {
+    return allow("http_probe") && url ? [{ name: "http_probe", args: { url, method: "GET" } }] : [];
+  }
+  if (force === "dom") {
+    return allow("browser_snapshot") ? [{ name: "browser_snapshot", args: { compact: true } }] : [];
+  }
+  if (force === "policy") {
+    return allow("policy_search") ? [{ name: "policy_search", args: { query, topK: 4 } }] : [];
+  }
+  if (force === "knowledge") {
+    return allow("knowledge_search") ? [{ name: "knowledge_search", args: { query, topK: 5 } }] : [];
+  }
+
+  const calls: PlannedCall[] = [];
+  if (url && allow("http_probe")) {
+    calls.push({ name: "http_probe", args: { url, method: "GET" } });
+  } else if (HEALTH_INTENT.test(query) && allow("http_probe") && origin) {
+    calls.push({ name: "http_probe", args: { url: origin, method: "HEAD" } });
+  }
+
+  if (DOM_INTENT.test(query) && allow("browser_snapshot")) {
+    calls.push({ name: "browser_snapshot", args: { compact: true } });
+  }
+
+  if (POLICY_INTENT.test(query) && allow("policy_search")) {
+    calls.push({ name: "policy_search", args: { query, topK: 4 } });
+    // 制度问句只查手册，不误伤项目知识库导致「未命中」
+    return calls;
+  }
+
+  if (allow("knowledge_search")) {
+    calls.push({ name: "knowledge_search", args: { query, topK: 5 } });
+  }
+
+  return calls;
+}
 
 async function streamText(text: string, onEvent: (ev: AgentStreamEvent) => void, chunk = 2) {
   for (let i = 0; i < text.length; i += chunk) {
     onEvent({ type: "text-delta", text: text.slice(i, i + chunk) });
-    await sleep(12);
+    await sleep(8);
   }
 }
 
 async function streamReasoning(text: string, onEvent: (ev: AgentStreamEvent) => void) {
-  for (let i = 0; i < text.length; i += 3) {
-    onEvent({ type: "reasoning-delta", text: text.slice(i, i + 3) });
-    await sleep(8);
+  for (let i = 0; i < text.length; i += 4) {
+    onEvent({ type: "reasoning-delta", text: text.slice(i, i + 4) });
+    await sleep(6);
   }
 }
 
@@ -53,67 +207,95 @@ function skillTraceToAgentTrace(steps: SkillTraceStep[], reasoning: string): Age
   };
 }
 
-/** 先判「正不正常」，再判「是干嘛的」。顺序反了，带「这个网站」的体检也会被当成介绍。 */
-const HEALTH_INTENT = /检查|正不正常|正常吗|能不能打开|打得开|探活|健康|体检|性能|ttfb|latency|加载慢|慢不慢|可用吗/i;
-const ABOUT_SITE_INTENT =
-  /是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|看一下这个站|本站是干嘛|这个站是/i;
-const KNOWLEDGE_INTENT = /介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent/i;
-
-type SkillPick =
-  | { kind: "skill"; skill: AgentSkill; hits: string[]; score: number }
-  | { kind: "about-site"; reason: string }
-  | { kind: "knowledge"; reason: string }
-  | { kind: "none" };
-
-/**
- * 路由顺序：站点体检 → 本站介绍 → 项目知识 → trigger 打分 → 明确没匹配。
- * 禁止「没命中就跑 site-analyzer」，否则每句话都是同一份体检报告。
- */
-function pickSkill(query: string): SkillPick {
-  if (HEALTH_INTENT.test(query)) {
-    return { kind: "skill", skill: getSkill("site-analyzer")!, hits: ["health-intent"], score: 2 };
+function composeFromHits(hits: KnowledgeHit[], lead?: string): string {
+  const usable = hits.filter((h) => (h.excerpt ?? "").trim().length > 0);
+  if (usable.length === 0) {
+    return lead ? `${lead}\n\n知识库这一轮没有更多片段。` : "";
   }
-  if (ABOUT_SITE_INTENT.test(query)) {
-    return { kind: "about-site", reason: "问的是这个网站是什么，不是让它去探活" };
-  }
-
-  const cap = classifyCapability(query);
-  if (cap.matched && getSkill("policy-desk")) {
-    return { kind: "skill", skill: getSkill("policy-desk")!, hits: [cap.cap], score: 3 };
-  }
-
-  if (KNOWLEDGE_INTENT.test(query)) {
-    return { kind: "knowledge", reason: "问的是项目 / 经历类信息，走知识库检索" };
-  }
-
-  const top = explainDiscovery(query)[0];
-  if (top && top.score > 0) {
-    return { kind: "skill", skill: top.skill, hits: top.hits, score: top.score };
-  }
-
-  if (/dom|元素|定位|snapshot/i.test(query)) {
-    return { kind: "skill", skill: getSkill("dom-probe")!, hits: ["dom-fallback"], score: 1 };
-  }
-  if (/workflow|自动化|流程|回放/i.test(query)) {
-    return { kind: "skill", skill: getSkill("workflow-orchestrator")!, hits: ["workflow-fallback"], score: 1 };
-  }
-
-  return { kind: "none" };
+  const body = usable
+    .slice(0, 3)
+    .map((h) => h.excerpt!.trim())
+    .join("\n\n");
+  const sources = [...new Set(usable.map((h) => h.title).filter(Boolean))];
+  const parts = [lead, body, sources.length ? `来源：${sources.join(" · ")}` : ""]
+    .filter(Boolean)
+    .join("\n\n");
+  return parts;
 }
 
-/** 一句话没匹配上时，说清楚为什么 + 能问什么，而不是随便挑个技能跑 */
-function synthesizeNoMatch(query: string): string {
+function summarizeSnapshot(snap: SnapResult | undefined): string {
+  const nodes = snap?.nodes ?? [];
+  const byRole: Record<string, number> = {};
+  for (const n of nodes) byRole[n.role] = (byRole[n.role] ?? 0) + 1;
+  const interactive = (byRole.button ?? 0) + (byRole.link ?? 0) + (byRole.textbox ?? 0);
+  const top = Object.entries(byRole)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([r, n]) => `${r} ${n}`)
+    .join("、");
+  const samples = nodes
+    .filter((n) => n.role === "button" || n.role === "link" || n.role === "textbox")
+    .slice(0, 8)
+    .map((n) => `- ${n.role} · ${n.name || n.tag}`)
+    .join("\n");
   return [
-    `没有技能命中「${query}」，所以这轮没有调用任何工具。`,
-    "",
-    "路由规则是：每个技能在 SKILL.md 里声明 triggers，命中长词记 2 分、短词 1 分，Top-1 才进入执行；一个都没命中就停在这里，不猜。",
-    "",
-    `现在装了 ${AGENT_SKILLS.length} 个可运行技能，可以这样问：`,
-    "",
-    ...AGENT_SKILLS.map((s) => `- **${s.name}** — ${s.description}`),
-    "",
-    "想了解项目本身，直接问「介绍一下 iMean 项目」会走知识库检索。",
-  ].join("\n");
+    `当前页抓到 ${snap?.nodeCount ?? nodes.length} 个节点，可交互约 ${interactive} 个。`,
+    top ? `Role 分布：${top}` : "",
+    samples ? `可交互样例：\n${samples}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function synthesizeOpenAnswer(query: string, packs: ToolPack[]): string {
+  const parts: string[] = [];
+  const compact = query.replace(/\s/g, "");
+
+  if (compact.length <= 2 && !URL_RE.test(query)) {
+    return "这句话信息太少了。可以直接问项目（iMean / OwnAgent / 剑池）、粘贴 URL 探活、或输入 /search /dom /policy。";
+  }
+
+  const httpPack = packs.find((p) => p.name === "http_probe");
+  const http = httpPack?.content as HttpProbe | undefined;
+  if (http) {
+    if (http.ok) {
+      parts.push(`**探活通过。** ${http.url ?? ""} → HTTP ${http.status ?? "—"}，${http.latencyMs ?? "—"}ms。`);
+    } else {
+      parts.push(
+        `**探活失败。** ${http.url ?? ""} ${http.error ? `· ${http.error}` : `· status ${http.status ?? "—"}`}。跨域或站点拒绝时浏览器会拦请求。`,
+      );
+    }
+  }
+
+  const snapPack = packs.find((p) => p.name === "browser_snapshot");
+  if (snapPack?.ok) parts.push(summarizeSnapshot(snapPack.content as SnapResult));
+
+  const policyPack = packs.find((p) => p.name === "policy_search");
+  const policyHits = ((policyPack?.content as { hits?: PolicyHit[] } | undefined)?.hits ?? []).filter((h) => h.text);
+  if (policyHits.length) {
+    parts.push(
+      policyHits
+        .slice(0, 3)
+        .map((h) => (h.value ? `**${h.slot ?? h.chunkId}**：${h.value}\n${h.text}` : h.text))
+        .join("\n\n"),
+    );
+  }
+
+  const knowPack = packs.find((p) => p.name === "knowledge_search");
+  const hits = ((knowPack?.content as { hits?: KnowledgeHit[] } | undefined)?.hits ?? []) as KnowledgeHit[];
+  const fromKb = composeFromHits(hits);
+  if (fromKb && !ABOUT_SITE_INTENT.test(query)) parts.push(fromKb);
+  if (fromKb && ABOUT_SITE_INTENT.test(query)) {
+    parts.unshift(composeFromHits(hits, "这是王旭的个人作品站，主项目是 OwnAgent。"));
+  }
+
+  const unique = [...new Set(parts.filter(Boolean))];
+  if (unique.length) return unique.join("\n\n");
+
+  return [
+    `知识库和当前工具里，没有足够依据回答「${query}」。`,
+    "可以直接问项目（iMean / OwnAgent / 剑池）、粘贴一个 URL 让我探活、让我看当前页的 DOM，或问年假/VPN 这类制度。接入自己的模型后，开放问题会走完整 Tool Call。",
+  ].join("\n\n");
 }
 
 function synthesizeSiteAudit(result: SkillResult, query: string): string {
@@ -147,108 +329,49 @@ function synthesizeSiteAudit(result: SkillResult, query: string): string {
 
   const lines = [verdict, ""];
   if (http) {
-    lines.push(`- HTTP 探活：${http.ok ? "✅ 通过" : "❌ 失败"} · status ${http.status ?? "—"} · ${http.latencyMs ?? "—"}ms`);
+    lines.push(`- HTTP 探活：${http.ok ? "通过" : "失败"} · status ${http.status ?? "—"} · ${http.latencyMs ?? "—"}ms`);
     lines.push(`- 目标：${http.url ?? "本站"}`);
   }
   if (perf) {
     lines.push(`- TTFB：${perf.ttfbMs ?? "—"}ms · Load：${perf.loadMs ?? "—"}ms · Resources：${perf.resourceCount ?? "—"}`);
   }
   if (d?.dom) lines.push(`- DOM a11y 节点：${d.dom.a11yNodes ?? "—"}`);
-  lines.push("", "以上数据来自真实 `http_probe` + Performance API + `browser_snapshot`，非 mock。");
   return lines.join("\n");
 }
 
 function synthesizeDomProbe(result: SkillResult): string {
   const p = (result.dashboard as { domProbe?: { totalNodes?: number; interactive?: number; density?: number; byRole?: Record<string, number> } })?.domProbe;
-  if (!p) return "DOM 探针已完成，详见右侧 Trace JSON。";
+  if (!p) return "当前页 DOM 已抓取，细节在右侧 Trace。";
   const topRoles = Object.entries(p.byRole ?? {})
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5)
     .map(([r, n]) => `${r}(${n})`)
     .join("、");
   return [
-    "**DOM 探针结果**",
-    "",
-    `- 总节点：${p.totalNodes ?? "—"}`,
-    `- 可交互元素：${p.interactive ?? "—"}（密度 ${p.density ?? "—"}%）`,
-    `- Role 分布：${topRoles || "—"}`,
-    "",
-    "同源算法见 Locator Lab · 数据来自真实 browser_snapshot。",
-  ].join("\n");
+    `当前页 ${p.totalNodes ?? "—"} 个节点，可交互 ${p.interactive ?? "—"}（密度 ${p.density ?? "—"}%）。`,
+    topRoles ? `Role：${topRoles}` : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function synthesizeWorkflow(result: SkillResult): string {
   const wf = (result.dashboard as { workflow?: { runId?: string; workflowId?: string; status?: string; replaySteps?: number } })?.workflow;
   return [
-    "**Workflow 已入队**",
-    "",
-    `- runId：${wf?.runId ?? "—"}`,
-    `- workflowId：${wf?.workflowId ?? "—"}`,
-    `- 状态：${wf?.status ?? "queued"}`,
-    `- 回放步骤：${wf?.replaySteps ?? "—"} 步`,
-    "",
-    "TaskQueue 上游协议见 SDK Lab · workflow_run 为真实 MCP 调用。",
+    `已在本机 MCP 入队 workflow \`${wf?.workflowId ?? "—"}\`（runId ${wf?.runId ?? "—"}，${wf?.replaySteps ?? "—"} 步）。`,
+    "这是本站的入队接口，不会去操控外部网站。要看真实浏览器自动化，打开 iMean 产品页。",
   ].join("\n");
 }
 
-async function runKnowledgePath(
-  query: string,
-  ctx: { snapshotRoot?: Element | null },
-  onEvent: (ev: AgentStreamEvent) => void,
-  opts?: { searchQuery?: string; compose?: (hits: { title: string; score: number; excerpt: string }[]) => string },
-): Promise<{ text: string; traces: AgentTurnTrace[] }> {
-  const searchQuery = opts?.searchQuery ?? query;
-  const t0 = performance.now();
-  const tool: AgentToolTrace = {
-    id: "guest-knowledge",
-    name: "knowledge_search",
-    args: JSON.stringify({ query: searchQuery, topK: 3 }),
-    iteration: 1,
-  };
-  const traces: AgentTurnTrace[] = [
-    { iteration: 1, label: "Retrieve · 知识库", reasoning: "", text: "", tools: [tool] },
-  ];
-  onEvent({ type: "iteration", n: 1 });
-  onEvent({ type: "trace-sync", traces });
-  onEvent({ type: "tool-start", tool });
-
-  const out = await mcpServer.callTool("knowledge_search", { query: searchQuery, topK: 3 }, ctx);
-  tool.result = out.content;
-  tool.ms = Math.round(performance.now() - t0);
-  tool.ok = !out.isError;
-  onEvent({ type: "tool-end", tool: { ...tool } });
-  onEvent({ type: "trace-sync", traces: [...traces] });
-
-  const hits = (out.content as { hits?: { title: string; score: number; excerpt: string }[] })?.hits ?? [];
-  const text = (opts?.compose ?? synthesizeKnowledgeHits)(hits);
-  return { text, traces };
-}
-
-function synthesizeAboutSite(hits: { title: string; score: number; excerpt: string }[]): string {
-  const lines = [
-    "**这是王旭的个人作品站，主项目是 OwnAgent。**",
-    "",
-    "OwnAgent 是跑在浏览器里的 Agent：你说一句话，先经过意图路由、MCP 工具、检索和能力锁，再流式作答。能力全景是底图，对话、追踪、评测是同一条链上的一层。",
-    "",
-    "它**不是**聊天套壳。打开就能跑，不需要 API Key；每一步的耗时和工具返回都能在「运行追踪」里展开。",
-  ];
-  if (hits.length > 0) {
-    lines.push("", "知识库里和本站相关的片段：", "");
-    hits.slice(0, 3).forEach((h, i) => {
-      lines.push(`${i + 1}. **${h.title}**（相关度 ${Math.round(h.score * 100)}%）`);
-      lines.push(`   ${h.excerpt}`);
-    });
+function synthesizeGeneric(result: SkillResult): string {
+  if (result.markdown) return result.markdown;
+  if (result.dashboard) {
+    return "```json\n" + JSON.stringify(result.dashboard, null, 2).slice(0, 2500) + "\n```";
   }
-  return lines.join("\n");
-}
-
-function synthesizeKnowledgeHits(hits: { title: string; score: number; excerpt: string }[]): string {
-  if (hits.length === 0) return "知识库未命中相关内容，可换项目名试试，比如 iMean、OwnAgent。";
-  return [
-    `检索到 ${hits.length} 条相关片段：`,
-    "",
-    ...hits.map((h, i) => `${i + 1}. **${h.title}**（相关度 ${Math.round(h.score * 100)}%）\n   ${h.excerpt}`),
-  ].join("\n");
+  if (result.meta?.raw != null) {
+    return "```json\n" + JSON.stringify(result.meta.raw, null, 2).slice(0, 2500) + "\n```";
+  }
+  return "这轮工具已跑完，右侧 Trace 是原始返回。";
 }
 
 function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: string): string {
@@ -260,18 +383,82 @@ function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: strin
     case "workflow-orchestrator":
       return synthesizeWorkflow(result);
     case "policy-desk":
-      return result.markdown ?? "制度值班已完成，详见能力锁面板。";
+      return result.markdown ?? "制度值班已完成。";
     case "knowledge-lookup":
-      return result.markdown ?? "检索完成，详见知识检索面板。";
+      return result.markdown ?? synthesizeGeneric(result);
     default:
-      return "任务已完成，详见右侧 MCP Trace。";
+      return synthesizeGeneric(result);
   }
 }
 
-/** 每条回复都带上「这句话被路由到哪、依据是什么」，避免不同问题看起来回了同一段 */
-function routingHeader(query: string, skill: AgentSkill, hits: string[], score: number): string {
-  const basis = hits.length > 0 && score > 0 ? `命中 ${hits.join("、")}，共 ${score} 分` : "正则兜底匹配";
-  return `> 「${query}」→ 技能 **${skill.name}**（${basis}），调用 \`${skill.tools.join("` → `")}\`\n`;
+async function runKnowledgePath(
+  query: string,
+  ctx: GuestTurnCtx,
+  onEvent: (ev: AgentStreamEvent) => void,
+  opts?: { searchQuery?: string; lead?: string },
+): Promise<{ text: string; traces: AgentTurnTrace[] }> {
+  const searchQuery = opts?.searchQuery ?? query;
+  const t0 = performance.now();
+  const tool: AgentToolTrace = {
+    id: "guest-knowledge",
+    name: "knowledge_search",
+    args: JSON.stringify({ query: searchQuery, topK: 5 }),
+    iteration: 1,
+  };
+  const traces: AgentTurnTrace[] = [{ iteration: 1, label: "Retrieve · 知识库", reasoning: "", text: "", tools: [tool] }];
+  onEvent({ type: "iteration", n: 1 });
+  onEvent({ type: "trace-sync", traces });
+  onEvent({ type: "tool-start", tool });
+
+  const out = await mcpServer.callTool("knowledge_search", { query: searchQuery, topK: 5 }, ctx);
+  tool.result = out.content;
+  tool.ms = Math.round(performance.now() - t0);
+  tool.ok = !out.isError;
+  onEvent({ type: "tool-end", tool: { ...tool } });
+  onEvent({ type: "trace-sync", traces: [...traces] });
+
+  const hits = (out.content as { hits?: KnowledgeHit[] })?.hits ?? [];
+  const text =
+    composeFromHits(hits, opts?.lead) ||
+    `知识库未命中「${query}」。可以换项目名，或问架构 / 难点 / 技术栈。`;
+  return { text, traces };
+}
+
+async function runOpenToolLoop(
+  query: string,
+  ctx: GuestTurnCtx,
+  onEvent: (ev: AgentStreamEvent) => void,
+): Promise<{ text: string; traces: AgentTurnTrace[] }> {
+  const calls = planOpenTools(query, ctx.enabledTools, ctx.force);
+  const traces: AgentTurnTrace[] = [
+    { iteration: 1, label: "Act · 工具", reasoning: "", text: "", tools: [] },
+  ];
+  onEvent({ type: "iteration", n: 1 });
+  onEvent({ type: "trace-sync", traces });
+
+  const packs: ToolPack[] = [];
+  for (const call of calls) {
+    if (ctx.signal?.aborted) break;
+    const tool: AgentToolTrace = {
+      id: `open-${call.name}-${packs.length}`,
+      name: call.name,
+      args: JSON.stringify(call.args),
+      iteration: 1,
+    };
+    traces[0]!.tools.push(tool);
+    onEvent({ type: "tool-start", tool });
+    onEvent({ type: "trace-sync", traces: traces.map((t) => ({ ...t, tools: [...t.tools] })) });
+    const t0 = performance.now();
+    const out = await mcpServer.callTool(call.name, call.args, ctx);
+    tool.result = out.content;
+    tool.ms = Math.round(performance.now() - t0);
+    tool.ok = !out.isError;
+    onEvent({ type: "tool-end", tool: { ...tool } });
+    onEvent({ type: "trace-sync", traces: traces.map((t) => ({ ...t, tools: [...t.tools] })) });
+    packs.push({ name: call.name, content: out.content, ok: !out.isError });
+  }
+
+  return { text: synthesizeOpenAnswer(query, packs), traces };
 }
 
 function persistGuestRun(
@@ -291,76 +478,94 @@ function persistGuestRun(
   });
 }
 
-/** 免 API Key · Router + MCP（服务端优先） */
+/** 免 API Key：对当前输入选工具并作答（带会话上下文） */
 export async function runGuestAgentTurn(
   query: string,
-  ctx: { snapshotRoot?: Element | null; signal?: AbortSignal },
+  ctx: GuestTurnCtx,
   onEvent: (ev: AgentStreamEvent) => void,
-): Promise<{ assistantText: string; traces: AgentTurnTrace[]; runtime?: "server" | "local" }> {
+): Promise<{
+  assistantText: string;
+  traces: AgentTurnTrace[];
+  runtime?: "server" | "local";
+  hitl?: TicketDraft;
+  policyTrust?: PolicyTrustView;
+  route?: RouteScoreView;
+}> {
   const t0 = performance.now();
   const turnId = `guest-${Date.now().toString(36)}`;
   onEvent({ type: "turn-start", turnId });
 
-  const serverResult = await runGuestAgentAsync(query, ctx);
-  if (serverResult) {
-    onEvent({ type: "iteration", n: 1 });
-    onEvent({ type: "trace-sync", traces: serverResult.traces });
-    await streamReasoning(`Server Agent · SQLite + MCP\nSkill 路由与工具调用已持久化到服务端数据库。`, onEvent);
-    for (const t of serverResult.traces[0]?.tools ?? []) {
-      onEvent({ type: "tool-start", tool: t });
-      onEvent({ type: "tool-end", tool: t });
-    }
-    await streamText(serverResult.assistantText, onEvent);
-    onEvent({ type: "done", iterations: 1, toolCount: serverResult.traces[0]?.tools.length ?? 0 });
-    const out = { ...serverResult, runtime: "server" as const };
-    persistGuestRun(query, out.assistantText, out.traces, out.runtime, Math.round(performance.now() - t0));
-    return out;
-  }
+  const working = ctx.pinned?.trim()
+    ? `${query}\n【钉住】${ctx.pinned.trim().slice(0, 800)}`
+    : query;
 
-  const pick = pickSkill(query);
+  const wrap = (
+    text: string,
+    traces: AgentTurnTrace[],
+    extra?: { hitl?: TicketDraft; policyTrust?: PolicyTrustView; route?: RouteScoreView },
+  ) => {
+    onEvent({ type: "done", iterations: 1, toolCount: traces[0]?.tools.length ?? 0 });
+    persistGuestRun(query, text, traces, "local", Math.round(performance.now() - t0));
+    return { assistantText: text, traces, runtime: "local" as const, ...extra };
+  };
 
-  if (pick.kind === "about-site" || pick.kind === "knowledge") {
-    const about = pick.kind === "about-site";
-    await streamReasoning(
-      [`Guest Agent · 意图路由`, pick.reason, `Pipeline：knowledge_search → ${about ? "本站介绍" : "引用合成"}`].join("\n"),
-      onEvent,
-    );
-    const { text, traces } = await runKnowledgePath(query, ctx, onEvent, {
-      searchQuery: about ? "OwnAgent 浏览器内 AI Agent 平台" : query,
-      compose: about ? synthesizeAboutSite : synthesizeKnowledgeHits,
+  if (ctx.force === "knowledge") {
+    await streamReasoning("斜杠 /search · 知识库", onEvent);
+    const expanded = expandQuery(working, ctx.history);
+    const ran = await runKnowledgePath(expanded, ctx, onEvent, { searchQuery: expanded });
+    await streamText(ran.text, onEvent);
+    return wrap(ran.text, ran.traces, {
+      route: { skillId: "knowledge-lookup", skillName: "知识检索", score: 2, hits: ["/search"], path: "knowledge" },
     });
-    const reply = `> 「${query}」→ ${about ? "本站介绍" : "知识库检索"}（${pick.reason}）\n\n${text}`;
-    await streamText(reply, onEvent);
-    onEvent({ type: "done", iterations: 1, toolCount: 1 });
-    persistGuestRun(query, reply, traces, "local", Math.round(performance.now() - t0));
-    return { assistantText: reply, traces, runtime: "local" };
   }
 
-  if (pick.kind === "none") {
+  if (ctx.force === "probe" || ctx.force === "dom" || ctx.force === "policy") {
+    await streamReasoning(`斜杠 /${ctx.force} · 指定工具`, onEvent);
+    const ran = await runOpenToolLoop(working, { ...ctx, force: ctx.force }, onEvent);
+    await streamText(ran.text, onEvent);
+    return wrap(ran.text, ran.traces, {
+      route: {
+        skillId: ctx.force,
+        skillName: ctx.force === "policy" ? "制度检索" : ctx.force === "dom" ? "DOM 探针" : "站点探活",
+        score: 3,
+        hits: [`/${ctx.force}`],
+        path: "open",
+      },
+    });
+  }
+
+  const pick = pickSkill(working);
+  const expanded = expandQuery(working, ctx.history);
+
+  if (pick.kind === "about-site" || pick.kind === "knowledge" || pick.kind === "open") {
     await streamReasoning(
-      [`Guest Agent · explainDiscovery 路由`, `所有技能得分为 0，不执行任何工具`].join("\n"),
+      pick.kind === "open" ? "按问题选工具：检索 / 探活 / 当前页 / 制度" : pick.reason,
       onEvent,
     );
-    const text = synthesizeNoMatch(query);
-    await streamText(text, onEvent);
-    onEvent({ type: "done", iterations: 0, toolCount: 0 });
-    persistGuestRun(query, text, [], "local", Math.round(performance.now() - t0));
-    return { assistantText: text, traces: [], runtime: "local" };
+    const ran =
+      pick.kind === "open"
+        ? await runOpenToolLoop(query, ctx, onEvent)
+        : await runKnowledgePath(expanded, ctx, onEvent, {
+            searchQuery: pick.kind === "about-site" ? `${expanded} OwnAgent 作品站` : expanded,
+            lead: pick.kind === "about-site" ? "这是王旭的个人作品站，主项目是 OwnAgent。" : undefined,
+          });
+    await streamText(ran.text, onEvent);
+    return wrap(ran.text, ran.traces, {
+      route: {
+        skillId: pick.kind,
+        skillName: pick.kind === "about-site" ? "本站介绍" : pick.kind === "knowledge" ? "知识检索" : "开放工具",
+        score: pick.kind === "open" ? 1 : 2,
+        hits: pick.kind === "open" ? ["open-tools"] : [pick.reason],
+        path: pick.kind,
+      },
+    });
   }
 
   const { skill, hits, score } = pick;
-
-  const reasoning = [
-    `Guest Agent · explainDiscovery 路由`,
-    `命中 Skill \`${skill.name}\`（${hits.join(", ")}，${score} 分）`,
-    `Pipeline：${skill.plan.join(" → ")}`,
-  ].join("\n");
-
+  const reasoning = `命中技能 ${skill.name}（${hits.join("、") || score}）→ ${skill.plan.join(" → ")}`;
   await streamReasoning(reasoning, onEvent);
-
   onEvent({ type: "iteration", n: 1 });
 
-  // runSkill 会在返回前就回调，这里不能引用还未初始化的 trace
   const seen: SkillTraceStep[] = [];
   const { trace, result } = await runSkill(
     skill,
@@ -405,12 +610,42 @@ export async function runGuestAgentTurn(
   const finalTraces = [skillTraceToAgentTrace(trace.filter((s) => !s.tool.startsWith("__")), reasoning)];
   onEvent({ type: "trace-sync", traces: finalTraces });
 
-  const text = `${routingHeader(query, skill, hits, score)}\n${synthesizeResponse(skill, result, query)}`;
+  const text = synthesizeResponse(skill, result, expanded);
   await streamText(text, onEvent);
 
-  onEvent({ type: "done", iterations: 1, toolCount: finalTraces[0]?.tools.length ?? 0 });
-  persistGuestRun(query, text, finalTraces, "local", Math.round(performance.now() - t0));
-  return { assistantText: text, traces: finalTraces, runtime: "local" };
+  let hitl: TicketDraft | undefined;
+  let policyTrust: PolicyTrustView | undefined;
+  const pol = result.dashboard?.policy;
+  if (pol && typeof pol === "object") {
+    const p = pol as {
+      ticketId?: string;
+      capability?: PolicyTrustView["cap"];
+      reason?: string;
+      outcome?: PolicyTrustView["outcome"];
+      citations?: PolicyTrustView["citations"];
+    };
+    if (p.ticketId) hitl = getTicket(p.ticketId) ?? undefined;
+    if (p.capability && p.outcome) {
+      policyTrust = {
+        cap: p.capability,
+        reason: p.reason ?? "",
+        outcome: p.outcome,
+        citations: p.citations ?? [],
+      };
+    }
+  }
+
+  return wrap(text, finalTraces, {
+    hitl,
+    policyTrust,
+    route: {
+      skillId: skill.id,
+      skillName: skill.name,
+      score,
+      hits,
+      path: "skill",
+    },
+  });
 }
 
 export function isAuthError(err: unknown): boolean {

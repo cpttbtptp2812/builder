@@ -1,87 +1,113 @@
-import { useEffect, useRef } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useEffect } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { EvalLabPanel } from "../components/fx/EvalLabPanel";
 import { GuardPanel } from "../components/ownagent/GuardPanel";
 import { RagPanel } from "../components/ownagent/RagPanel";
+import { SkillPlatformPanel } from "../components/ownagent/SkillPlatformPanel";
 import { TracePanel } from "../components/ownagent/TracePanel";
 
-type PanelId = "arch" | "chat" | "trace" | "rag" | "guard" | "eval";
+type TabId = "product" | "theory";
+type ViewId = "chat" | "skills" | "rag" | "guard" | "trace" | "eval";
 
-const PANELS: { id: PanelId; label: string; hint: string }[] = [
-  { id: "arch", label: "能力全景", hint: "点节点看这一层" },
-  { id: "chat", label: "对话", hint: "流式回复 + 工具" },
-  { id: "trace", label: "运行追踪", hint: "每步 payload" },
-  { id: "rag", label: "知识检索", hint: "chunkId 溯源" },
-  { id: "guard", label: "能力锁", hint: "工单预演" },
-  { id: "eval", label: "回归评测", hint: "路由命中率" },
+const VIEWS: { id: ViewId; label: string }[] = [
+  { id: "chat", label: "对话" },
+  { id: "skills", label: "技能" },
+  { id: "rag", label: "知识" },
+  { id: "guard", label: "能力锁" },
+  { id: "trace", label: "追踪" },
+  { id: "eval", label: "评测" },
 ];
 
-function resolvePanel(v: string | null): PanelId {
-  if (v === "skills" || v === "codrive") return "arch";
-  if (PANELS.some((p) => p.id === v)) return v as PanelId;
-  return "arch";
+function resolveTab(tab: string | null, panel: string | null): TabId {
+  if (tab === "theory" || panel === "arch") return "theory";
+  if (tab === "product") return "product";
+  if (panel && panel !== "arch") return "product";
+  return "product";
 }
 
-/** OwnAgent — 能力全景图是产品主界面 */
+function resolveView(panel: string | null, view: string | null): ViewId {
+  const raw = view || panel;
+  if (raw === "skills" || raw === "codrive") return "skills";
+  if (VIEWS.some((v) => v.id === raw)) return raw as ViewId;
+  return "chat";
+}
+
+/** OwnAgent 产品工作台 */
 export function WorkOwnAgent() {
   const [params, setParams] = useSearchParams();
-  const stageRef = useRef<HTMLElement>(null);
-  const raw = params.get("panel");
-  const active = resolvePanel(raw);
-  const current = PANELS.find((p) => p.id === active)!;
+  const tab = resolveTab(params.get("tab"), params.get("panel"));
+  const view = resolveView(params.get("panel"), params.get("view"));
 
-  useEffect(() => {
-    if (!raw) return;
-    stageRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [active, raw]);
-
-  function select(id: PanelId) {
-    const next = new URLSearchParams(params);
-    next.set("panel", id);
+  function go(nextTab: TabId, nextView?: ViewId) {
+    const next = new URLSearchParams();
+    next.set("tab", nextTab);
+    if (nextTab === "product") next.set("view", nextView ?? view);
+    const trySkill = params.get("try") ?? params.get("skill");
+    if (trySkill) next.set("try", trySkill);
     setParams(next, { replace: true });
   }
 
+  useEffect(() => {
+    function onGo(ev: Event) {
+      const detail = (ev as CustomEvent<{ view?: ViewId; tab?: TabId }>).detail ?? {};
+      if (detail.tab === "theory") go("theory");
+      else if (detail.view) go("product", detail.view);
+    }
+    window.addEventListener("ownagent:go", onGo);
+    return () => window.removeEventListener("ownagent:go", onGo);
+  }, [view]);
+
   return (
-    <div className="own-agent">
-      <header className="own-bar">
-        <div>
-          <p className="own-eyebrow">个人项目</p>
-          <h1>OwnAgent</h1>
+    <div className={`own-app ${tab}${view === "chat" && tab === "product" ? " chat-focus" : ""}`}>
+      <header className="own-app-bar">
+        <div className="own-app-brand">
+          <strong>OwnAgent</strong>
         </div>
-        <BackendStatusBar compact />
+        <nav className="own-app-tabs" aria-label="OwnAgent">
+          <button type="button" className={tab === "product" ? "on" : ""} onClick={() => go("product")}>
+            产品
+          </button>
+          <button type="button" className={tab === "theory" ? "on" : ""} onClick={() => go("theory")}>
+            理论
+          </button>
+        </nav>
+        <div className="own-app-actions">
+          <BackendStatusBar compact quiet />
+          <button type="button" className="own-cmd" onClick={() => window.dispatchEvent(new Event("ownagent:palette"))}>
+            命令
+          </button>
+          <Link to="/" className="own-exit">
+            退出
+          </Link>
+        </div>
       </header>
 
-      <nav className="own-tabs" aria-label="OwnAgent">
-        {PANELS.map((p, i) => (
-          <button
-            key={p.id}
-            type="button"
-            className={p.id === active ? "active" : ""}
-            aria-current={p.id === active ? "page" : undefined}
-            onClick={() => select(p.id)}
-          >
-            <span className="own-tab-no">{String(i + 1).padStart(2, "0")}</span>
-            <strong>{p.label}</strong>
-            <em>{p.hint}</em>
-          </button>
-        ))}
-      </nav>
-
-      <section className="own-stage" aria-label={current.label} ref={stageRef}>
-        {active === "arch" ? (
-          <div className="own-panel agent-hub">
-            <AgentHubOverview />
+      {tab === "theory" ? (
+        <div className="own-theory">
+          <AgentHubOverview />
+        </div>
+      ) : (
+        <>
+          <aside className="own-app-side">
+            {VIEWS.map((v) => (
+              <button key={v.id} type="button" className={view === v.id ? "on" : ""} onClick={() => go("product", v.id)}>
+                {v.label}
+              </button>
+            ))}
+          </aside>
+          <div className={`own-app-stage${view === "chat" ? " is-chat" : ""}`}>
+            {view === "chat" ? <AgentProductDemo hubMode /> : null}
+            {view === "skills" ? <SkillPlatformPanel /> : null}
+            {view === "rag" ? <RagPanel /> : null}
+            {view === "guard" ? <GuardPanel /> : null}
+            {view === "trace" ? <TracePanel /> : null}
+            {view === "eval" ? <EvalLabPanel /> : null}
           </div>
-        ) : null}
-        {active === "chat" ? <AgentProductDemo /> : null}
-        {active === "trace" ? <TracePanel /> : null}
-        {active === "rag" ? <RagPanel /> : null}
-        {active === "guard" ? <GuardPanel /> : null}
-        {active === "eval" ? <EvalLabPanel /> : null}
-      </section>
+        </>
+      )}
     </div>
   );
 }

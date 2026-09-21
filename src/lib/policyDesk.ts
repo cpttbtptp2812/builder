@@ -113,6 +113,10 @@ function saveTickets(list: TicketDraft[]) {
 
 let tickets: TicketDraft[] = loadTickets();
 
+export function getTicket(id: string): TicketDraft | null {
+  return tickets.find((t) => t.id === id) ?? null;
+}
+
 export function listTickets() {
   return tickets;
 }

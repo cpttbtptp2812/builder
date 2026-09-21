@@ -1,5 +1,6 @@
 /** Agent Skills — SKILL.md 解析注册表 + 流水线运行时 */
 
+import { loadImportedSkills } from "./importedSkills";
 import { mcpServer } from "./mcpServer";
 import { runPolicyDesk } from "./policyDesk";
 import { hydrateSkill, resolveStepArgs, skillIdFromPath, type SkillManifest } from "./skillMarkdown";
@@ -82,6 +83,17 @@ export const SKILL_CATALOG: AgentSkill[] = loadCatalog();
 /** 进入路由 / 执行链的技能：解析成功且有 steps */
 export const AGENT_SKILLS: AgentSkill[] = SKILL_CATALOG.filter((s) => s.runnable);
 
+/** 内置技能 + 访客导入的可运行技能 */
+export function allRunnableSkills(): AgentSkill[] {
+  try {
+    const extra = loadImportedSkills().filter((s) => s.runnable && s.steps.length > 0) as AgentSkill[];
+    const seen = new Set(AGENT_SKILLS.map((s) => s.id));
+    return [...AGENT_SKILLS, ...extra.filter((s) => !seen.has(s.id))];
+  } catch {
+    return AGENT_SKILLS;
+  }
+}
+
 export const SKILL_ROUTER_DOC = SKILL_CATALOG.find((s) => s.id === "skill-router")?.manifest ?? "";
 
 export const ROUTER_EXAMPLES = [
@@ -122,9 +134,10 @@ function scoreSkillDetailed(skill: AgentSkill, q: string): SkillDiscoveryRow {
 }
 
 export function explainDiscovery(query: string): SkillDiscoveryRow[] {
+  const skills = allRunnableSkills();
   const q = query.trim().toLowerCase();
-  if (!q) return AGENT_SKILLS.map((s) => ({ skill: s, score: 0, hits: [], breakdown: [] }));
-  return AGENT_SKILLS.map((s) => scoreSkillDetailed(s, q)).sort((a, b) => b.score - a.score);
+  if (!q) return skills.map((s) => ({ skill: s, score: 0, hits: [], breakdown: [] }));
+  return skills.map((s) => scoreSkillDetailed(s, q)).sort((a, b) => b.score - a.score);
 }
 
 export function discoverSkills(query: string): SkillCandidate[] {
@@ -220,10 +233,17 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
           dashboard: {
             policy: {
               capability: desk.capability.cap,
+              reason: desk.capability.reason,
               outcome: desk.outcome,
               ticketId: desk.ticket?.id,
               ticketStatus: desk.ticket?.status,
-              citations: desk.citations.map((c) => c.id),
+              citations: desk.citations.map((c) => ({
+                id: c.id,
+                text: c.text,
+                status: c.status,
+                value: c.value,
+                slot: c.slot,
+              })),
             },
           },
           markdown: desk.markdown,

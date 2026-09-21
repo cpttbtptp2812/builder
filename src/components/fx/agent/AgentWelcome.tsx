@@ -1,27 +1,77 @@
-import { AGENT_QUICK_PROMPTS } from "../../../lib/agentRuntime";
+import { useMemo } from "react";
+import { listKnowledgePrompts } from "../../../lib/ownKnowledge";
 
-/** 空状态欢迎 — 对齐 tianyangAgent AgentWelcome */
-export function AgentWelcome({ onPrompt, disabled }: { onPrompt: (text: string) => void; disabled?: boolean }) {
+/** 欢迎屏 — 对齐 tianyangAgent AgentWelcome */
+export function AgentWelcome({
+  onPrompt,
+  disabled,
+  onOpenKnowledge,
+  kbRev = 0,
+}: {
+  onPrompt: (text: string) => void;
+  disabled?: boolean;
+  onOpenKnowledge?: () => void;
+  kbRev?: number;
+}) {
+  const prompts = useMemo(() => listKnowledgePrompts(4), [kbRev]);
+
   return (
-    <div className="agent-welcome">
-      <div className="agent-welcome-avatar" aria-hidden>
-        UA
-      </div>
-      <h3 className="agent-welcome-title">OwnAgent</h3>
-      <p className="agent-welcome-desc">
-        说一句话。先看它选了哪个技能、调了哪个工具，再看它怎么答。不开模型也能跑。
-      </p>
-      <div className="agent-welcome-divider">
-        <span>开始对话</span>
-      </div>
-      <div className="agent-welcome-prompts">
-        {AGENT_QUICK_PROMPTS.map((p) => (
-          <button key={p.label} type="button" disabled={disabled} onClick={() => onPrompt(p.text)}>
-            <span>{p.label}</span>
-            <em>{p.text.slice(0, 28)}…</em>
-            <i aria-hidden>→</i>
+    <div className="ua-welcome ua-welcome-tianyang">
+      <div className="ua-welcome-inner">
+        <div className="ua-welcome-hero">
+          <div className="ua-welcome-avatar-wrap">
+            <div className="ua-welcome-glow ua-welcome-glow-outer" aria-hidden />
+            <div className="ua-welcome-glow ua-welcome-glow-inner" aria-hidden />
+            <div className="ua-welcome-avatar" aria-hidden>
+              OA
+            </div>
+          </div>
+          <div className="ua-welcome-copy">
+            <h2 className="ua-welcome-title">OwnAgent</h2>
+            <p className="ua-welcome-desc">
+              企业知识问答助手。下方示例均已在知识库配置正文，点击即可检索并生成带引用的答复。
+            </p>
+          </div>
+        </div>
+
+        {prompts.length > 0 && (
+          <div className="ua-welcome-section">
+            <div className="ua-welcome-divider">
+              <i aria-hidden />
+              <span>开始对话</span>
+              <i aria-hidden />
+            </div>
+            <div className="ua-welcome-prompts">
+              {prompts.map((p) => (
+                <button
+                  key={p.docId}
+                  type="button"
+                  disabled={disabled}
+                  className="ua-welcome-prompt"
+                  onClick={() => onPrompt(p.text)}
+                >
+                  <span className="ua-welcome-prompt-text">
+                    <em>{p.hint}</em>
+                    <strong>{p.text}</strong>
+                  </span>
+                  <span className="ua-welcome-prompt-go" aria-hidden>
+                    →
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {prompts.length === 0 && (
+          <p className="ua-welcome-empty">知识库还没有可问答的条目，请先配置正文与示例问句。</p>
+        )}
+
+        {onOpenKnowledge && (
+          <button type="button" className="ua-welcome-kb" disabled={disabled} onClick={onOpenKnowledge}>
+            管理知识库
           </button>
-        ))}
+        )}
       </div>
     </div>
   );

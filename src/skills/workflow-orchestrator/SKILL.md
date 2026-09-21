@@ -4,14 +4,10 @@ description: iMean workflow 入队 + 执行面 snapshot — TaskQueue 上游
 triggers:
   - workflow
   - 自动化
-  - 流程
   - 回放
-  - 改价
-  - 上架
   - taskqueue
   - 入队
   - 编排
-  - 跑一遍
   - 执行任务
 tools:
   - workflow_run
@@ -21,8 +17,8 @@ steps:
     label: workflow_run · cloud
     tool: workflow_run
     args:
-      workflowId: price-update
-      mode: cloud
+      workflowId: execute
+      mode: local
   - id: snap
     label: browser_snapshot 执行面
     tool: browser_snapshot

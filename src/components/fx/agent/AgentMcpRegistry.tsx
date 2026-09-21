@@ -6,7 +6,7 @@ const DEFAULT_ENABLED = MCP_TOOLS.map((t) => t.name);
 
 function loadEnabled(): string[] {
   try {
-    const raw = sessionStorage.getItem(STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY) ?? sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return DEFAULT_ENABLED;
     const parsed = JSON.parse(raw) as string[];
     return parsed.filter((n) => MCP_TOOLS.some((t) => t.name === n));
@@ -15,19 +15,21 @@ function loadEnabled(): string[] {
   }
 }
 
-/** MCP 工具注册表 — 对齐 tianyangbuilder ResourcesSection + ResourceSelectModal */
+/** MCP 工具注册表 — 中文产品文案 */
 export function AgentMcpRegistry({
   enabled,
   onChange,
+  compact = false,
 }: {
   enabled: string[];
   onChange: (names: string[]) => void;
+  compact?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>(enabled);
 
   useEffect(() => {
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(enabled));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(enabled));
   }, [enabled]);
 
   function toggle(name: string) {
@@ -40,37 +42,43 @@ export function AgentMcpRegistry({
   }
 
   return (
-    <section className="agent-mcp-registry">
+    <section className={`agent-mcp-registry${compact ? " compact" : ""}`}>
       <header className="agent-mcp-registry-head">
-        <div>
-          <strong>MCP 工具</strong>
-          <span>Agent 会话可调用的 tools/list 注册表</span>
-        </div>
+        {compact ? null : (
+          <div>
+            <strong>MCP 工具</strong>
+            <span>Agent 可调用的 tools/list</span>
+          </div>
+        )}
         <button type="button" onClick={() => { setDraft(enabled); setOpen(true); }}>
-          管理
+          {compact ? `工具 · ${enabled.length}` : "管理"}
         </button>
       </header>
-      <div className="agent-mcp-registry-chips">
-        {enabled.map((name) => {
-          const tool = MCP_TOOLS.find((t) => t.name === name);
-          return (
-            <span key={name} className="agent-mcp-chip" title={tool?.description}>
-              <code>{name}</code>
-            </span>
-          );
-        })}
-      </div>
+      {!compact && (
+        <div className="agent-mcp-registry-chips">
+          {enabled.map((name) => {
+            const tool = MCP_TOOLS.find((t) => t.name === name);
+            return (
+              <span key={name} className="agent-mcp-chip" title={tool?.descriptionZh}>
+                <code>{tool?.labelZh ?? name}</code>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {open && (
         <div className="agent-mcp-modal-backdrop" onClick={() => setOpen(false)}>
           <div className="agent-mcp-modal" onClick={(e) => e.stopPropagation()}>
             <header>
-              <strong>选择 MCP 工具</strong>
+              <strong>选择能力工具</strong>
               <button type="button" onClick={() => setOpen(false)} aria-label="关闭">
                 ×
               </button>
             </header>
-            <p className="agent-mcp-modal-lead">勾选后 Agent / LLM 仅可使用这些工具（Guest 模式按 Skill 流水线执行）。</p>
+            <p className="agent-mcp-modal-lead">
+              对齐理论「能力」层：勾选后对话会真正调用这些工具（探活、检索、快照、制度、工单）。
+            </p>
             <div className="agent-mcp-modal-list">
               {MCP_TOOLS.map((t) => (
                 <label key={t.name} className={draft.includes(t.name) ? "on" : ""}>
@@ -80,8 +88,9 @@ export function AgentMcpRegistry({
                     onChange={() => toggle(t.name)}
                   />
                   <div>
+                    <strong>{t.labelZh}</strong>
                     <code>{t.name}</code>
-                    <span>{t.description}</span>
+                    <span>{t.descriptionZh}</span>
                   </div>
                 </label>
               ))}

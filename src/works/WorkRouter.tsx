@@ -13,10 +13,10 @@ import { WorkAgentTrace } from "./WorkAgentTrace";
 import { WorkOwnAgent } from "./WorkOwnAgent";
 import { WorkStreamProbe } from "./WorkStreamProbe";
 
-/** 旧的散落入口 → OwnAgent 对应 Tab */
-const LEGACY_PANEL: Record<string, string> = {
+/** 旧的散落入口 → OwnAgent 产品视图 */
+const LEGACY_VIEW: Record<string, string> = {
   agent: "chat",
-  "dev-debug": "arch",
+  "dev-debug": "theory",
   skills: "chat",
   platform: "rag",
   eval: "eval",
@@ -24,11 +24,12 @@ const LEGACY_PANEL: Record<string, string> = {
 };
 
 function ownAgentRedirect(slug: string, params: URLSearchParams): string | null {
-  const panel = LEGACY_PANEL[slug];
-  if (!panel) return null;
-  const next = new URLSearchParams({ panel });
+  const view = LEGACY_VIEW[slug];
+  if (!view) return null;
+  if (view === "theory") return "/work/ownagent?tab=theory";
+  const next = new URLSearchParams({ tab: "product", view });
   const trySkill = params.get("try") ?? params.get("skill");
-  if (panel === "chat" && trySkill) next.set("try", trySkill);
+  if (view === "chat" && trySkill) next.set("try", trySkill);
   return `/work/ownagent?${next.toString()}`;
 }
 

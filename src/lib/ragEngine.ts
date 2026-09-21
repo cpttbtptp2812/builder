@@ -1,6 +1,7 @@
 /** RAG 引擎 — 分块语料 + 混合检索 + 引用溯源（可接向量库） */
 
 import { matchProject, PROJECT_DETAILS } from "../data/knowledge";
+import { knowledgeCorpusVersion, knowledgeDocsAsChunks } from "./ownKnowledge";
 
 export type RagSection = "desc" | "architecture" | "narrative" | "challenge" | "aspect" | "topics";
 
@@ -32,9 +33,11 @@ export type RagRetrieveResult = {
 };
 
 let corpusCache: RagChunk[] | null = null;
+let corpusVer = "";
 
 export function buildRagCorpus(): RagChunk[] {
-  if (corpusCache) return corpusCache;
+  const ver = knowledgeCorpusVersion();
+  if (corpusCache && corpusVer === ver) return corpusCache;
 
   const chunks: RagChunk[] = [];
   for (const p of PROJECT_DETAILS) {
@@ -67,12 +70,25 @@ export function buildRagCorpus(): RagChunk[] {
     }
   }
 
+  for (const c of knowledgeDocsAsChunks()) {
+    chunks.push({
+      chunkId: c.chunkId,
+      projectId: c.projectId,
+      projectName: c.projectName,
+      section: c.section,
+      text: c.text,
+      charCount: c.charCount,
+    });
+  }
+
   corpusCache = chunks;
+  corpusVer = ver;
   return chunks;
 }
 
 export function clearRagCorpusCache() {
   corpusCache = null;
+  corpusVer = "";
 }
 
 function tokenize(text: string): string[] {
@@ -103,6 +119,9 @@ export function retrieveRag(query: string, topK = 5): RagRetrieveResult {
       if (direct?.id === chunk.projectId) score += 0.22;
       if (chunk.section === "desc" && matchedTerms.length > 0) score += 0.06;
       score += sectionBoost(chunk.section, q);
+      // 配置问句精确命中：保证欢迎页点进去一定有结果
+      if (chunk.chunkId.startsWith("custom:") && matchedTerms.length >= 2) score += 0.2;
+      if (chunk.projectName && q.includes(chunk.projectName.slice(0, 6))) score += 0.12;
       score = Math.min(0.99, score);
       return { ...chunk, score, matchedTerms, rank: 0 };
     })
@@ -145,7 +164,7 @@ export function ragHitsForMcp(query: string, topK = 3) {
       projectId: h.projectId,
       chunkId: h.chunkId,
       score: h.score,
-      excerpt: h.text.slice(0, 160),
+      excerpt: h.text.slice(0, 480),
       matchedTerms: h.matchedTerms,
     })),
     source: `ragEngine · ${result.chunkCount} chunks · ${result.latencyMs}ms`,

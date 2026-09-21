@@ -11,7 +11,7 @@ import {
 } from "../../lib/llmConfig";
 
 /** 可选：接入自己的 LLM — 默认用内置 Guest Agent，无需配置 */
-export function AgentConfigBar({ onChange }: { onChange?: (cfg: LlmConfig) => void }) {
+export function AgentConfigBar({ onChange, compact }: { onChange?: (cfg: LlmConfig) => void; compact?: boolean }) {
   const [config, setConfig] = useState<LlmConfig>(() => loadLlmConfig());
   const [open, setOpen] = useState(false);
   const llmReady = isLlmConfigured(config);
@@ -46,11 +46,11 @@ export function AgentConfigBar({ onChange }: { onChange?: (cfg: LlmConfig) => vo
   }
 
   return (
-    <div className={`agent-config-bar${llmReady ? " ready" : " guest"}`}>
+    <div className={`agent-config-bar${llmReady ? " ready" : " guest"}${compact ? " compact" : ""}`}>
       <div className="agent-config-top">
-        <span className="agent-guest-badge">内置 Agent · 点开即用</span>
+        {compact ? null : <span className="agent-guest-badge">内置 Agent · 点开即用</span>}
         <button type="button" className="agent-config-toggle" onClick={() => setOpen((o) => !o)}>
-          {llmReady ? `${config.model} · 我的 LLM 已启用` : "高级：接入自己的 LLM（可选）"}
+          {llmReady ? `${config.model} · 已接 LLM` : compact ? "接入 LLM" : "高级：接入自己的 LLM（可选）"}
           <em>{open ? "▾" : "▸"}</em>
         </button>
       </div>
@@ -68,14 +68,14 @@ export function AgentConfigBar({ onChange }: { onChange?: (cfg: LlmConfig) => vo
 
           {!config.enabled && (
             <p className="agent-config-lead">
-              当前模式：<strong>Guest Agent</strong> — explainDiscovery 路由 + MCP 真实执行（http_probe / knowledge_search / snapshot），无需任何配置即可在网站上直接使用。
+              当前模式：<strong>内置 Agent</strong> — 你输入什么就检索 / 探活 / 看当前页，不必点固定演示。接入模型后走完整 Tool Call。
             </p>
           )}
 
           {config.enabled && (
             <>
               <p className="agent-config-lead">
-                已切换为 <strong>LLM Agent Loop</strong> — 你的模型自主选工具。Key 仅存浏览器 session。
+                已切换为 <strong>LLM Agent Loop</strong> — 你的模型自主选工具。Key 只存在本机浏览器。
                 {hasEnvApiKey() && " 检测到 .env.local，可自动填入 Key。"}
                 {import.meta.env.DEV && " 开发环境 DeepSeek 走 Vite proxy。"}
               </p>

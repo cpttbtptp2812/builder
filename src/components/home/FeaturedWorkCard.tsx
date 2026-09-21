@@ -60,7 +60,7 @@ export function FeaturedWorkCard({
         ) : (
           <>
             <Link to={`/work/${work.slug}`} className="home-featured-cta">
-              打开
+              {work.slug === "ownagent" ? "进入产品" : "打开"}
               <span aria-hidden>→</span>
             </Link>
             <button type="button" className="home-note-btn" onClick={onBrief}>

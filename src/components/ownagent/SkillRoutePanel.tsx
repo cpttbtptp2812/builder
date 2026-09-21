@@ -4,7 +4,7 @@ import { explainDiscovery, type SkillDiscoveryRow } from "../../lib/agentSkills"
 const PRESETS = [
   "分析本站性能，探活并看 ttfb metrics",
   "看看页面里可交互元素的 dom 定位分布",
-  "跑一遍改价上架的自动化流程",
+  "跑一遍网页调研的自动化流程",
   "今天天气怎么样",
   "满一年年假几天",
   "帮我开通公司 VPN",
