@@ -1,7 +1,38 @@
 import { useMemo } from "react";
 import { listKnowledgePrompts } from "../../../lib/ownKnowledge";
 
-/** 欢迎屏 — 对齐 tianyangAgent AgentWelcome */
+const CAPS = [
+  {
+    icon: "⚡",
+    title: "Hybrid RAG",
+    desc: "知识库向量检索，每条答复含引用溯源",
+    color: "#6366f1",
+    bg: "rgba(99,102,241,0.07)",
+  },
+  {
+    icon: "🧠",
+    title: "Neural Trace",
+    desc: "实时推理轨迹可视化，思考过程透明可审",
+    color: "#0891b2",
+    bg: "rgba(8,145,178,0.07)",
+  },
+  {
+    icon: "🔗",
+    title: "Citation Bridge",
+    desc: "答复片段与原始文档双向跳转追踪",
+    color: "#059669",
+    bg: "rgba(5,150,105,0.07)",
+  },
+  {
+    icon: "🤖",
+    title: "Multi-Agent",
+    desc: "复杂任务自动拆解，多子智能体协同完成",
+    color: "#dc2626",
+    bg: "rgba(220,38,38,0.07)",
+  },
+] as const;
+
+/** 欢迎屏 — 高端产品版 */
 export function AgentWelcome({
   onPrompt,
   disabled,
@@ -16,63 +47,90 @@ export function AgentWelcome({
   const prompts = useMemo(() => listKnowledgePrompts(4), [kbRev]);
 
   return (
-    <div className="ua-welcome ua-welcome-tianyang">
-      <div className="ua-welcome-inner">
-        <div className="ua-welcome-hero">
-          <div className="ua-welcome-avatar-wrap">
-            <div className="ua-welcome-glow ua-welcome-glow-outer" aria-hidden />
-            <div className="ua-welcome-glow ua-welcome-glow-inner" aria-hidden />
-            <div className="ua-welcome-avatar" aria-hidden>
-              OA
-            </div>
-          </div>
-          <div className="ua-welcome-copy">
-            <h2 className="ua-welcome-title">OwnAgent</h2>
-            <p className="ua-welcome-desc">
-              企业知识问答助手。下方示例均已在知识库配置正文，点击即可检索并生成带引用的答复。
-            </p>
+    <div className="ua-welcome-pro">
+      {/* ── Hero ── */}
+      <div className="ua-welcome-pro-hero">
+        <div className="ua-welcome-pro-avatar">
+          <div className="ua-welcome-pro-glow" aria-hidden />
+          <span>OA</span>
+        </div>
+        <div className="ua-welcome-pro-copy">
+          <h2 className="ua-welcome-pro-title">
+            OwnAgent
+            <span className="ua-welcome-pro-badge">Enterprise</span>
+          </h2>
+          <p className="ua-welcome-pro-desc">
+            企业级 AI 问答助手 · 知识库检索 · 推理过程透明可审
+          </p>
+          <div className="ua-welcome-pro-tech">
+            <span>Hybrid RAG</span>
+            <span>Neural Trace</span>
+            <span>Multi-Agent</span>
+            <span>Citation Bridge</span>
           </div>
         </div>
-
-        {prompts.length > 0 && (
-          <div className="ua-welcome-section">
-            <div className="ua-welcome-divider">
-              <i aria-hidden />
-              <span>开始对话</span>
-              <i aria-hidden />
-            </div>
-            <div className="ua-welcome-prompts">
-              {prompts.map((p) => (
-                <button
-                  key={p.docId}
-                  type="button"
-                  disabled={disabled}
-                  className="ua-welcome-prompt"
-                  onClick={() => onPrompt(p.text)}
-                >
-                  <span className="ua-welcome-prompt-text">
-                    <em>{p.hint}</em>
-                    <strong>{p.text}</strong>
-                  </span>
-                  <span className="ua-welcome-prompt-go" aria-hidden>
-                    →
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {prompts.length === 0 && (
-          <p className="ua-welcome-empty">知识库还没有可问答的条目，请先配置正文与示例问句。</p>
-        )}
-
-        {onOpenKnowledge && (
-          <button type="button" className="ua-welcome-kb" disabled={disabled} onClick={onOpenKnowledge}>
-            管理知识库
-          </button>
-        )}
       </div>
+
+      {/* ── Capability Cards ── */}
+      <div className="ua-welcome-pro-caps">
+        {CAPS.map((c) => (
+          <div
+            key={c.title}
+            className="ua-welcome-pro-cap"
+            style={{ "--cap-color": c.color, "--cap-bg": c.bg } as React.CSSProperties}
+          >
+            <span className="ua-welcome-pro-cap-icon">{c.icon}</span>
+            <strong>{c.title}</strong>
+            <p>{c.desc}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Prompts ── */}
+      {prompts.length > 0 && (
+        <div className="ua-welcome-pro-prompts-wrap">
+          <div className="ua-welcome-pro-divider">
+            <span>从这里开始</span>
+          </div>
+          <div className="ua-welcome-pro-prompts">
+            {prompts.map((p, i) => (
+              <button
+                key={p.docId}
+                type="button"
+                disabled={disabled}
+                className="ua-welcome-pro-prompt"
+                style={{ animationDelay: `${i * 0.07}s` }}
+                onClick={() => onPrompt(p.text)}
+              >
+                <span className="ua-welcome-pro-prompt-num">{i + 1}</span>
+                <span className="ua-welcome-pro-prompt-body">
+                  <em>{p.hint}</em>
+                  <strong>{p.text}</strong>
+                </span>
+                <span className="ua-welcome-pro-prompt-go">→</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {prompts.length === 0 && (
+        <div className="ua-welcome-pro-empty">
+          <span>📂</span>
+          <p>知识库还没有可问答的条目</p>
+          {onOpenKnowledge && (
+            <button type="button" onClick={onOpenKnowledge}>
+              立即配置知识库
+            </button>
+          )}
+        </div>
+      )}
+
+      {prompts.length > 0 && onOpenKnowledge && (
+        <button type="button" className="ua-welcome-pro-kb" disabled={disabled} onClick={onOpenKnowledge}>
+          管理知识库
+        </button>
+      )}
     </div>
   );
 }

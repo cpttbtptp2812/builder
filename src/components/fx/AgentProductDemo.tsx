@@ -53,6 +53,11 @@ import { buildAnswerInsight } from "../../lib/answerInsight";
 import { normalizeFollowUps } from "../../lib/followUpPrompts";
 import { AnswerInsightBar } from "./agent/AnswerInsightBar";
 import { FollowUpRail } from "./agent/FollowUpRail";
+import { KbAutocomplete } from "./agent/KbAutocomplete";
+import { SessionStats } from "./agent/SessionStats";
+import { useVoiceInput } from "../../hooks/useVoiceInput";
+import { KnowledgeSources } from "./agent/KnowledgeSources";
+import { AnswerDNA } from "./agent/AnswerDNA";
 import { buildTurnArtifacts, synthesizeCompareTable, type ChatArtifact } from "../../lib/chatArtifacts";
 import {
   emptySession,
@@ -119,11 +124,20 @@ export function AgentProductDemo({
   const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
   const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
   const [inspector, setInspector] = useState(false);
+  const [flowOpen, setFlowOpen] = useState(true);
+  const [rightTab, setRightTab] = useState<"graph" | "trace">("graph");
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pinned, setPinned] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resultFlash, setResultFlash] = useState(false);
+  const [acOpen, setAcOpen] = useState(false);
+
+  const { listening: voiceListening, supported: voiceSupported, start: voiceStart, stop: voiceStop } = useVoiceInput(
+    useCallback((text: string, _final: boolean) => {
+      setInput(text);
+    }, []),
+  );
 
   const {
     threadRef,
@@ -229,6 +243,8 @@ export function AgentProductDemo({
       setMessages((prev) => [...prev, userMsg]);
       setInput("");
       setRunning(true);
+      setFlowOpen(true);
+      setRightTab("trace");  // 回答中看 trace，完成后留在图
       setResultFlash(false);
       setTraces([]);
       setIteration(0);
@@ -351,6 +367,7 @@ export function AgentProductDemo({
         appendSessionTurn("user", q || text.trim());
         appendSessionTurn("assistant", content);
         onFlowActive?.("trace");
+        setRightTab("graph");  // 答完切回星图，感受知识增长
         setResultFlash(true);
         window.setTimeout(() => {
           scrollToMessage(assistantId, true);
@@ -689,41 +706,78 @@ export function AgentProductDemo({
   );
 
   return (
-    <div className={`ua-shell ua-shell-flow${hubMode ? " hub" : ""}${inspector ? " with-side" : ""}`} ref={rootRef}>
-      <header className="ua-topbar">
-        <button type="button" className="ua-icon-btn" onClick={() => setSessionsOpen(true)} title="历史会话">
-          ☰
+    <div className={`ua-shell ua-shell-flow${hubMode ? " hub" : ""}${inspector ? " with-side" : ""}${!flowOpen ? " flow-collapsed" : ""}${running ? " running-pulse" : ""}`} ref={rootRef}>
+      <header className="ua-topbar-pro">
+        {/* 左：菜单 + 品牌 */}
+        <button type="button" className="ua-icon-btn-pro" onClick={() => setSessionsOpen(true)} title="历史会话" aria-label="历史会话">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><rect y="2" width="16" height="1.6" rx="0.8" fill="currentColor"/><rect y="7.2" width="12" height="1.6" rx="0.8" fill="currentColor"/><rect y="12.4" width="9" height="1.6" rx="0.8" fill="currentColor"/></svg>
         </button>
-        <div className="ua-topbar-title">
-          <strong>{active.title || "新对话"}</strong>
-          <span>OwnAgent</span>
+        <div className="ua-brand-pro">
+          <div className="ua-brand-icon-pro" aria-hidden>OA</div>
+          <div className="ua-brand-text">
+            <strong>OwnAgent</strong>
+            <span className="ua-brand-sub">{active.title || "新对话"}</span>
+          </div>
         </div>
-        <div className="ua-topbar-actions">
-          <button type="button" className="ua-text-btn" onClick={newChat} disabled={running}>
-            新对话
-          </button>
-          <button type="button" className={`ua-text-btn${inspector ? " on" : ""}`} onClick={() => setInspector((o) => !o)}>
-            {inspector ? "收起详情" : "运行记录"}
+
+        {/* 中：状态胶囊 */}
+        <div className={`ua-status-pill-pro${running ? " running" : ""}`}>
+          <span className="ua-status-dot-pro" aria-hidden />
+          <span>{running ? "AI 处理中" : "就绪"}</span>
+        </div>
+
+        {/* 会话统计 */}
+        <SessionStats messages={messages} />
+
+        <div style={{ flex: 1 }} />
+
+        {/* 右：操作区 */}
+        <div className="ua-topbar-actions-pro">
+          <button
+            type="button"
+            className="ua-topbar-btn-pro"
+            onClick={newChat}
+            disabled={running}
+            title="新对话"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v12M1 7h12" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/></svg>
+            <span>新对话</span>
           </button>
           <button
             type="button"
-            className="ua-text-btn"
-            onClick={() => {
-              setSettingsTab("knowledge");
-              setSettingsOpen(true);
-            }}
+            className={`ua-topbar-btn-pro${flowOpen ? " active" : ""}`}
+            onClick={() => setFlowOpen((o) => !o)}
+            title={flowOpen ? "收起思考过程" : "打开思考过程"}
           >
-            知识库
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M2 7h7M2 10.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><circle cx="11.5" cy="7" r="1.4" fill="currentColor"/></svg>
+            <span>轨迹</span>
           </button>
           <button
             type="button"
-            className="ua-text-btn"
-            onClick={() => {
-              setSettingsTab("runtime");
-              setSettingsOpen(true);
-            }}
+            className={`ua-topbar-btn-pro${inspector ? " active" : ""}`}
+            onClick={() => setInspector((o) => !o)}
+            title="运行记录"
           >
-            设置
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="12" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="7" width="8" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="10" width="10" height="1.4" rx="0.7" fill="currentColor"/></svg>
+            <span>记录</span>
+          </button>
+          <button
+            type="button"
+            className="ua-topbar-btn-pro"
+            onClick={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
+            title="知识库"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h4v10H2zM8 2h4v10H8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>
+            <span>知识库</span>
+          </button>
+          <button
+            type="button"
+            className="ua-topbar-btn-pro"
+            onClick={() => { setSettingsTab("runtime"); setSettingsOpen(true); }}
+            title="设置"
+          >
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.4"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.93 2.93l1.06 1.06M10.01 10.01l1.06 1.06M2.93 11.07l1.06-1.06M10.01 3.99l1.06-1.06" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+            <span>设置</span>
           </button>
         </div>
       </header>
@@ -761,6 +815,9 @@ export function AgentProductDemo({
                       <div className="ua-bubble assistant ua-prose">
                         <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
                       </div>
+                    )}
+                    {m.role === "assistant" && m.flowJournal && m.flowJournal.length > 0 && (
+                      <AnswerDNA flowJournal={m.flowJournal} />
                     )}
                     {m.role === "assistant" && m.answerInsight && (
                       <AnswerInsightBar insight={m.answerInsight} />
@@ -841,8 +898,8 @@ export function AgentProductDemo({
                     OA
                   </div>
                   <div className="ua-bubble-wrap">
-                    {inspector && liveTools.length > 0 && (
-                      <div className="ua-tools">
+                    {liveTools.length > 0 && (
+                      <div className="ua-tools ua-tools-live">
                         {liveTools.map((t) => (
                           <AgentToolChip key={t.id} sticky tool={{ ...t, name: toolLabel(t.name) }} />
                         ))}
@@ -909,54 +966,156 @@ export function AgentProductDemo({
                 ))}
               </ul>
             )}
-            <form
-              className="ua-compose"
-              onSubmit={(e) => {
-                e.preventDefault();
-                void send(input);
-              }}
-            >
-              <textarea
-                value={input}
-                rows={1}
-                onChange={(e) => {
-                  setInput(e.target.value);
-                  e.target.style.height = "auto";
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+            <div className="ua-compose-wrap">
+              {/* 知识库自动补全 */}
+              {acOpen && input.length >= 2 && (
+                <KbAutocomplete
+                  query={input}
+                  exclude={messages.map((m) => m.content)}
+                  onPick={(t) => {
+                    setInput(t);
+                    setAcOpen(false);
+                    void send(t);
+                  }}
+                />
+              )}
+
+              <form
+                className={`ua-compose-pro${voiceListening ? " voice-active" : ""}`}
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  setAcOpen(false);
+                  void send(input);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    void send(input);
-                  }
-                }}
-                placeholder="输入问题，例如：介绍一下 iMean 的架构"
-                disabled={running}
-              />
-              <div className="ua-compose-bar">
-                <span className="ua-compose-hint">
-                  {modeHint} · Enter 发送
-                </span>
-                <button
-                  type={running ? "button" : "submit"}
-                  className={running ? "ua-compose-btn ua-stop" : "ua-compose-btn ua-send"}
-                  disabled={!running && !input.trim()}
-                  onClick={running ? stop : undefined}
-                  title={running ? "停止" : "发送"}
-                >
-                  {running ? "■" : "↑"}
-                </button>
-              </div>
-            </form>
+              >
+                {/* 能力标签行 */}
+                <div className="ua-compose-caps">
+                  <span className="ua-compose-cap">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5l1.5 1.5L7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    Hybrid RAG
+                  </span>
+                  <span className="ua-compose-cap">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 9L5 1l4 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 6.5h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    Neural Trace
+                  </span>
+                  <span className="ua-compose-cap">
+                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="5.5" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 5h1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                    多智能体
+                  </span>
+                  <span className="ua-compose-cap-dot" aria-hidden />
+                  <span className="ua-compose-mode-hint">{modeHint}</span>
+                </div>
+
+                {/* 文本区 */}
+                <textarea
+                  value={input}
+                  rows={1}
+                  onChange={(e) => {
+                    setInput(e.target.value);
+                    setAcOpen(true);
+                    e.target.style.height = "auto";
+                    e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      setAcOpen(false);
+                      void send(input);
+                    }
+                    if (e.key === "Escape") setAcOpen(false);
+                  }}
+                  onFocus={() => setAcOpen(true)}
+                  onBlur={() => window.setTimeout(() => setAcOpen(false), 160)}
+                  placeholder={voiceListening ? "🎤 正在聆听…" : "输入问题，例如：介绍一下 iMean 的架构"}
+                  disabled={running}
+                />
+
+                {/* 操作行 */}
+                <div className="ua-compose-bar-pro">
+                  <span className="ua-compose-hint-pro">
+                    ⏎ Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
+                  </span>
+                  {input.length > 0 && (
+                    <span className="ua-char-count">{input.length}</span>
+                  )}
+
+                  {/* 语音输入按钮 */}
+                  {voiceSupported && (
+                    <button
+                      type="button"
+                      className={`ua-voice-btn${voiceListening ? " listening" : ""}`}
+                      onClick={() => voiceListening ? voiceStop() : voiceStart()}
+                      title={voiceListening ? "点击停止" : "语音输入（中文）"}
+                      aria-label={voiceListening ? "停止录音" : "开始语音输入"}
+                      disabled={running}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="4.5" y="1" width="5" height="8" rx="2.5" stroke="currentColor" strokeWidth="1.4"/>
+                        <path d="M2 7a5 5 0 0 0 10 0" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                        <line x1="7" y1="12" x2="7" y2="13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                        <line x1="4.5" y1="13" x2="9.5" y2="13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                      </svg>
+                    </button>
+                  )}
+
+                  <button
+                    type={running ? "button" : "submit"}
+                    className={running ? "ua-send-btn-pro ua-stop-pro" : "ua-send-btn-pro"}
+                    disabled={!running && !input.trim()}
+                    onClick={running ? stop : undefined}
+                    title={running ? "停止" : "发送"}
+                    aria-label={running ? "停止" : "发送"}
+                  >
+                    {running
+                      ? <svg width="12" height="12" viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1.5" fill="currentColor"/></svg>
+                      : <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 11.5V2.5M3 6l4-4 4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                    }
+                  </button>
+                </div>
+              </form>
+            </div>
           </div>
         </div>
 
-        <TurnFlowPanel
-          journal={displayJournal}
-          running={running}
-          turnStartedAt={flowTurnStartedAt}
-          onEvidenceClick={handleEvidenceClick}
-        />
+        {flowOpen && (
+          <div className="ua-right-panel">
+            {/* Tab 切换 */}
+            <div className="ua-right-tabs">
+              <button
+                type="button"
+                className={rightTab === "graph" ? "on" : ""}
+                onClick={() => setRightTab("graph")}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="4" height="9" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="6" y="4" width="4" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
+                知识溯源
+              </button>
+              <button
+                type="button"
+                className={rightTab === "trace" ? "on" : ""}
+                onClick={() => setRightTab("trace")}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1h7M2 5.5h5M2 10h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="5.5" r="1.3" fill="currentColor"/></svg>
+                推理过程
+              </button>
+              <button type="button" className="ua-right-close" onClick={() => setFlowOpen(false)} aria-label="关闭">×</button>
+            </div>
+
+            {rightTab === "graph" ? (
+              <KnowledgeSources
+                messages={messages}
+                running={running}
+                onClose={() => setFlowOpen(false)}
+              />
+            ) : (
+              <TurnFlowPanel
+                journal={displayJournal}
+                running={running}
+                turnStartedAt={flowTurnStartedAt}
+                onEvidenceClick={handleEvidenceClick}
+              />
+            )}
+          </div>
+        )}
 
         {inspector && (
           <aside className="ua-side">
@@ -965,6 +1124,9 @@ export function AgentProductDemo({
               <span>{toolCount} 次调用</span>
               <button type="button" onClick={exportActive}>
                 导出
+              </button>
+              <button type="button" className="ua-side-close" onClick={() => setInspector(false)} aria-label="关闭">
+                ×
               </button>
             </header>
             <AgentLiveTrace traces={traces} running={running} iteration={iteration} />

@@ -17,11 +17,13 @@ export function TurnFlowPanel({
   running,
   turnStartedAt,
   onEvidenceClick,
+  onClose,
 }: {
   journal: FlowJournalNode[];
   running?: boolean;
   turnStartedAt?: number | null;
   onEvidenceClick?: (ev: FlowEvidence) => void;
+  onClose?: () => void;
 }) {
   const [selectedId, setSelectedId] = useState<FlowJournalId | null>(null);
   const [linkedEvidenceId, setLinkedEvidenceId] = useState<string | null>(null);
@@ -87,9 +89,16 @@ export function TurnFlowPanel({
       <aside className="ua-flow-live empty premium" aria-label="思考过程">
         <div className="ua-flow-live-ambient" aria-hidden />
         <header className="ua-flow-live-head">
-          <span className="ua-flow-live-kicker">Neural Trace</span>
-          <strong>思考过程</strong>
-          <p>提问后，这里会实时展示理解、检索与生成路径。</p>
+          <div>
+            <span className="ua-flow-live-kicker">Neural Trace</span>
+            <strong>思考过程</strong>
+            <p>提问后，这里会实时展示理解、检索与生成路径。</p>
+          </div>
+          {onClose && (
+            <button type="button" className="ua-flow-close" onClick={onClose} aria-label="关闭思考面板" title="关闭">
+              ×
+            </button>
+          )}
         </header>
       </aside>
     );
@@ -105,6 +114,11 @@ export function TurnFlowPanel({
           <strong>{running ? "实时推理中" : "推理已完成"}</strong>
           <p>{running ? "证据逐条落入时间线，点击可核对来源" : "可回放步骤或点击证据定位左侧答复"}</p>
         </div>
+        {onClose && (
+          <button type="button" className="ua-flow-close" onClick={onClose} aria-label="关闭思考面板" title="关闭">
+            ×
+          </button>
+        )}
       </header>
 
       <div className="ua-flow-metrics">
