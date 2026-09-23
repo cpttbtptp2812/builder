@@ -13,6 +13,8 @@ import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
 import { classifyCapability, getTicket, type TicketDraft } from "./policyDesk";
 import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
+import { runGuestAgentAsync } from "./backendBridge";
+import { peekRuntimeConfig } from "./runtimeConfig";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -502,19 +504,54 @@ export async function runGuestAgentTurn(
   const wrap = (
     text: string,
     traces: AgentTurnTrace[],
+    runtime: "server" | "local",
     extra?: { hitl?: TicketDraft; policyTrust?: PolicyTrustView; route?: RouteScoreView },
   ) => {
-    onEvent({ type: "done", iterations: 1, toolCount: traces[0]?.tools.length ?? 0 });
-    persistGuestRun(query, text, traces, "local", Math.round(performance.now() - t0));
-    return { assistantText: text, traces, runtime: "local" as const, ...extra };
+    onEvent({ type: "done", iterations: 1, toolCount: traces.reduce((n, t) => n + t.tools.length, 0) });
+    persistGuestRun(query, text, traces, runtime, Math.round(performance.now() - t0));
+    return { assistantText: text, traces, runtime, ...extra };
   };
+
+  if (
+    peekRuntimeConfig().features.preferServerGuest &&
+    !ctx.force &&
+    !ctx.pinned?.trim()
+  ) {
+    try {
+      const remote = await runGuestAgentAsync(query, { snapshotRoot: ctx.snapshotRoot });
+      if (remote && !ctx.signal?.aborted) {
+        for (const trace of remote.traces) {
+          for (const tool of trace.tools) {
+            onEvent({
+              type: "tool-start",
+              tool: { id: tool.id, name: tool.name, args: tool.args, iteration: tool.iteration },
+            });
+            onEvent({
+              type: "tool-end",
+              tool: { id: tool.id, name: tool.name, args: tool.args, result: tool.result, ok: tool.ok, iteration: tool.iteration },
+            });
+          }
+        }
+        await streamText(remote.assistantText, onEvent);
+        return wrap(remote.assistantText, remote.traces, remote.runtime, {
+          route: {
+            skillId: "server-guest",
+            skillName: "自研 Agent · Server",
+            score: 4,
+            hits: ["hybrid-rag", "mcp"],
+            path: "guest",
+          },
+        });
+      }
+    } catch { /* 回退浏览器内 Agent Loop */ }
+  }
 
   if (ctx.force === "knowledge") {
     await streamReasoning("斜杠 /search · 知识库", onEvent);
     const expanded = expandQuery(working, ctx.history);
     const ran = await runKnowledgePath(expanded, ctx, onEvent, { searchQuery: expanded });
     await streamText(ran.text, onEvent);
-    return wrap(ran.text, ran.traces, {
+    return wrap(ran.text, ran.traces, "local", {
       route: { skillId: "knowledge-lookup", skillName: "知识检索", score: 2, hits: ["/search"], path: "knowledge" },
     });
   }
@@ -523,7 +560,7 @@ export async function runGuestAgentTurn(
     await streamReasoning(`斜杠 /${ctx.force} · 指定工具`, onEvent);
     const ran = await runOpenToolLoop(working, { ...ctx, force: ctx.force }, onEvent);
     await streamText(ran.text, onEvent);
-    return wrap(ran.text, ran.traces, {
+    return wrap(ran.text, ran.traces, "local", {
       route: {
         skillId: ctx.force,
         skillName: ctx.force === "policy" ? "制度检索" : ctx.force === "dom" ? "DOM 探针" : "站点探活",
@@ -550,7 +587,7 @@ export async function runGuestAgentTurn(
             lead: pick.kind === "about-site" ? "这是王旭的个人作品站，主项目是 OwnAgent。" : undefined,
           });
     await streamText(ran.text, onEvent);
-    return wrap(ran.text, ran.traces, {
+    return wrap(ran.text, ran.traces, "local", {
       route: {
         skillId: pick.kind,
         skillName: pick.kind === "about-site" ? "本站介绍" : pick.kind === "knowledge" ? "知识检索" : "开放工具",
@@ -635,7 +672,7 @@ export async function runGuestAgentTurn(
     }
   }
 
-  return wrap(text, finalTraces, {
+  return wrap(text, finalTraces, "local", {
     hitl,
     policyTrust,
     route: {

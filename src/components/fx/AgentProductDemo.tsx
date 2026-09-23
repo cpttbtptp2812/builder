@@ -12,7 +12,7 @@ import { formatThreadAsPlaza, matchPlaza, publishPlaza } from "../../lib/plazaFe
 import { getSessionId } from "../../lib/sessionId";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
-import { InlineEvalCard, runInlineEval } from "./agent/InlineEvalCard";
+import { InlineEvalCard, runInlineEvalAsync } from "./agent/InlineEvalCard";
 import { ArtifactPanel } from "./agent/ArtifactPanel";
 import { ResultLocator } from "./agent/ResultLocator";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
@@ -33,7 +33,9 @@ import { isAuthError, runGuestAgentTurn, toolPreviewFromResult } from "../../lib
 import { appendSessionTurn, clearSessionTurns } from "../../lib/agentMemory";
 import { isLlmConfigured, loadLlmConfig, type LlmConfig } from "../../lib/llmConfig";
 import { downloadText } from "../../lib/importedSkills";
-import { runMultiAgentPipeline, type MultiAgentStep } from "../../lib/multiAgentRuntime";
+import { runMultiAgentAsync } from "../../lib/backendBridge";
+import type { MultiAgentStep } from "../../lib/multiAgentRuntime";
+import { getRuntimeConfig } from "../../lib/runtimeConfig";
 import { buildWorkingSet, type WorkingSet } from "../../lib/workingSet";
 import {
   activateFlowNode,
@@ -180,6 +182,8 @@ export function AgentProductDemo({
   const [liveTools, setLiveTools] = useState<ToolChipState[]>([]);
   const [flowJournal, setFlowJournal] = useState<FlowJournalNode[]>([]);
   const [flowTurnStartedAt, setFlowTurnStartedAt] = useState<number | null>(null);
+  const [turnRuntime, setTurnRuntime] = useState<"server" | "local" | undefined>();
+  const [turnRagRuntime, setTurnRagRuntime] = useState<"server" | "local" | undefined>();
   const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
   const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
   const [inspector, setInspector] = useState(false);
@@ -222,6 +226,10 @@ export function AgentProductDemo({
       })),
     [messages],
   );
+
+  useEffect(() => {
+    void getRuntimeConfig();
+  }, []);
 
   useEffect(() => {
     setStore((prev) => {
@@ -302,7 +310,9 @@ export function AgentProductDemo({
       setInput("");
       setRunning(true);
       setFlowOpen(true);
-      setRightTab("trace");  // 回答中看 trace，完成后留在图
+      setRightTab("trace");
+      setTurnRuntime(undefined);
+      setTurnRagRuntime(undefined);
       setResultFlash(false);
       setTraces([]);
       setIteration(0);
@@ -322,6 +332,8 @@ export function AgentProductDemo({
       let artifacts: ChatArtifact[] = [];
       let mode: OwnChatMessage["mode"] = useLlm ? "llm" : "guest";
       let plazaHit = false;
+      let turnRuntimeLocal: "server" | "local" | undefined;
+      let turnRagRuntimeLocal: "server" | "local" | undefined;
 
       const bindStreamJournal = (ev: AgentStreamEvent) => {
         if (ev.type === "reasoning-delta") {
@@ -334,6 +346,12 @@ export function AgentProductDemo({
         }
         if (ev.type === "tool-end") {
           if (ev.tool.name === "knowledge_search") {
+            const ragMeta = ev.tool.result as { runtime?: "server" | "local"; pipeline?: string[] } | undefined;
+            if (ragMeta?.runtime) {
+              turnRagRuntimeLocal = ragMeta.runtime;
+              setTurnRagRuntime(ragMeta.runtime);
+              jChip("fetch", `Hybrid RAG · ${ragMeta.runtime === "server" ? "SQLite" : "浏览器"}`);
+            }
             journalRef.current = setFlowEvidence(
               journalRef.current,
               "fetch",
@@ -398,6 +416,8 @@ export function AgentProductDemo({
           mode,
           route,
           toolCount: toolsAcc.length,
+          runtime: turnRuntimeLocal,
+          ragRuntime: turnRagRuntimeLocal,
         });
         latestAnswerIdRef.current = assistantId;
         setMessages((prev) => [
@@ -409,6 +429,8 @@ export function AgentProductDemo({
             content,
             reasoning,
             mode,
+            runtime: turnRuntimeLocal,
+            ragRuntime: turnRagRuntimeLocal,
             tools: [...toolsAcc],
             ms,
             flowJournal: [...journalRef.current],
@@ -447,10 +469,12 @@ export function AgentProductDemo({
       };
 
       try {
+        const cfg = await getRuntimeConfig();
+        jChip("read", q.length > 48 ? `${q.slice(0, 48)}…` : q);
         jActivate("route");
         if (!parsed.force && !parsed.evalKind) {
           const plazaMatch = await matchPlaza(q);
-          if (plazaMatch && plazaMatch.score >= 70) {
+          if (plazaMatch && plazaMatch.score >= cfg.plaza.matchThreshold) {
             mode = "plaza";
             plazaHit = true;
             jChip("route", `知识广场已有答案（匹配 ${plazaMatch.score}%）`);
@@ -460,7 +484,7 @@ export function AgentProductDemo({
             finish(plazaText, "知识广场优先命中");
             return;
           }
-          if (plazaMatch && plazaMatch.score >= 40) {
+          if (plazaMatch && plazaMatch.score >= cfg.plaza.hintThreshold) {
             jChip("route", `广场有相关问答（${plazaMatch.score}%），继续用 AI 补充`);
           } else {
             jChip("route", "广场未命中，转交 AI");
@@ -495,8 +519,10 @@ export function AgentProductDemo({
 
         if (parsed.evalKind) {
           mode = "eval";
-          const data = runInlineEval(parsed.evalKind);
+          const data = await runInlineEvalAsync(parsed.evalKind);
           inlineEval = data;
+          turnRuntimeLocal = data.runtime;
+          setTurnRuntime(data.runtime);
           route = {
             skillId: "eval",
             skillName: data.kind === "policy" ? "制度评测" : "路由评测",
@@ -533,7 +559,7 @@ export function AgentProductDemo({
           jChip("route", "多代理：Planner → Executor → Reviewer");
           jActivate("fetch");
           setStreamReasoning("多代理编排 · Planner → Executor → Reviewer\n");
-          const result = await runMultiAgentPipeline(q, (step) => {
+          const result = await runMultiAgentAsync(q, (step) => {
             multiSteps = [...multiSteps, step];
             setLiveMulti([...multiSteps]);
             setStreamReasoning((s) => s + `\n[${step.agentLabel}] ${step.phase}`);
@@ -548,14 +574,21 @@ export function AgentProductDemo({
                   preview: tc.preview,
                 });
                 jChip("fetch", `${toolLabel(tc.tool)}：${tc.preview ?? "完成"}`);
+                if (tc.tool === "knowledge_search" && tc.preview?.includes("SQLite")) {
+                  turnRagRuntimeLocal = "server";
+                  setTurnRagRuntime("server");
+                }
               }
               setLiveTools([...toolsAcc]);
             }
           });
+          turnRuntimeLocal = result.runtime;
+          setTurnRuntime(result.runtime);
+          jChip("route", `Multi-Agent · ${result.runtime === "server" ? "服务端编排" : "浏览器编排"}`);
           jActivate("write");
           fullText = result.answer;
           setStreamText(result.answer);
-          finish(result.answer, fullReasoning || "多代理流水线完成");
+          finish(result.answer, fullReasoning || `多代理流水线完成 · ${result.runtime}`);
           return;
         }
 
@@ -605,6 +638,9 @@ export function AgentProductDemo({
           },
           onEv,
         );
+        turnRuntimeLocal = guest.runtime;
+        setTurnRuntime(guest.runtime);
+        if (guest.runtime) jChip("route", `自研 Agent · ${guest.runtime === "server" ? "SQLite API" : "浏览器 Loop"}`);
         setTraces(guest.traces);
         hitl = guest.hitl;
         policyTrust = guest.policyTrust;
@@ -1246,6 +1282,8 @@ export function AgentProductDemo({
                 journal={displayJournal}
                 running={running}
                 turnStartedAt={flowTurnStartedAt}
+                runtime={turnRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.runtime}
+                ragRuntime={turnRagRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.ragRuntime}
                 onEvidenceClick={handleEvidenceClick}
               />
             )}

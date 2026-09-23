@@ -20,6 +20,8 @@ import {
   type RouterEvalRow,
   type ToolMetrics,
 } from "./evalHarness";
+import { policyEvalSummary, runPolicyEval as runPolicyEvalLocal } from "./policyDesk";
+import { peekRuntimeConfig } from "./runtimeConfig";
 import {
   buildMemoryContextBlock as buildMemoryLocal,
   getMemorySnapshot as getMemoryLocal,
@@ -144,6 +146,7 @@ export async function runGuestAgentAsync(
   query: string,
   ctx: { snapshotRoot?: Element | null },
 ): Promise<{ assistantText: string; traces: AgentTurnTrace[]; runtime: "server" | "local" } | null> {
+  if (!peekRuntimeConfig().features.preferServerGuest) return null;
   const remote = await apiFetch<{ assistantText: string; traces: AgentTurnTrace[] }>("/agent/guest", {
     method: "POST",
     signal: AbortSignal.timeout(4000),
@@ -163,6 +166,10 @@ export async function runMultiAgentAsync(
   query: string,
   onStep?: (step: MultiAgentStep) => void,
 ): Promise<(MultiAgentResult & { runtime: "server" | "local" }) | null> {
+  if (!peekRuntimeConfig().features.preferServerMultiAgent) {
+    const local = await runMultiAgentLocal(query, onStep);
+    return { ...local, runtime: "local" };
+  }
   const remote = await apiFetch<{
     query: string;
     steps: MultiAgentStep[];
@@ -189,9 +196,29 @@ export async function runMultiAgentAsync(
 }
 
 export async function runRouterEvalAsync(): Promise<{ rows: RouterEvalRow[]; runtime: "server" | "local" }> {
+  if (!peekRuntimeConfig().features.preferServerEval) {
+    return { rows: runRouterEvalLocal(), runtime: "local" };
+  }
   const remote = await apiFetch<{ rows: RouterEvalRow[] }>("/eval/router");
   if (remote?.rows) return { rows: remote.rows, runtime: "server" };
   return { rows: runRouterEvalLocal(), runtime: "local" };
+}
+
+export async function runPolicyEvalAsync(): Promise<{
+  rows: ReturnType<typeof runPolicyEvalLocal>;
+  summary: ReturnType<typeof policyEvalSummary>;
+  runtime: "server" | "local";
+}> {
+  if (!peekRuntimeConfig().features.preferServerEval) {
+    const rows = runPolicyEvalLocal();
+    return { rows, summary: policyEvalSummary(rows), runtime: "local" };
+  }
+  const remote = await apiFetch<{ rows: ReturnType<typeof runPolicyEvalLocal> }>("/eval/policy");
+  if (remote?.rows) {
+    return { rows: remote.rows, summary: policyEvalSummary(remote.rows), runtime: "server" };
+  }
+  const rows = runPolicyEvalLocal();
+  return { rows, summary: policyEvalSummary(rows), runtime: "local" };
 }
 
 export async function runSkillBenchmarkAsync(): Promise<{ metrics: ToolMetrics; runtime: "server" | "local" } | null> {

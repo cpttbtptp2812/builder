@@ -16,7 +16,9 @@ import { seedCustomerData } from "./customerSeed.ts";
 import { retrieveRagFromDb } from "./rag.ts";
 import { explainDiscovery, runRouterEval, runSkillBenchmark, runSkillOnServer, SKILL_CATALOG } from "./skills.ts";
 import { parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
+import { runPolicyEval } from "../src/lib/policyDesk.ts";
 import { dbGet, dbAll, dbRun } from "./db.ts";
+import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { randomUUID } from "node:crypto";
 
 const app = new Hono();
@@ -126,6 +128,10 @@ app.post("/api/multi-agent/run", async (c) => {
 });
 
 app.get("/api/eval/router", (c) => c.json({ rows: runRouterEval() }));
+
+app.get("/api/eval/policy", (c) => c.json({ rows: runPolicyEval() }));
+
+app.get("/api/runtime/config", (c) => c.json(loadRuntimeConfig()));
 
 app.post("/api/eval/benchmark", async (c) => {
   const body = await c.req.json<{ sessionId?: string }>();

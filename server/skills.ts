@@ -7,6 +7,7 @@ import { dbRun, nowIso } from "./db.ts";
 import { ragHitsForMcp } from "./rag.ts";
 import { runPolicyDesk, searchPolicy, draftTicket, commitTicket } from "../src/lib/policyDesk.ts";
 import { hydrateSkill, resolveStepArgs, type SkillManifest } from "../src/lib/skillMarkdown.ts";
+import { loadRuntimeConfig } from "./runtimeConfig.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "src", "skills");
@@ -331,7 +332,8 @@ export const ROUTER_EVAL_CASES = [
 ];
 
 export function runRouterEval() {
-  return ROUTER_EVAL_CASES.map((c) => {
+  const cases = loadRuntimeConfig().eval.routerCases;
+  return cases.map((c) => {
     const rows = explainDiscovery(c.query);
     const top = rows[0];
     return {

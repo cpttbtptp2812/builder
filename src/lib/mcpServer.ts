@@ -1,7 +1,8 @@
 /** 进程内 MCP Server — JSON-RPC 2.0 · 真实工具实现（非 mock 定时器） */
 
 import { matchProject } from "../data/knowledge";
-import { ragHitsForMcp } from "./ragEngine";
+import { ragHitsForMcp, ragHitsForMcpAsync } from "./ragEngine";
+import { peekRuntimeConfig } from "./runtimeConfig";
 import { REPLAY_STEPS, SCENARIOS } from "../data/scenarios";
 import { MCP_TOOLS, validateParams, type McpTool } from "./mcpBridgeLab";
 import { commitTicket, draftTicket, searchPolicy } from "./policyDesk";
@@ -41,6 +42,14 @@ export function nextRpcId() {
 
 export function searchKnowledgeCorpus(query: string, topK = 3) {
   void matchProject(query);
+  return ragHitsForMcp(query, topK);
+}
+
+export async function searchKnowledgeCorpusAsync(query: string, topK = 3) {
+  void matchProject(query);
+  if (peekRuntimeConfig().features.preferServerRag) {
+    return ragHitsForMcpAsync(query, topK);
+  }
   return ragHitsForMcp(query, topK);
 }
 
@@ -149,7 +158,7 @@ export class McpInProcessServer {
 
       case "knowledge_search":
         return {
-          content: searchKnowledgeCorpus(String(args.query), Number(args.topK ?? 3)),
+          content: await searchKnowledgeCorpusAsync(String(args.query), Number(args.topK ?? 3)),
         };
 
       case "workflow_run": {

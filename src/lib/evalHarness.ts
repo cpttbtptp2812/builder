@@ -1,7 +1,9 @@
 /** Eval Ops — Skill Router 回归 + 工具链路指标 */
 
+import { DEFAULT_ROUTER_EVAL_CASES } from "../data/agentRuntimeConfig";
 import { AGENT_SKILLS, explainDiscovery, runSkill, getSkill } from "./agentSkills";
 import type { SkillTraceStep } from "./agentSkills";
+import { peekRuntimeConfig } from "./runtimeConfig";
 
 export type RouterEvalCase = {
   id: string;
@@ -26,19 +28,14 @@ export type ToolMetrics = {
   byTool: Record<string, { calls: number; ok: number; avgMs: number }>;
 };
 
-export const ROUTER_EVAL_CASES: RouterEvalCase[] = [
-  { id: "r1", query: "分析本站性能 metrics 和 latency", expectedSkillId: "site-analyzer", note: "性能审计" },
-  { id: "r2", query: "DOM 结构 role 分布和交互密度", expectedSkillId: "dom-probe", note: "DOM 探针" },
-  { id: "r3", query: "workflow 入队执行 replay", expectedSkillId: "workflow-orchestrator", note: "流程编排" },
-  { id: "r4", query: "http_probe 探活健康检查", expectedSkillId: "site-analyzer", note: "探活 → 审计 Skill" },
-  { id: "r5", query: "a11y snapshot 浏览器快照", expectedSkillId: "dom-probe", note: "快照 → DOM Skill" },
-  { id: "r6", query: "满一年年假几天制度怎么规定", expectedSkillId: "policy-desk", note: "制度值班" },
-  { id: "r7", query: "帮我开通公司 VPN 权限", expectedSkillId: "policy-desk", note: "改权限走工单" },
-  { id: "r8", query: "检索 iMean 定位语料 chunkId", expectedSkillId: "knowledge-lookup", note: "知识检索技能" },
-];
+export const ROUTER_EVAL_CASES: RouterEvalCase[] = DEFAULT_ROUTER_EVAL_CASES;
 
-export function runRouterEval(): RouterEvalRow[] {
-  return ROUTER_EVAL_CASES.map((c) => {
+export function getRouterEvalCases(): RouterEvalCase[] {
+  return peekRuntimeConfig().eval.routerCases;
+}
+
+export function runRouterEval(cases = getRouterEvalCases()): RouterEvalRow[] {
+  return cases.map((c) => {
     const rows = explainDiscovery(c.query);
     const top = rows[0];
     const predictedSkillId = top?.skill.id ?? null;

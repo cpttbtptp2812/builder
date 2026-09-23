@@ -16,6 +16,11 @@ export function seedCustomerData() {
   insertConfig("welcome_message", "您好，有什么可以帮您？");
   insertConfig("theme_color", "#6366f1");
   insertConfig("plaza_match_threshold", "70");
+  insertConfig("plaza_hint_threshold", "40");
+  insertConfig("prefer_server_rag", "true");
+  insertConfig("prefer_server_guest", "true");
+  insertConfig("prefer_server_multi_agent", "true");
+  insertConfig("prefer_server_eval", "true");
   insertConfig("plaza_first_enabled", "true");
   insertConfig("allow_anonymous_publish", "true");
   insertConfig("low_confidence_threshold", "65");

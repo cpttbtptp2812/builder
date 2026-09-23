@@ -24,6 +24,8 @@ export type OwnChatMessage = {
   content: string;
   reasoning?: string;
   mode?: "guest" | "llm" | "multi" | "eval" | "sheet" | "plaza";
+  runtime?: "server" | "local";
+  ragRuntime?: "server" | "local";
   tools?: OwnToolChip[];
   ms?: number;
   pipeline?: PipelineStage[];

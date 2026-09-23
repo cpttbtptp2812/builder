@@ -16,12 +16,16 @@ export function TurnFlowPanel({
   journal,
   running,
   turnStartedAt,
+  runtime,
+  ragRuntime,
   onEvidenceClick,
   onClose,
 }: {
   journal: FlowJournalNode[];
   running?: boolean;
   turnStartedAt?: number | null;
+  runtime?: "server" | "local";
+  ragRuntime?: "server" | "local";
   onEvidenceClick?: (ev: FlowEvidence) => void;
   onClose?: () => void;
 }) {
@@ -113,6 +117,12 @@ export function TurnFlowPanel({
           <span className="ua-flow-live-kicker">Neural Trace</span>
           <strong>{running ? "实时推理中" : "推理已完成"}</strong>
           <p>{running ? "证据逐条落入时间线，点击可核对来源" : "可回放步骤或点击证据定位左侧答复"}</p>
+          {(runtime || ragRuntime) && (
+            <div className="ua-flow-runtime-badges">
+              {runtime && <span className={`ua-flow-runtime ua-flow-runtime--${runtime}`}>Agent · {runtime === "server" ? "SQLite API" : "浏览器"}</span>}
+              {ragRuntime && <span className={`ua-flow-runtime ua-flow-runtime--${ragRuntime}`}>Hybrid RAG · {ragRuntime === "server" ? "服务端" : "本地"}</span>}
+            </div>
+          )}
         </div>
         {onClose && (
           <button type="button" className="ua-flow-close" onClick={onClose} aria-label="关闭思考面板" title="关闭">

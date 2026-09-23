@@ -153,9 +153,7 @@ export function formatRagContext(result: RagRetrieveResult): string {
     .join("\n\n");
 }
 
-/** 兼容 MCP knowledge_search 的扁平 hits */
-export function ragHitsForMcp(query: string, topK = 3) {
-  const result = retrieveRag(query, topK);
+function mapRagHitsForMcp(result: RagRetrieveResult, runtime: "server" | "local" = "local") {
   return {
     query: result.query,
     topK: result.topK,
@@ -167,7 +165,24 @@ export function ragHitsForMcp(query: string, topK = 3) {
       excerpt: h.text.slice(0, 480),
       matchedTerms: h.matchedTerms,
     })),
-    source: `ragEngine · ${result.chunkCount} chunks · ${result.latencyMs}ms`,
+    source: `Hybrid RAG · ${runtime} · ${result.chunkCount} chunks · ${result.latencyMs}ms`,
     pipeline: result.pipeline,
+    runtime,
   };
+}
+
+/** 兼容 MCP knowledge_search 的扁平 hits（本地语料） */
+export function ragHitsForMcp(query: string, topK = 3) {
+  return mapRagHitsForMcp(retrieveRag(query, topK), "local");
+}
+
+/** Hybrid RAG — 优先服务端 SQLite，失败回退浏览器语料 */
+export async function ragHitsForMcpAsync(query: string, topK = 3) {
+  const { retrieveRagAsync } = await import("./backendBridge");
+  const { peekRuntimeConfig } = await import("./runtimeConfig");
+  if (peekRuntimeConfig().features.preferServerRag) {
+    const result = await retrieveRagAsync(query, topK);
+    if (result.runtime === "server") return mapRagHitsForMcp(result, "server");
+  }
+  return mapRagHitsForMcp(retrieveRag(query, topK), "local");
 }

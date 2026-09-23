@@ -8,6 +8,8 @@ import {
   type StoredTraceSession,
 } from "../../lib/agentTraceStore";
 import { runGuestAgentTurn } from "../../lib/guestAgentRuntime";
+import { loadSessionStore } from "../../lib/ownagentSessions";
+import { flowJournalStats } from "../../lib/turnFlowJournal";
 
 const QUICK = [
   "帮我对本站做发布前检查，探活并确认关键页面可访问",
@@ -105,6 +107,14 @@ export function TracePanel() {
 
   const selected = selectedId ? getTraceSession(selectedId) : null;
   const displaySpans = liveSpans ?? selected?.spans ?? [];
+  const chatNeuralTraces = (() => {
+    const store = loadSessionStore();
+    const session = store.sessions.find((s) => s.id === store.activeId);
+    return (session?.messages ?? [])
+      .filter((m) => m.role === "assistant" && m.flowJournal?.length)
+      .slice(-6)
+      .reverse();
+  })();
 
   const refreshSessions = useCallback(() => {
     setSessions(listTraceSessions());
@@ -180,6 +190,30 @@ export function TracePanel() {
           <strong>Agent 回复</strong>
           <p>{plainText(lastReply).slice(0, 400)}{lastReply.length > 400 ? "…" : ""}</p>
         </div>
+      ) : null}
+
+      {chatNeuralTraces.length > 0 ? (
+        <section className="agent-trace-neural card">
+          <header>
+            <strong>对话 Neural Trace</strong>
+            <span>来自当前会话 · Hybrid RAG + 自研 Agent 四段流水</span>
+          </header>
+          <ul>
+            {chatNeuralTraces.map((m) => {
+              const stats = flowJournalStats(m.flowJournal ?? []);
+              return (
+                <li key={m.id}>
+                  <span>{m.content.replace(/\s+/g, " ").slice(0, 56)}…</span>
+                  <em>
+                    {stats.doneSteps}/4 步 · {stats.evidenceCount} 证据
+                    {m.runtime ? ` · Agent ${m.runtime}` : ""}
+                    {m.ragRuntime ? ` · RAG ${m.ragRuntime}` : ""}
+                  </em>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       ) : null}
 
       <div className="agent-trace-layout">

@@ -31,6 +31,7 @@ export type InlineEvalView = {
   total: number;
   rows: { id: string; query: string; pass: boolean; detail: string }[];
   leakedCommit?: number;
+  runtime?: "server" | "local";
 };
 
 /** 跟进建议 — RAG 预检可答，优先推荐其他主题 */

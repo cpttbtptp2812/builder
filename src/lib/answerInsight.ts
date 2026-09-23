@@ -9,6 +9,8 @@ export type AnswerInsight = {
   ms: number;
   mode: string;
   tags: string[];
+  runtime?: "server" | "local";
+  ragRuntime?: "server" | "local";
 };
 
 export function buildAnswerInsight(opts: {
@@ -17,6 +19,8 @@ export function buildAnswerInsight(opts: {
   mode?: string;
   route?: RouteScoreView;
   toolCount?: number;
+  runtime?: "server" | "local";
+  ragRuntime?: "server" | "local";
 }): AnswerInsight {
   const stats = flowJournalStats(opts.flowJournal ?? []);
   const avg = stats.avgScore ?? 0;
@@ -27,11 +31,14 @@ export function buildAnswerInsight(opts: {
   );
 
   const tags: string[] = ["Hybrid RAG"];
+  if (opts.ragRuntime === "server") tags.push("SQLite RAG");
+  else if (opts.ragRuntime === "local") tags.push("Browser RAG");
   if (hitCount > 0) tags.push(`${hitCount} 段溯源`);
   if (opts.flowJournal?.length) tags.push("Neural Trace");
   if (opts.route?.path === "knowledge") tags.push("Knowledge Route");
-  if (opts.toolCount) tags.push(`${opts.toolCount} Tool Calls`);
+  if (opts.toolCount) tags.push(`${opts.toolCount} MCP Tools`);
   if (opts.mode === "multi") tags.push("Multi-Agent");
+  if (opts.runtime === "server") tags.push("Server Agent");
   if (opts.ms != null && opts.ms < 800) tags.push("Sub-second");
 
   return {
@@ -40,6 +47,8 @@ export function buildAnswerInsight(opts: {
     avgRelevance: avg,
     ms: opts.ms ?? 0,
     mode: opts.mode ?? "guest",
-    tags: tags.slice(0, 5),
+    tags: tags.slice(0, 6),
+    runtime: opts.runtime,
+    ragRuntime: opts.ragRuntime,
   };
 }

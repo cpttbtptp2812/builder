@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { runRouterEvalAsync, runSkillBenchmarkAsync } from "../../lib/backendBridge";
+import { runPolicyEvalAsync, runRouterEvalAsync, runSkillBenchmarkAsync } from "../../lib/backendBridge";
 import {
-  ROUTER_EVAL_CASES,
+  getRouterEvalCases,
   routerEvalSummary,
   type RouterEvalRow,
   type ToolMetrics,
@@ -18,12 +18,14 @@ export function EvalLabPanel({ compact = false }: Props) {
   const [evalRows, setEvalRows] = useState<RouterEvalRow[]>([]);
   const [toolMetrics, setToolMetrics] = useState<ToolMetrics | null>(null);
   const [runtime, setRuntime] = useState<"server" | "local">("local");
+  const [policyRuntime, setPolicyRuntime] = useState<"server" | "local">("local");
+  const [policyRows, setPolicyRows] = useState<ReturnType<typeof runPolicyEval>>([]);
   const [running, setRunning] = useState(false);
   const [benchRunning, setBenchRunning] = useState(false);
 
+  const routerCaseCount = getRouterEvalCases().length;
   const summary = useMemo(() => routerEvalSummary(evalRows), [evalRows]);
   const fails = useMemo(() => evalRows.filter((r) => !r.pass), [evalRows]);
-  const policyRows = useMemo(() => runPolicyEval(), []);
   const policySummary = useMemo(() => policyEvalSummary(policyRows), [policyRows]);
 
   const runRouter = useCallback(async () => {
@@ -50,13 +52,25 @@ export function EvalLabPanel({ compact = false }: Props) {
     }
   }, []);
 
+  const runPolicy = useCallback(async () => {
+    const res = await runPolicyEvalAsync();
+    setPolicyRows(res.rows);
+    setPolicyRuntime(res.runtime);
+  }, []);
+
   const runAll = useCallback(async () => {
     setRunning(true);
     setBenchRunning(true);
     try {
-      const [routerRes, bench] = await Promise.all([runRouterEvalAsync(), runSkillBenchmarkAsync()]);
+      const [routerRes, policyRes, bench] = await Promise.all([
+        runRouterEvalAsync(),
+        runPolicyEvalAsync(),
+        runSkillBenchmarkAsync(),
+      ]);
       setEvalRows(routerRes.rows);
       setRuntime(routerRes.runtime);
+      setPolicyRows(policyRes.rows);
+      setPolicyRuntime(policyRes.runtime);
       if (bench) setToolMetrics(bench.metrics);
     } finally {
       setRunning(false);
@@ -66,7 +80,8 @@ export function EvalLabPanel({ compact = false }: Props) {
 
   useEffect(() => {
     void runRouter();
-  }, [runRouter]);
+    void runPolicy();
+  }, [runRouter, runPolicy]);
 
   return (
     <div className={`eval-lab${compact ? " eval-lab--compact" : ""}`}>
@@ -75,7 +90,7 @@ export function EvalLabPanel({ compact = false }: Props) {
           <p className="eval-lab-eyebrow">Skill 路由</p>
           <h3>Router 回归 + 工具链压测</h3>
           <p className="eval-lab-desc">
-            {ROUTER_EVAL_CASES.length} 条固定用例，批量检查 Skill 路由是否正确，并统计工具调用延迟。
+            {routerCaseCount} 条可配置用例，批量检查 Skill 路由 + Policy 门禁，并统计 MCP 工具链延迟。
           </p>
         </div>
         <span className="eval-lab-runtime">{runtime === "server" ? "SQLite 服务端" : "浏览器离线"}</span>
@@ -125,8 +140,11 @@ export function EvalLabPanel({ compact = false }: Props) {
         <button type="button" className="eval-lab-btn" onClick={() => void runRouter()} disabled={running}>
           ↻ Router 回归
         </button>
+        <button type="button" className="eval-lab-btn" onClick={() => void runPolicy()} disabled={running}>
+          Policy 门禁
+        </button>
         <button type="button" className="eval-lab-btn" onClick={() => void runBenchmark()} disabled={benchRunning}>
-          Skill 压测
+          MCP 压测
         </button>
       </div>
 
@@ -149,7 +167,7 @@ export function EvalLabPanel({ compact = false }: Props) {
 
       {!compact && (
         <details className="platform-details eval-lab-table-wrap" open={fails.length > 0}>
-          <summary>全部 {ROUTER_EVAL_CASES.length} 条用例</summary>
+          <summary>全部 {routerCaseCount} 条 Router 用例 · {policyRuntime === "server" ? "Policy SQLite API" : "Policy 本地"}</summary>
           <table className="platform-eval-table">
             <thead>
               <tr>
