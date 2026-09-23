@@ -1,6 +1,8 @@
-/** 知识广场客户端 — 共享问答检索 / 发布 / 导入导出 */
+/** 知识广场客户端 — 共享问答检索 / 发布 / 导入导出（API 不可用时降级 localStorage） */
 
 const API = import.meta.env.VITE_API_BASE ?? "http://localhost:8787";
+const LOCAL_KEY = "oa-feed-local";
+const CACHE_KEY = "oa-feed-cache";
 
 export type PlazaItem = {
   id: string;
@@ -20,6 +22,11 @@ export type PlazaItem = {
 export type PlazaMatch = {
   item: PlazaItem;
   score: number;
+};
+
+export type PublishResult = {
+  id: string;
+  offline?: boolean;
 };
 
 function parseTags(raw: unknown): string[] {
@@ -47,25 +54,76 @@ function normalizeItem(row: Record<string, unknown>): PlazaItem {
   };
 }
 
-export async function listPlaza(q = "", limit = 50): Promise<{ items: PlazaItem[]; total: number }> {
+function loadLocalFeed(): PlazaItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(LOCAL_KEY) || "[]") as PlazaItem[];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalFeed(items: PlazaItem[]) {
+  const sorted = [...items].sort((a, b) => {
+    if (b.pinned !== a.pinned) return b.pinned - a.pinned;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+  localStorage.setItem(LOCAL_KEY, JSON.stringify(sorted));
+  localStorage.setItem(CACHE_KEY, JSON.stringify(sorted.slice(0, 30)));
+}
+
+function newLocalId() {
+  return `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+}
+
+function filterByQuery(items: PlazaItem[], q: string, limit: number) {
+  const query = q.trim().toLowerCase();
+  const filtered = query
+    ? items.filter((it) => it.question.toLowerCase().includes(query) || it.answer.toLowerCase().includes(query))
+    : items;
+  return filtered.slice(0, limit);
+}
+
+function createLocalItem(input: {
+  question: string;
+  answer: string;
+  author?: string;
+  tags?: string[];
+  sourceDoc?: string;
+}): PlazaItem {
+  const now = new Date().toISOString();
+  return {
+    id: newLocalId(),
+    question: input.question.trim(),
+    answer: input.answer.trim(),
+    author: input.author?.trim() || "匿名用户",
+    avatar_color: "#6366f1",
+    source_doc: input.sourceDoc ?? null,
+    tags: input.tags ?? [],
+    likes: 0,
+    views: 0,
+    pinned: 0,
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+export async function listPlaza(q = "", limit = 50): Promise<{ items: PlazaItem[]; total: number; offline?: boolean }> {
   try {
     const res = await fetch(`${API}/api/feed?q=${encodeURIComponent(q)}&limit=${limit}`);
     if (!res.ok) throw new Error(String(res.status));
     const data = await res.json() as { items: Record<string, unknown>[]; total: number };
     const items = data.items.map(normalizeItem);
-    localStorage.setItem("oa-feed-cache", JSON.stringify(items.slice(0, 30)));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(items.slice(0, 30)));
     return { items, total: data.total };
   } catch {
-    try {
-      const cached = JSON.parse(localStorage.getItem("oa-feed-cache") || "[]") as PlazaItem[];
-      const query = q.trim().toLowerCase();
-      const items = query
-        ? cached.filter((it) => it.question.toLowerCase().includes(query) || it.answer.toLowerCase().includes(query))
-        : cached;
-      return { items, total: items.length };
-    } catch {
-      return { items: [], total: 0 };
+    let local = loadLocalFeed();
+    if (local.length === 0) {
+      try {
+        local = JSON.parse(localStorage.getItem(CACHE_KEY) || "[]") as PlazaItem[];
+      } catch { /* */ }
     }
+    const items = filterByQuery(local, q, limit);
+    return { items, total: items.length, offline: true };
   }
 }
 
@@ -88,7 +146,12 @@ export async function matchPlaza(query: string): Promise<PlazaMatch | null> {
     const res = await fetch(`${API}/api/feed/match?q=${encodeURIComponent(q)}`);
     if (res.ok) {
       const data = await res.json() as { match: PlazaMatch | null };
-      if (data.match?.item) return { item: normalizeItem(data.match.item as unknown as Record<string, unknown>), score: data.match.score };
+      if (data.match?.item) {
+        return {
+          item: normalizeItem(data.match.item as unknown as Record<string, unknown>),
+          score: data.match.score,
+        };
+      }
     }
   } catch { /* fallback local */ }
   const { items } = await listPlaza(q, 20);
@@ -106,39 +169,79 @@ export async function publishPlaza(input: {
   author?: string;
   tags?: string[];
   sourceDoc?: string;
-}): Promise<string | null> {
-  const res = await fetch(`${API}/api/feed`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  const data = await res.json() as { id: string };
-  return data.id;
+}): Promise<PublishResult> {
+  try {
+    const res = await fetch(`${API}/api/feed`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json() as { id: string };
+    return { id: data.id };
+  } catch {
+    const item = createLocalItem(input);
+    saveLocalFeed([item, ...loadLocalFeed()]);
+    return { id: item.id, offline: true };
+  }
 }
 
-export async function updatePlaza(id: string, input: { question?: string; answer?: string; author?: string; tags?: string[] }) {
-  const res = await fetch(`${API}/api/feed/${id}`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(input),
-  });
-  if (!res.ok) throw new Error(await res.text());
+export async function updatePlaza(
+  id: string,
+  input: { question?: string; answer?: string; author?: string; tags?: string[] },
+): Promise<{ offline?: boolean }> {
+  try {
+    const res = await fetch(`${API}/api/feed/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return {};
+  } catch {
+    const items = loadLocalFeed();
+    const idx = items.findIndex((it) => it.id === id);
+    if (idx < 0) throw new Error("条目不存在");
+    items[idx] = {
+      ...items[idx]!,
+      question: input.question ?? items[idx]!.question,
+      answer: input.answer ?? items[idx]!.answer,
+      author: input.author ?? items[idx]!.author,
+      tags: input.tags ?? items[idx]!.tags,
+      updated_at: new Date().toISOString(),
+    };
+    saveLocalFeed(items);
+    return { offline: true };
+  }
 }
 
-export async function deletePlaza(id: string) {
-  const res = await fetch(`${API}/api/feed/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error(await res.text());
+export async function deletePlaza(id: string): Promise<{ offline?: boolean }> {
+  try {
+    const res = await fetch(`${API}/api/feed/${id}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(await res.text());
+    return {};
+  } catch {
+    saveLocalFeed(loadLocalFeed().filter((it) => it.id !== id));
+    return { offline: true };
+  }
 }
 
-export async function importPlaza(items: { question: string; answer: string; author?: string; tags?: string[] }[]) {
-  const res = await fetch(`${API}/api/feed/import`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ items }),
-  });
-  if (!res.ok) throw new Error(await res.text());
-  return res.json() as Promise<{ ok: boolean; count: number }>;
+export async function importPlaza(
+  items: { question: string; answer: string; author?: string; tags?: string[] }[],
+): Promise<{ ok: boolean; count: number; offline?: boolean }> {
+  try {
+    const res = await fetch(`${API}/api/feed/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ items }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json() as Promise<{ ok: boolean; count: number }>;
+  } catch {
+    const created = items.map((it) => createLocalItem(it));
+    saveLocalFeed([...created, ...loadLocalFeed()]);
+    return { ok: true, count: created.length, offline: true };
+  }
 }
 
 export async function exportPlaza(): Promise<PlazaItem[]> {

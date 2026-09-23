@@ -61,7 +61,47 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_published_qa_created ON published_qa(created_at DESC);
   CREATE INDEX IF NOT EXISTS idx_published_qa_pinned ON published_qa(pinned DESC, created_at DESC);
+
+  /* ── 制度条款（客户可配置） ── */
+  CREATE TABLE IF NOT EXISTS policy_clauses (
+    id TEXT PRIMARY KEY,
+    topic TEXT NOT NULL DEFAULT 'general',
+    status TEXT NOT NULL DEFAULT 'current',
+    text TEXT NOT NULL,
+    slot TEXT,
+    value TEXT,
+    condition_text TEXT,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  /* ── 能力规则（read / mutate / abstain） ── */
+  CREATE TABLE IF NOT EXISTS capability_rules (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    cap TEXT NOT NULL,
+    pattern TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    priority INTEGER NOT NULL DEFAULT 50,
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_capability_rules_priority ON capability_rules(priority ASC);
 `);
+
+const CHAT_SESSION_MIGRATIONS = [
+  "ALTER TABLE chat_sessions ADD COLUMN answer_preview TEXT",
+  "ALTER TABLE chat_sessions ADD COLUMN mode TEXT NOT NULL DEFAULT 'llm'",
+  "ALTER TABLE chat_sessions ADD COLUMN plaza_hit INTEGER NOT NULL DEFAULT 0",
+  "ALTER TABLE chat_sessions ADD COLUMN published INTEGER NOT NULL DEFAULT 0",
+] as const;
+
+for (const sql of CHAT_SESSION_MIGRATIONS) {
+  try { db.exec(sql); } catch { /* column exists */ }
+}
 
 /* ── 管理员密码默认配置 ── */
 try {

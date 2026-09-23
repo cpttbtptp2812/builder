@@ -9,6 +9,9 @@
  *   - 使用分析看板
  */
 import { useCallback, useEffect, useRef, useState } from "react";
+import { OperationsPanel } from "./admin/OperationsPanel";
+import { PlazaAdminPanel } from "./admin/PlazaAdminPanel";
+import { PoliciesPanel } from "./admin/PoliciesPanel";
 
 const API = import.meta.env.VITE_API_BASE ?? "http://localhost:8787";
 
@@ -43,13 +46,18 @@ type Analytics = {
   avgLatency: number;
   avgGround: number;
   kbCount: number;
+  plazaCount: number;
+  plazaHits: number;
+  aiCalls: number;
+  plazaHitRate: number;
+  tokenSavedEst: number;
   topQueries: { query: string; c: number }[];
-  dailyTrend: { day: string; c: number }[];
+  dailyTrend: { day: string; c: number; plaza?: number; ai?: number }[];
 };
 
 type AppConfig = Record<string, string>;
 
-type Tab = "knowledge" | "config" | "analytics" | "system";
+type Tab = "knowledge" | "plaza" | "operations" | "policies" | "config" | "analytics" | "system";
 
 /* ════════════════════════════════════════════════════════════
    Login Screen
@@ -105,7 +113,11 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
             {loading ? "验证中…" : "登录"}
           </button>
         </form>
-        <p className="adm-login-hint">默认密码: admin123（请在 .env 中修改 ADMIN_PASSWORD）</p>
+        <p className="adm-login-hint">默认密码: admin123（正式部署请在 .env 修改 ADMIN_PASSWORD）</p>
+        <p className="adm-login-demo">
+          GitHub Pages 为<strong>演示部署</strong>，管理后台需连接后端。
+          本地完整体验：<code>npm run dev:full</code> 或 <code>docker compose up -d</code>
+        </p>
       </div>
     </div>
   );
@@ -380,6 +392,35 @@ function ConfigPanel({ token }: { token: string }) {
         </div>
       </div>
 
+      {/* Plaza workflow */}
+      <div className="adm-section">
+        <h3 className="adm-section-title">广场与工作流</h3>
+        <div className="adm-config-grid">
+          <div className="adm-form-row">
+            <label>广场优先匹配阈值（%）</label>
+            <input className="adm-input" type="number" min={40} max={100} value={cfg.plaza_match_threshold ?? "70"} onChange={e => set("plaza_match_threshold", e.target.value)} />
+          </div>
+          <div className="adm-form-row">
+            <label>低置信度告警阈值（%）</label>
+            <input className="adm-input" type="number" min={20} max={90} value={cfg.low_confidence_threshold ?? "65"} onChange={e => set("low_confidence_threshold", e.target.value)} />
+          </div>
+          <div className="adm-form-row">
+            <label>启用「先搜广场」</label>
+            <select className="adm-input" value={cfg.plaza_first_enabled ?? "true"} onChange={e => set("plaza_first_enabled", e.target.value)}>
+              <option value="true">是</option>
+              <option value="false">否</option>
+            </select>
+          </div>
+          <div className="adm-form-row">
+            <label>允许匿名发布到广场</label>
+            <select className="adm-input" value={cfg.allow_anonymous_publish ?? "true"} onChange={e => set("allow_anonymous_publish", e.target.value)}>
+              <option value="true">是</option>
+              <option value="false">否（仅管理员）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       {/* Security */}
       <div className="adm-section">
         <h3 className="adm-section-title">
@@ -422,9 +463,11 @@ function AnalyticsPanel({ token }: { token: string }) {
       <div className="adm-kpi-grid">
         {[
           { label: "累计问答", value: data.total.toLocaleString(), sub: `今日 ${data.today}`, icon: "💬" },
-          { label: "知识文档", value: data.kbCount.toString(), sub: "已启用", icon: "📚" },
-          { label: "平均响应", value: `${(data.avgLatency / 1000).toFixed(1)}s`, sub: "响应耗时", icon: "⚡" },
-          { label: "知识覆盖", value: `${data.avgGround}%`, sub: "平均依据率", icon: "🎯" },
+          { label: "广场命中", value: `${data.plazaHitRate ?? 0}%`, sub: `${data.plazaHits ?? 0} 次零 Token`, icon: "🌐" },
+          { label: "预估节省", value: `≈${((data.tokenSavedEst ?? 0) / 1000).toFixed(1)}k`, sub: "Token 估算", icon: "💰" },
+          { label: "知识覆盖", value: `${data.avgGround}%`, sub: "平均置信度", icon: "🎯" },
+          { label: "知识文档", value: data.kbCount.toString(), sub: `${data.plazaCount ?? 0} 条广场`, icon: "📚" },
+          { label: "AI 调用", value: (data.aiCalls ?? 0).toLocaleString(), sub: `平均 ${(data.avgLatency / 1000).toFixed(1)}s`, icon: "⚡" },
         ].map(k => (
           <div key={k.label} className="adm-kpi-card">
             <span className="adm-kpi-icon">{k.icon}</span>
@@ -530,7 +573,7 @@ function SystemPanel({ token }: { token: string }) {
    ════════════════════════════════════════════════════════════ */
 export function AdminPage() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem("oa-admin-token"));
-  const [tab, setTab] = useState<Tab>("knowledge");
+  const [tab, setTab] = useState<Tab>("operations");
 
   function logout() {
     localStorage.removeItem("oa-admin-token");
@@ -540,10 +583,13 @@ export function AdminPage() {
   if (!token) return <LoginScreen onLogin={setToken} />;
 
   const NAV: { id: Tab; label: string; icon: string }[] = [
-    { id: "knowledge", label: "知识库", icon: "📚" },
-    { id: "config",    label: "配置",   icon: "⚙️" },
-    { id: "analytics", label: "分析",   icon: "📊" },
-    { id: "system",    label: "系统",   icon: "🔧" },
+    { id: "operations", label: "知识运营", icon: "📋" },
+    { id: "knowledge",  label: "知识库",   icon: "📚" },
+    { id: "plaza",      label: "知识广场", icon: "🌐" },
+    { id: "policies",   label: "制度权限", icon: "🛡️" },
+    { id: "analytics",  label: "数据分析", icon: "📊" },
+    { id: "config",     label: "应用配置", icon: "⚙️" },
+    { id: "system",     label: "系统",     icon: "🔧" },
   ];
 
   return (
@@ -578,7 +624,16 @@ export function AdminPage() {
 
       {/* Main */}
       <main className="adm-main">
+        {tab === "operations" && (
+          <OperationsPanel
+            token={token}
+            onGoKnowledge={() => setTab("knowledge")}
+            onGoPlaza={() => setTab("plaza")}
+          />
+        )}
         {tab === "knowledge"  && <KnowledgePanel  token={token} />}
+        {tab === "plaza"      && <PlazaAdminPanel  token={token} />}
+        {tab === "policies"   && <PoliciesPanel    token={token} />}
         {tab === "config"     && <ConfigPanel     token={token} />}
         {tab === "analytics"  && <AnalyticsPanel  token={token} />}
         {tab === "system"     && <SystemPanel     token={token} />}

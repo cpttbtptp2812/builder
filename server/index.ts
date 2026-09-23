@@ -12,6 +12,7 @@ import {
   upsertMemory,
 } from "./agent.ts";
 import { getChunkCount, seedRagCorpus } from "./seed.ts";
+import { seedCustomerData } from "./customerSeed.ts";
 import { retrieveRagFromDb } from "./rag.ts";
 import { explainDiscovery, runRouterEval, runSkillBenchmark, runSkillOnServer, SKILL_CATALOG } from "./skills.ts";
 import { parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
@@ -35,6 +36,7 @@ app.use(
 );
 
 seedRagCorpus();
+seedCustomerData();
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");
@@ -329,7 +331,10 @@ app.post("/api/admin/knowledge/import-url", async (c) => {
 });
 
 /* ─── 应用配置 ────────────────────────────────────────────── */
-const PUBLIC_CONFIG_KEYS = ["app_name", "app_logo_url", "app_description", "theme_color", "welcome_message"];
+const PUBLIC_CONFIG_KEYS = [
+  "app_name", "app_logo_url", "app_description", "theme_color", "welcome_message",
+  "plaza_match_threshold", "plaza_first_enabled", "allow_anonymous_publish", "low_confidence_threshold",
+];
 
 app.get("/api/config", (c) => {
   const rows = dbAll<{ key: string; value: string }>(
@@ -365,12 +370,45 @@ app.post("/api/admin/config", async (c) => {
 /* ─── 聊天日志记录 & 分析 ─────────────────────────────────── */
 app.post("/api/analytics/log", async (c) => {
   const body = await c.req.json<{
-    sessionId: string; query: string; answerLength?: number;
-    groundedness?: number; hitCount?: number; latencyMs?: number;
+    sessionId: string;
+    query: string;
+    answerPreview?: string;
+    answerLength?: number;
+    groundedness?: number;
+    hitCount?: number;
+    latencyMs?: number;
+    mode?: string;
+    plazaHit?: boolean;
+    published?: boolean;
   }>();
   dbRun(
-    "INSERT INTO chat_sessions(id,session_id,query,answer_length,groundedness,hit_count,latency_ms,created_at) VALUES(?,?,?,?,?,?,?,?)",
-    [randomUUID(), body.sessionId, body.query, body.answerLength ?? 0, body.groundedness ?? 0, body.hitCount ?? 0, body.latencyMs ?? 0, nowIsoLocal()]
+    `INSERT INTO chat_sessions(
+      id,session_id,query,answer_preview,answer_length,groundedness,hit_count,latency_ms,mode,plaza_hit,published,created_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [
+      randomUUID(),
+      body.sessionId,
+      body.query,
+      (body.answerPreview ?? "").slice(0, 500),
+      body.answerLength ?? 0,
+      body.groundedness ?? 0,
+      body.hitCount ?? 0,
+      body.latencyMs ?? 0,
+      body.mode ?? "llm",
+      body.plazaHit ? 1 : 0,
+      body.published ? 1 : 0,
+      nowIsoLocal(),
+    ],
+  );
+  return c.json({ ok: true });
+});
+
+app.post("/api/analytics/published", async (c) => {
+  const body = await c.req.json<{ query: string }>();
+  if (!body.query?.trim()) return c.json({ ok: false }, 400);
+  dbRun(
+    "UPDATE chat_sessions SET published=1 WHERE query=? AND published=0",
+    [body.query.trim()],
   );
   return c.json({ ok: true });
 });
@@ -381,14 +419,193 @@ app.get("/api/admin/analytics", (c) => {
   const today = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM chat_sessions WHERE date(created_at)=date('now')")?.c ?? 0;
   const avgLatency = dbGet<{ v: number }>("SELECT AVG(latency_ms) as v FROM chat_sessions")?.v ?? 0;
   const avgGround = dbGet<{ v: number }>("SELECT AVG(groundedness) as v FROM chat_sessions")?.v ?? 0;
+  const plazaHits = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM chat_sessions WHERE plaza_hit=1")?.c ?? 0;
+  const aiCalls = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM chat_sessions WHERE plaza_hit=0")?.c ?? 0;
   const topQueries = dbAll<{ query: string; c: number }>(
-    "SELECT query, COUNT(*) as c FROM chat_sessions GROUP BY query ORDER BY c DESC LIMIT 10"
+    "SELECT query, COUNT(*) as c FROM chat_sessions GROUP BY query ORDER BY c DESC LIMIT 10",
   );
-  const dailyTrend = dbAll<{ day: string; c: number }>(
-    "SELECT date(created_at) as day, COUNT(*) as c FROM chat_sessions GROUP BY day ORDER BY day DESC LIMIT 14"
+  const dailyTrend = dbAll<{ day: string; c: number; plaza: number; ai: number }>(
+    `SELECT date(created_at) as day,
+      COUNT(*) as c,
+      SUM(CASE WHEN plaza_hit=1 THEN 1 ELSE 0 END) as plaza,
+      SUM(CASE WHEN plaza_hit=0 THEN 1 ELSE 0 END) as ai
+     FROM chat_sessions GROUP BY day ORDER BY day DESC LIMIT 14`,
   );
   const kbCount = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM knowledge_docs WHERE enabled=1")?.c ?? 0;
-  return c.json({ total, today, avgLatency: Math.round(avgLatency), avgGround: Math.round(avgGround), topQueries, dailyTrend, kbCount });
+  const plazaCount = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM published_qa")?.c ?? 0;
+  const plazaHitRate = total ? Math.round((plazaHits / total) * 100) : 0;
+  const tokenSavedEst = plazaHits * 800;
+  return c.json({
+    total,
+    today,
+    avgLatency: Math.round(avgLatency),
+    avgGround: Math.round(avgGround),
+    topQueries,
+    dailyTrend,
+    kbCount,
+    plazaCount,
+    plazaHits,
+    aiCalls,
+    plazaHitRate,
+    tokenSavedEst,
+  });
+});
+
+/* ─── 知识运营台 ─────────────────────────────────────────── */
+app.get("/api/admin/operations", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const lowThreshold = Number(dbGet<{ value: string }>("SELECT value FROM app_config WHERE key='low_confidence_threshold'")?.value ?? "65");
+
+  const gaps = dbAll<{ query: string; count: number; avg_ground: number; avg_hits: number }>(
+    `SELECT query, COUNT(*) as count,
+      ROUND(AVG(groundedness)) as avg_ground,
+      ROUND(AVG(hit_count)) as avg_hits
+     FROM chat_sessions
+     WHERE plaza_hit=0 AND (groundedness < ? OR hit_count=0)
+     GROUP BY query
+     HAVING count >= 1
+     ORDER BY count DESC, avg_ground ASC
+     LIMIT 20`,
+    [lowThreshold],
+  );
+
+  const lowConfidence = dbAll<{
+    id: string; query: string; answer_preview: string; groundedness: number; hit_count: number; mode: string; created_at: string;
+  }>(
+    `SELECT id, query, answer_preview, groundedness, hit_count, mode, created_at
+     FROM chat_sessions
+     WHERE groundedness < ? AND plaza_hit=0
+     ORDER BY created_at DESC LIMIT 15`,
+    [lowThreshold],
+  );
+
+  const pendingPublish = dbAll<{
+    id: string; query: string; answer_preview: string; groundedness: number; hit_count: number; mode: string; created_at: string;
+  }>(
+    `SELECT id, query, answer_preview, groundedness, hit_count, mode, created_at
+     FROM chat_sessions
+     WHERE published=0 AND plaza_hit=0 AND groundedness >= ?
+     ORDER BY created_at DESC LIMIT 15`,
+    [lowThreshold],
+  );
+
+  const summary = {
+    gapCount: gaps.length,
+    lowConfidenceCount: lowConfidence.length,
+    pendingPublishCount: pendingPublish.length,
+    plazaTotal: dbGet<{ c: number }>("SELECT COUNT(*) as c FROM published_qa")?.c ?? 0,
+  };
+
+  return c.json({ summary, gaps, lowConfidence, pendingPublish });
+});
+
+/* ─── 制度条款 CRUD ─────────────────────────────────────── */
+app.get("/api/admin/policies", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const rows = dbAll<Record<string, unknown>>(
+    "SELECT * FROM policy_clauses ORDER BY sort_order ASC, updated_at DESC",
+  );
+  return c.json({ clauses: rows });
+});
+
+app.post("/api/admin/policies", async (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const body = await c.req.json<{
+    id?: string; topic?: string; status?: string; text: string;
+    slot?: string; value?: string; condition_text?: string; sort_order?: number;
+  }>();
+  const id = body.id?.trim() || `KB-${randomUUID().slice(0, 8)}`;
+  const now = nowIsoLocal();
+  dbRun(
+    `INSERT INTO policy_clauses(id,topic,status,text,slot,value,condition_text,sort_order,enabled,created_at,updated_at)
+     VALUES(?,?,?,?,?,?,?,?,1,?,?)`,
+    [id, body.topic ?? "general", body.status ?? "current", body.text, body.slot ?? null, body.value ?? null, body.condition_text ?? "", body.sort_order ?? 99, now, now],
+  );
+  return c.json({ ok: true, id });
+});
+
+app.put("/api/admin/policies/:id", async (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const body = await c.req.json<Record<string, unknown>>();
+  const now = nowIsoLocal();
+  dbRun(
+    `UPDATE policy_clauses SET
+      topic=COALESCE(?,topic), status=COALESCE(?,status), text=COALESCE(?,text),
+      slot=COALESCE(?,slot), value=COALESCE(?,value), condition_text=COALESCE(?,condition_text),
+      sort_order=COALESCE(?,sort_order), enabled=COALESCE(?,enabled), updated_at=?
+     WHERE id=?`,
+    [
+      body.topic ?? null, body.status ?? null, body.text ?? null,
+      body.slot ?? null, body.value ?? null, body.condition_text ?? null,
+      body.sort_order ?? null, body.enabled !== undefined ? (body.enabled ? 1 : 0) : null,
+      now, c.req.param("id"),
+    ],
+  );
+  return c.json({ ok: true });
+});
+
+app.delete("/api/admin/policies/:id", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  dbRun("DELETE FROM policy_clauses WHERE id=?", [c.req.param("id")]);
+  return c.json({ ok: true });
+});
+
+/* ─── 能力规则 CRUD ─────────────────────────────────────── */
+app.get("/api/admin/capability-rules", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const rows = dbAll<Record<string, unknown>>(
+    "SELECT * FROM capability_rules ORDER BY priority ASC, updated_at DESC",
+  );
+  return c.json({ rules: rows });
+});
+
+app.post("/api/admin/capability-rules", async (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const body = await c.req.json<{ name: string; cap: string; pattern: string; reason: string; priority?: number }>();
+  const id = `cap-${randomUUID().slice(0, 8)}`;
+  const now = nowIsoLocal();
+  dbRun(
+    `INSERT INTO capability_rules(id,name,cap,pattern,reason,priority,enabled,created_at,updated_at) VALUES(?,?,?,?,?,?,1,?,?)`,
+    [id, body.name, body.cap, body.pattern, body.reason, body.priority ?? 50, now, now],
+  );
+  return c.json({ ok: true, id });
+});
+
+app.put("/api/admin/capability-rules/:id", async (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const body = await c.req.json<Record<string, unknown>>();
+  const now = nowIsoLocal();
+  dbRun(
+    `UPDATE capability_rules SET
+      name=COALESCE(?,name), cap=COALESCE(?,cap), pattern=COALESCE(?,pattern),
+      reason=COALESCE(?,reason), priority=COALESCE(?,priority),
+      enabled=COALESCE(?,enabled), updated_at=?
+     WHERE id=?`,
+    [
+      body.name ?? null, body.cap ?? null, body.pattern ?? null, body.reason ?? null,
+      body.priority ?? null, body.enabled !== undefined ? (body.enabled ? 1 : 0) : null,
+      now, c.req.param("id"),
+    ],
+  );
+  return c.json({ ok: true });
+});
+
+app.delete("/api/admin/capability-rules/:id", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  dbRun("DELETE FROM capability_rules WHERE id=?", [c.req.param("id")]);
+  return c.json({ ok: true });
+});
+
+/* ─── 广场管理（管理员） ─────────────────────────────────── */
+app.get("/api/admin/plaza", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const rows = dbAll<Record<string, unknown>>(
+    "SELECT * FROM published_qa ORDER BY pinned DESC, created_at DESC LIMIT 200",
+  );
+  return c.json({
+    items: rows.map((r) => ({ ...r, tags: JSON.parse(String(r.tags ?? "[]")) })),
+    total: dbGet<{ c: number }>("SELECT COUNT(*) as c FROM published_qa")?.c ?? 0,
+  });
 });
 
 /* ════════════════════════════════════════════════════════════

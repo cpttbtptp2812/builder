@@ -47,6 +47,7 @@ export function KnowledgeFeed({
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [total, setTotal] = useState(0);
+  const [offline, setOffline] = useState(false);
   const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -60,6 +61,7 @@ export function KnowledgeFeed({
     const data = await listPlaza(q ?? "", 80);
     setItems(data.items);
     setTotal(data.total);
+    setOffline(Boolean(data.offline));
     setLoading(false);
   }, []);
 
@@ -96,17 +98,17 @@ export function KnowledgeFeed({
     if (!publishForm.question.trim() || !publishForm.answer.trim()) return;
     setPublishing(true);
     try {
-      await publishPlaza({
+      const result = await publishPlaza({
         question: publishForm.question,
         answer: publishForm.answer,
         author: publishForm.author || "匿名用户",
       });
       setPublishForm({ question: "", answer: "", author: "" });
       setShowPublish(false);
-      flash("已发布，所有人都能看到");
+      flash(result.offline ? "已保存到本机（后端未连接）" : "已发布，所有人都能看到");
       void loadFeed(search);
     } catch {
-      flash("发布失败，请确认后端已启动");
+      flash("发布失败，请稍后重试");
     }
     setPublishing(false);
   }
@@ -121,9 +123,9 @@ export function KnowledgeFeed({
     if (!editing) return;
     setSaving(true);
     try {
-      await updatePlaza(editing.id, editForm);
+      const result = await updatePlaza(editing.id, editForm);
       setEditing(null);
-      flash("已保存修改");
+      flash(result.offline ? "已保存到本机" : "已保存修改");
       void loadFeed(search);
     } catch {
       flash("保存失败");
@@ -134,8 +136,8 @@ export function KnowledgeFeed({
   async function remove(item: PlazaItem) {
     if (!confirm(`删除「${item.question.slice(0, 24)}」？删除后其他人将看不到。`)) return;
     try {
-      await deletePlaza(item.id);
-      flash("已删除");
+      const result = await deletePlaza(item.id);
+      flash(result.offline ? "已从本机删除" : "已删除");
       void loadFeed(search);
     } catch {
       flash("删除失败");
@@ -162,7 +164,7 @@ export function KnowledgeFeed({
         .map(it => ({ question: it.question, answer: it.answer, author: it.author, tags: it.tags }));
       if (!payload.length) { flash("文件里没有有效问答"); return; }
       const result = await importPlaza(payload);
-      flash(`成功导入 ${result.count} 条`);
+      flash(result.offline ? `已导入 ${result.count} 条到本机` : `成功导入 ${result.count} 条`);
       void loadFeed(search);
     } catch {
       flash("导入失败，请使用导出的 JSON 格式");
@@ -181,6 +183,12 @@ export function KnowledgeFeed({
           <span>条共享问答</span>
         </div>
       </div>
+
+      {offline ? (
+        <div className="kf-offline-banner">
+          后端未连接，当前显示本机已保存的问答。发布、编辑会暂存到浏览器，启动服务后可同步到服务器。
+        </div>
+      ) : null}
 
       <div className="kf-toolbar">
         <div className="kf-search">

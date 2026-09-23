@@ -39,7 +39,7 @@ export function BackendStatusBar({ compact = false, quiet = false }: Props) {
             ) : online ? (
               <span>服务端已连接，数据可持久化到 SQLite。</span>
             ) : (
-              <span>当前在本机浏览器运行，全部能力可用。可选启动服务端：npm run dev:full</span>
+              <span>演示模式：对话、知识库、广场均在本机运行；发布/广场数据存浏览器。完整管理后台需 docker compose 或 npm run dev:full</span>
             )}
           </div>
         )}
@@ -58,8 +58,8 @@ export function BackendStatusBar({ compact = false, quiet = false }: Props) {
   if (!health?.ok) {
     return (
       <div className={`backend-status backend-status--offline ${compact ? "compact" : ""}`}>
-        <strong>本机运行</strong>
-        <span>服务端未启动时自动降级，能力仍可用。</span>
+        <strong>演示模式</strong>
+        <span>无后端时自动降级本机运行；对话、广场、知识库可用。管理后台需启动服务端。</span>
       </div>
     );
   }

@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
-import { useCallback, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listKnowledgePrompts, listKnowledgeDocs, type KnowledgeDoc } from "../../../lib/ownKnowledge";
+import { listPlaza } from "../../../lib/plazaFeed";
 
 /* ════════════════════════════════════════════════════════════
    AgentWelcome — 超越一问一答的智能首页
@@ -70,21 +71,6 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-/* ── Quick answer data (from knowledge base) ─────────── */
-function buildQuickAnswers(docs: KnowledgeDoc[]): { q: string; preview: string; docTitle: string }[] {
-  const answers: { q: string; preview: string; docTitle: string }[] = [];
-  for (const doc of docs) {
-    if (!doc.body.trim()) continue;
-    for (const prompt of doc.prompts) {
-      if (!prompt.trim()) continue;
-      const preview = doc.body.slice(0, 80).replace(/\n/g, " ") + (doc.body.length > 80 ? "…" : "");
-      answers.push({ q: prompt.trim(), preview, docTitle: doc.title });
-      if (answers.length >= 6) return answers;
-    }
-  }
-  return answers;
-}
-
 /* ── Knowledge categories ────────────────────────────── */
 function buildCategories(docs: KnowledgeDoc[]): { name: string; count: number; color: string }[] {
   const colors = ["#6366f1", "#059669", "#d97706", "#0891b2", "#ec4899", "#8b5cf6"];
@@ -98,29 +84,26 @@ export function AgentWelcome({
   onPrompt,
   disabled,
   onOpenKnowledge,
+  onOpenPlaza,
   kbRev = 0,
 }: {
   onPrompt: (text: string) => void;
   disabled?: boolean;
   onOpenKnowledge?: () => void;
+  onOpenPlaza?: () => void;
   kbRev?: number;
 }) {
   const prompts = useMemo(() => listKnowledgePrompts(4), [kbRev]);
   const docs = useMemo(() => listKnowledgeDocs(), [kbRev]);
-  const quickAnswers = useMemo(() => buildQuickAnswers(docs), [docs]);
   const categories = useMemo(() => buildCategories(docs), [docs]);
 
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [guidedStep, setGuidedStep] = useState(0);
-  const [expandedAnswers, setExpandedAnswers] = useState<Set<number>>(new Set());
+  const [plazaTotal, setPlazaTotal] = useState(0);
 
-  const toggleAnswer = useCallback((idx: number) => {
-    setExpandedAnswers(prev => {
-      const next = new Set(prev);
-      next.has(idx) ? next.delete(idx) : next.add(idx);
-      return next;
-    });
-  }, []);
+  useEffect(() => {
+    void listPlaza("", 1).then((d) => setPlazaTotal(d.total));
+  }, [kbRev]);
 
   function selectScenario(s: Scenario) {
     if (s.id === "freeask") {
@@ -286,44 +269,29 @@ export function AgentWelcome({
         ))}
       </div>
 
-      {/* ── Knowledge Feed: Quick Answers ── */}
-      {quickAnswers.length > 0 && (
-        <div className="aw-feed">
-          <div className="aw-feed-header">
-            <h3>🔥 大家都在问</h3>
-            <span>点击展开答案</span>
-          </div>
-          <div className="aw-feed-list">
-            {quickAnswers.map((qa, i) => (
-              <div key={i} className={`aw-feed-item${expandedAnswers.has(i) ? " expanded" : ""}`}>
-                <button
-                  type="button"
-                  className="aw-feed-q"
-                  onClick={() => toggleAnswer(i)}
-                >
-                  <span className="aw-feed-q-icon">Q</span>
-                  <span className="aw-feed-q-text">{qa.q}</span>
-                  <span className="aw-feed-toggle">{expandedAnswers.has(i) ? "▲" : "▼"}</span>
-                </button>
-                {expandedAnswers.has(i) && (
-                  <div className="aw-feed-a">
-                    <p>{qa.preview}</p>
-                    <div className="aw-feed-a-actions">
-                      <span className="aw-feed-a-source">来自：{qa.docTitle}</span>
-                      <button
-                        type="button"
-                        className="aw-feed-a-more"
-                        onClick={() => onPrompt(qa.q)}
-                        disabled={disabled}
-                      >
-                        查看完整回答 →
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+      {/* ── Quick entry row ── */}
+      {(onOpenPlaza || onOpenKnowledge) && (
+        <div className="aw-quick-actions">
+          {onOpenPlaza ? (
+            <button type="button" className="aw-quick-action aw-quick-action--plaza" onClick={onOpenPlaza}>
+              <span className="aw-quick-action-icon" aria-hidden>🌐</span>
+              <span className="aw-quick-action-body">
+                <strong>知识广场</strong>
+                <em>{plazaTotal > 0 ? `${plazaTotal} 条共享问答，先搜再问` : "共享问答，先搜再问"}</em>
+              </span>
+              <span className="aw-quick-action-arrow" aria-hidden>→</span>
+            </button>
+          ) : null}
+          {onOpenKnowledge ? (
+            <button type="button" className="aw-quick-action" onClick={onOpenKnowledge}>
+              <span className="aw-quick-action-icon" aria-hidden>📚</span>
+              <span className="aw-quick-action-body">
+                <strong>知识管理</strong>
+                <em>{docs.length > 0 ? `已加载 ${docs.length} 篇资料` : "录入资料让 AI 更懂你"}</em>
+              </span>
+              <span className="aw-quick-action-arrow" aria-hidden>→</span>
+            </button>
+          ) : null}
         </div>
       )}
 
@@ -346,14 +314,27 @@ export function AgentWelcome({
               </button>
             ))}
           </div>
-          {onOpenKnowledge && (
-            <button type="button" className="aw-kmap-manage" onClick={onOpenKnowledge}>
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              </svg>
-              管理知识库
-            </button>
-          )}
+        </div>
+      )}
+
+      {/* ── Suggested prompts ── */}
+      {prompts.length > 0 && (
+        <div className="aw-prompts">
+          <span className="aw-prompts-label">试试这样问</span>
+          <div className="aw-prompts-list">
+            {prompts.map((p) => (
+              <button
+                key={`${p.docId}-${p.text}`}
+                type="button"
+                className="aw-prompt-chip"
+                onClick={() => onPrompt(p.text)}
+                disabled={disabled}
+                title={p.hint}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 

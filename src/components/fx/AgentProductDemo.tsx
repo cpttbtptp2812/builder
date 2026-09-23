@@ -7,8 +7,9 @@ import { formatMsgTime } from "../../lib/formatMsgTime";
 import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
-import { PlazaFirstHint } from "./agent/PlazaFirstHint";
+import { logChatSession, markQueryPublished } from "../../lib/analyticsLog";
 import { formatThreadAsPlaza, matchPlaza, publishPlaza } from "../../lib/plazaFeed";
+import { getSessionId } from "../../lib/sessionId";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
 import { InlineEvalCard, runInlineEval } from "./agent/InlineEvalCard";
@@ -55,7 +56,7 @@ import { buildAnswerInsight } from "../../lib/answerInsight";
 import { normalizeFollowUps } from "../../lib/followUpPrompts";
 import { AnswerInsightBar } from "./agent/AnswerInsightBar";
 import { FollowUpRail } from "./agent/FollowUpRail";
-import { KbAutocomplete } from "./agent/KbAutocomplete";
+import { InputSuggestPopup } from "./agent/InputSuggestPopup";
 import { SessionStats } from "./agent/SessionStats";
 import { useVoiceInput } from "../../hooks/useVoiceInput";
 import { KnowledgeSources } from "./agent/KnowledgeSources";
@@ -97,30 +98,44 @@ function PublishToFeedButton({
   answer: string;
   thread: { role: string; content: string }[];
 }) {
-  const [state, setState] = useState<"idle" | "one" | "all" | "done-one" | "done-all">("idle");
+  const [state, setState] = useState<"idle" | "one" | "all" | "done-one" | "done-all" | "err">("idle");
+  const [offlineHint, setOfflineHint] = useState(false);
   if (state === "done-one" || state === "done-all") {
-    return <span className="kf-published-hint">{state === "done-all" ? "✅ 整段对话已发布到广场" : "✅ 本条已发布到广场"}</span>;
+    return (
+      <span className="kf-published-hint">
+        {state === "done-all" ? "✅ 整段对话已发布到广场" : "✅ 本条已发布到广场"}
+        {offlineHint ? "（已保存到本机）" : ""}
+      </span>
+    );
   }
   async function publish(kind: "one" | "all") {
     setState(kind);
     try {
+      let result;
       if (kind === "all") {
         const packed = formatThreadAsPlaza(thread);
         if (!packed) { setState("idle"); return; }
-        await publishPlaza({ question: packed.question, answer: packed.answer, author: "对话共享" });
+        result = await publishPlaza({ question: packed.question, answer: packed.answer, author: "对话共享" });
+        setOfflineHint(Boolean(result.offline));
+        void markQueryPublished(packed.question);
         setState("done-all");
       } else {
-        await publishPlaza({ question, answer });
+        result = await publishPlaza({ question, answer });
+        setOfflineHint(Boolean(result.offline));
+        void markQueryPublished(question);
         setState("done-one");
       }
-    } catch { setState("idle"); }
+    } catch {
+      setState("err");
+      window.setTimeout(() => setState("idle"), 2000);
+    }
   }
   return (
     <div className="kf-publish-row">
-      <button type="button" className="kf-publish-inline" disabled={state !== "idle"} onClick={() => void publish("one")}>
-        {state === "one" ? "发布中…" : "发布本条问答"}
+      <button type="button" className="kf-publish-inline" disabled={state !== "idle" && state !== "err"} onClick={() => void publish("one")}>
+        {state === "one" ? "发布中…" : state === "err" ? "发布失败" : "发布本条问答"}
       </button>
-      <button type="button" className="kf-publish-inline kf-publish-inline--all" disabled={state !== "idle"} onClick={() => void publish("all")}>
+      <button type="button" className="kf-publish-inline kf-publish-inline--all" disabled={state !== "idle" && state !== "err"} onClick={() => void publish("all")}>
         {state === "all" ? "发布中…" : "发布整段对话"}
       </button>
     </div>
@@ -156,6 +171,7 @@ export function AgentProductDemo({
   const historyRef = useRef(history);
   historyRef.current = history;
   const [input, setInput] = useState("");
+  const [composeFocused, setComposeFocused] = useState(false);
   const [running, setRunning] = useState(false);
   const [traces, setTraces] = useState<AgentTurnTrace[]>([]);
   const [iteration, setIteration] = useState(0);
@@ -174,7 +190,6 @@ export function AgentProductDemo({
   const [pinned, setPinned] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [resultFlash, setResultFlash] = useState(false);
-  const [acOpen, setAcOpen] = useState(false);
 
   const { listening: voiceListening, supported: voiceSupported, start: voiceStart, stop: voiceStop } = useVoiceInput(
     useCallback((text: string, _final: boolean) => {
@@ -306,6 +321,7 @@ export function AgentProductDemo({
       let inlineEval: InlineEvalView | undefined;
       let artifacts: ChatArtifact[] = [];
       let mode: OwnChatMessage["mode"] = useLlm ? "llm" : "guest";
+      let plazaHit = false;
 
       const bindStreamJournal = (ev: AgentStreamEvent) => {
         if (ev.type === "reasoning-delta") {
@@ -409,6 +425,17 @@ export function AgentProductDemo({
         ]);
         appendSessionTurn("user", q || text.trim());
         appendSessionTurn("assistant", content);
+        void logChatSession({
+          sessionId: getSessionId(),
+          query: q || text.trim(),
+          answerPreview: content.replace(/\s+/g, " ").slice(0, 200),
+          answerLength: content.length,
+          groundedness: answerInsight.groundedness,
+          hitCount: answerInsight.hitCount,
+          latencyMs: ms,
+          mode: mode ?? "guest",
+          plazaHit,
+        });
         onFlowActive?.("trace");
         setRightTab("graph");  // 答完切回星图，感受知识增长
         setResultFlash(true);
@@ -422,18 +449,19 @@ export function AgentProductDemo({
       try {
         jActivate("route");
         if (!parsed.force && !parsed.evalKind) {
-          const plazaHit = await matchPlaza(q);
-          if (plazaHit && plazaHit.score >= 70) {
+          const plazaMatch = await matchPlaza(q);
+          if (plazaMatch && plazaMatch.score >= 70) {
             mode = "plaza";
-            jChip("route", `知识广场已有答案（匹配 ${plazaHit.score}%）`);
+            plazaHit = true;
+            jChip("route", `知识广场已有答案（匹配 ${plazaMatch.score}%）`);
             jActivate("write");
-            const plazaText = `> 来自知识广场 · ${plazaHit.item.author} · 未消耗 AI\n\n${plazaHit.item.answer}`;
+            const plazaText = `> 来自知识广场 · ${plazaMatch.item.author} · 未消耗 AI\n\n${plazaMatch.item.answer}`;
             setStreamText(plazaText);
             finish(plazaText, "知识广场优先命中");
             return;
           }
-          if (plazaHit && plazaHit.score >= 40) {
-            jChip("route", `广场有相关问答（${plazaHit.score}%），继续用 AI 补充`);
+          if (plazaMatch && plazaMatch.score >= 40) {
+            jChip("route", `广场有相关问答（${plazaMatch.score}%），继续用 AI 补充`);
           } else {
             jChip("route", "广场未命中，转交 AI");
           }
@@ -1021,23 +1049,11 @@ export function AgentProductDemo({
 
           {emptyMessage && (
             <div className="ua-empty" style={{ paddingBottom: Math.max(footerHeight + 16, 120) }}>
-              <PlazaFirstHint
-                onOpenPlaza={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
-                onUseAnswer={(question, answer) => {
-                  setMessages([
-                    { id: uid(), role: "user", content: question, createdAt: Date.now() },
-                    { id: uid(), role: "assistant", content: answer, createdAt: Date.now(), mode: "plaza" },
-                  ]);
-                }}
-                onAsk={(q) => {
-                  if (q) void send(q);
-                  else window.dispatchEvent(new CustomEvent("ownagent:focus-input"));
-                }}
-              />
               <AgentWelcome
                 kbRev={kbRev}
                 onPrompt={(t) => void send(t)}
                 disabled={running}
+                onOpenPlaza={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
                 onOpenKnowledge={() => {
                   setSettingsTab("knowledge");
                   setSettingsOpen(true);
@@ -1078,24 +1094,18 @@ export function AgentProductDemo({
               </ul>
             )}
             <div className="ua-compose-wrap">
-              {/* 知识库自动补全 */}
-              {acOpen && input.length >= 2 && (
-                <KbAutocomplete
-                  query={input}
-                  exclude={messages.map((m) => m.content)}
-                  onPick={(t) => {
-                    setInput(t);
-                    setAcOpen(false);
-                    void send(t);
-                  }}
-                />
-              )}
+              <InputSuggestPopup
+                input={input}
+                running={running}
+                focused={composeFocused}
+                exclude={messages.map((m) => m.content)}
+                onPick={(t) => setInput(t)}
+              />
 
               <form
                 className={`ua-compose-pro${voiceListening ? " voice-active" : ""}`}
                 onSubmit={(e) => {
                   e.preventDefault();
-                  setAcOpen(false);
                   void send(input);
                 }}
               >
@@ -1106,7 +1116,7 @@ export function AgentProductDemo({
                     className="ua-compose-cap ua-compose-cap--plaza"
                     onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
                   >
-                    知识广场优先
+                    知识广场
                   </button>
                   <span className="ua-compose-cap">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5l1.5 1.5L7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
@@ -1130,20 +1140,17 @@ export function AgentProductDemo({
                   rows={1}
                   onChange={(e) => {
                     setInput(e.target.value);
-                    setAcOpen(true);
                     e.target.style.height = "auto";
                     e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
                   }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
-                      setAcOpen(false);
                       void send(input);
                     }
-                    if (e.key === "Escape") setAcOpen(false);
                   }}
-                  onFocus={() => setAcOpen(true)}
-                  onBlur={() => window.setTimeout(() => setAcOpen(false), 160)}
+                  onFocus={() => setComposeFocused(true)}
+                  onBlur={() => window.setTimeout(() => setComposeFocused(false), 180)}
                   placeholder={voiceListening ? "🎤 正在聆听…" : "先搜广场，没有再问：例如「产品怎么收费」"}
                   disabled={running}
                 />

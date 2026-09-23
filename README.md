@@ -26,13 +26,26 @@ npm run dev
 
 打开 `http://localhost:5173` → 浏览作品集 → 点击 **交互演示** 进入 `#/demo/chat`。
 
-## GitHub Pages
+## GitHub Pages（演示部署）
 
 仓库已配置 Actions 工作流（`.github/workflows/static.yml`）：
 
 1. push 到 `main` 后自动 `npm ci && npm run build`
 2. 部署 `dist/` 到 Pages（Node 24）
 3. **首次部署前**（只需一次）：仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**，保存后再 push 或手动重跑工作流
+
+### 演示模式 vs 完整产品
+
+| | GitHub Pages 演示 | Docker / 本地 dev:full |
+|--|-------------------|-------------------------|
+| 作品集、简历 | ✅ | ✅ |
+| OwnAgent 对话（Guest） | ✅ | ✅ |
+| 知识库（浏览器） | ✅ | ✅ + 服务端同步 |
+| 知识广场发布/搜索 | ✅ 本机 localStorage | ✅ SQLite 全员共享 |
+| 管理后台 /admin | ❌ 需连后端 | ✅ |
+| 知识运营、数据分析 | ❌ | ✅ |
+
+**直接 push 即可演示**，代码和功能全部保留；客户交付时再 `docker compose up -d`。
 
 本地模拟 Pages 构建：
 
