@@ -12,6 +12,46 @@ fs.mkdirSync(DATA_DIR, { recursive: true });
 export const db = new DatabaseSync(DB_PATH);
 
 db.exec(`
+  /* ── 知识库文档（客户可通过管理后台增删改） ── */
+  CREATE TABLE IF NOT EXISTS knowledge_docs (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL,
+    prompts TEXT NOT NULL DEFAULT '[]',
+    tags TEXT NOT NULL DEFAULT '[]',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  /* ── 应用配置（KV 存储，供管理后台读写） ── */
+  CREATE TABLE IF NOT EXISTS app_config (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  /* ── 聊天会话记录（用于分析） ── */
+  CREATE TABLE IF NOT EXISTS chat_sessions (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    query TEXT NOT NULL,
+    answer_length INTEGER NOT NULL DEFAULT 0,
+    groundedness INTEGER NOT NULL DEFAULT 0,
+    hit_count INTEGER NOT NULL DEFAULT 0,
+    latency_ms INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_chat_sessions_created ON chat_sessions(created_at DESC);
+`);
+
+/* ── 管理员密码默认配置 ── */
+try {
+  db.prepare(`INSERT OR IGNORE INTO app_config(key,value,updated_at) VALUES(?,?,?)`)
+    .run("admin_password", process.env.ADMIN_PASSWORD ?? "admin123", new Date().toISOString());
+} catch { /* ignore */ }
+
+db.exec(`
   CREATE TABLE IF NOT EXISTS rag_chunks (
     chunk_id TEXT PRIMARY KEY,
     project_id TEXT NOT NULL,

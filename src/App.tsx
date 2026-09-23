@@ -7,6 +7,7 @@ import { HomePage } from "./pages/HomePage";
 import { ResumePage } from "./pages/ResumePage";
 import { SecretRomancePage } from "./pages/SecretRomancePage";
 import { WorkRouter } from "./works/WorkRouter";
+import { AdminPage } from "./pages/AdminPage";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/tools/mirror" element={<Navigate to="/tools/extensions" replace />} />
         <Route path="/tools/eval" element={<Navigate to="/work/ownagent?tab=product&view=eval" replace />} />
         <Route path="/tools/clip-hub" element={<Navigate to="/tools/extensions" replace />} />
+        <Route path="/admin" element={<AdminPage />} />
         <Route path="/for-you" element={<SecretRomancePage />} />
         <Route path="/about" element={<Navigate to="/resume" replace />} />
         <Route path="/demo/*" element={<Navigate to="/work/imean" replace />} />

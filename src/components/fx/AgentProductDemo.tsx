@@ -58,6 +58,8 @@ import { SessionStats } from "./agent/SessionStats";
 import { useVoiceInput } from "../../hooks/useVoiceInput";
 import { KnowledgeSources } from "./agent/KnowledgeSources";
 import { AnswerDNA } from "./agent/AnswerDNA";
+import { GapDetectionCard } from "./agent/GapDetectionCard";
+import { SessionInsight } from "./agent/SessionInsight";
 import { buildTurnArtifacts, synthesizeCompareTable, type ChatArtifact } from "../../lib/chatArtifacts";
 import {
   emptySession,
@@ -125,7 +127,7 @@ export function AgentProductDemo({
   const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
   const [inspector, setInspector] = useState(false);
   const [flowOpen, setFlowOpen] = useState(true);
-  const [rightTab, setRightTab] = useState<"graph" | "trace">("graph");
+  const [rightTab, setRightTab] = useState<"graph" | "trace" | "insight">("graph");
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pinned, setPinned] = useState("");
@@ -729,6 +731,19 @@ export function AgentProductDemo({
         {/* 会话统计 */}
         <SessionStats messages={messages} />
 
+        {/* 实时检索脉冲 */}
+        {running && (() => {
+          const liveHits = displayJournal
+            .flatMap((n) => n.evidence ?? [])
+            .filter((e) => e.kind === "hit").length;
+          return liveHits > 0 ? (
+            <div className="ua-live-pulse">
+              <span className="ua-live-pulse-dot" />
+              <span>已检索 {liveHits} 个知识片段</span>
+            </div>
+          ) : null;
+        })()}
+
         <div style={{ flex: 1 }} />
 
         {/* 右：操作区 */}
@@ -821,6 +836,13 @@ export function AgentProductDemo({
                     )}
                     {m.role === "assistant" && m.answerInsight && (
                       <AnswerInsightBar insight={m.answerInsight} />
+                    )}
+                    {m.role === "assistant" && m.answerInsight && (
+                      <GapDetectionCard
+                        insight={m.answerInsight}
+                        flowJournal={m.flowJournal}
+                        onFillGap={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
+                      />
                     )}
                     {m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
                       <ArtifactPanel artifacts={m.artifacts} />
@@ -1097,6 +1119,14 @@ export function AgentProductDemo({
                 <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1h7M2 5.5h5M2 10h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="5.5" r="1.3" fill="currentColor"/></svg>
                 推理过程
               </button>
+              <button
+                type="button"
+                className={rightTab === "insight" ? "on" : ""}
+                onClick={() => setRightTab("insight")}
+              >
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><polygon points="5.5,1 10,9.5 1,9.5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" fill="none"/><polygon points="5.5,3.5 8.5,9 2.5,9" stroke="currentColor" strokeWidth="0.7" strokeLinejoin="round" fill="none"/></svg>
+                质量洞察
+              </button>
               <button type="button" className="ua-right-close" onClick={() => setFlowOpen(false)} aria-label="关闭">×</button>
             </div>
 
@@ -1106,6 +1136,8 @@ export function AgentProductDemo({
                 running={running}
                 onClose={() => setFlowOpen(false)}
               />
+            ) : rightTab === "insight" ? (
+              <SessionInsight messages={messages} />
             ) : (
               <TurnFlowPanel
                 journal={displayJournal}
