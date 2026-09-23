@@ -28158,17 +28158,17 @@ button.agent-tool-chip {
   flex-direction: column;
   min-height: 0;
   height: 100%;
-  background: #0c0f1a;
-  border-left: 1px solid rgba(99,102,241,0.2);
+  background: #f8fafc;
+  border-left: 1px solid #e2e8f0;
 }
 
 .ua-right-tabs {
   display: flex;
   align-items: center;
-  gap: 0.15rem;
-  padding: 0.45rem 0.55rem;
-  background: rgba(15,23,42,0.9);
-  border-bottom: 1px solid rgba(99,102,241,0.15);
+  gap: 0.2rem;
+  padding: 0.5rem 0.55rem;
+  background: #fff;
+  border-bottom: 1px solid #e2e8f0;
   flex-shrink: 0;
 }
 
@@ -28179,20 +28179,21 @@ button.agent-tool-chip {
   border: 1px solid transparent;
   border-radius: 7px;
   background: transparent;
-  padding: 0.28rem 0.55rem;
-  font-size: 0.7rem;
+  padding: 0.32rem 0.6rem;
+  font-size: 0.72rem;
+  font-weight: 500;
   color: #64748b;
   cursor: pointer;
   transition: border-color 0.15s, background 0.15s, color 0.15s;
 }
 .ua-right-tabs button:hover {
-  color: #94a3b8;
-  background: rgba(255,255,255,0.05);
+  color: #334155;
+  background: #f1f5f9;
 }
 .ua-right-tabs button.on {
-  border-color: rgba(99,102,241,0.4);
-  background: rgba(99,102,241,0.12);
-  color: #a5b4fc;
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #4f46e5;
   font-weight: 600;
 }
 .ua-right-close {
@@ -28204,6 +28205,11 @@ button.agent-tool-chip {
   font-size: 1rem !important;
   display: grid !important;
   place-items: center !important;
+  color: #94a3b8 !important;
+}
+.ua-right-close:hover {
+  color: #ef4444 !important;
+  background: #fef2f2 !important;
 }
 
 /* ï¿½ï¿½ï¿½ï¿½ Knowledge Constellation ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
