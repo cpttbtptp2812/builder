@@ -43,6 +43,24 @@ db.exec(`
     created_at TEXT NOT NULL
   );
   CREATE INDEX IF NOT EXISTS idx_chat_sessions_created ON chat_sessions(created_at DESC);
+
+  /* ── 共享问答（朋友圈式知识 Feed） ── */
+  CREATE TABLE IF NOT EXISTS published_qa (
+    id TEXT PRIMARY KEY,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    author TEXT NOT NULL DEFAULT '匿名用户',
+    avatar_color TEXT NOT NULL DEFAULT '#6366f1',
+    source_doc TEXT,
+    tags TEXT NOT NULL DEFAULT '[]',
+    likes INTEGER NOT NULL DEFAULT 0,
+    views INTEGER NOT NULL DEFAULT 0,
+    pinned INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_published_qa_created ON published_qa(created_at DESC);
+  CREATE INDEX IF NOT EXISTS idx_published_qa_pinned ON published_qa(pinned DESC, created_at DESC);
 `);
 
 /* ── 管理员密码默认配置 ── */

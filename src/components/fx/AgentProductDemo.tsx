@@ -7,6 +7,8 @@ import { formatMsgTime } from "../../lib/formatMsgTime";
 import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
+import { PlazaFirstHint } from "./agent/PlazaFirstHint";
+import { formatThreadAsPlaza, matchPlaza, publishPlaza } from "../../lib/plazaFeed";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
 import { InlineEvalCard, runInlineEval } from "./agent/InlineEvalCard";
@@ -86,6 +88,45 @@ function toolLabel(name: string) {
 }
 
 /** OwnAgent 对话 — UniAgent 布局 + 理论流水线 / HITL / 多代理 */
+function PublishToFeedButton({
+  question,
+  answer,
+  thread,
+}: {
+  question: string;
+  answer: string;
+  thread: { role: string; content: string }[];
+}) {
+  const [state, setState] = useState<"idle" | "one" | "all" | "done-one" | "done-all">("idle");
+  if (state === "done-one" || state === "done-all") {
+    return <span className="kf-published-hint">{state === "done-all" ? "✅ 整段对话已发布到广场" : "✅ 本条已发布到广场"}</span>;
+  }
+  async function publish(kind: "one" | "all") {
+    setState(kind);
+    try {
+      if (kind === "all") {
+        const packed = formatThreadAsPlaza(thread);
+        if (!packed) { setState("idle"); return; }
+        await publishPlaza({ question: packed.question, answer: packed.answer, author: "对话共享" });
+        setState("done-all");
+      } else {
+        await publishPlaza({ question, answer });
+        setState("done-one");
+      }
+    } catch { setState("idle"); }
+  }
+  return (
+    <div className="kf-publish-row">
+      <button type="button" className="kf-publish-inline" disabled={state !== "idle"} onClick={() => void publish("one")}>
+        {state === "one" ? "发布中…" : "发布本条问答"}
+      </button>
+      <button type="button" className="kf-publish-inline kf-publish-inline--all" disabled={state !== "idle"} onClick={() => void publish("all")}>
+        {state === "all" ? "发布中…" : "发布整段对话"}
+      </button>
+    </div>
+  );
+}
+
 export function AgentProductDemo({
   autoStart: _autoStart = false,
   hubMode = false,
@@ -380,6 +421,23 @@ export function AgentProductDemo({
 
       try {
         jActivate("route");
+        if (!parsed.force && !parsed.evalKind) {
+          const plazaHit = await matchPlaza(q);
+          if (plazaHit && plazaHit.score >= 70) {
+            mode = "plaza";
+            jChip("route", `知识广场已有答案（匹配 ${plazaHit.score}%）`);
+            jActivate("write");
+            const plazaText = `> 来自知识广场 · ${plazaHit.item.author} · 未消耗 AI\n\n${plazaHit.item.answer}`;
+            setStreamText(plazaText);
+            finish(plazaText, "知识广场优先命中");
+            return;
+          }
+          if (plazaHit && plazaHit.score >= 40) {
+            jChip("route", `广场有相关问答（${plazaHit.score}%），继续用 AI 补充`);
+          } else {
+            jChip("route", "广场未命中，转交 AI");
+          }
+        }
         const topSkill = explainDiscovery(parsed.evalKind ? `eval ${parsed.evalKind}` : q)[0];
         if (topSkill && topSkill.score > 0) {
           jChip("route", `技能倾向：${topSkill.skill.name}（${topSkill.score} 分）`);
@@ -549,6 +607,13 @@ export function AgentProductDemo({
     },
     [running, useLlm, llmConfig, enabledTools, handleEvent, onFlowActive, pinned, orchMode, scrollToBottom, scrollToMessage, stickRef],
   );
+
+  useEffect(() => {
+    const pending = sessionStorage.getItem("oa-pending-ask");
+    if (!pending) return;
+    sessionStorage.removeItem("oa-pending-ask");
+    void send(pending);
+  }, [send]);
 
   function stop() {
     abortRef.current?.abort();
@@ -844,6 +909,17 @@ export function AgentProductDemo({
                         onFillGap={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
                       />
                     )}
+                    {m.role === "assistant" && !running && (() => {
+                      const userMsg = messages.slice(0, idx).reverse().find(x => x.role === "user");
+                      if (!userMsg) return null;
+                      return (
+                        <PublishToFeedButton
+                          question={userMsg.content}
+                          answer={m.content}
+                          thread={messages.slice(0, idx + 1).map(x => ({ role: x.role, content: x.content }))}
+                        />
+                      );
+                    })()}
                     {m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
                       <ArtifactPanel artifacts={m.artifacts} />
                     )}
@@ -945,6 +1021,19 @@ export function AgentProductDemo({
 
           {emptyMessage && (
             <div className="ua-empty" style={{ paddingBottom: Math.max(footerHeight + 16, 120) }}>
+              <PlazaFirstHint
+                onOpenPlaza={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
+                onUseAnswer={(question, answer) => {
+                  setMessages([
+                    { id: uid(), role: "user", content: question, createdAt: Date.now() },
+                    { id: uid(), role: "assistant", content: answer, createdAt: Date.now(), mode: "plaza" },
+                  ]);
+                }}
+                onAsk={(q) => {
+                  if (q) void send(q);
+                  else window.dispatchEvent(new CustomEvent("ownagent:focus-input"));
+                }}
+              />
               <AgentWelcome
                 kbRev={kbRev}
                 onPrompt={(t) => void send(t)}
@@ -1012,6 +1101,13 @@ export function AgentProductDemo({
               >
                 {/* 能力标签行 */}
                 <div className="ua-compose-caps">
+                  <button
+                    type="button"
+                    className="ua-compose-cap ua-compose-cap--plaza"
+                    onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
+                  >
+                    知识广场优先
+                  </button>
                   <span className="ua-compose-cap">
                     <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5l1.5 1.5L7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
                     Hybrid RAG
@@ -1048,7 +1144,7 @@ export function AgentProductDemo({
                   }}
                   onFocus={() => setAcOpen(true)}
                   onBlur={() => window.setTimeout(() => setAcOpen(false), 160)}
-                  placeholder={voiceListening ? "🎤 正在聆听…" : "输入问题，例如：介绍一下 iMean 的架构"}
+                  placeholder={voiceListening ? "🎤 正在聆听…" : "先搜广场，没有再问：例如「产品怎么收费」"}
                   disabled={running}
                 />
 

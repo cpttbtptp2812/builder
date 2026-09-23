@@ -391,6 +391,172 @@ app.get("/api/admin/analytics", (c) => {
   return c.json({ total, today, avgLatency: Math.round(avgLatency), avgGround: Math.round(avgGround), topQueries, dailyTrend, kbCount });
 });
 
+/* ════════════════════════════════════════════════════════════
+   共享问答 Feed（朋友圈式知识共享）
+   ════════════════════════════════════════════════════════════ */
+
+function scorePlazaQuestion(query: string, question: string, answer: string): number {
+  const q = query.trim().toLowerCase();
+  const title = question.trim().toLowerCase();
+  if (!q || !title) return 0;
+  if (q === title) return 100;
+  if (title.includes(q) || q.includes(title)) return 88;
+  const tokens = q.split(/[\s，。？?、]+/).filter((t) => t.length >= 2);
+  if (!tokens.length) return 0;
+  const blob = `${title} ${answer.toLowerCase()}`;
+  const hit = tokens.filter((t) => blob.includes(t)).length;
+  return Math.round((hit / tokens.length) * 80);
+}
+
+/* 优先匹配（问答时先搜广场） */
+app.get("/api/feed/match", (c) => {
+  const q = c.req.query("q")?.trim() ?? "";
+  if (!q) return c.json({ match: null });
+  const rows = dbAll<{ id: string; question: string; answer: string; author: string; avatar_color: string; source_doc: string | null; tags: string; likes: number; views: number; pinned: number; created_at: string; updated_at: string }>(
+    "SELECT * FROM published_qa"
+  );
+  let best: { item: Record<string, unknown>; score: number } | null = null;
+  for (const row of rows) {
+    const score = scorePlazaQuestion(q, row.question, row.answer);
+    if (!best || score > best.score) {
+      best = { item: { ...row, tags: JSON.parse(row.tags || "[]") }, score };
+    }
+  }
+  if (!best || best.score < 40) return c.json({ match: null });
+  return c.json({ match: best });
+});
+
+app.get("/api/feed/export", (c) => {
+  const rows = dbAll<Record<string, unknown>>("SELECT * FROM published_qa ORDER BY pinned DESC, created_at DESC");
+  return c.json({
+    exportedAt: nowIsoLocal(),
+    items: rows.map(r => ({ ...r, tags: JSON.parse(String(r.tags ?? "[]")) })),
+  });
+});
+
+app.post("/api/feed/import", async (c) => {
+  const body = await c.req.json<{ items?: { question?: string; answer?: string; author?: string; tags?: string[] }[] }>();
+  const items = body.items ?? [];
+  const now = nowIsoLocal();
+  const colors = ["#6366f1", "#059669", "#d97706", "#0891b2", "#ec4899", "#8b5cf6"];
+  let count = 0;
+  for (const it of items) {
+    if (!it.question?.trim() || !it.answer?.trim()) continue;
+    dbRun(
+      `INSERT INTO published_qa(id,question,answer,author,avatar_color,source_doc,tags,likes,views,pinned,created_at,updated_at)
+       VALUES(?,?,?,?,?,?,?,0,0,0,?,?)`,
+      [
+        `qa-${randomUUID().slice(0, 8)}`,
+        it.question.trim(),
+        it.answer.trim(),
+        it.author?.trim() || "导入",
+        colors[count % colors.length],
+        null,
+        JSON.stringify(it.tags ?? []),
+        now,
+        now,
+      ]
+    );
+    count++;
+  }
+  return c.json({ ok: true, count });
+});
+
+/* 列表（公开） */
+app.get("/api/feed", (c) => {
+  const search = c.req.query("q")?.trim() ?? "";
+  const limit = Math.min(Number(c.req.query("limit") ?? 30), 100);
+  const offset = Number(c.req.query("offset") ?? 0);
+  let rows;
+  if (search) {
+    rows = dbAll<Record<string, unknown>>(
+      `SELECT * FROM published_qa WHERE question LIKE ? OR answer LIKE ? OR tags LIKE ?
+       ORDER BY pinned DESC, created_at DESC LIMIT ? OFFSET ?`,
+      [`%${search}%`, `%${search}%`, `%${search}%`, limit, offset]
+    );
+  } else {
+    rows = dbAll<Record<string, unknown>>(
+      "SELECT * FROM published_qa ORDER BY pinned DESC, created_at DESC LIMIT ? OFFSET ?",
+      [limit, offset]
+    );
+  }
+  const total = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM published_qa")?.c ?? 0;
+  return c.json({ items: rows.map(r => ({ ...r, tags: JSON.parse(String(r.tags ?? "[]")) })), total });
+});
+
+/* 发布 */
+app.post("/api/feed", async (c) => {
+  const body = await c.req.json<{
+    question: string; answer: string;
+    author?: string; avatarColor?: string;
+    sourceDoc?: string; tags?: string[];
+  }>();
+  if (!body.question?.trim() || !body.answer?.trim()) {
+    return c.json({ error: "问题和回答不能为空" }, 400);
+  }
+  const id = `qa-${randomUUID().slice(0, 8)}`;
+  const now = nowIsoLocal();
+  const colors = ["#6366f1", "#059669", "#d97706", "#0891b2", "#ec4899", "#8b5cf6", "#ef4444"];
+  const color = body.avatarColor ?? colors[Math.floor(Math.random() * colors.length)];
+  dbRun(
+    `INSERT INTO published_qa(id,question,answer,author,avatar_color,source_doc,tags,likes,views,pinned,created_at,updated_at)
+     VALUES(?,?,?,?,?,?,?,0,0,0,?,?)`,
+    [id, body.question.trim(), body.answer.trim(), body.author?.trim() || "匿名用户", color,
+     body.sourceDoc ?? null, JSON.stringify(body.tags ?? []), now, now]
+  );
+  return c.json({ ok: true, id });
+});
+
+/* 点赞 */
+app.post("/api/feed/:id/like", (c) => {
+  const id = c.req.param("id");
+  dbRun("UPDATE published_qa SET likes=likes+1, updated_at=? WHERE id=?", [nowIsoLocal(), id]);
+  const row = dbGet<{ likes: number }>("SELECT likes FROM published_qa WHERE id=?", [id]);
+  return c.json({ ok: true, likes: row?.likes ?? 0 });
+});
+
+/* 浏览量 +1 */
+app.post("/api/feed/:id/view", (c) => {
+  dbRun("UPDATE published_qa SET views=views+1 WHERE id=?", [c.req.param("id")]);
+  return c.json({ ok: true });
+});
+
+/* 置顶/取消置顶（管理员） */
+app.post("/api/feed/:id/pin", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
+  const row = dbGet<{ pinned: number }>("SELECT pinned FROM published_qa WHERE id=?", [c.req.param("id")]);
+  dbRun("UPDATE published_qa SET pinned=?, updated_at=? WHERE id=?",
+    [row?.pinned ? 0 : 1, nowIsoLocal(), c.req.param("id")]);
+  return c.json({ ok: true });
+});
+
+/* 编辑（客户可改自己发布的问答） */
+app.put("/api/feed/:id", async (c) => {
+  const id = c.req.param("id");
+  const body = await c.req.json<{ question?: string; answer?: string; author?: string; tags?: string[] }>();
+  dbRun(
+    `UPDATE published_qa SET
+      question=COALESCE(?,question), answer=COALESCE(?,answer),
+      author=COALESCE(?,author), tags=COALESCE(?,tags), updated_at=?
+     WHERE id=?`,
+    [
+      body.question?.trim() || null,
+      body.answer?.trim() || null,
+      body.author?.trim() || null,
+      body.tags ? JSON.stringify(body.tags) : null,
+      nowIsoLocal(),
+      id,
+    ]
+  );
+  return c.json({ ok: true });
+});
+
+/* 删除 */
+app.delete("/api/feed/:id", (c) => {
+  dbRun("DELETE FROM published_qa WHERE id=?", [c.req.param("id")]);
+  return c.json({ ok: true });
+});
+
 console.log(`[builder-api] SQLite ready · ${getChunkCount()} RAG chunks · http://localhost:${PORT}`);
 
 serve({ fetch: app.fetch, port: PORT });

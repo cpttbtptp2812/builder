@@ -23,7 +23,7 @@ export type OwnChatMessage = {
   createdAt?: number;
   content: string;
   reasoning?: string;
-  mode?: "guest" | "llm" | "multi" | "eval" | "sheet";
+  mode?: "guest" | "llm" | "multi" | "eval" | "sheet" | "plaza";
   tools?: OwnToolChip[];
   ms?: number;
   pipeline?: PipelineStage[];

@@ -523,8 +523,20 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   ownagent: {
     slug: "ownagent",
     purpose:
-      "能力全景是底图：一句话经过意图路由、MCP、检索、能力锁。对话、追踪、评测是同一条链上的切片，不是并列的实验室。",
+      "企业级 AI 知识助手，全栈可部署给客户用。React + Hono + SQLite + Docker；知识库、知识广场、管理后台；底层 Agent Loop + MCP + Hybrid RAG。",
     highlights: [
+      {
+        title: "知识广场 · 先搜再问",
+        analysis:
+          "共享问答存 SQLite，提问时优先匹配已有答案（≥ 70% 直接返回、零 Token）。对话可发布单条或整段到广场，支持编辑、JSON 导入导出。客户不用重复问同样的问题。",
+        metric: "广场优先 · 零 Token 命中",
+      },
+      {
+        title: "全栈可部署 · 管理后台",
+        analysis:
+          "Hono + SQLite 后端，Docker Compose 一键启动。管理后台含知识库 CRUD、文件/网页/粘贴导入、LLM 配置热更新、使用分析看板。LLM Key 服务端代理，不暴露浏览器。",
+        metric: "Docker 一键部署",
+      },
       {
         title: "Agent Loop + MCP",
         analysis:
@@ -557,7 +569,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       },
     ],
     content:
-      "能力全景是底图。对话、追踪、检索、能力锁、评测都是同一条链上的一层，不是并列的五个小产品。",
+      "从 Demo 做到可交付产品：客户能自己配知识库、搜广场、问 AI、发布共享。底层 Agent 机制（Loop / MCP / RAG / 能力锁）是引擎，上面是面向客户的产品层。",
     techJots: [
       { tag: "Loop", text: "tool_call 参数按 delta 累积，凑齐 JSON 才执行。" },
       { tag: "MCP", text: "进程内 JSON-RPC，Schema 校验 + isError 统一异常。" },
@@ -565,7 +577,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       { tag: "记忆", text: "IndexedDB 长期 + sessionStorage 会话态。" },
     ],
     scraps: ["后续：trace 导出 JSON", "接向量检索替换关键词打分"],
-    siteNote: "先看能力全景，再下钻对话 / 追踪 / 能力锁 / 评测。",
+    siteNote: "产品页：对话 + 知识广场 + 管理后台；理论页：Agent 能力全景。",
   },
 
   extension: {

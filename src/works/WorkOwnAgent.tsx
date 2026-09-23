@@ -4,6 +4,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
+import { KnowledgeFeed } from "../components/fx/agent/KnowledgeFeed";
 import { EvalLabPanel } from "../components/fx/EvalLabPanel";
 import { GuardPanel } from "../components/ownagent/GuardPanel";
 import { RagPanel } from "../components/ownagent/RagPanel";
@@ -11,7 +12,7 @@ import { SkillPlatformPanel } from "../components/ownagent/SkillPlatformPanel";
 import { TracePanel } from "../components/ownagent/TracePanel";
 
 type TabId = "product" | "theory";
-type ViewId = "chat" | "guide" | "skills" | "rag" | "guard" | "trace" | "eval";
+type ViewId = "chat" | "guide" | "feed" | "skills" | "rag" | "guard" | "trace" | "eval";
 
 type NavItem = { id: ViewId; label: string; desc: string; icon: React.ReactNode; primary?: boolean };
 
@@ -40,6 +41,17 @@ const MANAGE_VIEWS: NavItem[] = [
       <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
         <rect x="2.5" y="1.5" width="10" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.3"/>
         <path d="M5 4.5h5M5 7h5M5 9.5h3" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
+    id: "feed",
+    label: "知识广场",
+    desc: "共享问答，先搜再问",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <circle cx="7.5" cy="7.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+        <path d="M5 8.2c.8 1.1 2.2 1.1 3 0M5.8 6.2h.1M9.2 6.2h.1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
       </svg>
     ),
   },
@@ -151,16 +163,26 @@ function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
     },
     {
       num: 2,
+      title: "先搜知识广场",
+      desc: "别人问过的问题会发布在广场里。先搜广场，找到答案就不用再问 AI。",
+      detail: "打开左侧「知识广场」→ 用搜索框搜关键词 → 没有再去对话。问完后可把当前问答或整段对话发布到广场，同事下次直接看。",
+      action: "去知识广场",
+      target: "feed" as ViewId,
+      color: "#0891b2",
+      icon: <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><circle cx="14" cy="14" r="10" stroke="#0891b2" strokeWidth="2"/><path d="M10 16c1.5 2 6.5 2 8 0M11.5 11.5h.2M16.5 11.5h.2" stroke="#0891b2" strokeWidth="1.8" strokeLinecap="round"/></svg>,
+    },
+    {
+      num: 3,
       title: "和 AI 对话",
-      desc: "直接输入问题，AI 会从你录入的知识中找答案。如果答得不好，补充知识即可。",
-      detail: "点击左侧「和 AI 对话」→ 在底部输入框输入你的问题 → 按回车发送。AI 会显示回答来源，你可以看到它引用了哪篇文档。",
+      desc: "广场没有的问题再问 AI。答完后点「发布到广场」，整段对话也能一起共享。",
+      detail: "点击左侧「和 AI 对话」→ 先看顶部广场搜索 → 没有再输入问题。每条回答下方可以把「这一条」或「整段对话」发布到广场。",
       action: "去对话试试",
       target: "chat" as ViewId,
       color: "#059669",
       icon: <svg width="28" height="28" viewBox="0 0 28 28" fill="none"><path d="M24 18a3 3 0 0 1-3 3H9L4 26V7a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v11z" stroke="#059669" strokeWidth="2" strokeLinejoin="round"/><path d="M9 10h10M9 14h6" stroke="#059669" strokeWidth="1.6" strokeLinecap="round"/></svg>,
     },
     {
-      num: 3,
+      num: 4,
       title: "检查回答质量",
       desc: "一键批量测试 AI 的回答是否准确，发现问题就回去补充知识，持续优化。",
       detail: "点击「质量检测」→ 点击「运行全部用例」→ 查看通过率和失败样本。失败的说明知识库缺少相关内容，回去补充即可。",
@@ -172,7 +194,8 @@ function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
   ];
 
   const FAQ = [
-    { q: "AI 回答得不对怎么办？", a: "在「知识管理」里补充更详细的内容，AI 会自动学习新录入的知识。" },
+    { q: "为什么要先去知识广场？", a: "广场里是已经问过、校对过的答案。先搜能省时间和费用；没有再问 AI，答完记得发布回去。" },
+    { q: "AI 回答得不对怎么办？", a: "在「知识管理」里补充更详细的内容，或把正确版本编辑进知识广场。" },
     { q: "可以限制 AI 不回答某些问题吗？", a: "可以。进入「安全管控」设置规则，比如只允许回答产品相关问题。" },
     { q: "怎么知道 AI 为什么这样回答？", a: "在「运行日志」里可以看到 AI 的完整思考过程和引用了哪些资料。" },
     { q: "如何添加更多 AI 能力？", a: "进入「功能扩展」可以导入新的技能，比如自动查数据、生成报表等。" },
@@ -367,6 +390,14 @@ export function WorkOwnAgent() {
           <div className={`own-app-stage${view === "chat" ? " is-chat" : ""}`}>
             {view === "chat" ? <AgentProductDemo hubMode /> : null}
             {view === "guide" ? <QuickStartGuide onGo={(v) => go("product", v)} /> : null}
+            {view === "feed" ? (
+              <KnowledgeFeed
+                onAskNew={(q) => {
+                  if (q) sessionStorage.setItem("oa-pending-ask", q);
+                  go("product", "chat");
+                }}
+              />
+            ) : null}
             {view === "skills" ? <SkillPlatformPanel /> : null}
             {view === "rag" ? <RagPanel /> : null}
             {view === "guard" ? <GuardPanel /> : null}
