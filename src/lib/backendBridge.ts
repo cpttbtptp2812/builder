@@ -260,4 +260,20 @@ export async function deleteMemoryAsync(key: string) {
   }
 }
 
+export type SkillRunRecord = {
+  id: number;
+  skillId: string;
+  query: string;
+  trace: SkillTraceStep[];
+  ok: boolean;
+  totalMs: number;
+  createdAt: string;
+};
+
+export async function fetchSkillRunsAsync(skillId?: string, limit = 10): Promise<SkillRunRecord[]> {
+  const q = skillId ? `?skillId=${encodeURIComponent(skillId)}&limit=${limit}` : `?limit=${limit}`;
+  const data = await apiFetch<{ runs: SkillRunRecord[] }>(`/skill-runs${q}`);
+  return data?.runs ?? [];
+}
+
 export { checkBackendHealth, isBackendOnline } from "./apiClient";

@@ -1,9 +1,17 @@
 /** Agent Skills — SKILL.md 解析注册表 + 流水线运行时 */
 
 import { loadImportedSkills } from "./importedSkills";
+import { overlayPublishedCatalog } from "./skillPublished";
 import { mcpServer } from "./mcpServer";
 import { runPolicyDesk } from "./policyDesk";
-import { hydrateSkill, resolveStepArgs, skillIdFromPath, type SkillManifest } from "./skillMarkdown";
+import {
+  enrichSkillCatalog,
+  hydrateSkill,
+  resolveStepArgs,
+  skillIdFromPath,
+  type SkillManifest,
+} from "./skillMarkdown";
+import { applyStepVarWrites } from "./skillVarBindings";
 import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
 
 export type SkillStep = {
@@ -68,38 +76,49 @@ const skillFiles = import.meta.glob("../skills/*/SKILL.md", {
 }) as Record<string, string>;
 
 function loadCatalog(): AgentSkill[] {
-  const loaded = Object.entries(skillFiles).map(([filePath, raw]) => {
+  const cores = Object.entries(skillFiles).map(([filePath, raw]) => {
     const id = skillIdFromPath(filePath);
     return hydrateSkill(raw, { id, skillPath: `src/skills/${id}/SKILL.md` });
   });
-  return loaded.sort((a, b) => {
+  const sorted = cores.sort((a, b) => {
     const ia = SKILL_ORDER.indexOf(a.id);
     const ib = SKILL_ORDER.indexOf(b.id);
     return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   });
+  return enrichSkillCatalog(sorted, "browser") as AgentSkill[];
 }
 
-/** 目录里所有 SKILL.md（含仅解析、不可运行） */
+/** 内置 SKILL.md（仓库出厂，不含运维已上线覆盖） */
 export const SKILL_CATALOG: AgentSkill[] = loadCatalog();
 
-/** 进入路由 / 执行链的技能：解析成功且有 steps */
+/** 内置可运行技能 */
 export const AGENT_SKILLS: AgentSkill[] = SKILL_CATALOG.filter((s) => s.runnable);
 
-/** 内置技能 + 访客导入的可运行技能 */
+/** 现用目录 = 内置 + 运维已批准覆盖 */
+export function getLiveCatalog(): AgentSkill[] {
+  return overlayPublishedCatalog(SKILL_CATALOG);
+}
+
+export function getLiveRunnableSkills(): AgentSkill[] {
+  return getLiveCatalog().filter((s) => s.runnable);
+}
+
+/** 内置技能 + 访客导入的可运行技能（运行时走现用版） */
 export function allRunnableSkills(): AgentSkill[] {
   try {
+    const live = getLiveRunnableSkills();
     const extra = loadImportedSkills().filter((s) => s.runnable && s.steps.length > 0) as AgentSkill[];
-    const seen = new Set(AGENT_SKILLS.map((s) => s.id));
-    return [...AGENT_SKILLS, ...extra.filter((s) => !seen.has(s.id))];
+    const seen = new Set(live.map((s) => s.id));
+    return [...live, ...extra.filter((s) => !seen.has(s.id))];
   } catch {
-    return AGENT_SKILLS;
+    return getLiveRunnableSkills();
   }
 }
 
 export const SKILL_ROUTER_DOC = SKILL_CATALOG.find((s) => s.id === "skill-router")?.manifest ?? "";
 
 export const ROUTER_EXAMPLES = [
-  { label: "发布前巡检", query: "/inspect https://example.com 能否上线" },
+  { label: "发布前巡检", query: "帮我巡检 https://example.com 能否上线" },
   { label: "站点性能审计", query: "分析本站性能和探活 metrics" },
   { label: "DOM 定位探针", query: "dom snapshot 元素定位 a11y" },
   { label: "自动化 workflow", query: "执行 workflow 自动化回放流程" },
@@ -110,6 +129,10 @@ export const ROUTER_EXAMPLES = [
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function getSkill(id: string) {
+  return getLiveCatalog().find((s) => s.id === id) ?? SKILL_CATALOG.find((s) => s.id === id);
+}
+
+export function getBuiltinSkill(id: string) {
   return SKILL_CATALOG.find((s) => s.id === id);
 }
 
@@ -184,12 +207,7 @@ function analyzeDomTree(snapshot: SnapResult | undefined) {
 }
 
 function storeStepResult(ctx: SkillRunContext, step: SkillStep, result: unknown) {
-  ctx.vars[step.id] = result;
-  if (step.tool === "http_probe") ctx.vars.probeResult = result;
-  if (step.tool === "browser_snapshot") ctx.vars.snapshotResult = result;
-  if (step.tool === "workflow_run") ctx.vars.workflowResult = result;
-  if (step.tool === "__perf_metrics__") ctx.vars.perfResult = result;
-  if (step.tool === "knowledge_search") ctx.vars.searchResult = result;
+  applyStepVarWrites(ctx.vars, step.id, step.tool, result);
 }
 
 async function runInternalTool(name: string, args: Record<string, unknown>): Promise<{ content: unknown; isError?: boolean }> {
@@ -339,6 +357,7 @@ export async function runSkill(
     snapshotRoot?: Element | null;
     onStepStart?: (step: SkillStep) => void;
     probeUrl?: string;
+    mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
   const ctx: SkillRunContext = { query, skillId: skill.id, vars: {} };
@@ -353,9 +372,12 @@ export async function runSkill(
     const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
     const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
 
-    const out = step.tool.startsWith("__")
-      ? await runInternalTool(step.tool, args)
-      : await mcpServer.callTool(step.tool, args, { snapshotRoot: snapRoot });
+    const mockFn = opts?.mockProfile?.[step.tool];
+    const out = mockFn
+      ? { content: mockFn(args) }
+      : step.tool.startsWith("__")
+        ? await runInternalTool(step.tool, args)
+        : await mcpServer.callTool(step.tool, args, { snapshotRoot: snapRoot });
 
     const ms = Math.max(1, Math.round(performance.now() - t0));
     lastResult = out.content;

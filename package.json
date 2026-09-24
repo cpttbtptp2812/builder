@@ -12,7 +12,8 @@
     "build:extensions": "node scripts/build-extensions.mjs",
     "build:all": "npm run build:extensions && npm run build",
     "preview": "vite preview",
-    "start:server": "tsx server/index.ts"
+    "start:server": "tsx server/index.ts",
+    "prove": "tsx scripts/prove.ts"
   },
   "dependencies": {
     "@hono/node-server": "^1.14.4",

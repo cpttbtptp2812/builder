@@ -1,5 +1,7 @@
 /** SKILL.md 解析 — YAML frontmatter + steps AST，浏览器与 Node 共用 */
 
+import type { SkillCompileFields } from "./skillCompileAttach";
+
 export type SkillParseIssue = {
   level: "error" | "warning";
   line?: number;
@@ -34,7 +36,7 @@ export type SkillArgContext = {
   vars: Record<string, unknown>;
 };
 
-export type SkillManifest = {
+export type SkillManifestCore = {
   id: string;
   name: string;
   description: string;
@@ -47,6 +49,12 @@ export type SkillManifest = {
   parsed: ParsedSkillDoc;
   runnable: boolean;
 };
+
+export type SkillManifest = SkillManifestCore & SkillCompileFields;
+
+export { attachCompileToManifest, enrichSkillCatalog, compileParsedOnly } from "./skillCompileAttach";
+export type { SkillCompileFields, SkillDiagnostic } from "./skillCompileAttach";
+export type { SkillPeer } from "./skillSemcompiler";
 
 type YamlValue = string | number | boolean | null | YamlValue[] | { [key: string]: YamlValue };
 
@@ -283,7 +291,7 @@ export function parseSkillMarkdown(raw: string): ParsedSkillDoc {
   };
 }
 
-export function hydrateSkill(raw: string, loc: { id: string; skillPath: string }): SkillManifest {
+export function hydrateSkill(raw: string, loc: { id: string; skillPath: string }): SkillManifestCore {
   const parsed = parseSkillMarkdown(raw);
   const name = parsed.name || loc.id;
   const steps = parsed.steps.map((s) => ({ ...s }));

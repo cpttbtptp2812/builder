@@ -14,6 +14,7 @@ import {
   type KnowledgeEvalRow,
 } from "../../lib/knowledgeEval";
 import { gapDraftFromEval } from "../../lib/knowledgeGapWizard";
+import { runTraceEval, traceEvalSummary, type TraceEvalRow } from "../../lib/provingGround";
 import { OaBadge, OaBtn, OaEmpty, OaPage, OaStack, OaStatGrid } from "../ownagent/OaUi";
 
 type Props = {
@@ -25,6 +26,7 @@ export function EvalLabPanel({ compact = false }: Props) {
   const [evalRows, setEvalRows] = useState<RouterEvalRow[]>([]);
   const [policyRows, setPolicyRows] = useState<ReturnType<typeof runPolicyEval>>([]);
   const [knowledgeRows, setKnowledgeRows] = useState<KnowledgeEvalRow[]>([]);
+  const [traceRows, setTraceRows] = useState<TraceEvalRow[]>([]);
   const [running, setRunning] = useState(false);
 
   const routerCaseCount = getRouterEvalCases().length;
@@ -34,6 +36,8 @@ export function EvalLabPanel({ compact = false }: Props) {
   const policySummary = useMemo(() => policyEvalSummary(policyRows), [policyRows]);
   const knowledgeSummary = useMemo(() => knowledgeEvalSummary(knowledgeRows), [knowledgeRows]);
   const knowledgeFails = useMemo(() => knowledgeRows.filter((r) => !r.pass), [knowledgeRows]);
+  const traceSummary = useMemo(() => traceEvalSummary(traceRows), [traceRows]);
+  const traceFails = useMemo(() => traceRows.filter((r) => !r.pass), [traceRows]);
 
   const runAll = useCallback(async () => {
     setRunning(true);
@@ -42,6 +46,7 @@ export function EvalLabPanel({ compact = false }: Props) {
       setEvalRows(routerRes.rows);
       setPolicyRows(policyRes.rows);
       setKnowledgeRows(runKnowledgeEval());
+      setTraceRows(await runTraceEval());
     } finally {
       setRunning(false);
     }
@@ -76,7 +81,7 @@ export function EvalLabPanel({ compact = false }: Props) {
   return (
     <OaPage
       title="回答质检"
-      desc={`路由 ${routerCaseCount} 条 + 资料库 ${knowledgeCaseCount} 条自动 golden set，批量检测 AI 能否答对、RAG 能否命中。`}
+      desc={`路由 ${routerCaseCount} 条 + 资料库 ${knowledgeCaseCount} 条 golden set + Proving Ground trace mock，批量检测路由、RAG 与 Skill 工具链骨架。`}
     >
       <OaStatGrid
         items={[
@@ -104,6 +109,12 @@ export function EvalLabPanel({ compact = false }: Props) {
             hint: `${knowledgeSummary.pass}/${knowledgeSummary.total} 条问句能检索到对应条目`,
             tone: knowledgeSummary.accuracy >= 80 ? "ok" : knowledgeRows.length ? "warn" : undefined,
           },
+          {
+            label: "Trace 证明",
+            value: traceRows.length ? `${traceSummary.accuracy}%` : "—",
+            hint: `${traceSummary.pass}/${traceSummary.total} Skill mock 骨架`,
+            tone: traceSummary.accuracy === 100 && traceRows.length ? "ok" : traceRows.length ? "warn" : undefined,
+          },
         ]}
       />
 
@@ -115,6 +126,25 @@ export function EvalLabPanel({ compact = false }: Props) {
 
       {evalRows.length === 0 && !running ? (
         <OaEmpty>点击「开始检测」运行批量测试</OaEmpty>
+      ) : null}
+
+      {traceFails.length > 0 ? (
+        <OaStack>
+          <h2 style={{ margin: 0, fontSize: "0.9rem", fontWeight: 600 }}>Proving Ground · Trace 未通过</h2>
+          <ul className="oa-list">
+            {traceFails.map((row) => (
+              <li key={row.id} className="oa-list-item">
+                <div>
+                  <strong style={{ fontSize: "0.8125rem" }}>{row.skillId} · {row.id}</strong>
+                  <p>{row.detail}</p>
+                </div>
+                <OaBadge tone="danger">骨架失败</OaBadge>
+              </li>
+            ))}
+          </ul>
+        </OaStack>
+      ) : traceRows.length > 0 ? (
+        <OaEmpty>Proving Ground trace mock 全部通过</OaEmpty>
       ) : null}
 
       {knowledgeFails.length > 0 ? (

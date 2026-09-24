@@ -22,7 +22,8 @@ import {
   runSkillOnServer,
   SKILL_CATALOG,
 } from "./skills.ts";
-import { parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
+import { compileParsedOnly, parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
+import { compileSkill } from "../src/lib/skillSemcompiler.ts";
 import { runPolicyEval } from "../src/lib/policyDesk.ts";
 import { dbGet, dbAll, dbRun } from "./db.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
@@ -117,17 +118,61 @@ app.get("/api/skills/list", (c) =>
       name: s.name,
       description: s.description,
       runnable: s.runnable,
+      compileOk: s.compileOk,
+      runOk: s.runOk,
+      effectUpperBound: s.effectUpperBound,
       plan: s.plan,
       triggers: s.triggers,
       tools: s.tools,
       issues: s.parsed.issues,
+      diagnostics: s.diagnostics,
     })),
   }),
 );
 
 app.post("/api/skills/parse", async (c) => {
   const body = await c.req.json<{ markdown?: string }>().catch(() => ({ markdown: "" }));
-  return c.json(parseSkillMarkdown(body.markdown ?? ""));
+  const parsed = parseSkillMarkdown(body.markdown ?? "");
+  const compile = compileParsedOnly(parsed, parsed.name || "preview", SKILL_CATALOG.map((s) => ({ id: s.id, triggers: s.triggers })), "server");
+  return c.json({ parsed, ...compile });
+});
+
+app.post("/api/skills/compile", async (c) => {
+  const body = await c.req.json<{ markdown?: string; skillId?: string }>().catch(() => ({}));
+  const parsed = parseSkillMarkdown(body.markdown ?? "");
+  const skillId = body.skillId ?? parsed.name ?? "preview";
+  const peers = SKILL_CATALOG.filter((s) => s.id !== skillId).map((s) => ({ id: s.id, triggers: s.triggers }));
+  const compile = compileSkill(parsed, { skillId, env: "server", peers });
+  return c.json({
+    skillId,
+    compile,
+    diagnostics: compileParsedOnly(parsed, skillId, peers, "server").diagnostics,
+  });
+});
+
+app.get("/api/skill-runs", (c) => {
+  const skillId = c.req.query("skillId");
+  const limit = Math.min(50, Number(c.req.query("limit") ?? 20) || 20);
+  const rows = skillId
+    ? dbAll<{ id: number; skill_id: string; query: string; trace_json: string; ok: number; total_ms: number; created_at: string }>(
+        `SELECT id, skill_id, query, trace_json, ok, total_ms, created_at FROM skill_runs WHERE skill_id = ? ORDER BY id DESC LIMIT ?`,
+        [skillId, limit],
+      )
+    : dbAll<{ id: number; skill_id: string; query: string; trace_json: string; ok: number; total_ms: number; created_at: string }>(
+        `SELECT id, skill_id, query, trace_json, ok, total_ms, created_at FROM skill_runs ORDER BY id DESC LIMIT ?`,
+        [limit],
+      );
+  return c.json({
+    runs: rows.map((r) => ({
+      id: r.id,
+      skillId: r.skill_id,
+      query: r.query,
+      trace: JSON.parse(r.trace_json),
+      ok: Boolean(r.ok),
+      totalMs: r.total_ms,
+      createdAt: r.created_at,
+    })),
+  });
 });
 
 app.post("/api/agent/guest", async (c) => {

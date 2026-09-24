@@ -1,6 +1,31 @@
 /** 访客导入的 SKILL.md — 存在 localStorage，不写仓库 */
 
-import { hydrateSkill, parseSkillMarkdown, skillIdFromPath, type SkillManifest } from "./skillMarkdown";
+import {
+  attachCompileToManifest,
+  hydrateSkill,
+  parseSkillMarkdown,
+  skillIdFromPath,
+  type SkillManifest,
+  type SkillPeer,
+} from "./skillMarkdown";
+
+function readBuiltinSkillFiles(): Record<string, string> {
+  const globFn = (import.meta as ImportMeta & { glob?: (p: string, o: object) => Record<string, string> }).glob;
+  if (typeof globFn !== "function") return {};
+  return globFn("../skills/*/SKILL.md", {
+    eager: true,
+    query: "?raw",
+    import: "default",
+  }) as Record<string, string>;
+}
+
+function builtinPeers(): SkillPeer[] {
+  return Object.entries(readBuiltinSkillFiles()).map(([filePath, raw]) => {
+    const id = skillIdFromPath(filePath);
+    const parsed = parseSkillMarkdown(raw);
+    return { id, triggers: parsed.triggers };
+  });
+}
 
 const KEY = "ownagent:imported-skills";
 
@@ -31,10 +56,24 @@ function writeImportedRecords(rows: ImportedRecord[]) {
   localStorage.setItem(KEY, JSON.stringify({ skills: rows }));
 }
 
+function catalogPeers(): SkillPeer[] {
+  return builtinPeers();
+}
+
 export function recordsToSkills(rows: ImportedRecord[]): SkillManifest[] {
-  return rows.map((r) =>
-    hydrateSkill(r.raw, { id: r.id, skillPath: `imported://${r.id}` }),
-  );
+  return rows.map((r) => {
+    const core = hydrateSkill(r.raw, { id: r.id, skillPath: `imported://${r.id}` });
+    const peers = [
+      ...catalogPeers(),
+      ...rows
+        .filter((x) => x.id !== r.id)
+        .map((x) => {
+          const p = parseSkillMarkdown(x.raw);
+          return { id: x.id, triggers: p.triggers };
+        }),
+    ];
+    return attachCompileToManifest(core, { skillId: r.id, env: "browser", peers });
+  });
 }
 
 export function loadImportedSkills(): SkillManifest[] {
@@ -58,7 +97,9 @@ export function installImportedMarkdown(raw: string, taken: Set<string>, preferr
   const record: ImportedRecord = { id, raw, importedAt: new Date().toISOString() };
   const rows = readImportedRecords().filter((r) => r.id !== id).concat(record);
   writeImportedRecords(rows);
-  return { record, skill: hydrateSkill(raw, { id, skillPath: `imported://${id}` }), parsed };
+  const core = hydrateSkill(raw, { id, skillPath: `imported://${id}` });
+  const skill = attachCompileToManifest(core, { skillId: id, env: "browser", peers: catalogPeers() });
+  return { record, skill, parsed };
 }
 
 export function removeImportedSkill(id: string) {

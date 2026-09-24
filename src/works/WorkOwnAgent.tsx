@@ -12,12 +12,13 @@ import { ConnectPanel } from "../components/ownagent/ConnectPanel";
 import { McpToolsPanel } from "../components/ownagent/McpToolsPanel";
 import { PromptTemplatePanel } from "../components/ownagent/PromptTemplatePanel";
 import { RagPanel } from "../components/ownagent/RagPanel";
+import { SkillComparePanel } from "../components/ownagent/SkillComparePanel";
 import { SkillPlatformPanel } from "../components/ownagent/SkillPlatformPanel";
 import { TracePanel } from "../components/ownagent/TracePanel";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 
 type TabId = "product" | "theory";
-type ViewId = "chat" | "guide" | "feed" | "skills" | "rag" | "guard" | "trace" | "eval" | "prompts" | "mcp" | "connect" | "jd";
+type ViewId = "chat" | "guide" | "feed" | "skills" | "compare" | "rag" | "guard" | "trace" | "eval" | "prompts" | "mcp" | "connect" | "jd";
 type NavTier = "daily" | "manage" | "advanced";
 
 type NavItem = {
@@ -100,6 +101,19 @@ const MANAGE_VIEWS: NavItem[] = [
     ),
   },
   {
+    id: "compare",
+    label: "技能管理",
+    desc: "改配置、发新版",
+    tier: "manage",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <rect x="1.5" y="3" width="5" height="9" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+        <rect x="8.5" y="3" width="5" height="9" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M6.5 7.5h2" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     id: "eval",
     label: "回答质检",
     desc: "批量测试是否准确",
@@ -129,7 +143,7 @@ const MANAGE_VIEWS: NavItem[] = [
 const DEV_VIEWS: NavItem[] = [
   {
     id: "skills",
-    label: "技能扩展",
+    label: "开发者模式",
     desc: "自动化能力（技术向）",
     tier: "advanced",
     sidebar: false,
@@ -275,7 +289,7 @@ function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
     { q: "AI 回答得不对怎么办？", a: "在「资料库」里补充更详细的内容，或把正确版本编辑进知识广场。" },
     { q: "可以限制 AI 不回答某些问题吗？", a: "可以。进入「回答规则 → 分流规则」，开启「拒绝无关问题」并编辑关键词；也可在「制度条款」里维护可引用的内容。" },
     { q: "怎么知道 AI 为什么这样回答？", a: "在对话中展开每条回答的「来源」，可查看引用了哪些资料。" },
-    { q: "如何添加更多 AI 能力？", a: "在「资料库」补充文档即可。技术人员可通过命令面板（⌘K）访问技能扩展等开发者功能。" },
+    { q: "如何添加更多 AI 能力？", a: "业务资料进「资料库」。改 AI 技能走侧栏「技能管理」，改完直接发新版。" },
     { q: "数据安全吗？", a: "所有数据存储在你自己的服务器上，不会上传到任何第三方平台。" },
   ];
 
@@ -442,6 +456,7 @@ export function WorkOwnAgent() {
                 }}
               />
             ) : null}
+            {view === "compare" ? <SkillComparePanel /> : null}
             {view === "skills" ? <SkillPlatformPanel /> : null}
             {view === "rag" ? <RagPanel /> : null}
             {view === "guard" ? <GuardPanel /> : null}

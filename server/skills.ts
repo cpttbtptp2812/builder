@@ -6,7 +6,14 @@ import { fileURLToPath } from "node:url";
 import { dbRun, nowIso } from "./db.ts";
 import { ragHitsForMcp } from "./rag.ts";
 import { runPolicyDesk, searchPolicy, draftTicket, commitTicket } from "../src/lib/policyDesk.ts";
-import { hydrateSkill, resolveStepArgs, type SkillManifest } from "../src/lib/skillMarkdown.ts";
+import {
+  enrichSkillCatalog,
+  hydrateSkill,
+  resolveStepArgs,
+  type SkillManifest,
+} from "../src/lib/skillMarkdown.ts";
+import { applyStepVarWrites } from "../src/lib/skillVarBindings.ts";
+import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "../src/lib/releaseInspect.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { buildProbeBodyFromHtml, readProbeHtml } from "../src/lib/htmlProbeMeta.ts";
 
@@ -32,6 +39,7 @@ export type AgentSkill = SkillManifest;
 const DEFAULT_PROBE_URL = process.env.PROBE_URL ?? "https://cpttbtptp2812.github.io/builder/index.html";
 
 const SKILL_ORDER = [
+  "release-inspector",
   "site-analyzer",
   "dom-probe",
   "workflow-orchestrator",
@@ -42,7 +50,7 @@ const SKILL_ORDER = [
 
 function loadCatalog(): AgentSkill[] {
   if (!fs.existsSync(SKILLS_DIR)) return [];
-  return fs
+  const cores = fs
     .readdirSync(SKILLS_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory() && fs.existsSync(path.join(SKILLS_DIR, d.name, "SKILL.md")))
     .map((d) => hydrateSkill(readSkillMd(d.name), { id: d.name, skillPath: `src/skills/${d.name}/SKILL.md` }))
@@ -51,6 +59,7 @@ function loadCatalog(): AgentSkill[] {
       const ib = SKILL_ORDER.indexOf(b.id);
       return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
     });
+  return enrichSkillCatalog(cores, "server") as AgentSkill[];
 }
 
 export const SKILL_CATALOG: AgentSkill[] = loadCatalog();
@@ -275,6 +284,27 @@ async function callTool(
         },
       };
     }
+    case "__compose_release_report__": {
+      const probe = (args.probe ?? ctx.vars.probeResult) as Record<string, unknown>;
+      const targetUrl = String(args.targetUrl ?? probe?.url ?? ctx.probeUrl ?? DEFAULT_PROBE_URL);
+      const snapshot = args.snapshot as Record<string, unknown> | null | undefined;
+      const snapResolved = snapshot ?? (ctx.vars.snapshotResult as Record<string, unknown> | undefined);
+      const skipped = !isSameOriginUrl(targetUrl);
+      const report = composeReleaseReport({
+        targetUrl,
+        probe,
+        snapshot: skipped ? null : snapResolved,
+        snapshotSkipped: skipped,
+        knowledgeQuery: String(args.query ?? ctx.query ?? targetUrl),
+      });
+      return {
+        content: {
+          dashboard: { releaseInspect: report },
+          markdown: releaseReportMarkdown(report),
+          meta: { skill: "release-inspector", ts: Date.now(), runtime: "server" },
+        },
+      };
+    }
     default:
       return { content: { error: `unknown tool: ${name}` }, isError: true as const };
   }
@@ -311,12 +341,7 @@ export async function runSkillOnServer(
     const args = resolveArgs(step, ctx);
     const out = await callTool(step.tool, args, ctx);
 
-    ctx.vars[step.id] = out.content;
-    if (step.tool === "http_probe") ctx.vars.probeResult = out.content;
-    if (step.tool === "browser_snapshot") ctx.vars.snapshotResult = out.content;
-    if (step.tool === "workflow_run") ctx.vars.workflowResult = out.content;
-    if (step.tool === "__perf_metrics__") ctx.vars.perfResult = out.content;
-    if (step.tool === "knowledge_search") ctx.vars.searchResult = out.content;
+    applyStepVarWrites(ctx.vars, step.id, step.tool, out.content);
 
     const row: SkillTraceStep = {
       stepId: step.id,

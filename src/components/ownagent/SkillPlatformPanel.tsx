@@ -1,14 +1,33 @@
 import { useEffect, useMemo, useRef, useState, type DragEvent, type RefObject } from "react";
-import { runSkillAsync } from "../../lib/backendBridge";
+import { fetchSkillRunsAsync, runSkillAsync, type SkillRunRecord } from "../../lib/backendBridge";
 import {
   explainDiscovery,
+  getLiveCatalog,
   ROUTER_EXAMPLES,
   SKILL_CATALOG,
   type AgentSkill,
   type SkillResult,
   type SkillTraceStep,
 } from "../../lib/agentSkills";
-import { hydrateSkill, parseSkillMarkdown, SAMPLE_SKILL_MD } from "../../lib/skillMarkdown";
+import {
+  compileParsedOnly,
+  hydrateSkill,
+  parseSkillMarkdown,
+  SAMPLE_SKILL_MD,
+  type SkillManifest,
+} from "../../lib/skillMarkdown";
+import { effectLabel } from "../../lib/skillSemcompiler";
+import { compileSummary, devIssueCount, diagLabel, flowEdgeText } from "./skillDevLabels";
+import {
+  diffTrace,
+  loadSkillBaseline,
+  proveSkill,
+  saveSkillBaseline,
+  type TraceDiff,
+  type TraceEvalRow,
+} from "../../lib/provingGround";
+import { SKILL_CATALOG as BUILTIN_CATALOG } from "../../lib/agentSkills";
+import { getAppliedSkill, getPublishedVersion, submitCompareDraft, SKILL_PUBLISH_EVENT } from "../../lib/skillCompareStore";
 import {
   downloadText,
   installImportedMarkdown,
@@ -20,10 +39,12 @@ import {
 
 function defaultQuery(skill: AgentSkill) {
   if (skill.skillPath.startsWith("imported://")) return skill.triggers.slice(0, 3).join(" ") || skill.name;
+  if (skill.id === "release-inspector") return "帮我巡检 https://example.com 能否上线";
   if (skill.id === "knowledge-lookup") return "检索 iMean 定位语料 chunkId";
   if (skill.id === "policy-desk") return "满一年年假几天";
-  if (skill.id === "dom-probe") return "dom snapshot 元素定位 a11y";
+  if (skill.id === "dom-probe") return "分析页面 DOM 结构和可交互元素";
   if (skill.id === "workflow-orchestrator") return "执行 workflow 自动化回放流程";
+  if (skill.id === "site-analyzer") return "分析本站性能和探活情况";
   const hit = ROUTER_EXAMPLES.find((e) => skill.triggers.some((t) => e.query.toLowerCase().includes(t.toLowerCase())));
   return hit?.query ?? skill.triggers.slice(0, 3).join(" ");
 }
@@ -56,6 +77,7 @@ export function SkillPlatformPanel() {
   const rootRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const [imported, setImported] = useState<AgentSkill[]>([]);
+  const [liveTick, setLiveTick] = useState(0);
   const [skillId, setSkillId] = useState(SKILL_CATALOG[0]?.id ?? "site-analyzer");
   const [mode, setMode] = useState<"run" | "import">("run");
   const [copied, setCopied] = useState(false);
@@ -65,7 +87,14 @@ export function SkillPlatformPanel() {
     setImported(loadImportedSkills());
   }, []);
 
-  const catalog = useMemo(() => [...SKILL_CATALOG, ...imported], [imported]);
+  useEffect(() => {
+    const bump = () => setLiveTick((n) => n + 1);
+    window.addEventListener(SKILL_PUBLISH_EVENT, bump);
+    return () => window.removeEventListener(SKILL_PUBLISH_EVENT, bump);
+  }, []);
+
+  const liveBuiltin = useMemo(() => getLiveCatalog(), [liveTick]);
+  const catalog = useMemo(() => [...liveBuiltin, ...imported], [liveBuiltin, imported]);
   const skill = catalog.find((s) => s.id === skillId) ?? catalog[0]!;
   const importedSet = useMemo(() => new Set(imported.map((s) => s.id)), [imported]);
 
@@ -116,11 +145,16 @@ export function SkillPlatformPanel() {
 
   return (
     <div className="oa-ui oa-page own-skill-forge" ref={rootRef}>
-      <header className="oa-page-head">
+      <header className="oa-page-head own-skill-page-head">
         <div className="oa-page-head-main">
-          <h1>技能扩展</h1>
-          <p>开发者工具：导入或调试自动化技能。客户请在「资料库」录入文档即可。</p>
+          <h1>技能编辑</h1>
+          <p>改 Skill、试跑，满意后点「提交新版本」。</p>
         </div>
+          <ol className="own-skill-steps-guide" aria-label="使用步骤">
+          <li><strong>选技能</strong><span>左侧目录</span></li>
+          <li><strong>试跑</strong><span>基于现用版</span></li>
+          <li><strong>提交</strong><span>交给运维对比上线</span></li>
+        </ol>
       </header>
       <div className="own-skill-platform">
         <aside className="own-skill-rail" aria-label="技能目录">
@@ -129,17 +163,24 @@ export function SkillPlatformPanel() {
             <span>{catalog.length}</span>
           </header>
           <ul className="own-skill-index">
-            {SKILL_CATALOG.map((s, i) => (
+            {SKILL_CATALOG.map((s, i) => {
+              const ver = getPublishedVersion(s.id);
+              const onLive = Boolean(getAppliedSkill(s.id));
+              return (
               <li key={s.id}>
                 <button type="button" className={s.id === skill.id && mode === "run" ? "on" : ""} onClick={() => select(s.id)}>
                   <em>{String(i + 1).padStart(2, "0")}</em>
                   <span>
                     <strong>{s.name}</strong>
-                    <small>{s.runnable ? `${s.steps.length} 步工具链` : "仅文档"}</small>
+                    <small>
+                      {onLive ? `v${ver} 已上线` : `v${ver} 出厂`}
+                      {s.runnable ? ` · ${s.steps.length} 步` : " · 仅文档"}
+                      {!s.compileOk ? " · 待检查" : ""}
+                    </small>
                   </span>
                 </button>
               </li>
-            ))}
+            );})}
           </ul>
           {imported.length > 0 ? (
             <>
@@ -241,7 +282,26 @@ function RunDock({
   const [trace, setTrace] = useState<SkillTraceStep[]>([]);
   const [result, setResult] = useState<SkillResult | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
-  const [inspect, setInspect] = useState(false);
+  const [devOpen, setDevOpen] = useState(false);
+  const [proveRow, setProveRow] = useState<TraceEvalRow | null>(null);
+  const [proving, setProving] = useState(false);
+  const [shadowDiff, setShadowDiff] = useState<TraceDiff | null>(null);
+  const [hasBaseline, setHasBaseline] = useState(false);
+  const [runHistory, setRunHistory] = useState<SkillRunRecord[]>([]);
+  const [submitToast, setSubmitToast] = useState<string | null>(null);
+  const issues = devIssueCount(skill);
+  const liveVersion = getPublishedVersion(skill.id);
+  const applied = getAppliedSkill(skill.id);
+
+  function submitToCompare() {
+    const draft = submitCompareDraft(skill.id, skill.manifest, skill.name, "开发者模式提交");
+    setSubmitToast(`已提交 v${draft.version}，去「技能管理」发布`);
+    window.setTimeout(() => setSubmitToast(null), 4000);
+  }
+
+  function goCompare() {
+    window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "compare" } }));
+  }
 
   useEffect(() => {
     setQuery(defaultQuery(skill));
@@ -249,10 +309,24 @@ function RunDock({
     setResult(null);
     setRuntime(null);
     setOpenId(null);
+    setProveRow(null);
+    setShadowDiff(null);
+    setHasBaseline(Boolean(loadSkillBaseline(skill.id)?.length));
+    void fetchSkillRunsAsync(skill.id, 5).then(setRunHistory);
   }, [skill.id]);
 
   const route = useMemo(() => (query.trim() ? explainDiscovery(query) : []), [query]);
   const winner = route.find((r) => r.score > 0);
+
+  async function runProve() {
+    setProving(true);
+    setProveRow(null);
+    try {
+      setProveRow(await proveSkill(skill.id));
+    } finally {
+      setProving(false);
+    }
+  }
 
   async function run() {
     if (!skill.runnable) return;
@@ -278,26 +352,47 @@ function RunDock({
       setTrace(out.trace);
       setResult(out.result);
       setRuntime(out.runtime);
+      const baseline = loadSkillBaseline(skill.id);
+      if (baseline?.length) setShadowDiff(diffTrace(baseline, out.trace));
+      else setShadowDiff(null);
+      void fetchSkillRunsAsync(skill.id, 5).then(setRunHistory);
     } finally {
       setRunning(false);
     }
   }
 
+  function pinBaseline() {
+    if (!trace.length) return;
+    saveSkillBaseline(skill.id, trace);
+    setHasBaseline(true);
+    setShadowDiff(null);
+  }
+
   return (
     <>
-      <header className="own-skill-head">
+      <header className="own-skill-head own-skill-head--run">
         <div>
-          <p className="own-skill-kicker">
-            {isImported ? "已导入" : "内置"} · {skill.skillPath}
-          </p>
           <h3>{skill.name}</h3>
           <p className="own-skill-desc">{skill.description}</p>
         </div>
-        <span className={skill.runnable ? "own-skill-badge ok" : "own-skill-badge"}>{skill.runnable ? "可运行" : "仅文档"}</span>
+        <div className="own-skill-head-actions">
+          <span className={applied ? "own-skill-badge ok" : "own-skill-badge"}>
+            {applied ? `现用 v${liveVersion}` : `出厂 v${liveVersion}`}
+          </span>
+          <span className={skill.runnable ? "own-skill-badge ok" : "own-skill-badge"}>{skill.runnable ? "可试跑" : "仅文档"}</span>
+          <button type="button" className="own-dev-submit-compare" onClick={submitToCompare} disabled={!skill.runnable}>
+            提交新版本
+          </button>
+          <button type="button" className="own-dev-mode-trigger" onClick={() => setDevOpen(true)}>
+            开发者检查
+            {issues > 0 ? <em>{issues}</em> : null}
+          </button>
+        </div>
       </header>
+      {submitToast ? <p className="own-skill-submit-toast">{submitToast} · <button type="button" className="own-skill-inline-btn" onClick={goCompare}>去对比</button></p> : null}
 
       {skill.steps.length > 0 ? (
-        <ol className="own-skill-pipe" aria-label="这份技能会调的工具">
+        <ol className="own-skill-pipe" aria-label="执行顺序">
           {skill.steps.map((s, i) => (
             <li key={s.id} className={stepTone(s.id, skill.steps, trace, running)}>
               <em>{String(i + 1).padStart(2, "0")}</em>
@@ -309,126 +404,283 @@ function RunDock({
           ))}
         </ol>
       ) : (
-        <p className="own-skill-empty-stage">这份 SKILL.md 没有 steps，不能跑。打开下方原文对照，或从左侧导入一份带工具链的技能。</p>
+        <p className="own-skill-empty-stage">这份技能没有可执行步骤。请从左侧导入带 steps 的 SKILL.md，或在开发者检查里看原文。</p>
       )}
 
       {skill.runnable ? (
-        <div className="own-skill-composer">
-          <label className="own-skill-composer-label" htmlFor="own-skill-query">
-            对这条工具链说一句话，然后运行
-          </label>
-          <div className="agent-trace-input-row">
-            <input
-              id="own-skill-query"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="例如：分析本站性能"
-              onKeyDown={(e) => {
-                if (e.key === "Enter") void run();
-              }}
-            />
-            <button type="button" className="agent-trace-send" onClick={() => void run()} disabled={running}>
-              {running ? "运行中" : "运行"}
+        <section className="own-skill-run-card">
+          <div className="own-skill-run-card-head">
+            <h4>试跑</h4>
+            <p>用自然语言描述你要做的事，直接点运行即可（无需斜杠命令）。</p>
+          </div>
+          <textarea
+            id="own-skill-query"
+            className="own-skill-run-input"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="例如：帮我巡检 https://example.com 能否上线"
+            rows={2}
+          />
+          <div className="own-skill-run-actions">
+            <button type="button" className="own-skill-run-primary" onClick={() => void run()} disabled={running || !query.trim()}>
+              {running ? "运行中…" : "运行"}
             </button>
+            {query.trim() && winner ? (
+              <p className="own-skill-route-peek">
+                若走自动路由，会交给 <strong>{winner.skill.name}</strong>
+                {winner.skill.id !== skill.id ? "；此处仍按当前选中技能试跑" : ""}
+              </p>
+            ) : null}
           </div>
-          <p className="own-skill-route-peek">
-            {query.trim() ? (
-              winner ? (
-                <>
-                  路由会把这句话交给 <strong>{winner.skill.name}</strong>（{winner.score} 分）
-                  {winner.skill.id !== skill.id ? " · 这里仍按你选中的这份手动跑" : ""}
-                </>
-              ) : (
-                <>没有 trigger 命中，自动路由会停住；这里仍按 <strong>{skill.name}</strong> 手动跑。</>
-              )
-            ) : (
-              <>工具链 {skill.plan.join(" → ") || "无 steps"}</>
-            )}
-          </p>
-        </div>
+        </section>
       ) : null}
 
-      {runtime ? (
-        <p className="own-skill-hint">
-          {runtime === "local" ? "浏览器内运行时" : "服务端"} · {trace.length} 步完成
-        </p>
-      ) : null}
-
-      {trace.length > 0 ? (
-        <ol className="skill-pipeline-trace">
-          {trace.map((s, i) => (
-            <li key={s.stepId} className={s.ok ? "ok" : "fail"}>
-              <button type="button" className="skill-pipeline-head" onClick={() => setOpenId(openId === s.stepId ? null : s.stepId)}>
-                <span className="skill-pipeline-idx">{String(i + 1).padStart(2, "0")}</span>
-                <code>{s.tool}</code>
-                <span className="skill-pipeline-label">{s.label}</span>
-                <span className="skill-pipeline-ms">{s.ms}ms</span>
-                <span className="skill-pipeline-chevron">{openId === s.stepId ? "▾" : "▸"}</span>
-              </button>
-              {openId === s.stepId && s.result != null ? (
-                <pre className="skill-pipeline-json">{JSON.stringify(s.result, null, 2)}</pre>
-              ) : null}
-            </li>
-          ))}
-        </ol>
-      ) : null}
-
-      <ResultBoard result={result} />
-
-      <div className="own-skill-filebar">
-        <span>SKILL.md</span>
-        <button type="button" onClick={onCopy}>{copied ? "已复制" : "复制原文"}</button>
-        <button type="button" onClick={onExport}>导出这份</button>
-        <button type="button" onClick={onExportAll}>导出全部 JSON</button>
-        <details className="own-skill-inspect" open={inspect} onToggle={(e) => setInspect((e.target as HTMLDetailsElement).open)}>
-          <summary>解析对照</summary>
-        </details>
-      </div>
-
-      {inspect ? (
-        <div className="own-skill-inspect-grid">
-          <div>
-            <h4>解析</h4>
-            <IssueLine skill={skill} />
-            <p className="own-skill-meta-line">
-              triggers {skill.triggers.length} · tools {skill.tools.join(", ") || "—"}
-            </p>
-            <ol className="own-skill-steps compact">
-              {skill.steps.length === 0 ? (
-                <li>没有 steps</li>
-              ) : (
-                skill.steps.map((s) => (
-                  <li key={s.id}>
-                    <code>{s.id}</code>
-                    <strong>{s.tool}</strong>
-                    <span>{s.label}</span>
-                  </li>
-                ))
-              )}
+      {trace.length > 0 || result ? (
+        <section className="own-skill-result-section">
+          <header className="own-skill-result-head">
+            <h4>运行结果</h4>
+            {runtime ? <span>{runtime === "local" ? "浏览器" : "服务端"} · {trace.length} 步</span> : null}
+          </header>
+          {trace.length > 0 ? (
+            <ol className="skill-pipeline-trace skill-pipeline-trace--compact">
+              {trace.map((s, i) => (
+                <li key={s.stepId} className={s.ok ? "ok" : "fail"}>
+                  <button type="button" className="skill-pipeline-head" onClick={() => setOpenId(openId === s.stepId ? null : s.stepId)}>
+                    <span className="skill-pipeline-idx">{String(i + 1).padStart(2, "0")}</span>
+                    <code>{s.tool}</code>
+                    <span className="skill-pipeline-label">{s.label}</span>
+                    <span className="skill-pipeline-ms">{s.ms}ms</span>
+                    <span className="skill-pipeline-chevron">{openId === s.stepId ? "▾" : "▸"}</span>
+                  </button>
+                  {openId === s.stepId && s.result != null ? (
+                    <pre className="skill-pipeline-json">{JSON.stringify(s.result, null, 2)}</pre>
+                  ) : null}
+                </li>
+              ))}
             </ol>
-          </div>
-          <div>
-            <h4>原文</h4>
-            <pre className="own-skill-md">{skill.manifest}</pre>
-          </div>
-        </div>
+          ) : null}
+          <ResultBoard result={result} />
+        </section>
+      ) : null}
+
+      {devOpen ? (
+        <DeveloperModeSheet
+          skill={skill}
+          isImported={isImported}
+          copied={copied}
+          issues={issues}
+          proveRow={proveRow}
+          proving={proving}
+          shadowDiff={shadowDiff}
+          hasBaseline={hasBaseline}
+          runHistory={runHistory}
+          trace={trace}
+          onClose={() => setDevOpen(false)}
+          onProve={() => void runProve()}
+          onPinBaseline={pinBaseline}
+          onCopy={onCopy}
+          onExport={onExport}
+          onExportAll={onExportAll}
+        />
       ) : null}
     </>
   );
 }
 
-function IssueLine({ skill }: { skill: AgentSkill }) {
-  const issues = skill.parsed.issues;
-  if (issues.length === 0) return <p className="own-skill-ok">解析通过</p>;
+function DeveloperModeSheet({
+  skill,
+  isImported,
+  copied,
+  issues,
+  proveRow,
+  proving,
+  shadowDiff,
+  hasBaseline,
+  runHistory,
+  trace,
+  onClose,
+  onProve,
+  onPinBaseline,
+  onCopy,
+  onExport,
+  onExportAll,
+}: {
+  skill: AgentSkill;
+  isImported: boolean;
+  copied: boolean;
+  issues: number;
+  proveRow: TraceEvalRow | null;
+  proving: boolean;
+  shadowDiff: TraceDiff | null;
+  hasBaseline: boolean;
+  runHistory: SkillRunRecord[];
+  trace: SkillTraceStep[];
+  onClose: () => void;
+  onProve: () => void;
+  onPinBaseline: () => void;
+  onCopy: () => void;
+  onExport: () => void;
+  onExportAll: () => void;
+}) {
+  const ir = skill.ir;
+  const errors = skill.diagnostics.filter((d) => d.level === "error");
+
   return (
-    <ul className="own-skill-issues">
-      {issues.map((iss, i) => (
-        <li key={`${iss.message}-${i}`} className={iss.level}>
-          {iss.level === "error" ? "错误" : "警告"} — {iss.message}
+    <div className="own-dev-sheet-backdrop" role="presentation" onClick={onClose}>
+      <aside
+        className="own-dev-sheet"
+        role="dialog"
+        aria-labelledby="own-dev-sheet-title"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="own-dev-sheet-head">
+          <div>
+            <p className="own-skill-kicker">{isImported ? "已导入" : "内置"}技能</p>
+            <h2 id="own-dev-sheet-title">开发者检查</h2>
+            <p className="own-dev-sheet-sub">改 SKILL.md 前先看这里：工具对不对、变量连没连上、触发词会不会抢。</p>
+          </div>
+          <button type="button" className="own-dev-sheet-close" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </header>
+
+        <div className="own-dev-sheet-body">
+          <section className="own-dev-block">
+            <header className="own-dev-block-head">
+              <h3>静态检查</h3>
+              <span className={skill.compileOk ? "own-skill-badge ok" : "own-skill-badge warn"}>{compileSummary(skill)}</span>
+            </header>
+            {skill.effectUpperBound ? (
+              <p className="own-dev-meta">最高权限：{effectLabel(skill.effectUpperBound)}（只读 / 可写 / 需人工 等）</p>
+            ) : null}
+            <DiagnosticsList diagnostics={skill.diagnostics} />
+          </section>
+
+          {ir?.dataFlow.length ? (
+            <section className="own-dev-block">
+              <header className="own-dev-block-head">
+                <h3>变量怎么传</h3>
+                <span className="own-dev-block-hint">上一步产出 → 下一步读取</span>
+              </header>
+              <ul className="own-dev-flow-list">
+                {ir.dataFlow.map((e, i) => (
+                  <li key={`${e.from}-${e.stepId}-${i}`}>{flowEdgeText(e.from, e.stepId)}</li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {ir?.triggerInterference.length ? (
+            <section className="own-dev-block own-dev-block--warn">
+              <header className="own-dev-block-head">
+                <h3>触发词冲突</h3>
+                <span className="own-dev-block-hint">用户说这些话时，可能进错技能</span>
+              </header>
+              <ul className="own-dev-interference-list">
+                {ir.triggerInterference.map((t) => (
+                  <li key={t.otherSkillId}>
+                    与 <strong>{t.otherSkillId}</strong> 共用：{t.shared.join("、")}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          <section className="own-dev-block">
+            <header className="own-dev-block-head">
+              <h3>质量回归</h3>
+              <span className="own-dev-block-hint">不连外网，测工具链顺序对不对</span>
+            </header>
+            <div className="own-dev-actions-row">
+              <button type="button" className="own-skill-run-primary own-skill-run-primary--sm" onClick={onProve} disabled={proving || !skill.runOk}>
+                {proving ? "检测中…" : "一键 Mock 回归"}
+              </button>
+              {trace.length > 0 ? (
+                <button type="button" className="own-dev-secondary-btn" onClick={onPinBaseline}>
+                  {hasBaseline ? "更新对比基线" : "保存为对比基线"}
+                </button>
+              ) : null}
+            </div>
+            {proveRow ? (
+              <p className={`own-skill-prove-result ${proveRow.pass ? "ok" : "fail"}`}>
+                {proveRow.pass ? "回归通过" : "回归失败"}：{proveRow.detail}
+              </p>
+            ) : null}
+            {shadowDiff ? (
+              <p className={`own-skill-prove-result ${shadowDiff.sameSkeleton ? "ok" : "fail"}`}>
+                与基线对比：{shadowDiff.sameSkeleton ? "工具链未变" : shadowDiff.summary}
+              </p>
+            ) : hasBaseline ? (
+              <p className="own-dev-meta">已保存基线，试跑后会自动对比。</p>
+            ) : null}
+            {runHistory.length > 0 ? (
+              <details className="own-skill-runs own-skill-runs--in-sheet">
+                <summary>服务端最近 {runHistory.length} 次运行</summary>
+                <ul>
+                  {runHistory.map((r) => (
+                    <li key={r.id}>
+                      <span>{r.createdAt.slice(0, 16).replace("T", " ")}</span>
+                      <code>{r.ok ? "成功" : "失败"}</code>
+                      <small>{r.query.slice(0, 40)}</small>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
+          </section>
+
+          <section className="own-dev-block">
+            <header className="own-dev-block-head">
+              <h3>SKILL 源码</h3>
+              <div className="own-dev-source-actions">
+                <button type="button" onClick={onCopy}>{copied ? "已复制" : "复制"}</button>
+                <button type="button" onClick={onExport}>导出</button>
+                <button type="button" onClick={onExportAll}>全部 JSON</button>
+              </div>
+            </header>
+            <p className="own-dev-meta">
+              {skill.triggers.length} 个触发词 · {skill.tools.length} 个工具 · {skill.steps.length} 步
+            </p>
+            <pre className="own-skill-md own-skill-md--sheet">{skill.manifest}</pre>
+          </section>
+        </div>
+
+        <footer className="own-dev-sheet-foot">
+          {errors.length
+            ? `${errors.length} 个错误建议先修再上线`
+            : issues > 0
+              ? `${issues} 条提醒，可按需处理`
+              : "静态检查无问题"}
+        </footer>
+      </aside>
+    </div>
+  );
+}
+
+function DiagnosticsList({ diagnostics }: { diagnostics: SkillManifest["diagnostics"] }) {
+  const visible = diagnostics.filter((d) => d.level !== "info");
+  if (visible.length === 0) return <p className="own-skill-ok">未发现错误或警告</p>;
+  return (
+    <ul className="own-skill-issues own-dev-diag-list">
+      {visible.map((iss, i) => (
+        <li key={`${iss.code}-${i}`} className={iss.level}>
+          <span className="own-dev-diag-tag">{diagLabel(iss.code)}</span>
+          {iss.stepId ? <span className="own-semcompiler-step">步骤 {iss.stepId}</span> : null}
+          <p className="own-dev-diag-msg">{iss.message}</p>
+          {iss.fixHint ? <small>{iss.fixHint}</small> : null}
         </li>
       ))}
     </ul>
   );
+}
+
+function IssueLine({ skill }: { skill: AgentSkill }) {
+  return <DiagnosticsList diagnostics={skill.diagnostics.length ? skill.diagnostics : skill.parsed.issues.map((i) => ({
+    code: "PARSE",
+    level: i.level,
+    message: i.message,
+  }))} />;
 }
 
 function ResultBoard({ result }: { result: SkillResult | null }) {
@@ -542,14 +794,31 @@ function ImportDock({
   }, [seed]);
 
   const payload = useMemo(() => parseImportPayload(draft), [draft]);
+  const peers = useMemo(
+    () => BUILTIN_CATALOG.map((s) => ({ id: s.id, triggers: s.triggers })),
+    [],
+  );
+
   const previews = useMemo(
     () =>
       payload.files.map((file, i) => {
         const parsed = parseSkillMarkdown(file.raw);
-        const skill = hydrateSkill(file.raw, { id: file.id || parsed.name || `preview-${i}`, skillPath: "import://preview" });
+        const id = file.id || parsed.name || `preview-${i}`;
+        const core = hydrateSkill(file.raw, { id, skillPath: "import://preview" });
+        const compiled = compileParsedOnly(parsed, id, peers, "browser");
+        const skill: SkillManifest = {
+          ...core,
+          compile: compiled.compile,
+          ir: compiled.compile.ir,
+          diagnostics: compiled.diagnostics,
+          compileOk: compiled.compile.compileOk,
+          runOk: compiled.compile.runOk,
+          effectUpperBound: compiled.compile.ir?.effectUpperBound,
+          runnable: compiled.compile.runOk,
+        };
         return { file, parsed, skill };
       }),
-    [payload.files],
+    [payload.files, peers],
   );
 
   function install() {
