@@ -5,10 +5,12 @@ import type { Work } from "../../data/works";
 import { MiniClipHubLive } from "./MiniClipHubLive";
 import { MiniMatchLive } from "./MiniMatchLive";
 import { MiniTeaserLive } from "./MiniTeaserLive";
+import { MiniTurnReplayLive } from "./MiniTurnReplayLive";
 
 function WorkMiniDemo({ work }: { work: Work }) {
   if (work.slug === "extension-hub") return <MiniClipHubLive />;
   if (work.slug === "imean") return <MiniMatchLive />;
+  if (work.slug === "ownagent") return <MiniTurnReplayLive />;
   return <MiniTeaserLive work={work} />;
 }
 

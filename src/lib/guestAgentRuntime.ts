@@ -15,6 +15,9 @@ import { classifyCapability, getTicket, type TicketDraft } from "./policyDesk";
 import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
 import { runGuestAgentAsync } from "./backendBridge";
 import { peekRuntimeConfig } from "./runtimeConfig";
+import { rewriteRagQueries } from "./ragQueryRewrite";
+import { shouldUseRagRewrite } from "./agentPromptRuntime";
+import { extractUrlFromText } from "./releaseInspect";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -27,6 +30,7 @@ export type GuestTurnCtx = {
   history?: AgentChatMessage[];
   force?: GuestForce;
   pinned?: string;
+  promptAddon?: string;
 };
 
 type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
@@ -378,6 +382,8 @@ function synthesizeGeneric(result: SkillResult): string {
 
 function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: string): string {
   switch (skill.id) {
+    case "release-inspector":
+      return result.markdown ?? synthesizeGeneric(result);
     case "site-analyzer":
       return synthesizeSiteAudit(result, query);
     case "dom-probe":
@@ -399,7 +405,11 @@ async function runKnowledgePath(
   onEvent: (ev: AgentStreamEvent) => void,
   opts?: { searchQuery?: string; lead?: string },
 ): Promise<{ text: string; traces: AgentTurnTrace[] }> {
-  const searchQuery = opts?.searchQuery ?? query;
+  let searchQuery = opts?.searchQuery ?? query;
+  if (shouldUseRagRewrite() || ctx.promptAddon?.includes("Query Rewrite")) {
+    const rw = rewriteRagQueries(searchQuery, ctx.history, { multi: true });
+    searchQuery = rw.primary;
+  }
   const t0 = performance.now();
   const tool: AgentToolTrace = {
     id: "guest-knowledge",
@@ -629,6 +639,10 @@ export async function runGuestAgentTurn(
     },
     {
       snapshotRoot: ctx.snapshotRoot,
+      probeUrl:
+        skill.id === "release-inspector"
+          ? extractUrlFromText(query) ?? undefined
+          : undefined,
       onStepStart: (step) => {
         if (step.tool.startsWith("__")) return;
         onEvent({

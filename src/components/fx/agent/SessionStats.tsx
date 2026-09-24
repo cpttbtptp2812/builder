@@ -33,7 +33,13 @@ function computeStats(messages: OwnChatMessage[]): Stats {
 }
 
 /** 顶栏会话统计胶囊 */
-export function SessionStats({ messages }: { messages: OwnChatMessage[] }) {
+export function SessionStats({
+  messages,
+  hideGroundedness = false,
+}: {
+  messages: OwnChatMessage[];
+  hideGroundedness?: boolean;
+}) {
   const stats = useMemo(() => computeStats(messages), [messages]);
 
   if (stats.turns === 0) return null;
@@ -50,7 +56,7 @@ export function SessionStats({ messages }: { messages: OwnChatMessage[] }) {
           <span className="ua-session-stat-label">平均响应</span>
         </span>
       )}
-      {stats.groundedness != null && (
+      {!hideGroundedness && stats.groundedness != null && (
         <span className="ua-session-stat highlight">
           <span className="ua-session-stat-val">{stats.groundedness}%</span>
           <span className="ua-session-stat-label">知识依据</span>

@@ -17,6 +17,14 @@ export type OwnToolChip = {
   preview?: string;
 };
 
+/** 广场优先路由 — 命中来源（对话内展示） */
+export type PlazaSourceView = {
+  itemId: string;
+  question: string;
+  author: string;
+  matchScore: number;
+};
+
 export type OwnChatMessage = {
   id: string;
   role: "user" | "assistant";
@@ -40,6 +48,8 @@ export type OwnChatMessage = {
   followUps?: FollowUpPrompt[] | string[];
   answerInsight?: AnswerInsight;
   artifacts?: ChatArtifact[];
+  plazaSource?: PlazaSourceView;
+  releaseInspect?: import("./releaseInspect").ReleaseInspectReport;
 };
 
 export type OwnSession = {
@@ -151,4 +161,8 @@ export function sessionToMarkdown(session: OwnSession): string {
     lines.push(m.content, "");
   }
   return lines.join("\n");
+}
+
+export function sessionToJson(session: OwnSession): string {
+  return JSON.stringify(session, null, 2);
 }

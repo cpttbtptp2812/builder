@@ -157,11 +157,13 @@ export function TracePanel() {
   }
 
   return (
-    <div className="own-panel" ref={rootRef}>
-      <p className="own-panel-lead">
-        输入一句话，走<strong>真实 Agent 运行</strong>（Skill 路由 + MCP 工具）。每一步 intent / tool /
-        回复写入时间线，历史保存在本机。
-      </p>
+    <div className="oa-ui oa-page" ref={rootRef}>
+      <header className="oa-page-head">
+        <div className="oa-page-head-main">
+          <h1>处理过程</h1>
+          <p>开发者工具：查看 AI 收到问题后的每一步。历史记录保存在本机。</p>
+        </div>
+      </header>
 
       <div className="agent-trace-input-row">
         <input
@@ -195,8 +197,8 @@ export function TracePanel() {
       {chatNeuralTraces.length > 0 ? (
         <section className="agent-trace-neural card">
           <header>
-            <strong>对话 Neural Trace</strong>
-            <span>来自当前会话 · Hybrid RAG + 自研 Agent 四段流水</span>
+            <strong>最近对话记录</strong>
+            <span>来自当前会话的处理摘要</span>
           </header>
           <ul>
             {chatNeuralTraces.map((m) => {

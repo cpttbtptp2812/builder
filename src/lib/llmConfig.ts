@@ -98,6 +98,11 @@ export function saveLlmConfig(config: LlmConfig) {
   } catch {
     /* ignore */
   }
+  try {
+    window.dispatchEvent(new CustomEvent("ownagent:config-updated"));
+  } catch {
+    /* ignore */
+  }
 }
 
 export function isLlmConfigured(config: LlmConfig): boolean {
@@ -114,4 +119,42 @@ export function resolveLlmBaseUrl(baseUrl: string): string {
     return "/llm-proxy/v1";
   }
   return trimmed;
+}
+
+/** 探测 LLM 是否可用（非流式，最多 5 token） */
+export async function probeLlmConnection(
+  config: LlmConfig,
+): Promise<{ ok: boolean; ms: number; detail: string }> {
+  if (!isLlmConfigured(config)) {
+    return { ok: false, ms: 0, detail: "请先启用并填写 Base URL、Model 与 API Key" };
+  }
+  const t0 = performance.now();
+  const baseUrl = resolveLlmBaseUrl(config.baseUrl);
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
+
+  try {
+    const res = await fetch(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 5,
+        stream: false,
+      }),
+    });
+    const ms = Math.round(performance.now() - t0);
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      return { ok: false, ms, detail: `HTTP ${res.status}: ${errText.slice(0, 120) || res.statusText}` };
+    }
+    return { ok: true, ms, detail: `${config.model} · ${ms}ms` };
+  } catch (err) {
+    return {
+      ok: false,
+      ms: Math.round(performance.now() - t0),
+      detail: err instanceof Error ? err.message : "网络错误",
+    };
+  }
 }

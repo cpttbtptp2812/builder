@@ -8,6 +8,7 @@ import {
   updatePlaza,
   type PlazaItem,
 } from "../../../lib/plazaFeed";
+import { OaPage } from "../../ownagent/OaUi";
 
 function timeAgo(iso: string): string {
   const diff = Date.now() - new Date(iso).getTime();
@@ -172,17 +173,17 @@ export function KnowledgeFeed({
   }
 
   return (
-    <div className="kf-page">
-      <div className="kf-page-hero">
-        <div>
-          <h1>知识广场</h1>
-          <p>别人问过的问题，直接看答案。先搜广场，找不到再问 AI，能省下重复消耗。</p>
-        </div>
-        <div className="kf-page-stats">
+    <OaPage
+      title="知识广场"
+      desc="别人问过的问题，直接看答案。先搜广场，找不到再问 AI。"
+      actions={
+        <div className="oa-page-stat">
           <strong>{total}</strong>
           <span>条共享问答</span>
         </div>
-      </div>
+      }
+    >
+    <div className="kf-page">
 
       {offline ? (
         <div className="kf-offline-banner">
@@ -346,5 +347,6 @@ export function KnowledgeFeed({
         </div>
       )}
     </div>
+    </OaPage>
   );
 }

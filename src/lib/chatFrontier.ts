@@ -25,7 +25,7 @@ export type RouteScoreView = {
 };
 
 export type InlineEvalView = {
-  kind: "policy" | "router";
+  kind: "policy" | "router" | "knowledge";
   accuracy: number;
   pass: number;
   total: number;

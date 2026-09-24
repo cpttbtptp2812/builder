@@ -158,7 +158,13 @@ export async function runAgentTurn(
   userMessage: string,
   history: AgentChatMessage[],
   config: LlmConfig,
-  ctx: { snapshotRoot?: Element | null; signal?: AbortSignal; enabledTools?: string[]; memoryBlock?: string },
+  ctx: {
+    snapshotRoot?: Element | null;
+    signal?: AbortSignal;
+    enabledTools?: string[];
+    memoryBlock?: string;
+    promptAddon?: string;
+  },
   onEvent: (ev: AgentStreamEvent) => void,
 ): Promise<{ assistantText: string; traces: AgentTurnTrace[]; messages: AgentChatMessage[] }> {
   if (!isLlmConfigured(config)) {
@@ -176,6 +182,7 @@ export async function runAgentTurn(
       content: buildAgentSystemPrompt({
         memoryBlock: ctx.memoryBlock,
         enabledTools: ctx.enabledTools,
+        promptAddon: ctx.promptAddon,
       }),
     },
     ...history.filter((m) => m.role !== "system"),

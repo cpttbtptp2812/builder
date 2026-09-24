@@ -14,7 +14,14 @@ import {
 import { getChunkCount, seedRagCorpus } from "./seed.ts";
 import { seedCustomerData } from "./customerSeed.ts";
 import { retrieveRagFromDb } from "./rag.ts";
-import { explainDiscovery, runRouterEval, runSkillBenchmark, runSkillOnServer, SKILL_CATALOG } from "./skills.ts";
+import {
+  explainDiscovery,
+  probeHttpTool,
+  runRouterEval,
+  runSkillBenchmark,
+  runSkillOnServer,
+  SKILL_CATALOG,
+} from "./skills.ts";
 import { parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
 import { runPolicyEval } from "../src/lib/policyDesk.ts";
 import { dbGet, dbAll, dbRun } from "./db.ts";
@@ -57,6 +64,20 @@ app.get("/api/health", (c) => {
 app.post("/api/rag/retrieve", async (c) => {
   const body = await c.req.json<{ query: string; topK?: number }>();
   return c.json(retrieveRagFromDb(body.query ?? "", body.topK ?? 5));
+});
+
+/** 跨域 URL 探活 — 浏览器直连受 CORS/网络限制，走服务端 fetch */
+app.post("/api/tools/http-probe", async (c) => {
+  const body = await c.req.json<{ url?: string; method?: "GET" | "HEAD" }>().catch(() => ({}));
+  const url = String(body.url ?? "").trim();
+  if (!url) return c.json({ error: "url required" }, 400);
+  try {
+    new URL(url);
+  } catch {
+    return c.json({ error: "invalid url" }, 400);
+  }
+  const method = body.method === "HEAD" ? "HEAD" : "GET";
+  return c.json(await probeHttpTool(url.startsWith("http") ? url : `https://${url}`, method));
 });
 
 app.post("/api/skills/discover", async (c) => {

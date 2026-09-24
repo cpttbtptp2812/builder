@@ -1,6 +1,8 @@
 /** 进程内 MCP Server — JSON-RPC 2.0 · 真实工具实现（非 mock 定时器） */
 
 import { matchProject } from "../data/knowledge";
+import { apiFetch, apiUrl } from "./apiClient";
+import { buildProbeBodyFromHtml, readProbeHtml } from "./htmlProbeMeta";
 import { ragHitsForMcp, ragHitsForMcpAsync } from "./ragEngine";
 import { peekRuntimeConfig } from "./runtimeConfig";
 import { REPLAY_STEPS, SCENARIOS } from "../data/scenarios";
@@ -83,21 +85,69 @@ function buildA11ySnapshot(root: Element, compact = false) {
   };
 }
 
-async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
+type ProbeResult = {
+  url: string;
+  method: "GET" | "HEAD";
+  status?: number;
+  ok: boolean;
+  latencyMs: number;
+  contentType?: string | null;
+  body?: unknown;
+  error?: string;
+  via?: "server" | "browser";
+};
+
+function isCrossOriginUrl(url: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URL(url).origin !== window.location.origin;
+  } catch {
+    return true;
+  }
+}
+
+async function probeHttpViaServer(url: string, method: "GET" | "HEAD"): Promise<ProbeResult | null> {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await fetch(apiUrl("/tools/http-probe"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url, method }),
+        signal: AbortSignal.timeout(35_000),
+      });
+      if (!res.ok) continue;
+      const data = (await res.json()) as ProbeResult;
+      if (data.ok || data.error || data.status != null) return data;
+    } catch {
+      /* retry */
+    }
+  }
+  return apiFetch<ProbeResult>("/tools/http-probe", {
+    method: "POST",
+    body: JSON.stringify({ url, method }),
+  });
+}
+
+async function probeHttpDirect(url: string, method: "GET" | "HEAD" = "GET"): Promise<ProbeResult> {
   const t0 = performance.now();
   try {
-    const res = await fetch(url, { method, cache: "no-store" });
+    const res = await fetch(url, {
+      method,
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
     const latencyMs = Math.round(performance.now() - t0);
     let body: unknown = null;
-    if (method === "GET" && res.headers.get("content-type")?.includes("json")) {
+    const contentType = res.headers.get("content-type");
+    if (method === "GET" && contentType?.includes("json")) {
       try {
         body = await res.json();
       } catch {
         body = null;
       }
     } else if (method === "GET") {
-      const text = await res.text();
-      body = { bytes: text.length, preview: text.slice(0, 120) };
+      const text = await readProbeHtml(res);
+      body = buildProbeBodyFromHtml(text);
     }
     return {
       url,
@@ -105,8 +155,9 @@ async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
       status: res.status,
       ok: res.ok,
       latencyMs,
-      contentType: res.headers.get("content-type"),
+      contentType,
       body,
+      via: "browser",
     };
   } catch (err) {
     return {
@@ -115,8 +166,17 @@ async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
       ok: false,
       latencyMs: Math.round(performance.now() - t0),
       error: err instanceof Error ? err.message : "fetch failed",
+      via: "browser",
     };
   }
+}
+
+async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
+  if (isCrossOriginUrl(url)) {
+    const remote = await probeHttpViaServer(url, method);
+    if (remote) return remote;
+  }
+  return probeHttpDirect(url, method);
 }
 
 export class McpInProcessServer {

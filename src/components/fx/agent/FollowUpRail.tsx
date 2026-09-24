@@ -15,9 +15,9 @@ export function FollowUpRail({
   return (
     <div className="ua-followup-rail">
       <header>
-        <span className="ua-followup-rail-kicker">Smart Follow-up</span>
-        <strong>继续探索</strong>
-        <em>已预检知识库 · 点击必有答复</em>
+        <span className="ua-followup-rail-kicker">跟进提问</span>
+        <strong>还可以问</strong>
+        <em>已预检资料库 · 点击直接发送</em>
       </header>
       <div className="ua-followup-rail-list">
         {prompts.map((p, i) => (

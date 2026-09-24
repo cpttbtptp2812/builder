@@ -77,7 +77,7 @@ export function AgentMcpRegistry({
               </button>
             </header>
             <p className="agent-mcp-modal-lead">
-              对齐理论「能力」层：勾选后对话会真正调用这些工具（探活、检索、快照、制度、工单）。
+              勾选后 Agent 对话会调用对应 MCP 工具（探活、检索、快照、制度、工单等）。
             </p>
             <div className="agent-mcp-modal-list">
               {MCP_TOOLS.map((t) => (

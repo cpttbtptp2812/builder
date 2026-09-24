@@ -115,7 +115,13 @@ export function SkillPlatformPanel() {
   }
 
   return (
-    <div className="own-panel own-skill-forge" ref={rootRef}>
+    <div className="oa-ui oa-page own-skill-forge" ref={rootRef}>
+      <header className="oa-page-head">
+        <div className="oa-page-head-main">
+          <h1>技能扩展</h1>
+          <p>开发者工具：导入或调试自动化技能。客户请在「资料库」录入文档即可。</p>
+        </div>
+      </header>
       <div className="own-skill-platform">
         <aside className="own-skill-rail" aria-label="技能目录">
           <header className="own-skill-rail-head">

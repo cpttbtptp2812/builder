@@ -1,3 +1,5 @@
+import { loadPolicyHandbook, loadPolicySettings, matchPolicyRules } from "./policyConfig";
+
 /** 制度值班 — 能力信封 + 出处锁 + 工单预演 */
 
 export type Capability = "read" | "mutate" | "abstain";
@@ -122,26 +124,17 @@ export function listTickets() {
 }
 
 export function classifyCapability(query: string): CapabilityDecision {
-  const q = query.trim();
-  if (/上市|天气|股价|几点了|今天星期/.test(q)) {
-    return { cap: "abstain", matched: true, reason: "手册外事实，不允许编造" };
-  }
-  if (/开通|vpn|换电脑|更换设备|改权限|蓝屏|重置密码/i.test(q)) {
-    return { cap: "mutate", matched: true, reason: "会改系统状态，只许起草工单", topic: "vpn" };
-  }
-  if (/年假|休假|请假/.test(q)) {
-    return { cap: "read", matched: true, reason: "制度问答 · 年假", topic: "leave" };
-  }
-  if (/加班/.test(q)) {
-    return { cap: "read", matched: true, reason: "制度问答 · 加班", topic: "overtime" };
-  }
-  if (/报销/.test(q)) {
-    return { cap: "read", matched: true, reason: "制度问答 · 报销", topic: "reimburse" };
-  }
-  if (/制度|手册|工单/.test(q)) {
-    return { cap: "read", matched: true, reason: "制度问答" };
-  }
-  return { cap: "read", matched: false, reason: "未命中制度 / 权限场景" };
+  const hit = matchPolicyRules(query, loadPolicySettings());
+  return {
+    cap: hit.cap,
+    matched: hit.matched,
+    reason: hit.reason,
+    topic: hit.topic,
+  };
+}
+
+export function getPolicyHandbook() {
+  return loadPolicyHandbook();
 }
 
 export function searchPolicy(query: string, topK = 4): PolicyHit[] {
@@ -149,7 +142,7 @@ export function searchPolicy(query: string, topK = 4): PolicyHit[] {
   const tokens = q.match(/[\u4e00-\u9fff]{1,8}|[a-z0-9]{2,}/g) ?? [];
   const cap = classifyCapability(query);
 
-  return POLICY_HANDBOOK.map((clause) => {
+  return getPolicyHandbook().map((clause) => {
     const text = clause.text.toLowerCase();
     let score = tokens.filter((t) => text.includes(t) || clause.id.toLowerCase().includes(t)).length * 0.14;
     if (cap.topic && clause.topic === cap.topic) score += 0.28;
@@ -222,6 +215,7 @@ function factsFromHits(hits: PolicyHit[]) {
 }
 
 export function runPolicyDesk(query: string, opts?: { persistTicket?: boolean }): PolicyDeskResult {
+  const settings = loadPolicySettings();
   const capability = classifyCapability(query);
 
   if (capability.cap === "abstain") {
@@ -233,10 +227,9 @@ export function runPolicyDesk(query: string, opts?: { persistTicket?: boolean })
       facts: [],
       ticket: null,
       markdown: [
-        `能力信封：**abstain（拒绝）** — ${capability.reason}`,
+        `已拒绝 — ${capability.reason}`,
         "",
-        "手册里没有这类事实，所以不检索、不生成、不调工具。",
-        "可以问年假、报销、加班抵假，或开通 VPN（只会起草工单）。",
+        settings.refuseMessage,
       ].join("\n"),
     };
   }
@@ -286,7 +279,7 @@ export function runPolicyDesk(query: string, opts?: { persistTicket?: boolean })
     };
   }
 
-  if (!citations.length) {
+  if (!citations.length && settings.requireCitation) {
     return {
       query,
       capability,
@@ -294,7 +287,7 @@ export function runPolicyDesk(query: string, opts?: { persistTicket?: boolean })
       citations: [],
       facts: [],
       ticket: null,
-      markdown: `能力信封：**read**，但没有带出处的句子，所以不生成答案。`,
+      markdown: `未找到可引用的制度条款。请在「回答规则 → 制度条款」补充内容，或调整关键词规则。`,
     };
   }
 

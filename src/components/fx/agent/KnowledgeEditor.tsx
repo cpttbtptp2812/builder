@@ -7,6 +7,7 @@ import {
   saveKnowledgeDoc,
   type KnowledgeDoc,
 } from "../../../lib/ownKnowledge";
+import { consumeGapDraft } from "../../../lib/knowledgeGapWizard";
 
 const API = import.meta.env.VITE_API_BASE ?? "http://localhost:8787";
 
@@ -70,6 +71,23 @@ export function KnowledgeEditor({ onChanged }: { onChanged?: () => void }) {
   }
 
   useEffect(() => { reload(); }, []);
+
+  useEffect(() => {
+    const applyDraft = () => {
+      const draft = consumeGapDraft();
+      if (!draft) return;
+      setImportMode("none");
+      setImportPreview(null);
+      setEditing({ id: "", title: draft.title, body: draft.body, prompts: draft.prompts, updatedAt: 0 });
+      setTitle(draft.title);
+      setBody(draft.body);
+      setPromptsText(draft.prompts.join("\n"));
+      flash(`已载入缺口草稿：${draft.reason}`);
+    };
+    applyDraft();
+    window.addEventListener("ownagent:gap-draft", applyDraft);
+    return () => window.removeEventListener("ownagent:gap-draft", applyDraft);
+  }, []);
 
   function flash(msg: string) {
     setToast(msg);

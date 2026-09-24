@@ -8,7 +8,7 @@ import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
 import { logChatSession, markQueryPublished } from "../../lib/analyticsLog";
-import { formatThreadAsPlaza, matchPlaza, publishPlaza } from "../../lib/plazaFeed";
+import { formatThreadAsPlaza, matchPlaza, publishPlaza, type PlazaItem } from "../../lib/plazaFeed";
 import { getSessionId } from "../../lib/sessionId";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
@@ -17,6 +17,8 @@ import { ArtifactPanel } from "./agent/ArtifactPanel";
 import { ResultLocator } from "./agent/ResultLocator";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
 import { explainDiscovery } from "../../lib/agentSkills";
+import { listFollowUpPrompts, listKnowledgePrompts, matchPresetQuery } from "../../lib/ownKnowledge";
+import { AGENT_QUICK_PROMPTS } from "../../lib/agentRuntime";
 import {
   loadOrchestrationMode,
   OwnSettingsSheet,
@@ -31,7 +33,7 @@ import {
 } from "../../lib/agentRuntime";
 import { isAuthError, runGuestAgentTurn, toolPreviewFromResult } from "../../lib/guestAgentRuntime";
 import { appendSessionTurn, clearSessionTurns } from "../../lib/agentMemory";
-import { isLlmConfigured, loadLlmConfig, type LlmConfig } from "../../lib/llmConfig";
+import { isLlmConfigured, loadLlmConfig, saveLlmConfig, type LlmConfig } from "../../lib/llmConfig";
 import { downloadText } from "../../lib/importedSkills";
 import { runMultiAgentAsync } from "../../lib/backendBridge";
 import type { MultiAgentStep } from "../../lib/multiAgentRuntime";
@@ -58,30 +60,53 @@ import { buildAnswerInsight } from "../../lib/answerInsight";
 import { normalizeFollowUps } from "../../lib/followUpPrompts";
 import { AnswerInsightBar } from "./agent/AnswerInsightBar";
 import { FollowUpRail } from "./agent/FollowUpRail";
+import { NeuralTraceStrip } from "./agent/NeuralTraceStrip";
 import { InputSuggestPopup } from "./agent/InputSuggestPopup";
 import { SessionStats } from "./agent/SessionStats";
+import { MessageMetaBar } from "./agent/MessageMetaBar";
 import { useVoiceInput } from "../../hooks/useVoiceInput";
 import { KnowledgeSources } from "./agent/KnowledgeSources";
 import { AnswerDNA } from "./agent/AnswerDNA";
 import { GapDetectionCard } from "./agent/GapDetectionCard";
+import { PlazaComposeRouter } from "./agent/PlazaComposeRouter";
+import { PlazaRouteCard } from "./agent/PlazaRouteCard";
+import { TurnReplayTheater } from "./agent/TurnReplayTheater";
+import { MultiAgentTraceCard } from "./agent/MultiAgentTraceCard";
+import { ChatQuickPrompts } from "./agent/ChatQuickPrompts";
+import { ComposeModelBar } from "./agent/ComposeModelBar";
+import { ReleaseInspectCard } from "./agent/ReleaseInspectCard";
+import { ReleaseInspectEntry } from "./agent/ReleaseInspectEntry";
+import {
+  parseReleaseInspectRequest,
+  releaseReportMarkdown,
+  runReleaseInspect,
+  type ReleaseInspectReport,
+} from "../../lib/releaseInspect";
+import { saveGapDraft } from "../../lib/knowledgeGapWizard";
 import { SessionInsight } from "./agent/SessionInsight";
 import { buildTurnArtifacts, synthesizeCompareTable, type ChatArtifact } from "../../lib/chatArtifacts";
 import {
   emptySession,
   loadSessionStore,
   persistSessionStore,
+  sessionToJson,
   sessionToMarkdown,
   upsertActive,
   type OwnChatMessage,
   type OwnSession,
+  type PlazaSourceView,
 } from "../../lib/ownagentSessions";
+import { activePromptLabel, getActiveSystemAddon } from "../../lib/agentPromptRuntime";
+import { evaluatePolicyGate } from "../../lib/policyGate";
 import { parseSlash, slashSuggestions } from "../../lib/slashCommands";
 import { OwnCommandPalette, type PaletteItem } from "../ownagent/OwnCommandPalette";
 import { getMcpTool } from "../../lib/mcpBridgeLab";
 import { useThreadScroll } from "../../hooks/useThreadScroll";
 
+let uidSeq = 0;
 function uid() {
-  return `m-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+  uidSeq += 1;
+  return `m-${Date.now().toString(36)}-${uidSeq.toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
 }
 
 type ToolChipState = NonNullable<OwnChatMessage["tools"]>[number];
@@ -89,6 +114,8 @@ type ToolChipState = NonNullable<OwnChatMessage["tools"]>[number];
 function toolLabel(name: string) {
   return getMcpTool(name)?.labelZh ?? name;
 }
+
+const sleep = (ms: number) => new Promise<void>((r) => window.setTimeout(r, ms));
 
 /** OwnAgent 对话 — UniAgent 布局 + 理论流水线 / HITL / 多代理 */
 function PublishToFeedButton({
@@ -135,10 +162,10 @@ function PublishToFeedButton({
   return (
     <div className="kf-publish-row">
       <button type="button" className="kf-publish-inline" disabled={state !== "idle" && state !== "err"} onClick={() => void publish("one")}>
-        {state === "one" ? "发布中…" : state === "err" ? "发布失败" : "发布本条问答"}
+        {state === "one" ? "发布中…" : state === "err" ? "发布失败" : "📤 发布本条问答"}
       </button>
       <button type="button" className="kf-publish-inline kf-publish-inline--all" disabled={state !== "idle" && state !== "err"} onClick={() => void publish("all")}>
-        {state === "all" ? "发布中…" : "发布整段对话"}
+        {state === "all" ? "发布中…" : "📋 发布整段对话"}
       </button>
     </div>
   );
@@ -156,6 +183,7 @@ export function AgentProductDemo({
   const rootRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const sendLockRef = useRef(false);
   const [footerHeight, setFooterHeight] = useState(120);
   const latestAnswerIdRef = useRef<string | null>(null);
 
@@ -187,12 +215,15 @@ export function AgentProductDemo({
   const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
   const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
   const [inspector, setInspector] = useState(false);
-  const [flowOpen, setFlowOpen] = useState(true);
+  const [flowOpen, setFlowOpen] = useState(() => !hubMode);
+  const [traceElapsed, setTraceElapsed] = useState(0);
   const [rightTab, setRightTab] = useState<"graph" | "trace" | "insight">("graph");
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pinned, setPinned] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [threadSearch, setThreadSearch] = useState("");
+  const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [resultFlash, setResultFlash] = useState(false);
 
   const { listening: voiceListening, supported: voiceSupported, start: voiceStart, stop: voiceStop } = useVoiceInput(
@@ -211,10 +242,35 @@ export function AgentProductDemo({
     scrollToMessage,
     onThreadScroll,
     stickRef,
-  } = useThreadScroll([messages.length, streamText, streamReasoning, liveTools.length, flowJournal, liveMulti, running, footerHeight]);
+  } = useThreadScroll([
+    messages.length,
+    streamText,
+    streamReasoning,
+    liveTools.length,
+    flowJournal.length,
+    liveMulti.length,
+    running,
+    footerHeight,
+  ]);
 
   const useLlm = isLlmConfigured(llmConfig);
   const emptyMessage = messages.length === 0 && !running;
+
+  const handleLlmChange = useCallback((cfg: LlmConfig) => {
+    saveLlmConfig(cfg);
+    setLlmConfig(cfg);
+    window.dispatchEvent(new CustomEvent("ownagent:config-updated"));
+  }, []);
+
+  useEffect(() => {
+    const syncConfig = () => {
+      setLlmConfig(loadLlmConfig());
+      setEnabledTools(loadEnabledMcpTools());
+      setOrchMode(loadOrchestrationMode());
+    };
+    window.addEventListener("ownagent:config-updated", syncConfig);
+    return () => window.removeEventListener("ownagent:config-updated", syncConfig);
+  }, []);
   const slashMenu = slashSuggestions(input);
 
   const railItems = useMemo(
@@ -232,7 +288,61 @@ export function AgentProductDemo({
   }, []);
 
   useEffect(() => {
+    if (!running || flowTurnStartedAt == null) {
+      setTraceElapsed((prev) => (prev === 0 ? prev : 0));
+      return;
+    }
+    const tick = window.setInterval(() => setTraceElapsed(Date.now() - flowTurnStartedAt), 120);
+    return () => clearInterval(tick);
+  }, [running, flowTurnStartedAt]);
+
+  const lastAsst = useMemo(
+    () => [...messages].reverse().find((m) => m.role === "assistant"),
+    [messages],
+  );
+  const lastAsstId = lastAsst?.id;
+
+  const [replayMsg, setReplayMsg] = useState<OwnChatMessage | null>(null);
+
+  /** 输入框上方快捷问句 — 资料库预制 + 站点能力演示 */
+  const quickPromptItems = useMemo(() => {
+    if (running) return [];
+    const seen = new Set<string>();
+    const push = (label: string, text: string, hint?: string) => {
+      const key = text.trim().toLowerCase();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      out.push({ label: label.trim(), text: text.trim(), hint });
+    };
+    const out: { label: string; text: string; hint?: string }[] = [];
+
+    if (emptyMessage) {
+      for (const p of listKnowledgePrompts(6)) push(p.label, p.text, p.hint);
+      for (const p of AGENT_QUICK_PROMPTS) push(p.label, p.text, "内置能力");
+      return out.slice(0, 8);
+    }
+
+    const fromLast = normalizeFollowUps(lastAsst?.followUps);
+    if (fromLast.length) {
+      for (const p of fromLast.slice(0, 4)) push(p.text, p.text, p.hint);
+      return out;
+    }
+    for (const t of listFollowUpPrompts(messages.map((m) => m.content), 5)) push(t, t);
+    return out.slice(0, 5);
+  }, [running, emptyMessage, lastAsst, messages, kbRev]);
+
+  const threadSearchNorm = threadSearch.trim().toLowerCase();
+  const threadMatchCount = useMemo(() => {
+    if (!threadSearchNorm) return 0;
+    return messages.filter((m) => m.content.toLowerCase().includes(threadSearchNorm)).length;
+  }, [messages, threadSearchNorm]);
+
+  useEffect(() => {
     setStore((prev) => {
+      const cur = prev.sessions.find((s) => s.id === prev.activeId);
+      if (cur && cur.messages === messages && cur.history === history) {
+        return prev;
+      }
       const next = upsertActive(prev, { messages, history });
       persistSessionStore(next);
       return next;
@@ -242,9 +352,13 @@ export function AgentProductDemo({
   useEffect(() => {
     const el = footerRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setFooterHeight(el.offsetHeight));
+    const sync = () => {
+      const h = el.offsetHeight;
+      setFooterHeight((prev) => (prev === h ? prev : h));
+    };
+    const ro = new ResizeObserver(sync);
     ro.observe(el);
-    setFooterHeight(el.offsetHeight);
+    sync();
     return () => ro.disconnect();
   }, []);
 
@@ -278,13 +392,20 @@ export function AgentProductDemo({
     async (text: string) => {
       const parsed = parseSlash(text);
       const q = parsed.query.trim();
-      if (!q || running) return;
+      if (!q || running || sendLockRef.current) return;
 
+      sendLockRef.current = true;
       abortRef.current?.abort();
       const ac = new AbortController();
       abortRef.current = ac;
 
-      const userMsg: OwnChatMessage = { id: uid(), role: "user", content: text.trim(), createdAt: Date.now() };
+      const inspectPreview = parseReleaseInspectRequest(q);
+      const userMsg: OwnChatMessage = {
+        id: uid(),
+        role: "user",
+        content: inspectPreview ? `巡检 ${inspectPreview.url}` : text.trim(),
+        createdAt: Date.now(),
+      };
       const assistantId = uid();
       const toolsAcc: ToolChipState[] = [];
       const t0 = performance.now();
@@ -309,8 +430,10 @@ export function AgentProductDemo({
       setMessages((prev) => [...prev, userMsg]);
       setInput("");
       setRunning(true);
-      setFlowOpen(true);
-      setRightTab("trace");
+      if (!hubMode) {
+        setFlowOpen(true);
+        setRightTab("trace");
+      }
       setTurnRuntime(undefined);
       setTurnRagRuntime(undefined);
       setResultFlash(false);
@@ -332,8 +455,11 @@ export function AgentProductDemo({
       let artifacts: ChatArtifact[] = [];
       let mode: OwnChatMessage["mode"] = useLlm ? "llm" : "guest";
       let plazaHit = false;
+      let plazaSourceLocal: PlazaSourceView | undefined;
       let turnRuntimeLocal: "server" | "local" | undefined;
       let turnRagRuntimeLocal: "server" | "local" | undefined;
+      let releaseInspectReport: ReleaseInspectReport | undefined;
+      let turnDone = false;
 
       const bindStreamJournal = (ev: AgentStreamEvent) => {
         if (ev.type === "reasoning-delta") {
@@ -370,6 +496,8 @@ export function AgentProductDemo({
       };
 
       const finish = (content: string, reasoning?: string) => {
+        if (turnDone) return;
+        turnDone = true;
         journalRef.current = finishFlowJournal(journalRef.current);
         if (content.trim()) {
           journalRef.current = setFlowEvidence(journalRef.current, "write", [
@@ -401,50 +529,68 @@ export function AgentProductDemo({
             ? merged.filter((a) => !(a.kind === "table" && a.id.startsWith("md-table-")))
             : merged;
         const asked = [...messages.map((m) => m.content), q, text.trim()];
-        const followUps = followUpsFor({
-          policyTrust,
-          route,
-          mode,
-          exclude: asked,
-          query: q,
-          flowJournal: journalRef.current,
-          limit: 3,
-        });
-        const answerInsight = buildAnswerInsight({
-          flowJournal: journalRef.current,
-          ms,
-          mode,
-          route,
-          toolCount: toolsAcc.length,
-          runtime: turnRuntimeLocal,
-          ragRuntime: turnRagRuntimeLocal,
-        });
+        const followUps = releaseInspectReport
+          ? []
+          : followUpsFor({
+              policyTrust,
+              route,
+              mode,
+              exclude: asked,
+              query: q,
+              flowJournal: journalRef.current,
+              limit: 3,
+            });
+        const passN = releaseInspectReport?.checks.filter((c) => c.status === "pass").length ?? 0;
+        const answerInsight = releaseInspectReport
+          ? {
+              groundedness:
+                releaseInspectReport.overall === "fail" ? 25 : releaseInspectReport.overall === "warn" ? 68 : 92,
+              hitCount: passN,
+              avgRelevance: releaseInspectReport.overall === "pass" ? 0.88 : 0.45,
+              ms,
+              mode: "guest" as const,
+              tags: ["发布前巡检", releaseInspectReport.pageTitle ?? "HTTP 探活"].slice(0, 2),
+            }
+          : buildAnswerInsight({
+              flowJournal: journalRef.current,
+              ms,
+              mode,
+              route,
+              toolCount: toolsAcc.length,
+              runtime: turnRuntimeLocal,
+              ragRuntime: turnRagRuntimeLocal,
+            });
         latestAnswerIdRef.current = assistantId;
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: assistantId,
-            role: "assistant",
-            createdAt: Date.now(),
-            content,
-            reasoning,
-            mode,
-            runtime: turnRuntimeLocal,
-            ragRuntime: turnRagRuntimeLocal,
-            tools: [...toolsAcc],
-            ms,
-            flowJournal: [...journalRef.current],
-            hitl,
-            multiAgent: multiSteps.length ? multiSteps : undefined,
-            workingSet,
-            policyTrust,
-            route,
-            inlineEval,
-            followUps,
-            answerInsight,
-            artifacts: deduped.length ? deduped : undefined,
-          },
-        ]);
+        setMessages((prev) => {
+          if (prev.some((m) => m.id === assistantId)) return prev;
+          return [
+            ...prev,
+            {
+              id: assistantId,
+              role: "assistant",
+              createdAt: Date.now(),
+              content,
+              reasoning,
+              mode,
+              runtime: turnRuntimeLocal,
+              ragRuntime: turnRagRuntimeLocal,
+              tools: [...toolsAcc],
+              ms,
+              flowJournal: [...journalRef.current],
+              hitl,
+              multiAgent: multiSteps.length ? multiSteps : undefined,
+              workingSet,
+              policyTrust,
+              route,
+              inlineEval,
+              followUps,
+              answerInsight,
+              artifacts: deduped.length ? deduped : undefined,
+              plazaSource: plazaSourceLocal,
+              releaseInspect: releaseInspectReport,
+            },
+          ];
+        });
         appendSessionTurn("user", q || text.trim());
         appendSessionTurn("assistant", content);
         void logChatSession({
@@ -456,32 +602,187 @@ export function AgentProductDemo({
           hitCount: answerInsight.hitCount,
           latencyMs: ms,
           mode: mode ?? "guest",
-          plazaHit,
+          plazaHit: mode === "plaza" || plazaHit,
         });
         onFlowActive?.("trace");
-        setRightTab("graph");  // 答完切回星图，感受知识增长
-        setResultFlash(true);
-        window.setTimeout(() => {
-          scrollToMessage(assistantId, true);
-          setResultFlash(false);
-        }, 48);
-        window.setTimeout(() => scrollToBottom(false), 320);
+        if (!hubMode) setRightTab("graph");
+        if (hubMode) {
+          window.requestAnimationFrame(() => scrollToBottom(false));
+        } else {
+          setResultFlash(true);
+          window.setTimeout(() => {
+            scrollToMessage(assistantId, true);
+            setResultFlash(false);
+          }, 48);
+          window.setTimeout(() => scrollToBottom(false), 320);
+        }
       };
 
       try {
         const cfg = await getRuntimeConfig();
+        const promptAddon = getActiveSystemAddon();
         jChip("read", q.length > 48 ? `${q.slice(0, 48)}…` : q);
+        if (promptAddon) jChip("read", `Prompt · ${activePromptLabel() ?? "模板"}`);
         jActivate("route");
+
+        if (parsed.matched?.id === "inspect" && !parseReleaseInspectRequest(q)) {
+          finish("请在 `/inspect` 后附上 URL，例如：`/inspect https://example.com`");
+          return;
+        }
+
+        const inspectReq = parseReleaseInspectRequest(q);
+        if (inspectReq && !parsed.evalKind && (!parsed.force || parsed.matched?.id === "inspect")) {
+          mode = "guest";
+          route = {
+            skillId: "release-inspector",
+            skillName: "发布前巡检",
+            score: 8,
+            hits: ["http_probe", inspectReq.url],
+            path: "skill",
+          };
+          jChip("route", `发布前巡检 · ${inspectReq.url}`);
+          jActivate("fetch");
+          toolsAcc.push({ id: "ri-probe", name: "http_probe", state: "loading" });
+          setLiveTools([...toolsAcc]);
+          try {
+            releaseInspectReport = await runReleaseInspect(inspectReq.url, inspectReq.query, {
+              snapshotRoot: rootRef.current,
+            });
+          } catch (err) {
+            finish(`巡检失败：${err instanceof Error ? err.message : "未知错误"}`);
+            return;
+          }
+          const httpCheck = releaseInspectReport.checks.find((c) => c.id === "http");
+          toolsAcc[0] = {
+            id: "ri-probe",
+            name: "http_probe",
+            state: httpCheck?.status === "fail" ? "error" : "ok",
+            ms: releaseInspectReport.ms,
+            preview: httpCheck?.detail.slice(0, 72),
+          };
+          toolsAcc.push({
+            id: "ri-knowledge",
+            name: "knowledge_search",
+            state: "ok",
+            preview: `${releaseInspectReport.knowledgeHits ?? 0} 条资料库命中`,
+          });
+          if (!releaseInspectReport.snapshotSkipped) {
+            const domCheck = releaseInspectReport.checks.find((c) => c.id === "dom");
+            toolsAcc.push({
+              id: "ri-snapshot",
+              name: "browser_snapshot",
+              state: domCheck?.status === "fail" ? "error" : "ok",
+              preview: domCheck?.detail.slice(0, 72),
+            });
+          }
+          setLiveTools([...toolsAcc]);
+          journalRef.current = setFlowEvidence(
+            journalRef.current,
+            "fetch",
+            releaseInspectReport.checks.map((c) => ({
+              id: c.id,
+              kind: "tool" as const,
+              title: c.label,
+              excerpt: c.detail,
+              meta: c.status === "pass" ? "通过" : c.status === "warn" ? "注意" : "失败",
+            })),
+          );
+          syncJournal();
+          jActivate("write");
+          const inspectMd = releaseReportMarkdown(releaseInspectReport);
+          setStreamText(inspectMd);
+          finish(inspectMd, "发布前巡检 · http_probe + 资料库对照");
+          return;
+        }
+
         if (!parsed.force && !parsed.evalKind) {
+          const gate = evaluatePolicyGate(q, { llmPath: useLlm });
+          if (gate) {
+            mode = "guest";
+            policyTrust = gate.policyTrust;
+            hitl = gate.hitl;
+            route = gate.route;
+            jChip("route", gate.route.skillName);
+            jActivate("write");
+            for (let i = 0; i < gate.markdown.length; i += 2) {
+              handleEvent({ type: "text-delta", text: gate.markdown.slice(i, i + 2) }, toolsAcc);
+              await sleep(8);
+            }
+            finish(gate.markdown, "回答规则 · 发送前拦截");
+            return;
+          }
+        }
+
+        if (!parsed.force && !parsed.evalKind) {
+          const preset = matchPresetQuery(q);
+          if (preset) {
+            mode = "guest";
+            route = {
+              skillId: "knowledge-preset",
+              skillName: preset.doc.title,
+              score: 10,
+              hits: [preset.doc.title],
+              path: "knowledge",
+            };
+            jChip("route", `知识库 · ${preset.doc.title}`);
+            jActivate("fetch");
+            journalRef.current = setFlowEvidence(journalRef.current, "fetch", [
+              {
+                id: preset.doc.id,
+                kind: "hit",
+                title: preset.doc.title,
+                excerpt: preset.doc.body.trim().slice(0, 240),
+                score: preset.score,
+                meta: "预设问句",
+              },
+            ]);
+            syncJournal();
+            jActivate("write");
+            for (let i = 0; i < preset.answer.length; i += 2) {
+              const chunk = preset.answer.slice(i, i + 2);
+              handleEvent({ type: "text-delta", text: chunk }, toolsAcc);
+              await sleep(8);
+            }
+            finish(preset.answer, "知识库 · 结构化答复");
+            return;
+          }
           const plazaMatch = await matchPlaza(q);
           if (plazaMatch && plazaMatch.score >= cfg.plaza.matchThreshold) {
             mode = "plaza";
             plazaHit = true;
-            jChip("route", `知识广场已有答案（匹配 ${plazaMatch.score}%）`);
+            plazaSourceLocal = {
+              itemId: plazaMatch.item.id,
+              question: plazaMatch.item.question,
+              author: plazaMatch.item.author,
+              matchScore: plazaMatch.score,
+            };
+            route = {
+              skillId: "plaza-first",
+              skillName: "广场优先路由",
+              score: Math.round(plazaMatch.score / 10),
+              hits: ["plaza-router", "skip-llm"],
+              path: "plaza",
+            };
+            jChip("route", `广场命中 ${plazaMatch.score}% · 跳过 LLM`);
+            jActivate("fetch");
+            journalRef.current = setFlowEvidence(journalRef.current, "fetch", [
+              {
+                id: `plaza-${plazaMatch.item.id}`,
+                kind: "hit",
+                title: plazaMatch.item.question.trim().slice(0, 80) || "知识广场",
+                excerpt: plazaMatch.item.answer.trim().slice(0, 240),
+                score: plazaMatch.score / 100,
+                meta: `广场 · ${plazaMatch.item.author}`,
+              },
+            ]);
+            syncJournal();
             jActivate("write");
-            const plazaText = `> 来自知识广场 · ${plazaMatch.item.author} · 未消耗 AI\n\n${plazaMatch.item.answer}`;
-            setStreamText(plazaText);
-            finish(plazaText, "知识广场优先命中");
+            const plazaText = plazaMatch.item.answer.trim();
+            for (let i = 0; i < plazaText.length; i += 2) {
+              handleEvent({ type: "text-delta", text: plazaText.slice(i, i + 2) }, toolsAcc);
+              await sleep(8);
+            }
+            finish(plazaText, "广场优先路由");
             return;
           }
           if (plazaMatch && plazaMatch.score >= cfg.plaza.hintThreshold) {
@@ -525,14 +826,20 @@ export function AgentProductDemo({
           setTurnRuntime(data.runtime);
           route = {
             skillId: "eval",
-            skillName: data.kind === "policy" ? "制度评测" : "路由评测",
+            skillName:
+              data.kind === "policy" ? "制度评测" : data.kind === "knowledge" ? "资料库评测" : "路由评测",
             score: 5,
             hits: ["/eval", data.kind],
             path: "eval",
           };
-          jChip("route", data.kind === "policy" ? "制度评测" : "路由评测");
+          jChip(
+            "route",
+            data.kind === "policy" ? "制度评测" : data.kind === "knowledge" ? "资料库评测" : "路由评测",
+          );
           jActivate("write");
-          const summary = `本轮${data.kind === "policy" ? "制度" : "路由"}评测准确率 **${data.accuracy}%**（${data.pass}/${data.total}）。`;
+          const evalLabel =
+            data.kind === "policy" ? "制度" : data.kind === "knowledge" ? "资料库命中" : "路由";
+          const summary = `本轮${evalLabel}评测准确率 **${data.accuracy}%**（${data.pass}/${data.total}）。`;
           setStreamText(summary);
           finish(summary, "对话内评测");
           return;
@@ -607,6 +914,7 @@ export function AgentProductDemo({
                 signal: ac.signal,
                 enabledTools,
                 memoryBlock: ws.memoryBlock,
+                promptAddon,
               },
               onEv,
             );
@@ -618,7 +926,7 @@ export function AgentProductDemo({
           } catch (err) {
             if ((err as Error).name === "AbortError") return;
             if (isAuthError(err)) {
-              finish("LLM Key 无效。请在「设置」关闭接入 LLM，继续使用内置 Agent。");
+              finish("LLM Key 无效。请在「接入配置」检查 API Key，或关闭 LLM 继续使用内置 Agent。");
               return;
             }
             throw err;
@@ -635,6 +943,7 @@ export function AgentProductDemo({
             history: historyRef.current,
             force: parsed.force,
             pinned: pinned || undefined,
+            promptAddon,
           },
           onEv,
         );
@@ -661,6 +970,7 @@ export function AgentProductDemo({
         if ((err as Error).name === "AbortError") return;
         finish(`请求失败：${err instanceof Error ? err.message : "未知错误"}`);
       } finally {
+        sendLockRef.current = false;
         setRunning(false);
         setStreamReasoning("");
         setStreamText("");
@@ -669,15 +979,109 @@ export function AgentProductDemo({
         setIteration(0);
       }
     },
-    [running, useLlm, llmConfig, enabledTools, handleEvent, onFlowActive, pinned, orchMode, scrollToBottom, scrollToMessage, stickRef],
+    [running, useLlm, llmConfig, enabledTools, handleEvent, onFlowActive, pinned, orchMode, hubMode, scrollToBottom, scrollToMessage, stickRef, messages],
   );
 
+  /** 广场优先 — 用户从输入区检索结果直接采用（跳过 LLM） */
+  const deliverPlazaAnswer = useCallback(
+    async (userText: string, item: PlazaItem) => {
+      const q = userText.trim() || item.question.trim();
+      if (!q || running) return;
+      const matched = await matchPlaza(q);
+      const score = matched?.item.id === item.id ? matched.score : 88;
+      const userMsg: OwnChatMessage = { id: uid(), role: "user", content: q, createdAt: Date.now() };
+      const assistantId = uid();
+      const t0 = performance.now();
+      let journal = createFlowJournal(q);
+      journal = activateFlowNode(journal, "route");
+      journal = addFlowChip(journal, "route", `广场命中 ${score}% · 跳过 LLM`);
+      journal = activateFlowNode(journal, "fetch");
+      journal = setFlowEvidence(journal, "fetch", [
+        {
+          id: `plaza-${item.id}`,
+          kind: "hit",
+          title: item.question.slice(0, 80),
+          excerpt: item.answer.slice(0, 240),
+          score: score / 100,
+          meta: `广场 · ${item.author}`,
+        },
+      ]);
+      journal = activateFlowNode(journal, "write");
+      const answer = item.answer.trim();
+      journal = finishFlowJournal(
+        setFlowEvidence(journal, "write", [
+          { id: "answer", kind: "stream", title: "采用广场答案", excerpt: answer.slice(0, 140), meta: `${answer.length} 字` },
+        ]),
+      );
+      const ms = Math.round(performance.now() - t0);
+      const plazaSource: PlazaSourceView = {
+        itemId: item.id,
+        question: item.question,
+        author: item.author,
+        matchScore: score,
+      };
+      const route: RouteScoreView = {
+        skillId: "plaza-first",
+        skillName: "广场优先路由",
+        score: Math.round(score / 10),
+        hits: ["plaza-router", "user-pick"],
+        path: "plaza",
+      };
+      const answerInsight = buildAnswerInsight({
+        flowJournal: journal,
+        ms,
+        mode: "plaza",
+        route,
+        toolCount: 0,
+      });
+      setInput("");
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          id: assistantId,
+          role: "assistant",
+          createdAt: Date.now(),
+          content: answer,
+          mode: "plaza",
+          ms,
+          flowJournal: journal,
+          route,
+          plazaSource,
+          answerInsight,
+          reasoning: "广场优先 · 用户采用",
+        },
+      ]);
+      appendSessionTurn("user", q);
+      appendSessionTurn("assistant", answer);
+      void logChatSession({
+        sessionId: getSessionId(),
+        query: q,
+        answerPreview: answer.slice(0, 200),
+        answerLength: answer.length,
+        groundedness: answerInsight.groundedness,
+        hitCount: answerInsight.hitCount,
+        latencyMs: ms,
+        mode: "plaza",
+        plazaHit: true,
+      });
+      latestAnswerIdRef.current = assistantId;
+      scrollToBottom(false);
+    },
+    [running, scrollToBottom],
+  );
+
+  const pendingAskRef = useRef(false);
+  const sendRef = useRef(send);
+  sendRef.current = send;
   useEffect(() => {
+    if (pendingAskRef.current) return;
     const pending = sessionStorage.getItem("oa-pending-ask");
     if (!pending) return;
+    pendingAskRef.current = true;
     sessionStorage.removeItem("oa-pending-ask");
-    void send(pending);
-  }, [send]);
+    void sendRef.current(pending);
+  }, []);
 
   function stop() {
     abortRef.current?.abort();
@@ -746,9 +1150,19 @@ export function AgentProductDemo({
     }
   }
 
-  function exportActive() {
+  function exportActive(fmt: "md" | "json" = "md") {
     const session = { ...active, messages, history };
-    downloadText(`${session.title || "ownagent"}.md`, sessionToMarkdown(session));
+    const base = session.title || "ownagent";
+    if (fmt === "json") {
+      downloadText(`${base}.json`, sessionToJson(session));
+    } else {
+      downloadText(`${base}.md`, sessionToMarkdown(session));
+    }
+  }
+
+  function openSourcesPanel() {
+    setFlowOpen(true);
+    setRightTab("graph");
   }
 
   useEffect(() => {
@@ -787,8 +1201,15 @@ export function AgentProductDemo({
   const paletteItems: PaletteItem[] = useMemo(() => {
     return [
       { id: "new", group: "会话", label: "新对话", kbd: "⌘N", run: newChat },
-      { id: "settings", group: "会话", label: "运行设置", kbd: "⌘,", run: () => setSettingsOpen(true) },
-      { id: "export", group: "会话", label: "导出 Markdown", run: exportActive },
+      {
+        id: "connect",
+        group: "会话",
+        label: "接入配置（模型 / MCP）",
+        kbd: "⌘,",
+        run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "connect" } })),
+      },
+      { id: "export", group: "会话", label: "导出 Markdown", run: () => exportActive("md") },
+      { id: "export-json", group: "会话", label: "导出 JSON", run: () => exportActive("json") },
       { id: "retry", group: "会话", label: "重试上一问", run: retryLast },
       { id: "eval", group: "编排", label: "对话内评测 /eval", run: () => void send("/eval") },
       {
@@ -798,9 +1219,18 @@ export function AgentProductDemo({
         run: () => setOrchMode((m) => (m === "multi" ? "single" : "multi")),
       },
       { id: "inspector", group: "视图", label: inspector ? "收起运行详情" : "打开运行详情", kbd: "⌘I", run: () => setInspector((o) => !o) },
-      { id: "skills", group: "视图", label: "技能", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "skills" } })) },
-      { id: "rag", group: "视图", label: "知识", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } })) },
-      { id: "theory", group: "视图", label: "理论 / 能力全景", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { tab: "theory" } })) },
+      { id: "chat", group: "视图", label: "问 AI", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "chat" } })) },
+      { id: "feed", group: "视图", label: "知识广场", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } })) },
+      { id: "rag", group: "视图", label: "资料库", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } })) },
+      { id: "guide", group: "视图", label: "新手指南", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "guide" } })) },
+      { id: "eval-panel", group: "视图", label: "回答质检", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "eval" } })) },
+      { id: "connect-panel", group: "视图", label: "接入配置", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "connect" } })) },
+      { id: "theory", group: "视图", label: "理论 / Flow 编排", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { tab: "theory" } })) },
+      { id: "skills", group: "开发者", label: "技能扩展", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "skills" } })) },
+      { id: "trace", group: "开发者", label: "处理过程", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "trace" } })) },
+      { id: "jd", group: "开发者", label: "能力图谱", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "jd" } })) },
+      { id: "mcp", group: "开发者", label: "工具沙箱", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "mcp" } })) },
+      { id: "prompts", group: "开发者", label: "Prompt 模板", run: () => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "prompts" } })) },
       ...store.sessions.slice(0, 8).map((s) => ({
         id: `sess-${s.id}`,
         group: "最近会话",
@@ -814,7 +1244,6 @@ export function AgentProductDemo({
   const toolCount = traces.reduce((n, t) => n + t.tools.length, 0);
   const modeHint = useLlm ? llmConfig.model : "本地运行";
 
-  const lastAsst = useMemo(() => [...messages].reverse().find((m) => m.role === "assistant"), [messages]);
   const displayJournal = useMemo(() => {
     const raw =
       running && flowJournal.length
@@ -851,17 +1280,17 @@ export function AgentProductDemo({
           </div>
         </div>
 
-        {/* 中：状态胶囊 */}
-        <div className={`ua-status-pill-pro${running ? " running" : ""}`}>
-          <span className="ua-status-dot-pro" aria-hidden />
-          <span>{running ? "AI 处理中" : "就绪"}</span>
-        </div>
+        {!hubMode && (
+          <div className={`ua-status-pill-pro${running ? " running" : ""}`}>
+            <span className="ua-status-dot-pro" aria-hidden />
+            <span>{running ? "AI 处理中" : "就绪"}</span>
+          </div>
+        )}
 
-        {/* 会话统计 */}
-        <SessionStats messages={messages} />
+        {!hubMode && <SessionStats messages={messages} />}
 
-        {/* 实时检索脉冲 */}
-        {running && (() => {
+        {/* 实时检索脉冲 — 客户模式隐藏 */}
+        {!hubMode && running && (() => {
           const liveHits = displayJournal
             .flatMap((n) => n.evidence ?? [])
             .filter((e) => e.kind === "hit").length;
@@ -894,37 +1323,80 @@ export function AgentProductDemo({
             title={flowOpen ? "收起思考过程" : "打开思考过程"}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M2 7h7M2 10.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><circle cx="11.5" cy="7" r="1.4" fill="currentColor"/></svg>
-            <span>轨迹</span>
+            <span>{hubMode ? "来源" : "轨迹"}</span>
           </button>
-          <button
-            type="button"
-            className={`ua-topbar-btn-pro${inspector ? " active" : ""}`}
-            onClick={() => setInspector((o) => !o)}
-            title="运行记录"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="12" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="7" width="8" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="10" width="10" height="1.4" rx="0.7" fill="currentColor"/></svg>
-            <span>记录</span>
-          </button>
+          {!hubMode && (
+            <button
+              type="button"
+              className={`ua-topbar-btn-pro${inspector ? " active" : ""}`}
+              onClick={() => setInspector((o) => !o)}
+              title="运行记录"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="12" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="7" width="8" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="10" width="10" height="1.4" rx="0.7" fill="currentColor"/></svg>
+              <span>记录</span>
+            </button>
+          )}
+          {hubMode && (
+            <button
+              type="button"
+              className={`ua-topbar-btn-pro${inspector ? " active" : ""}`}
+              onClick={() => setInspector((o) => !o)}
+              title="运行详情"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="12" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="7" width="8" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="10" width="10" height="1.4" rx="0.7" fill="currentColor"/></svg>
+              <span>详情</span>
+            </button>
+          )}
+          {!hubMode && (
+            <button
+              type="button"
+              className="ua-topbar-btn-pro"
+              onClick={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
+              title="知识库"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h4v10H2zM8 2h4v10H8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>
+              <span>知识库</span>
+            </button>
+          )}
+          {hubMode && (
+            <button
+              type="button"
+              className={`ua-topbar-btn-pro${threadSearchOpen ? " active" : ""}`}
+              onClick={() => setThreadSearchOpen((o) => !o)}
+              title="搜索对话"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="6.2" cy="6.2" r="4.2" stroke="currentColor" strokeWidth="1.4"/><path d="M9.5 9.5L12.5 12.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
+              <span>搜索</span>
+            </button>
+          )}
           <button
             type="button"
             className="ua-topbar-btn-pro"
-            onClick={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
-            title="知识库"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h4v10H2zM8 2h4v10H8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>
-            <span>知识库</span>
-          </button>
-          <button
-            type="button"
-            className="ua-topbar-btn-pro"
-            onClick={() => { setSettingsTab("runtime"); setSettingsOpen(true); }}
-            title="设置"
+            onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "connect" } }))}
+            title="接入配置"
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.4"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.93 2.93l1.06 1.06M10.01 10.01l1.06 1.06M2.93 11.07l1.06-1.06M10.01 3.99l1.06-1.06" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>
-            <span>设置</span>
+            <span>接入</span>
           </button>
         </div>
       </header>
+
+      {threadSearchOpen && (
+        <div className="ua-thread-search-bar">
+          <input
+            value={threadSearch}
+            onChange={(e) => setThreadSearch(e.target.value)}
+            placeholder="搜索当前对话…"
+            autoFocus
+          />
+          {threadSearchNorm && (
+            <span className="ua-thread-search-count">{threadMatchCount} 条匹配</span>
+          )}
+          <button type="button" onClick={() => { setThreadSearch(""); setThreadSearchOpen(false); }} aria-label="关闭">
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="ua-body">
         <div className={`ua-chat${emptyMessage ? " empty" : ""}`}>
@@ -932,17 +1404,21 @@ export function AgentProductDemo({
             <div
               ref={threadRef}
               className="ua-thread"
-              style={{ paddingBottom: Math.max(footerHeight + 28, 140) }}
+              style={{ paddingBottom: Math.max(footerHeight + (hubMode ? 24 : 28), hubMode ? 128 : 140) }}
               onScroll={onThreadScroll}
             >
               <div ref={contentRef} className="ua-thread-content">
-              {messages.map((m, idx) => (
+              {messages
+                .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i)
+                .map((m, idx) => (
                 <div
                   key={m.id}
                   data-msg-id={m.id}
                   className={`ua-row group/message ${m.role}${focusId === m.id ? " focus-result" : ""}${
                     m.id === latestAnswerIdRef.current && resultFlash ? " result-flash" : ""
-                  }${highlightTerm && m.id === latestAnswerIdRef.current ? " citation-pulse" : ""}`}
+                  }${highlightTerm && m.id === latestAnswerIdRef.current ? " citation-pulse" : ""}${
+                    threadSearchNorm && m.content.toLowerCase().includes(threadSearchNorm) ? " search-hit" : ""
+                  }${threadSearchNorm && !m.content.toLowerCase().includes(threadSearchNorm) ? " search-dim" : ""}`}
                 >
                   {m.role === "assistant" ? (
                     <div className="ua-avatar ua-avatar-agent" aria-hidden>
@@ -956,24 +1432,77 @@ export function AgentProductDemo({
                     {m.role === "user" ? (
                       <UserMessageBubble text={m.content} />
                     ) : (
-                      <div className="ua-bubble assistant ua-prose">
-                        <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
-                      </div>
+                      <>
+                        {m.plazaSource && (
+                          <PlazaRouteCard
+                            source={m.plazaSource}
+                            onOpenPlaza={() =>
+                              window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))
+                            }
+                          />
+                        )}
+                        {m.releaseInspect && (
+                          <ReleaseInspectCard report={m.releaseInspect} compact={hubMode} />
+                        )}
+                        {m.multiAgent && m.multiAgent.length > 0 && (
+                          <MultiAgentTraceCard steps={m.multiAgent} />
+                        )}
+                        {m.releaseInspect ? (
+                          <details className="release-inspect-md-extra">
+                            <summary>Markdown 详情</summary>
+                            <div className="ua-bubble assistant ua-prose">
+                              <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
+                            </div>
+                          </details>
+                        ) : (
+                          <div className="ua-bubble assistant ua-prose">
+                            <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
+                          </div>
+                        )}
+                      </>
                     )}
-                    {m.role === "assistant" && m.flowJournal && m.flowJournal.length > 0 && (
+                    {(!hubMode || inspector) && m.role === "assistant" && m.flowJournal && m.flowJournal.length > 0 && (
                       <AnswerDNA flowJournal={m.flowJournal} />
                     )}
-                    {m.role === "assistant" && m.answerInsight && (
-                      <AnswerInsightBar insight={m.answerInsight} />
-                    )}
-                    {m.role === "assistant" && m.answerInsight && (
+                    {hubMode && m.role === "assistant" ? (
+                      <MessageMetaBar
+                        insight={m.answerInsight}
+                        tools={m.tools?.map((t) => ({ ...t, name: toolLabel(t.name) }))}
+                        message={m}
+                        onOpenSources={openSourcesPanel}
+                        onReplay={
+                          m.flowJournal?.length
+                            ? () => setReplayMsg(m)
+                            : undefined
+                        }
+                      />
+                    ) : m.role === "assistant" && m.answerInsight ? (
+                      <AnswerInsightBar insight={m.answerInsight} compact={false} />
+                    ) : null}
+                    {m.role === "assistant" &&
+                      m.answerInsight &&
+                      !m.releaseInspect &&
+                      m.route?.skillId !== "release-inspector" &&
+                      (m.answerInsight.groundedness < 65 || m.answerInsight.hitCount === 0) && (
                       <GapDetectionCard
                         insight={m.answerInsight}
                         flowJournal={m.flowJournal}
-                        onFillGap={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
+                        onFillGap={() => {
+                          const userQ = messages.slice(0, idx).reverse().find((x) => x.role === "user")?.content;
+                          if (userQ) {
+                            saveGapDraft({
+                              title: `补充：${userQ.slice(0, 28)}`,
+                              body: `针对「${userQ}」目前知识库依据不足，请在此补充正文：\n\n`,
+                              prompts: [userQ],
+                              reason: "对话 Gap 检测触发",
+                              source: "gap",
+                            });
+                          }
+                          window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } }));
+                        }}
                       />
                     )}
-                    {m.role === "assistant" && !running && (() => {
+                    {!hubMode && m.role === "assistant" && !running && idx === messages.length - 1 && (() => {
                       const userMsg = messages.slice(0, idx).reverse().find(x => x.role === "user");
                       if (!userMsg) return null;
                       return (
@@ -984,17 +1513,21 @@ export function AgentProductDemo({
                         />
                       );
                     })()}
-                    {m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
+                    {(!hubMode || inspector) && m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
                       <ArtifactPanel artifacts={m.artifacts} />
                     )}
-                    {m.role === "assistant" && m.policyTrust && <PolicyTrustCard trust={m.policyTrust} />}
+                    {m.role === "assistant" && m.policyTrust && (
+                      <PolicyTrustCard trust={m.policyTrust} />
+                    )}
                     {m.role === "assistant" && m.hitl && (
                       <HitlTicketCard
                         ticket={m.hitl}
                         onUpdate={(ticket, note) => updateHitl(m.id, ticket, note)}
                       />
                     )}
-                    {inspector && m.role === "assistant" && m.inlineEval && <InlineEvalCard eval={m.inlineEval} />}
+                    {(hubMode || inspector) && m.role === "assistant" && m.inlineEval && (
+                      <InlineEvalCard eval={m.inlineEval} />
+                    )}
                     {inspector && m.role === "assistant" && m.tools && m.tools.length > 0 && (
                       <div className="ua-tools">
                         {m.tools.map((t) => (
@@ -1009,7 +1542,7 @@ export function AgentProductDemo({
                     {inspector && m.role === "assistant" && m.reasoning && (
                       <AgentReasoningBlock text={m.reasoning} thinking={false} defaultOpen={false} />
                     )}
-                    {m.role === "assistant" && (() => {
+                    {!hubMode && m.role === "assistant" && idx === messages.length - 1 && (() => {
                       const prompts = normalizeFollowUps(m.followUps);
                       if (!prompts.length && m.content) {
                         const priorUser = messages.slice(0, idx).filter((x) => x.role === "user").map((x) => x.content);
@@ -1060,7 +1593,14 @@ export function AgentProductDemo({
                     OA
                   </div>
                   <div className="ua-bubble-wrap">
-                    {liveTools.length > 0 && (
+                    {hubMode && (
+                      <MessageMetaBar
+                        live
+                        reserve
+                        tools={liveTools.map((t) => ({ ...t, name: toolLabel(t.name) }))}
+                      />
+                    )}
+                    {(!hubMode || inspector) && liveTools.length > 0 && (
                       <div className="ua-tools ua-tools-live">
                         {liveTools.map((t) => (
                           <AgentToolChip key={t.id} sticky tool={{ ...t, name: toolLabel(t.name) }} />
@@ -1087,13 +1627,13 @@ export function AgentProductDemo({
             <div className="ua-empty" style={{ paddingBottom: Math.max(footerHeight + 16, 120) }}>
               <AgentWelcome
                 kbRev={kbRev}
+                hidePrompts={hubMode}
                 onPrompt={(t) => void send(t)}
                 disabled={running}
                 onOpenPlaza={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
-                onOpenKnowledge={() => {
-                  setSettingsTab("knowledge");
-                  setSettingsOpen(true);
-                }}
+                onOpenKnowledge={() =>
+                  window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } }))
+                }
               />
             </div>
           )}
@@ -1117,7 +1657,10 @@ export function AgentProductDemo({
                 </button>
               </div>
             )}
-            {slashMenu.length > 0 && (
+            {hubMode && running && displayJournal.length > 0 && (
+              <NeuralTraceStrip journal={displayJournal} running elapsedMs={traceElapsed} />
+            )}
+            {!hubMode && slashMenu.length > 0 && (
               <ul className="ua-slash">
                 {slashMenu.map((s) => (
                   <li key={s.token}>
@@ -1129,6 +1672,33 @@ export function AgentProductDemo({
                 ))}
               </ul>
             )}
+            <div className={`ua-compose-dock${hubMode ? " hub" : ""}`}>
+              {!running && (
+                <ReleaseInspectEntry
+                  compact={hubMode}
+                  disabled={running}
+                  onInspect={(url) => {
+                    const clean = url.replace(/^\/inspect\s+/gi, "").trim();
+                    if (clean) void send(`/inspect ${clean}`);
+                  }}
+                />
+              )}
+              {hubMode && !running && quickPromptItems.length > 0 && (
+                <ChatQuickPrompts
+                  label={emptyMessage ? "试试这样问" : "继续问"}
+                  items={quickPromptItems}
+                  disabled={running}
+                  onPick={(t) => void send(t)}
+                />
+              )}
+              {hubMode && input.trim().length >= 2 && (
+                <PlazaComposeRouter
+                  input={input}
+                  running={running}
+                  onUsePlaza={(item) => void deliverPlazaAnswer(input, item)}
+                />
+              )}
+
             <div className="ua-compose-wrap">
               <InputSuggestPopup
                 input={input}
@@ -1145,30 +1715,39 @@ export function AgentProductDemo({
                   void send(input);
                 }}
               >
-                {/* 能力标签行 */}
-                <div className="ua-compose-caps">
-                  <button
-                    type="button"
-                    className="ua-compose-cap ua-compose-cap--plaza"
-                    onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
-                  >
-                    知识广场
-                  </button>
-                  <span className="ua-compose-cap">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5l1.5 1.5L7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                    Hybrid RAG
-                  </span>
-                  <span className="ua-compose-cap">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 9L5 1l4 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 6.5h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                    Neural Trace
-                  </span>
-                  <span className="ua-compose-cap">
-                    <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="5.5" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 5h1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                    多智能体
-                  </span>
-                  <span className="ua-compose-cap-dot" aria-hidden />
-                  <span className="ua-compose-mode-hint">{modeHint}</span>
-                </div>
+                {hubMode && (
+                  <ComposeModelBar
+                    config={llmConfig}
+                    onChange={handleLlmChange}
+                    orchMode={orchMode}
+                    onOrchChange={setOrchMode}
+                  />
+                )}
+                {!hubMode && (
+                  <div className="ua-compose-caps">
+                    <button
+                      type="button"
+                      className="ua-compose-cap ua-compose-cap--plaza"
+                      onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
+                    >
+                      知识广场
+                    </button>
+                    <span className="ua-compose-cap">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5l1.5 1.5L7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                      Hybrid RAG
+                    </span>
+                    <span className="ua-compose-cap">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 9L5 1l4 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 6.5h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                      Neural Trace
+                    </span>
+                    <span className="ua-compose-cap">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="5.5" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 5h1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
+                      多智能体
+                    </span>
+                    <span className="ua-compose-cap-dot" aria-hidden />
+                    <span className="ua-compose-mode-hint">{modeHint}</span>
+                  </div>
+                )}
 
                 {/* 文本区 */}
                 <textarea
@@ -1187,15 +1766,17 @@ export function AgentProductDemo({
                   }}
                   onFocus={() => setComposeFocused(true)}
                   onBlur={() => window.setTimeout(() => setComposeFocused(false), 180)}
-                  placeholder={voiceListening ? "🎤 正在聆听…" : "先搜广场，没有再问：例如「产品怎么收费」"}
+                  placeholder={voiceListening ? "🎤 正在聆听…" : "输入问题，Enter 发送"}
                   disabled={running}
                 />
 
-                {/* 操作行 */}
                 <div className="ua-compose-bar-pro">
-                  <span className="ua-compose-hint-pro">
-                    ⏎ Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
-                  </span>
+                  {!hubMode && (
+                    <span className="ua-compose-hint-pro">
+                      ⏎ Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
+                    </span>
+                  )}
+                  {hubMode && <span className="ua-compose-hint-pro" />}
                   {input.length > 0 && (
                     <span className="ua-char-count">{input.length}</span>
                   )}
@@ -1234,6 +1815,7 @@ export function AgentProductDemo({
                   </button>
                 </div>
               </form>
+            </div>
             </div>
           </div>
         </div>
@@ -1346,6 +1928,21 @@ export function AgentProductDemo({
       />
 
       <OwnCommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
+
+      {replayMsg?.flowJournal && (
+        <TurnReplayTheater
+          query={
+            (() => {
+              const idx = messages.findIndex((m) => m.id === replayMsg.id);
+              const user = messages.slice(0, idx).reverse().find((m) => m.role === "user");
+              return user?.content ?? "本轮对话";
+            })()
+          }
+          journal={replayMsg.flowJournal}
+          totalMs={replayMsg.ms}
+          onClose={() => setReplayMsg(null)}
+        />
+      )}
     </div>
   );
 }

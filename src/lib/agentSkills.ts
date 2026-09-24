@@ -4,6 +4,7 @@ import { loadImportedSkills } from "./importedSkills";
 import { mcpServer } from "./mcpServer";
 import { runPolicyDesk } from "./policyDesk";
 import { hydrateSkill, resolveStepArgs, skillIdFromPath, type SkillManifest } from "./skillMarkdown";
+import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
 
 export type SkillStep = {
   id: string;
@@ -51,6 +52,7 @@ const PROBE_URL =
     : "/index.html";
 
 const SKILL_ORDER = [
+  "release-inspector",
   "site-analyzer",
   "dom-probe",
   "workflow-orchestrator",
@@ -97,6 +99,7 @@ export function allRunnableSkills(): AgentSkill[] {
 export const SKILL_ROUTER_DOC = SKILL_CATALOG.find((s) => s.id === "skill-router")?.manifest ?? "";
 
 export const ROUTER_EXAMPLES = [
+  { label: "发布前巡检", query: "/inspect https://example.com 能否上线" },
   { label: "站点性能审计", query: "分析本站性能和探活 metrics" },
   { label: "DOM 定位探针", query: "dom snapshot 元素定位 a11y" },
   { label: "自动化 workflow", query: "执行 workflow 自动化回放流程" },
@@ -193,6 +196,27 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
   switch (name) {
     case "__perf_metrics__":
       return { content: collectPerfMetrics() };
+
+    case "__compose_release_report__": {
+      const probe = args.probe as Record<string, unknown>;
+      const targetUrl = String(args.targetUrl ?? probe?.url ?? PROBE_URL);
+      const snapshot = args.snapshot as Record<string, unknown> | null | undefined;
+      const skipped = !isSameOriginUrl(targetUrl);
+      const report = composeReleaseReport({
+        targetUrl,
+        probe,
+        snapshot: skipped ? null : snapshot,
+        snapshotSkipped: skipped,
+        knowledgeQuery: String(args.query ?? targetUrl),
+      });
+      return {
+        content: {
+          dashboard: { releaseInspect: report },
+          markdown: releaseReportMarkdown(report),
+          meta: { skill: "release-inspector", ts: Date.now() },
+        },
+      };
+    }
 
     case "__compose_site_audit__": {
       const probe = args.probe as ProbeResult;
@@ -311,18 +335,23 @@ export async function runSkill(
   skill: AgentSkill,
   query: string,
   onStep?: (step: SkillTraceStep) => void,
-  opts?: { snapshotRoot?: Element | null; onStepStart?: (step: SkillStep) => void },
+  opts?: {
+    snapshotRoot?: Element | null;
+    onStepStart?: (step: SkillStep) => void;
+    probeUrl?: string;
+  },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
   const ctx: SkillRunContext = { query, skillId: skill.id, vars: {} };
   const trace: SkillTraceStep[] = [];
   let lastResult: unknown = null;
   const snapRoot = opts?.snapshotRoot ?? null;
+  const probeUrl = opts?.probeUrl ?? PROBE_URL;
 
   for (const step of skill.steps) {
     opts?.onStepStart?.(step);
     const t0 = performance.now();
     const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
-    const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl: PROBE_URL, vars: ctx.vars });
+    const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
 
     const out = step.tool.startsWith("__")
       ? await runInternalTool(step.tool, args)

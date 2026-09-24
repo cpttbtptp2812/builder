@@ -141,6 +141,49 @@ function normPrompt(s: string) {
   return s.trim().toLowerCase();
 }
 
+function formatPresetDocAnswer(doc: KnowledgeDoc, query: string): string {
+  const lines = [`## ${doc.title}`, "", doc.body.trim()];
+  if (/怎么|如何|怎样/.test(query)) {
+    lines.unshift(`针对「${query.trim()}」，说明如下：`, "");
+  }
+  return lines.join("\n");
+}
+
+export type PresetMatch = {
+  doc: KnowledgeDoc;
+  answer: string;
+  score: number;
+};
+
+export function matchPresetQuery(query: string): PresetMatch | null {
+  const q = normPrompt(query);
+  if (!q) return null;
+
+  for (const doc of listKnowledgeDocs()) {
+    if (!doc.body.trim()) continue;
+    for (const raw of doc.prompts) {
+      const p = normPrompt(raw);
+      if (!p) continue;
+      if (p === q || q === normPrompt(doc.title)) {
+        return { doc, answer: formatPresetDocAnswer(doc, query), score: 1 };
+      }
+    }
+  }
+
+  for (const doc of listKnowledgeDocs()) {
+    if (!doc.body.trim()) continue;
+    for (const raw of doc.prompts) {
+      const p = normPrompt(raw);
+      if (!p || p.length < 4) continue;
+      if (q.includes(p) || p.includes(q)) {
+        return { doc, answer: formatPresetDocAnswer(doc, query), score: 0.88 };
+      }
+    }
+  }
+
+  return null;
+}
+
 /** 只推有正文的知识条目；欢迎页每条目取首个示例问句，保证都能命中 */
 export function listKnowledgePrompts(limit = 4): { label: string; text: string; hint: string; docId: string }[] {
   const out: { label: string; text: string; hint: string; docId: string }[] = [];

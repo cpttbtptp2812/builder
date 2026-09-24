@@ -8,6 +8,7 @@ import { ragHitsForMcp } from "./rag.ts";
 import { runPolicyDesk, searchPolicy, draftTicket, commitTicket } from "../src/lib/policyDesk.ts";
 import { hydrateSkill, resolveStepArgs, type SkillManifest } from "../src/lib/skillMarkdown.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
+import { buildProbeBodyFromHtml, readProbeHtml } from "../src/lib/htmlProbeMeta.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "src", "skills");
@@ -86,17 +87,39 @@ export function explainDiscovery(query: string) {
   return AGENT_SKILLS.map((s) => scoreSkill(s, q)).sort((a, b) => b.score - a.score);
 }
 
-async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
+export async function probeHttpTool(url: string, method: "GET" | "HEAD" = "GET") {
   const t0 = performance.now();
   try {
-    const res = await fetch(url, { method, cache: "no-store" });
+    const res = await fetch(url, {
+      method,
+      cache: "no-store",
+      redirect: "follow",
+      signal: AbortSignal.timeout(30_000),
+    });
+    const latencyMs = Math.round(performance.now() - t0);
+    const contentType = res.headers.get("content-type");
+    let body: unknown = null;
+    if (method === "GET") {
+      if (contentType?.includes("json")) {
+        try {
+          body = await res.json();
+        } catch {
+          body = null;
+        }
+      } else {
+        const text = await readProbeHtml(res);
+        body = buildProbeBodyFromHtml(text);
+      }
+    }
     return {
       url,
       method,
       status: res.status,
       ok: res.ok,
-      latencyMs: Math.round(performance.now() - t0),
-      contentType: res.headers.get("content-type"),
+      latencyMs,
+      contentType,
+      body,
+      via: "server" as const,
     };
   } catch (err) {
     return {
@@ -105,8 +128,13 @@ async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
       ok: false,
       latencyMs: Math.round(performance.now() - t0),
       error: err instanceof Error ? err.message : "fetch failed",
+      via: "server" as const,
     };
   }
+}
+
+async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
+  return probeHttpTool(url, method);
 }
 
 function analyzeDomTree(snapshot: { nodes?: { role: string }[]; nodeCount?: number } | undefined) {

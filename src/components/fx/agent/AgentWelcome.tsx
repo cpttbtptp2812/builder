@@ -86,12 +86,14 @@ export function AgentWelcome({
   onOpenKnowledge,
   onOpenPlaza,
   kbRev = 0,
+  hidePrompts = false,
 }: {
   onPrompt: (text: string) => void;
   disabled?: boolean;
   onOpenKnowledge?: () => void;
   onOpenPlaza?: () => void;
   kbRev?: number;
+  hidePrompts?: boolean;
 }) {
   const prompts = useMemo(() => listKnowledgePrompts(4), [kbRev]);
   const docs = useMemo(() => listKnowledgeDocs(), [kbRev]);
@@ -318,7 +320,7 @@ export function AgentWelcome({
       )}
 
       {/* ── Suggested prompts ── */}
-      {prompts.length > 0 && (
+      {!hidePrompts && prompts.length > 0 && (
         <div className="aw-prompts">
           <span className="aw-prompts-label">试试这样问</span>
           <div className="aw-prompts-list">

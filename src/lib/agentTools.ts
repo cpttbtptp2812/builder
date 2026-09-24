@@ -64,7 +64,11 @@ export async function executeAgentTool(
   };
 }
 
-export function buildAgentSystemPrompt(opts?: { memoryBlock?: string; enabledTools?: string[] }): string {
+export function buildAgentSystemPrompt(opts?: {
+  memoryBlock?: string;
+  enabledTools?: string[];
+  promptAddon?: string;
+}): string {
   const probeUrl =
     typeof window !== "undefined"
       ? `${window.location.origin}${import.meta.env.BASE_URL}index.html`
@@ -93,6 +97,7 @@ export function buildAgentSystemPrompt(opts?: { memoryBlock?: string; enabledToo
     "发布前检查：先 http_probe，再 knowledge_search，必要时 browser_snapshot。",
     "回答简洁专业，中文为主。工具失败时说明原因并给建议。",
     opts?.memoryBlock ? `\n【工作集 / 记忆】\n${opts.memoryBlock}` : "",
+    opts?.promptAddon ? `\n${opts.promptAddon}` : "",
   ]
     .filter(Boolean)
     .join("\n");
