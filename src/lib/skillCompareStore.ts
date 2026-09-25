@@ -3,6 +3,22 @@
 import { bumpSkillMinor, compareSkillVersion, INITIAL_SKILL_VERSION } from "./skillVersion";
 
 export const SKILL_PUBLISH_EVENT = "ownagent:skill-published";
+export const SKILL_OPEN_EVENT = "ownagent:skill-open";
+const PENDING_OPEN_KEY = "ownagent:skill-open-pending";
+
+/** 从别处跳到「技能管理」并直接打开某个技能（面板未挂载时靠 sessionStorage 交接） */
+export function requestSkillOpen(skillId: string) {
+  sessionStorage.setItem(PENDING_OPEN_KEY, skillId);
+  window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "compare" } }));
+  window.dispatchEvent(new CustomEvent(SKILL_OPEN_EVENT));
+}
+
+export function takePendingSkillOpen(): string | null {
+  if (typeof sessionStorage === "undefined") return null;
+  const id = sessionStorage.getItem(PENDING_OPEN_KEY);
+  if (id) sessionStorage.removeItem(PENDING_OPEN_KEY);
+  return id;
+}
 
 function dispatchSkillPublished(skillId: string, version: string) {
   if (typeof window === "undefined") return;

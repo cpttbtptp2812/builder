@@ -5,6 +5,7 @@ import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { KnowledgeFeed } from "../components/fx/agent/KnowledgeFeed";
 import { EvalLabPanel } from "../components/fx/EvalLabPanel";
+import { EvalOpsPanel } from "../components/ownagent/EvalOpsPanel";
 import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentWorkbenchPanel } from "../components/ownagent/AgentWorkbenchPanel";
 import { GuardPanel } from "../components/ownagent/GuardPanel";
@@ -18,7 +19,7 @@ import { TracePanel } from "../components/ownagent/TracePanel";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 
 type TabId = "product" | "theory";
-type ViewId = "chat" | "guide" | "feed" | "skills" | "compare" | "rag" | "guard" | "trace" | "eval" | "prompts" | "mcp" | "connect" | "jd";
+type ViewId = "chat" | "guide" | "feed" | "skills" | "compare" | "rag" | "guard" | "trace" | "eval" | "evalops" | "prompts" | "mcp" | "connect" | "jd";
 type NavTier = "daily" | "manage" | "advanced";
 
 type NavItem = {
@@ -116,12 +117,25 @@ const MANAGE_VIEWS: NavItem[] = [
   {
     id: "eval",
     label: "回答质检",
-    desc: "批量测试是否准确",
+    desc: "内置题库自检",
     tier: "manage",
     icon: (
       <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
         <path d="M2 11l3.5-4L8 10l3-5 2 2.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
         <circle cx="11.5" cy="4.5" r="1.5" stroke="currentColor" strokeWidth="1.2"/>
+      </svg>
+    ),
+  },
+  {
+    id: "evalops",
+    label: "回归评测",
+    desc: "改动前后对比 · 能否上线",
+    tier: "manage",
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <rect x="1.5" y="2" width="5" height="11" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+        <rect x="8.5" y="2" width="5" height="11" rx="1" stroke="currentColor" strokeWidth="1.2"/>
+        <path d="M3 9.5l1.2 1.2L5.5 8.5M10 6h2M10 9h2" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round" strokeLinejoin="round"/>
       </svg>
     ),
   },
@@ -462,6 +476,7 @@ export function WorkOwnAgent() {
             {view === "guard" ? <GuardPanel /> : null}
             {view === "trace" ? <TracePanel /> : null}
             {view === "eval" ? <EvalLabPanel /> : null}
+            {view === "evalops" ? <EvalOpsPanel /> : null}
             {view === "connect" ? <ConnectPanel /> : null}
             {view === "prompts" ? <PromptTemplatePanel /> : null}
             {view === "mcp" ? <McpToolsPanel /> : null}

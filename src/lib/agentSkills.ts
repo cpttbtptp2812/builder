@@ -136,7 +136,8 @@ export function getBuiltinSkill(id: string) {
   return SKILL_CATALOG.find((s) => s.id === id);
 }
 
-function scoreSkillDetailed(skill: AgentSkill, q: string): SkillDiscoveryRow {
+/** q 须已 trim + toLowerCase */
+export function scoreSkillDetailed(skill: AgentSkill, q: string): SkillDiscoveryRow {
   const breakdown: TriggerBreakdown[] = [];
   let score = 0;
   const hits: string[] = [];

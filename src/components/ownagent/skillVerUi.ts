@@ -19,8 +19,10 @@ export function sampleTriggers(triggers: string[], max = 4): string[] {
 }
 
 export function stepShortLabel(step: { id: string; label: string }): string {
-  const head = step.label.split(" · ")[0]?.trim();
-  return head && head.length <= 20 ? head : step.id;
+  const [head = "", ...rest] = step.label.split(" · ").map((s) => s.trim());
+  const tail = rest.join(" · ");
+  const name = /^[a-z_]+$/i.test(head) && tail ? tail : head;
+  return name && name.length <= 20 ? name : step.id;
 }
 
 export function stepPipelineText(steps: { id: string; label: string }[]): string {

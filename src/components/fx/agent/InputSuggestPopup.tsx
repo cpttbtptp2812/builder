@@ -29,7 +29,7 @@ function scoreKbPrompt(query: string, prompt: string): number {
   return hit === 0 ? 0 : Math.round((hit / qTokens.length) * 78);
 }
 
-async function collectSuggestions(query: string, exclude: Set<string>): Promise<SuggestItem[]> {
+async function collectSuggestions(query: string, exclude: Set<string>, skipPlaza = false): Promise<SuggestItem[]> {
   const q = query.trim();
   const out: SuggestItem[] = [];
 
@@ -49,7 +49,7 @@ async function collectSuggestions(query: string, exclude: Set<string>): Promise<
 
   if (q.startsWith("/")) return [];
 
-  try {
+  if (!skipPlaza) try {
     const { items: plazaItems } = await listPlaza(q, 12);
     for (const item of plazaItems) {
       const text = item.question.trim();
@@ -111,6 +111,8 @@ export function InputSuggestPopup({
   exclude,
   onPick,
   onClose,
+  skipPlaza = false,
+  showExamples: allowExamples = true,
 }: {
   input: string;
   running?: boolean;
@@ -118,12 +120,18 @@ export function InputSuggestPopup({
   exclude?: string[];
   onPick: (text: string) => void;
   onClose?: () => void;
+  /** 广场条目由外部「直接采用」弹层展示时关闭 */
+  skipPlaza?: boolean;
+  /** 空输入时是否弹出示例（外部已有快捷提问时关闭） */
+  showExamples?: boolean;
 }) {
   const [items, setItems] = useState<SuggestItem[]>([]);
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
   const [loading, setLoading] = useState(false);
   const dismissedRef = useRef(false);
+  const itemsRef = useRef<SuggestItem[]>([]);
+  itemsRef.current = items;
 
   const blocked = useMemo(() => new Set((exclude ?? []).map(norm)), [exclude]);
 
@@ -141,15 +149,21 @@ export function InputSuggestPopup({
     const q = input.trim();
     const showExamples = !q;
 
-    if (!showExamples && q.length < 2) {
+    if ((showExamples && !allowExamples) || (!showExamples && q.length < 2)) {
       setOpen(false);
       setItems([]);
       return;
     }
 
+    // 示例只属于空输入，开始打字立即收起，不等防抖
+    if (!showExamples && itemsRef.current.some((it) => it.source === "example")) {
+      setOpen(false);
+      setItems([]);
+    }
+
     setLoading(!showExamples);
     const timer = window.setTimeout(() => {
-      void collectSuggestions(input, blocked).then((next) => {
+      void collectSuggestions(input, blocked, skipPlaza).then((next) => {
         setLoading(false);
         if (dismissedRef.current) return;
         setItems(next);
@@ -159,7 +173,7 @@ export function InputSuggestPopup({
     }, showExamples ? 0 : DEBOUNCE_MS);
 
     return () => window.clearTimeout(timer);
-  }, [input, running, focused, blocked]);
+  }, [input, running, focused, blocked, skipPlaza, allowExamples]);
 
   useEffect(() => {
     if (!open || !items.length) return;
@@ -196,15 +210,14 @@ export function InputSuggestPopup({
   if (!open || !items.length) return null;
 
   const q = input.trim();
-  const title = !q
-    ? "快捷提问 · 点选填入输入框"
-    : loading
-      ? "正在匹配…"
-      : "找到相关问题 · 点选填入，或直接 Enter 发送原问题";
+  const title = !q ? "快捷提问 · 点选填入输入框" : "相关问题 · 点选或 Tab 填入";
 
   return (
     <div className="ua-suggest-popup" role="dialog" aria-label="输入建议">
-      <div className="ua-suggest-popup-head">{title}</div>
+      <div className="ua-suggest-popup-head">
+        <span>{title}</span>
+        {loading && <i className="ua-suggest-spin" aria-hidden />}
+      </div>
       <ul className="ua-suggest-popup-list" role="listbox">
         {items.map((s, i) => (
           <li

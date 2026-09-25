@@ -1,8 +1,6 @@
 /** Guest Agent — 浏览器内开放工具循环（不依赖固定演示句） */
 
 import {
-  explainDiscovery,
-  getSkill,
   runSkill,
   type AgentSkill,
   type SkillResult,
@@ -11,7 +9,9 @@ import {
 import { mcpServer } from "./mcpServer";
 import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
-import { classifyCapability, getTicket, type TicketDraft } from "./policyDesk";
+import { getTicket, type TicketDraft } from "./policyDesk";
+import { ABOUT_SITE_INTENT, HEALTH_INTENT, routeQuery, URL_RE } from "./skillRouter";
+import { logRoutedQuery } from "./skillQueryLog";
 import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
 import { runGuestAgentAsync } from "./backendBridge";
 import { peekRuntimeConfig } from "./runtimeConfig";
@@ -79,13 +79,8 @@ export function toolPreviewFromResult(name: string, content: unknown): string {
   return typeof content === "string" ? content.slice(0, 48) : "ok";
 }
 
-const HEALTH_INTENT = /检查|正不正常|正常吗|能不能打开|打得开|探活|健康|体检|性能|ttfb|latency|加载慢|慢不慢|可用吗/i;
-const ABOUT_SITE_INTENT =
-  /是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|看一下这个站|本站是干嘛|这个站是/i;
-const KNOWLEDGE_INTENT = /介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent|剑池|难点|挑战|架构/i;
 const DOM_INTENT = /dom|元素|定位|snapshot|a11y|页面结构|可交互|有多少按钮|当前页/i;
 const POLICY_INTENT = /制度|年假|加班|vpn|工单|请假|报销|开通/i;
-const URL_RE = /https?:\/\/[^\s)）"'<>]+/i;
 
 type SkillPick =
   | { kind: "skill"; skill: AgentSkill; hits: string[]; score: number }
@@ -108,30 +103,11 @@ function expandQuery(query: string, history?: AgentChatMessage[]): string {
 }
 
 function pickSkill(query: string): SkillPick {
-  if (URL_RE.test(query)) {
-    return { kind: "open" };
-  }
-  if (HEALTH_INTENT.test(query) && getSkill("site-analyzer")) {
-    return { kind: "skill", skill: getSkill("site-analyzer")!, hits: ["health-intent"], score: 2 };
-  }
-  if (ABOUT_SITE_INTENT.test(query)) {
-    return { kind: "about-site", reason: "问的是这个网站是什么" };
-  }
-
-  const cap = classifyCapability(query);
-  if (cap.matched && getSkill("policy-desk")) {
-    return { kind: "skill", skill: getSkill("policy-desk")!, hits: [cap.cap], score: 3 };
-  }
-
-  if (KNOWLEDGE_INTENT.test(query)) {
-    return { kind: "knowledge", reason: "项目 / 经历类问题，检索知识库" };
-  }
-
-  const top = explainDiscovery(query)[0];
-  if (top && top.score >= 2) {
-    return { kind: "skill", skill: top.skill, hits: top.hits, score: top.score };
-  }
-
+  const d = routeQuery(query);
+  logRoutedQuery(query, d);
+  if (d.kind === "skill" && d.skill) return { kind: "skill", skill: d.skill, hits: d.hits, score: d.score };
+  if (d.kind === "about-site") return { kind: "about-site", reason: "问的是这个网站是什么" };
+  if (d.kind === "knowledge") return { kind: "knowledge", reason: "项目 / 经历类问题，检索知识库" };
   return { kind: "open" };
 }
 

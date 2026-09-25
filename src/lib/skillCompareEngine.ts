@@ -1,6 +1,7 @@
 /** 技能对比引擎 — 现用版 vs 新版，输出运维可读结论 */
 
-import { AGENT_SKILLS, getLiveRunnableSkills, runSkill, type AgentSkill, type SkillDiscoveryRow } from "./agentSkills";
+import { AGENT_SKILLS, allRunnableSkills, runSkill, type AgentSkill } from "./agentSkills";
+import { routeQuery } from "./skillRouter";
 import { attachCompileToManifest, hydrateSkill } from "./skillMarkdown";
 import { diffTrace, MOCK_PROFILES, type TraceDiff } from "./provingGround";
 import type { SkillTraceStep } from "./agentSkills";
@@ -34,35 +35,7 @@ export type SkillCompareResult = {
   verdict: CompareVerdict;
 };
 
-function scoreSkill(skill: AgentSkill, q: string): SkillDiscoveryRow {
-  const breakdown: { trigger: string; points: number }[] = [];
-  let score = 0;
-  const hits: string[] = [];
-  for (const trigger of skill.triggers) {
-    const t = trigger.toLowerCase();
-    if (q.includes(t)) {
-      const points = t.length >= 4 ? 2 : 1;
-      score += points;
-      hits.push(trigger);
-      breakdown.push({ trigger, points });
-    }
-  }
-  if (skill.name.includes(q) || q.includes(skill.name)) {
-    score += 3;
-    hits.push(skill.name);
-    breakdown.push({ trigger: `name:${skill.name}`, points: 3 });
-  }
-  return { skill, score, hits, breakdown };
-}
-
-function routeTop(query: string, catalog: AgentSkill[]): SkillDiscoveryRow | null {
-  const q = query.trim().toLowerCase();
-  if (!q) return null;
-  const rows = catalog.map((s) => scoreSkill(s, q)).sort((a, b) => b.score - a.score);
-  return rows[0]?.score ? rows[0] : null;
-}
-
-function hydrateFromRaw(raw: string, skillId: string, label: string): AgentSkill {
+export function hydrateFromRaw(raw: string, skillId: string, label: string): AgentSkill {
   const core = hydrateSkill(raw, { id: skillId, skillPath: `compare://${label}` });
   const peers = AGENT_SKILLS.filter((s) => s.id !== skillId).map((s) => ({ id: s.id, triggers: s.triggers }));
   return attachCompileToManifest(core, { skillId, env: "browser", peers }) as AgentSkill;
@@ -152,7 +125,7 @@ async function runSide(
   probeUrl?: string,
 ): Promise<CompareSide> {
   const mockProfile = MOCK_PROFILES[skill.id];
-  const route = routeTop(query, catalog);
+  const route = routeQuery(query, catalog);
   const { trace, output } = await runSkill(skill, query, undefined, {
     probeUrl,
     mockProfile: mockProfile ?? undefined,
@@ -160,9 +133,9 @@ async function runSide(
   return {
     versionLabel,
     skillName: skill.name,
-    routedSkillId: route?.skill.id ?? null,
-    routedSkillName: route?.skill.name ?? null,
-    routeScore: route?.score ?? 0,
+    routedSkillId: route.skillId,
+    routedSkillName: route.label,
+    routeScore: route.score,
     steps: skill.steps.map((s) => ({ id: s.id, tool: s.tool, label: s.label })),
     trace,
     traceOk: trace.every((t) => t.ok),
@@ -182,7 +155,7 @@ export async function runSkillCompare(opts: {
   const baselineSkill = hydrateFromRaw(baselineRaw, skillId, "baseline");
   const candidateSkill = hydrateFromRaw(candidateRaw, skillId, "candidate");
 
-  const live = getLiveRunnableSkills();
+  const live = allRunnableSkills();
   const catalogBase = live.map((s) => (s.id === skillId ? baselineSkill : s));
   const catalogCand = live.map((s) => (s.id === skillId ? candidateSkill : s));
 

@@ -109,6 +109,18 @@ export function moveStep(raw: string, index: number, delta: -1 | 1): string {
   });
 }
 
+export function moveStepTo(raw: string, from: number, to: number): string {
+  return edit(raw, (p) => {
+    const s = readSteps(p);
+    if (!s) return;
+    const n = s.block.chunks.length;
+    if (from < 0 || from >= n || to < 0 || to >= n || from === to) return;
+    const [item] = s.block.chunks.splice(from, 1);
+    s.block.chunks.splice(to, 0, item!);
+    writeSteps(p, s.range, s.block);
+  });
+}
+
 export function removeStep(raw: string, index: number): string {
   return edit(raw, (p) => {
     const s = readSteps(p);

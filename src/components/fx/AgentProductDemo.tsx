@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AgentLiveTrace } from "./AgentLiveTrace";
 import { AgentMarkdown } from "./agent/AgentMarkdown";
 import { AgentThink } from "./agent/AgentThink";
@@ -68,7 +68,7 @@ import { useVoiceInput } from "../../hooks/useVoiceInput";
 import { KnowledgeSources } from "./agent/KnowledgeSources";
 import { AnswerDNA } from "./agent/AnswerDNA";
 import { GapDetectionCard } from "./agent/GapDetectionCard";
-import { PlazaComposeRouter } from "./agent/PlazaComposeRouter";
+import { PlazaHitPop, PrecheckLine, usePrecheck } from "./agent/PlazaComposeRouter";
 import { PlazaRouteCard } from "./agent/PlazaRouteCard";
 import { TurnReplayTheater } from "./agent/TurnReplayTheater";
 import { MultiAgentTraceCard } from "./agent/MultiAgentTraceCard";
@@ -202,7 +202,16 @@ export function AgentProductDemo({
   historyRef.current = history;
   const [input, setInput] = useState("");
   const [composeFocused, setComposeFocused] = useState(false);
+  const composeRef = useRef<HTMLTextAreaElement>(null);
   const [running, setRunning] = useState(false);
+  const precheck = usePrecheck(hubMode ? input : "", running);
+
+  useLayoutEffect(() => {
+    const el = composeRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 140)}px`;
+  }, [input]);
   const [traces, setTraces] = useState<AgentTurnTrace[]>([]);
   const [iteration, setIteration] = useState(0);
   const [streamReasoning, setStreamReasoning] = useState("");
@@ -1675,55 +1684,49 @@ export function AgentProductDemo({
             )}
             <div className={`ua-compose-dock${hubMode ? " hub" : ""}`}>
               {!running && (
-                <ReleaseInspectEntry
-                  compact={hubMode}
-                  disabled={running}
-                  onInspect={(url) => {
-                    const clean = url.replace(/^\/inspect\s+/gi, "").trim();
-                    if (clean) void send(`/inspect ${clean}`);
-                  }}
-                />
-              )}
-              {hubMode && !running && quickPromptItems.length > 0 && (
-                <ChatQuickPrompts
-                  label={emptyMessage ? "试试这样问" : "继续问"}
-                  items={quickPromptItems}
-                  disabled={running}
-                  onPick={(t) => void send(t)}
-                />
-              )}
-              {hubMode && input.trim().length >= 2 && (
-                <PlazaComposeRouter
-                  input={input}
-                  running={running}
-                  onUsePlaza={(item) => void deliverPlazaAnswer(input, item)}
-                />
+                <div className="oc-shortcuts">
+                  <ReleaseInspectEntry
+                    compact={hubMode}
+                    disabled={running}
+                    onInspect={(url) => {
+                      const clean = url.replace(/^\/inspect\s+/gi, "").trim();
+                      if (clean) void send(`/inspect ${clean}`);
+                    }}
+                  />
+                  {hubMode && quickPromptItems.length > 0 && (
+                    <ChatQuickPrompts
+                      label={emptyMessage ? "试试这样问" : "继续问"}
+                      items={quickPromptItems}
+                      disabled={running}
+                      onPick={(t) => void send(t)}
+                    />
+                  )}
+                </div>
               )}
 
             <div className="ua-compose-wrap">
-              <InputSuggestPopup
-                input={input}
-                running={running}
-                focused={composeFocused}
-                exclude={messages.map((m) => m.content)}
-                onPick={(t) => setInput(t)}
-              />
+              <div className="oc-above">
+                <InputSuggestPopup
+                  input={input}
+                  running={running}
+                  focused={composeFocused}
+                  exclude={messages.map((m) => m.content)}
+                  onPick={(t) => setInput(t)}
+                  skipPlaza={hubMode}
+                  showExamples={!hubMode || quickPromptItems.length === 0}
+                />
+                {hubMode && composeFocused && (
+                  <PlazaHitPop pre={precheck} onUsePlaza={(item) => void deliverPlazaAnswer(input, item)} />
+                )}
+              </div>
 
               <form
-                className={`ua-compose-pro${voiceListening ? " voice-active" : ""}`}
+                className={`ua-compose-pro${voiceListening ? " voice-active" : ""}${hubMode ? " oc-card" : ""}`}
                 onSubmit={(e) => {
                   e.preventDefault();
                   void send(input);
                 }}
               >
-                {hubMode && (
-                  <ComposeModelBar
-                    config={llmConfig}
-                    onChange={handleLlmChange}
-                    orchMode={orchMode}
-                    onOrchChange={setOrchMode}
-                  />
-                )}
                 {!hubMode && (
                   <div className="ua-compose-caps">
                     <button
@@ -1752,13 +1755,10 @@ export function AgentProductDemo({
 
                 {/* 文本区 */}
                 <textarea
+                  ref={composeRef}
                   value={input}
                   rows={1}
-                  onChange={(e) => {
-                    setInput(e.target.value);
-                    e.target.style.height = "auto";
-                    e.target.style.height = `${Math.min(e.target.scrollHeight, 140)}px`;
-                  }}
+                  onChange={(e) => setInput(e.target.value)}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -1767,9 +1767,10 @@ export function AgentProductDemo({
                   }}
                   onFocus={() => setComposeFocused(true)}
                   onBlur={() => window.setTimeout(() => setComposeFocused(false), 180)}
-                  placeholder={voiceListening ? "🎤 正在聆听…" : "输入问题，Enter 发送"}
+                  placeholder={voiceListening ? "🎤 正在聆听…" : hubMode ? "输入问题，Enter 发送，Shift+Enter 换行" : "输入问题，Enter 发送"}
                   disabled={running}
                 />
+                {hubMode && <PrecheckLine pre={precheck} />}
 
                 <div className="ua-compose-bar-pro">
                   {!hubMode && (
@@ -1777,7 +1778,14 @@ export function AgentProductDemo({
                       ⏎ Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
                     </span>
                   )}
-                  {hubMode && <span className="ua-compose-hint-pro" />}
+                  {hubMode && (
+                    <ComposeModelBar
+                      config={llmConfig}
+                      onChange={handleLlmChange}
+                      orchMode={orchMode}
+                      onOrchChange={setOrchMode}
+                    />
+                  )}
                   {input.length > 0 && (
                     <span className="ua-char-count">{input.length}</span>
                   )}

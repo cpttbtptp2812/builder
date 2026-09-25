@@ -11,7 +11,9 @@ import {
   publishSkillVersion,
   resolveBaselineRaw,
   saveNewVersionDraft,
+  SKILL_OPEN_EVENT,
   SKILL_PUBLISH_EVENT,
+  takePendingSkillOpen,
 } from "../../lib/skillCompareStore";
 import { reportToMarkdown, runFullSkillCompare, type SkillFullCompareReport } from "../../lib/skillCompareReport";
 import { runSkillCompare, type SkillCompareResult } from "../../lib/skillCompareEngine";
@@ -39,6 +41,17 @@ import {
   stepShortLabel,
 } from "./skillVerUi";
 import { OaBtn, OaPage } from "./OaUi";
+import {
+  addTriggerTo,
+  ImpactPanel,
+  NlEditBox,
+  RecentQueries,
+  RouteProbe,
+  TriggerAdvice,
+  useSkillImpact,
+} from "./SkillInsights";
+import type { SkillImpact } from "../../lib/skillImpact";
+import { skillQueryStats } from "../../lib/skillQueryLog";
 
 type Tab = "overview" | "edit" | "check" | "history";
 
@@ -75,13 +88,21 @@ function useToast() {
 
 /** 技能管理 — 列表 → 概览 / 编辑 / 检查发布 / 发布记录 */
 export function SkillComparePanel() {
-  const [skillId, setSkillId] = useState<string | null>(null);
+  const [skillId, setSkillId] = useState<string | null>(takePendingSkillOpen);
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
     const refresh = () => setTick((n) => n + 1);
+    const open = () => {
+      const id = takePendingSkillOpen();
+      if (id) setSkillId(id);
+    };
     window.addEventListener(SKILL_PUBLISH_EVENT, refresh);
-    return () => window.removeEventListener(SKILL_PUBLISH_EVENT, refresh);
+    window.addEventListener(SKILL_OPEN_EVENT, open);
+    return () => {
+      window.removeEventListener(SKILL_PUBLISH_EVENT, refresh);
+      window.removeEventListener(SKILL_OPEN_EVENT, open);
+    };
   }, []);
 
   if (!skillId) return <SkillList tick={tick} onOpen={setSkillId} />;
@@ -148,6 +169,7 @@ function SkillListCard({ skill, onOpen }: { skill: AgentSkill; onOpen: () => voi
   const draft = newestDraftForSkill(skill.id);
   const applied = getAppliedSkill(skill.id);
   const samples = sampleTriggers(skill.triggers);
+  const usage = skillQueryStats(skill.id);
 
   return (
     <li>
@@ -161,6 +183,7 @@ function SkillListCard({ skill, onOpen }: { skill: AgentSkill; onOpen: () => voi
         {samples.length ? <p className="own-skill-ver-samples">用户常说：{samples.join("、")}</p> : null}
         <footer>
           <span>{fmtUpdatedAt(applied?.appliedAt)}</span>
+          {usage.handled ? <span>近 7 天接手 {usage.handled} 句</span> : null}
           {draft ? <em className="own-skill-ver-pending">草稿 v{draft.version} 未发布</em> : <span className="own-skill-ver-ok">运行中</span>}
         </footer>
       </button>
@@ -192,6 +215,8 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
   const reportStale = report != null && reportRaw !== draft;
   const title = skillDisplayTitle({ name: onlineParsed.name || skillId, description: onlineParsed.description });
   const skillName = builtin?.name ?? skillId;
+  const impact = useSkillImpact(skillId, online, draft);
+  const realLost = impact.lost.filter((s) => s.source === "real");
 
   useEffect(() => {
     if (!hasChanges) {
@@ -215,8 +240,8 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
     return next;
   }
 
-  async function runCheck() {
-    if (!hasChanges) return;
+  async function runCheck(): Promise<SkillFullCompareReport | null> {
+    if (!hasChanges) return null;
     setTab("check");
     setChecking(true);
     setSingle(null);
@@ -246,8 +271,10 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
       setSingle(one);
       setReport(full);
       setReportRaw(snapshot);
+      return full;
     } catch (err) {
       toast.show(`检查没跑完：${err instanceof Error ? err.message : "未知错误"}`);
+      return null;
     } finally {
       setChecking(false);
     }
@@ -257,17 +284,27 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
     ? "还没有改动"
     : !draftParsed.ok
       ? `配置有错误：${draftParsed.issues.find((i) => i.level === "error")?.message ?? "格式不对"}`
-      : !report
-        ? "发布前请先点「检查改动」"
-        : reportStale
-          ? "检查后又改过内容，请重新检查"
-          : null;
+      : null;
+  const checkHint = !report ? "点发布会先自动检查一遍" : reportStale ? "检查后又改过，发布时会重新检查" : null;
 
-  function publish(force = false) {
-    if (publishBlock) return;
-    if (report?.verdict.level === "reject" && !force) return;
-    if (report?.verdict.level === "warn" && !window.confirm("检查发现有需要注意的地方，确定发布吗？")) return;
-    const applied = publishSkillVersion(skillId, skillName, draft, report?.verdict.title);
+  /** 没检查过（或检查后又改过）就先自动检查，再按结果确认发布 */
+  async function publish(force = false) {
+    if (publishBlock || checking) return;
+    const r = report && !reportStale ? report : await runCheck();
+    if (!r) return;
+    if (r.verdict.level === "reject" && !force) {
+      toast.show(`检查建议先别发布：${r.verdict.title}。看下方报告，确认无碍可点「我确认，仍要发布」`);
+      return;
+    }
+    if (r.verdict.level === "warn" && !window.confirm("检查发现有需要注意的地方，确定发布吗？")) return;
+    if (
+      realLost.length &&
+      !window.confirm(
+        `发布后，有 ${realLost.length} 句用户真实问过的话不再由这个技能处理，例如「${realLost[0]!.q}」会改由「${realLost[0]!.toLabel}」处理。确定发布吗？`,
+      )
+    )
+      return;
+    const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
     const next = reloadOnline();
     setDraft(next);
     setReport(null);
@@ -344,16 +381,18 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
             onTry={(q) => {
               setTestQuery(q);
               setTab(hasChanges ? "check" : "edit");
-              if (!hasChanges) toast.show("先改点内容，再到「检查并发布」用这句话对比");
+              if (!hasChanges) toast.show("已记下这句话。先改点内容，再到「检查并发布」用它对比");
             }}
           />
         ) : null}
 
         {tab === "edit" ? (
           <Editor
+            skillId={skillId}
             raw={draft}
             online={online}
             onChange={(next) => setDraft(next)}
+            onNotify={toast.show}
             onRestore={() => {
               if (hasChanges && !window.confirm("撤销全部修改，恢复成线上内容？")) return;
               setDraft(online);
@@ -377,6 +416,7 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
               single={single}
               report={report}
               reportStale={reportStale}
+              impact={impact}
               onCheck={() => void runCheck()}
             />
           ) : (
@@ -407,12 +447,17 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
                 <span>
                   +{stats.added} −{stats.removed} 行 · {saved === "saving" ? "保存中…" : "已自动保存，关掉页面也不会丢"}
                 </span>
+                {impact.gained.length || impact.lost.length ? (
+                  <button type="button" className={realLost.length ? "own-si-bar-impact is-lose" : "own-si-bar-impact"} onClick={() => setTab("check")}>
+                    路由变化：新接手 {impact.gained.length} 句 · 不再接手 {impact.lost.length} 句
+                  </button>
+                ) : null}
                 {report && !reportStale ? (
                   <span className={`own-ver-sticky-verdict own-ver-sticky-verdict--${verdictTone(report.verdict.level)}`}>
                     检查结果：{humanVerdict(report.verdict.level).title}
                   </span>
-                ) : publishBlock ? (
-                  <span className="own-skm-bar-block">{publishBlock}</span>
+                ) : publishBlock || checkHint ? (
+                  <span className="own-skm-bar-block">{publishBlock ?? checkHint}</span>
                 ) : null}
               </div>
               <div className="own-ver-sticky-actions">
@@ -421,14 +466,17 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
                 </button>
                 <button
                   type="button"
-                  className={!report || reportStale ? "own-skm-btn-primary" : "own-compare-secondary-btn"}
+                  className="own-compare-secondary-btn"
                   onClick={() => void runCheck()}
                   disabled={checking}
                 >
-                  {checking ? "检查中…" : report && !reportStale ? "重新检查" : "检查改动"}
+                  {checking ? "检查中…" : report && !reportStale ? "重新检查" : "只检查不发布"}
                 </button>
-                <OaBtn onClick={() => publish()} disabled={Boolean(publishBlock) || checking || report?.verdict.level === "reject"}>
-                  发布 v{draftVersion}
+                <OaBtn
+                  onClick={() => void publish()}
+                  disabled={Boolean(publishBlock) || checking || (report?.verdict.level === "reject" && !reportStale)}
+                >
+                  {checking ? "检查中…" : !report || reportStale ? `检查并发布 v${draftVersion}` : `发布 v${draftVersion}`}
                 </OaBtn>
               </div>
             </div>
@@ -439,7 +487,7 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
                   type="button"
                   className="own-skill-inline-btn"
                   onClick={() => {
-                    if (window.confirm("检查建议先别发布。确认了解风险，仍要发布？")) publish(true);
+                    if (window.confirm("检查建议先别发布。确认了解风险，仍要发布？")) void publish(true);
                   }}
                 >
                   我确认，仍要发布
@@ -524,7 +572,7 @@ function Overview({
               <em>{i + 1}</em>
               <div>
                 <strong>{stepShortLabel(s)}</strong>
-                <small>{s.label.includes(" · ") ? s.label.split(" · ").slice(1).join(" · ") : s.tool}</small>
+                <small>{s.tool.startsWith("__") ? "汇总生成回答" : `使用工具 ${s.tool}`}</small>
               </div>
             </li>
           ))}
@@ -532,24 +580,31 @@ function Overview({
       </section>
 
       <section className="own-skill-showcase-block">
-        <h3>试一句话</h3>
-        <button type="button" className="own-skill-ver-try-btn" onClick={() => onTry(sample)}>
-          「{sample}」→ 用这句话对比改动前后
-        </button>
+        <h3>试一句话：会交给哪个技能？</h3>
+        <RouteProbe skillId={skillId} initial={sample} onCompare={onTry} />
+      </section>
+
+      <section className="own-skill-showcase-block">
+        <h3>最近用户问了什么</h3>
+        <RecentQueries skillId={skillId} />
       </section>
     </div>
   );
 }
 
 function Editor({
+  skillId,
   raw,
   online,
   onChange,
+  onNotify,
   onRestore,
 }: {
+  skillId: string;
   raw: string;
   online: string;
   onChange: (raw: string) => void;
+  onNotify: (msg: string) => void;
   onRestore: () => void;
 }) {
   const formOk = canFormEdit(raw);
@@ -577,8 +632,18 @@ function Editor({
         ) : null}
       </header>
 
+      {formOk ? (
+        <NlEditBox
+          raw={raw}
+          onApply={(next, summary) => {
+            onChange(next);
+            onNotify(`已应用到草稿：${summary}`);
+          }}
+        />
+      ) : null}
+
       {mode === "form" && formOk ? (
-        <FormEditor raw={raw} online={online} onChange={onChange} />
+        <FormEditor skillId={skillId} raw={raw} online={online} onChange={onChange} />
       ) : (
         <>
           {!formOk ? <p className="own-ver-parse-warn">这份配置格式特殊，只能用源码修改。</p> : null}
@@ -608,7 +673,17 @@ function SourceIssues({ raw }: { raw: string }) {
   );
 }
 
-function FormEditor({ raw, online, onChange }: { raw: string; online: string; onChange: (raw: string) => void }) {
+function FormEditor({
+  skillId,
+  raw,
+  online,
+  onChange,
+}: {
+  skillId: string;
+  raw: string;
+  online: string;
+  onChange: (raw: string) => void;
+}) {
   const parsed = useMemo(() => parseSkillMarkdown(raw), [raw]);
   const base = useMemo(() => parseSkillMarkdown(online), [online]);
   const [desc, setDesc] = useState(parsed.description);
@@ -695,6 +770,7 @@ function FormEditor({ raw, online, onChange }: { raw: string; online: string; on
           </p>
         ) : null}
         {!parsed.triggers.length ? <p className="own-ver-parse-warn">至少要有一个说法，否则这个技能不会被用到。</p> : null}
+        <TriggerAdvice skillId={skillId} raw={raw} onAdd={(p) => onChange(addTriggerTo(raw, p))} />
       </div>
 
       <div className="own-skm-field">
@@ -810,6 +886,7 @@ function CheckView({
   single,
   report,
   reportStale,
+  impact,
   onCheck,
 }: {
   skillId: string;
@@ -825,6 +902,7 @@ function CheckView({
   single: SkillCompareResult | null;
   report: SkillFullCompareReport | null;
   reportStale: boolean;
+  impact: SkillImpact;
   onCheck: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
@@ -839,7 +917,7 @@ function CheckView({
   if (onlineParsed.description !== draftParsed.description) summary.push(`说明改成：「${draftParsed.description}」`);
   if (addedT.length) summary.push(`新增说法：${addedT.join("、")}`);
   if (removedT.length) summary.push(`删掉说法：${removedT.join("、")}`);
-  if (stepsBefore !== stepsAfter) summary.push(`回答步骤：${stepsBefore}  →  ${stepsAfter}`);
+  if (stepsBefore !== stepsAfter) summary.push(`回答步骤原来是「${stepsBefore}」，改成「${stepsAfter}」`);
   if (onlineParsed.body.trim() !== draftParsed.body.trim()) summary.push("详细说明有改动");
   if (!summary.length) summary.push("只改了格式或参数，具体见下方逐行对比");
 
@@ -881,6 +959,8 @@ function CheckView({
         </div>
       </section>
 
+      <ImpactPanel impact={impact} />
+
       <section className="own-skill-ver-try">
         <label htmlFor="skill-test-query">用一句用户可能说的话，对比改动前后怎么回答</label>
         <div className="own-skill-ver-chips own-skill-ver-chips--click">
@@ -901,7 +981,7 @@ function CheckView({
           onChange={(e) => setTestQuery(e.target.value)}
           placeholder="例如：帮我看看 https://example.com 能不能上线"
         />
-        <p className="own-ver-hint">点「检查改动」会用这句话 + 约 10 句常见说法，同时跑一遍现用版和新版。</p>
+        <p className="own-ver-hint">检查会用这句话 + 约 10 句常见说法，同时跑一遍现用版和新版；直接点底部「检查并发布」也会先跑这一步。</p>
         <div>
           <OaBtn onClick={onCheck} disabled={checking}>
             {checking ? "检查中…" : "检查改动"}
