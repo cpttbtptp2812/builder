@@ -40,6 +40,15 @@ import {
   stepPipelineText,
   stepShortLabel,
 } from "./skillVerUi";
+import {
+  batchInstallSkills,
+  buildSkillsExportBundle,
+  downloadText,
+  loadImportedSkills,
+  readSkillImportFiles,
+  removeImportedSkill,
+  type SkillExportRecord,
+} from "../../lib/importedSkills";
 import { OaBtn, OaPage } from "./OaUi";
 import {
   addTriggerTo,
@@ -120,9 +129,19 @@ export function SkillComparePanel() {
 
 function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => void }) {
   const [q, setQ] = useState("");
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [importOpen, setImportOpen] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+
+  const builtinIds = useMemo(() => new Set(AGENT_SKILLS.map((s) => s.id)), []);
+  const importedIds = useMemo(() => new Set(loadImportedSkills().map((s) => s.id)), [tick]);
+
   const skills = useMemo(() => {
     const live = new Map(getLiveCatalog().map((s) => [s.id, s]));
-    return AGENT_SKILLS.map((b) => live.get(b.id) ?? b);
+    const builtin = AGENT_SKILLS.map((b) => live.get(b.id) ?? b);
+    const extra = loadImportedSkills().filter((s) => !live.has(s.id));
+    return [...builtin, ...extra];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
@@ -137,9 +156,85 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   }, [skills, q]);
 
   const pendingCount = skills.filter((s) => newestDraftForSkill(s.id)).length;
+  const selectedRows = rows.filter((s) => selected.has(s.id));
+  const exportTargets = selectedRows.length ? selectedRows : rows;
+
+  function toggle(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    if (selectedRows.length === rows.length && rows.length > 0) setSelected(new Set());
+    else setSelected(new Set(rows.map((s) => s.id)));
+  }
+
+  function exportRecords(list: AgentSkill[]): SkillExportRecord[] {
+    return list.map((s) => ({
+      id: s.id,
+      raw: s.manifest,
+      source: importedIds.has(s.id) ? "imported" : getAppliedSkill(s.id) ? "published" : "builtin",
+    }));
+  }
+
+  function exportJson() {
+    const name = exportTargets.length === skills.length ? "ownagent-skills.json" : "ownagent-skills-selected.json";
+    downloadText(name, buildSkillsExportBundle(exportRecords(exportTargets)), "application/json;charset=utf-8");
+    toast.show(`已导出 ${exportTargets.length} 个技能`);
+  }
+
+  function exportMarkdown() {
+    for (const s of exportTargets) downloadText(`${s.id}.SKILL.md`, s.manifest);
+    toast.show(`已导出 ${exportTargets.length} 份 SKILL.md`);
+  }
+
+  function removeSelectedImported() {
+    const ids = selectedRows.filter((s) => importedIds.has(s.id)).map((s) => s.id);
+    if (!ids.length) {
+      toast.show("所选里没有可删除的导入技能（内置技能不能删）");
+      return;
+    }
+    if (!window.confirm(`删除 ${ids.length} 个导入技能？不影响内置出厂版。`)) return;
+    for (const id of ids) removeImportedSkill(id);
+    setSelected(new Set());
+    window.dispatchEvent(new CustomEvent(SKILL_PUBLISH_EVENT));
+    toast.show(`已删除 ${ids.length} 个导入技能`);
+  }
+
+  async function onImportFiles(files: FileList | null) {
+    if (!files?.length) return;
+    try {
+      const list = await readSkillImportFiles(files);
+      if (!list.length) {
+        toast.show("文件里没有可识别的 SKILL 内容");
+        return;
+      }
+      const taken = new Set([...skills.map((s) => s.id)]);
+      const result = batchInstallSkills(list, taken, {
+        knownBuiltinIds: builtinIds,
+        onBuiltinDraft: (skillId, raw, name) => {
+          saveNewVersionDraft(skillId, raw, name);
+        },
+      });
+      setImportOpen(false);
+      window.dispatchEvent(new CustomEvent(SKILL_PUBLISH_EVENT));
+      const parts: string[] = [];
+      if (result.installed.length) parts.push(`新导入 ${result.installed.length} 个`);
+      if (result.drafted.length) parts.push(`${result.drafted.length} 个已写入草稿（对应内置技能）`);
+      if (result.errors.length) parts.push(`${result.errors.length} 个失败`);
+      toast.show(parts.join(" · ") || "导入完成");
+    } catch (e) {
+      toast.show(e instanceof Error ? e.message : "导入失败");
+    }
+  }
 
   return (
     <OaPage title="技能管理" desc="每个技能决定「用户这样说时，AI 按什么步骤回答」。点进去可以查看、修改、检查后发布。">
+      {toast.node}
       <div className="own-skm-list-bar">
         <input
           className="own-skm-search"
@@ -147,16 +242,80 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           onChange={(e) => setQ(e.target.value)}
           placeholder="搜技能名称或用户说法，例如：上线、年假"
         />
+        <div className="own-skm-batch-actions">
+          <button type="button" className="own-skm-batch-btn" onClick={toggleAll} disabled={!rows.length}>
+            {selectedRows.length === rows.length && rows.length ? "取消全选" : "全选"}
+          </button>
+          <button type="button" className="own-skm-batch-btn" onClick={() => setImportOpen((v) => !v)}>
+            导入
+          </button>
+          <button type="button" className="own-skm-batch-btn" onClick={exportJson} disabled={!exportTargets.length}>
+            导出 JSON{selectedRows.length ? ` (${selectedRows.length})` : ""}
+          </button>
+          <button type="button" className="own-skm-batch-btn" onClick={exportMarkdown} disabled={!exportTargets.length}>
+            导出 MD{selectedRows.length ? ` (${selectedRows.length})` : ""}
+          </button>
+          {selectedRows.some((s) => importedIds.has(s.id)) ? (
+            <button type="button" className="own-skm-batch-btn own-skm-batch-btn--danger" onClick={removeSelectedImported}>
+              删除导入项
+            </button>
+          ) : null}
+        </div>
         <span className="own-skm-list-count">
-          共 {skills.length} 个技能{pendingCount ? ` · ${pendingCount} 个有未发布的修改` : ""}
+          共 {skills.length} 个技能
+          {pendingCount ? ` · ${pendingCount} 个有未发布的修改` : ""}
+          {selectedRows.length ? ` · 已选 ${selectedRows.length}` : ""}
         </span>
       </div>
+
+      {importOpen ? (
+        <div
+          className="own-skm-import-panel"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            void onImportFiles(e.dataTransfer.files);
+          }}
+        >
+          <p><strong>批量导入</strong> — 支持 JSON 技能包、多个 .md 文件，或拖入文件夹。</p>
+          <p className="own-skm-import-hint">
+            新技能会进「已导入」目录；若 id 对应内置技能，则写入草稿，到该技能里检查并发布。
+          </p>
+          <div className="own-skm-import-actions">
+            <button type="button" className="own-skm-batch-btn" onClick={() => fileRef.current?.click()}>
+              选择文件
+            </button>
+            <button type="button" className="own-skm-batch-btn" onClick={() => setImportOpen(false)}>
+              收起
+            </button>
+          </div>
+          <input
+            ref={fileRef}
+            type="file"
+            hidden
+            multiple
+            accept=".md,.markdown,.json,text/markdown,application/json"
+            onChange={(e) => {
+              void onImportFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+        </div>
+      ) : null}
+
       {rows.length === 0 ? (
         <p className="own-ver-hint">没有匹配「{q}」的技能。</p>
       ) : (
         <ul className="own-skill-ver-grid">
           {rows.map((s) => (
-            <SkillListCard key={s.id} skill={s} onOpen={() => onOpen(s.id)} />
+            <SkillListCard
+              key={s.id}
+              skill={s}
+              checked={selected.has(s.id)}
+              imported={importedIds.has(s.id)}
+              onToggle={() => toggle(s.id)}
+              onOpen={() => onOpen(s.id)}
+            />
           ))}
         </ul>
       )}
@@ -164,7 +323,19 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   );
 }
 
-function SkillListCard({ skill, onOpen }: { skill: AgentSkill; onOpen: () => void }) {
+function SkillListCard({
+  skill,
+  checked,
+  imported,
+  onToggle,
+  onOpen,
+}: {
+  skill: AgentSkill;
+  checked: boolean;
+  imported: boolean;
+  onToggle: () => void;
+  onOpen: () => void;
+}) {
   const ver = getPublishedVersion(skill.id);
   const draft = newestDraftForSkill(skill.id);
   const applied = getAppliedSkill(skill.id);
@@ -172,11 +343,15 @@ function SkillListCard({ skill, onOpen }: { skill: AgentSkill; onOpen: () => voi
   const usage = skillQueryStats(skill.id);
 
   return (
-    <li>
+    <li className={checked ? "own-skill-ver-item own-skill-ver-item--on" : "own-skill-ver-item"}>
+      <label className="own-skill-ver-check" onClick={(e) => e.stopPropagation()}>
+        <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`选择 ${skill.name}`} />
+      </label>
       <button type="button" className={draft ? "own-skill-ver-card own-skill-ver-card--draft" : "own-skill-ver-card"} onClick={onOpen}>
         <header>
           <strong>{skillDisplayTitle(skill)}</strong>
           <span className="own-skill-ver-tag">v{ver}</span>
+          {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
         </header>
         <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
         <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps)}</p>

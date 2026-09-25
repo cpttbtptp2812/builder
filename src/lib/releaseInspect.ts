@@ -391,9 +391,11 @@ export async function runReleaseInspect(
   }
   try {
     const parsed = new URL(url);
-    if (!parsed.hostname.includes(".")) {
-      throw new Error("hostname");
-    }
+    const h = parsed.hostname.replace(/^\[|\]$/g, "");
+    const okHost =
+      h.length > 0 &&
+      (h.includes(".") || h === "localhost" || h === "127.0.0.1" || h === "::1");
+    if (!okHost) throw new Error("hostname");
   } catch {
     throw new Error(`URL 无效：${targetUrl}（请使用完整地址，如 https://www.baidu.com）`);
   }

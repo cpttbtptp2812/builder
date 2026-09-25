@@ -134,3 +134,83 @@ export function downloadText(filename: string, text: string, mime = "text/markdo
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export type SkillExportRecord = {
+  id: string;
+  raw: string;
+  source: "builtin" | "imported" | "published";
+};
+
+/** 技能包 JSON — 与 parseImportPayload 格式兼容 */
+export function buildSkillsExportBundle(skills: SkillExportRecord[]): string {
+  return JSON.stringify(
+    {
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      skills: skills.map((s) => ({ id: s.id, raw: s.raw, importedAt: s.source })),
+    },
+    null,
+    2,
+  );
+}
+
+/** 从文件列表解析出待导入的 SKILL 条目（支持多 .md + JSON 包） */
+export async function readSkillImportFiles(files: FileList | File[]): Promise<{ id?: string; raw: string }[]> {
+  const out: { id?: string; raw: string }[] = [];
+  for (const file of [...files]) {
+    const text = await file.text();
+    const parsed = parseImportPayload(text);
+    if (!parsed.error && (file.name.endsWith(".json") || text.trim().startsWith("{") || text.trim().startsWith("["))) {
+      out.push(...parsed.files);
+      continue;
+    }
+    if (parsed.error && (text.trim().startsWith("{") || text.trim().startsWith("["))) {
+      throw new Error(parsed.error);
+    }
+    out.push({ id: file.name.replace(/\.(md|markdown|json)$/i, ""), raw: text });
+  }
+  return out;
+}
+
+export type BatchInstallResult = { installed: string[]; drafted: string[]; errors: string[] };
+
+/** 批量装入：新 id → 导入目录；已有内置 id → 回调由调用方存草稿 */
+export function batchInstallSkills(
+  files: { id?: string; raw: string }[],
+  taken: Set<string>,
+  opts?: {
+    knownBuiltinIds?: Set<string>;
+    onBuiltinDraft?: (skillId: string, raw: string, name: string) => void;
+  },
+): BatchInstallResult {
+  const installed: string[] = [];
+  const drafted: string[] = [];
+  const errors: string[] = [];
+  const used = new Set(taken);
+  for (const file of files) {
+    try {
+      const parsed = parseSkillMarkdown(file.raw);
+      const hint = file.id?.replace(/\.(md|markdown|json)$/i, "").replace(/\.SKILL$/i, "");
+      const looksLikeFilename = Boolean(file.id && /\.(md|markdown|json)$/i.test(file.id));
+      const seed = looksLikeFilename ? parsed.name || hint : hint || parsed.name;
+      const targetBuiltin = [...(opts?.knownBuiltinIds ?? [])].find((id) => {
+        if (file.id === id) return true;
+        const stem = file.id?.replace(/\.(md|markdown|json)$/i, "").replace(/\.SKILL$/i, "");
+        if (stem === id) return true;
+        if (hint === id || parsed.name === id) return true;
+        return false;
+      });
+      if (targetBuiltin && opts?.onBuiltinDraft) {
+        opts.onBuiltinDraft(targetBuiltin, file.raw, parsed.name || targetBuiltin);
+        drafted.push(targetBuiltin);
+        continue;
+      }
+      const out = installImportedMarkdown(file.raw, used, file.id);
+      used.add(out.record.id);
+      installed.push(out.record.id);
+    } catch (e) {
+      errors.push(e instanceof Error ? e.message : String(e));
+    }
+  }
+  return { installed, drafted, errors };
+}

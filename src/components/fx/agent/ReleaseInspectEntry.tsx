@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { checkBackendHealth } from "../../../lib/apiClient";
+import { getProbeUrl } from "../../../lib/sessionId";
 
 export function ReleaseInspectEntry({
   disabled,
@@ -33,7 +34,7 @@ export function ReleaseInspectEntry({
     if (v) onInspect(v);
   };
 
-  const localOrigin = typeof window !== "undefined" ? window.location.origin : "";
+  const probeUrl = typeof window !== "undefined" ? getProbeUrl() : "";
 
   if (compact && !open) {
     return (
@@ -42,12 +43,12 @@ export function ReleaseInspectEntry({
           <span>发布前巡检</span>
           <em>{apiOk ? "API 就绪" : "展开输入 URL"}</em>
         </button>
-        {localOrigin ? (
+        {probeUrl ? (
           <button
             type="button"
             className="release-inspect-entry-quick"
             disabled={disabled}
-            onClick={() => onInspect(localOrigin)}
+            onClick={() => onInspect(probeUrl)}
           >
             测本站
           </button>
@@ -76,7 +77,7 @@ export function ReleaseInspectEntry({
           ref={inputRef}
           type="url"
           className="release-inspect-entry-input"
-          placeholder={`${localOrigin || "https://staging.example.com"}`}
+          placeholder={probeUrl || "https://staging.example.com"}
           disabled={disabled}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -86,13 +87,13 @@ export function ReleaseInspectEntry({
             }
           }}
         />
-        {localOrigin ? (
+        {probeUrl ? (
           <button
             type="button"
             className="release-inspect-entry-quick"
             disabled={disabled}
-            onClick={() => submit(localOrigin)}
-            title="探当前开发站，验证巡检链路"
+            onClick={() => submit(probeUrl)}
+            title="探当前站点入口页（含 /builder/ 等子路径）"
           >
             测本站
           </button>
