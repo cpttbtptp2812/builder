@@ -101,6 +101,7 @@ export function AgentWelcome({
 
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null);
   const [guidedStep, setGuidedStep] = useState(0);
+  const [guidedIdx, setGuidedIdx] = useState(0);
   const [plazaTotal, setPlazaTotal] = useState(0);
 
   useEffect(() => {
@@ -162,11 +163,9 @@ export function AgentWelcome({
                   type="button"
                   className="aw-guided-option"
                   style={{ "--sc": s.color } as CSSProperties}
-                  onClick={() => setGuidedStep(1)}
-                  onClickCapture={() => setGuidedStep(1)}
-                  onMouseDown={() => {
-                    // Store which option was selected
-                    (window as unknown as Record<string, number>).__guidedIdx = i;
+                  onClick={() => {
+                    setGuidedIdx(i);
+                    setGuidedStep(1);
                   }}
                 >
                   <span className="aw-guided-option-icon">
@@ -181,8 +180,7 @@ export function AgentWelcome({
             <div className="aw-guided-options">
               <p className="aw-guided-label">具体想问什么？点击直接获取答案</p>
               {(() => {
-                const idx = (window as unknown as Record<string, number>).__guidedIdx ?? 0;
-                const gq = s.guidedQuestions[idx];
+                const gq = s.guidedQuestions[guidedIdx];
                 if (!gq) return null;
                 return (
                   <>

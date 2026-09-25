@@ -48,6 +48,9 @@ export const MOCK_PROFILES: Record<string, Record<string, (args: Record<string, 
     knowledge_search: () => ({ hits: [{ title: "hit", chunkId: "c1", score: 0.8 }] }),
     __compose_knowledge__: () => ({ markdown: "ok", meta: { skill: "knowledge-lookup" } }),
   },
+  "product-faq": {
+    __answer_faq__: () => ({ markdown: "faq ok", meta: { skill: "product-faq" } }),
+  },
   "policy-desk": {
     __run_policy_desk__: () => ({ markdown: "policy ok", meta: { outcome: "GROUNDED" } }),
   },

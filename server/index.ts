@@ -11,7 +11,7 @@ import {
   runMultiAgentOnServer,
   upsertMemory,
 } from "./agent.ts";
-import { getChunkCount, seedRagCorpus } from "./seed.ts";
+import { getChunkCount, seedFaqChunks, seedRagCorpus } from "./seed.ts";
 import { seedCustomerData } from "./customerSeed.ts";
 import { retrieveRagFromDb } from "./rag.ts";
 import {
@@ -47,6 +47,7 @@ app.use(
 );
 
 seedRagCorpus();
+seedFaqChunks();
 seedCustomerData();
 registerEvalOps(app);
 

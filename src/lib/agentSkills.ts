@@ -13,6 +13,28 @@ import {
 } from "./skillMarkdown";
 import { applyStepVarWrites } from "./skillVarBindings";
 import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
+import { matchKnowledgeSection } from "./ownKnowledge";
+import { faqAnswerMarkdown, faqFallbackMarkdown, matchFaq } from "../data/productFaq";
+
+function answerProductFaq(query: string): SkillResult {
+  const kb = matchKnowledgeSection(query);
+  if (kb) {
+    return {
+      markdown: kb.section.a,
+      dashboard: { faq: { q: kb.section.q, score: Number(kb.score.toFixed(2)), source: kb.doc.title } },
+      meta: { skill: "product-faq", docId: kb.doc.id },
+    };
+  }
+  const hit = matchFaq(query);
+  if (hit) {
+    return {
+      markdown: faqAnswerMarkdown(hit.entry),
+      dashboard: { faq: { id: hit.entry.id, q: hit.entry.q, score: Number(hit.score.toFixed(2)), source: "内置产品问答" } },
+      meta: { skill: "product-faq" },
+    };
+  }
+  return { markdown: faqFallbackMarkdown(query), dashboard: { faq: { q: null, score: 0 } }, meta: { skill: "product-faq", gap: true } };
+}
 
 export type SkillStep = {
   id: string;
@@ -65,6 +87,7 @@ const SKILL_ORDER = [
   "dom-probe",
   "workflow-orchestrator",
   "policy-desk",
+  "product-faq",
   "knowledge-lookup",
   "skill-router",
 ];
@@ -268,6 +291,9 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
         },
       };
     }
+
+    case "__answer_faq__":
+      return { content: answerProductFaq(String(args.query ?? "")) };
 
     case "__run_policy_desk__": {
       const desk = runPolicyDesk(String(args.query ?? ""));

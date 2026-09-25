@@ -3,7 +3,16 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { dbRun, nowIso } from "./db.ts";
+import { dbAll, dbRun, nowIso } from "./db.ts";
+import {
+  FAQ_MATCH_THRESHOLD,
+  faqAnswerMarkdown,
+  faqFallbackMarkdown,
+  matchFaq,
+  normalizeQuestion,
+  parseQaSections,
+  questionSimilarity,
+} from "../src/data/productFaq.ts";
 import { ragHitsForMcp } from "./rag.ts";
 import { runPolicyDesk, searchPolicy, draftTicket, commitTicket } from "../src/lib/policyDesk.ts";
 import {
@@ -44,9 +53,34 @@ const SKILL_ORDER = [
   "dom-probe",
   "workflow-orchestrator",
   "policy-desk",
+  "product-faq",
   "knowledge-lookup",
   "skill-router",
 ];
+
+export type ServerFaqMatch = { q: string; answer: string; score: number; source: string; docId?: string };
+
+/** 后台资料库（knowledge_docs）问答段优先，内置产品问答兜底 */
+export function matchProductFaqOnServer(query: string): ServerFaqMatch | null {
+  const q = normalizeQuestion(query);
+  if (q.length < 2 || /https?:\/\//i.test(query)) return null;
+  let best: ServerFaqMatch | null = null;
+  const docs = dbAll<{ id: string; title: string; body: string }>(
+    "SELECT id, title, body FROM knowledge_docs WHERE enabled=1",
+  );
+  for (const doc of docs) {
+    for (const s of parseQaSections(doc.body)) {
+      const f = normalizeQuestion(s.q);
+      const score = f === q ? 1 : questionSimilarity(q, f);
+      if (!best || score > best.score) best = { q: s.q, answer: s.a, score, source: doc.title, docId: doc.id };
+    }
+  }
+  const faq = matchFaq(query);
+  if (faq && (!best || faq.score > best.score)) {
+    best = { q: faq.entry.q, answer: faqAnswerMarkdown(faq.entry), score: faq.score, source: "内置产品问答" };
+  }
+  return best && best.score >= FAQ_MATCH_THRESHOLD ? best : null;
+}
 
 function loadCatalog(): AgentSkill[] {
   if (!fs.existsSync(SKILLS_DIR)) return [];
@@ -250,6 +284,20 @@ async function callTool(
       const out = commitTicket(String(args.ticketId ?? ""));
       return out.ok ? { content: out } : { content: out, isError: true as const };
     }
+    case "__answer_faq__": {
+      const query = String(args.query ?? ctx.vars.query ?? "");
+      const hit = matchProductFaqOnServer(query);
+      return {
+        content: hit
+          ? {
+              markdown: hit.answer,
+              dashboard: { faq: { q: hit.q, score: Number(hit.score.toFixed(2)), source: hit.source } },
+              meta: { skill: "product-faq", docId: hit.docId },
+            }
+          : { markdown: faqFallbackMarkdown(query), dashboard: { faq: { q: null, score: 0 } }, meta: { skill: "product-faq", gap: true } },
+      };
+    }
+
     case "__run_policy_desk__": {
       const desk = runPolicyDesk(String(args.query ?? ctx.vars.query ?? ""), { persistTicket: false });
       return {

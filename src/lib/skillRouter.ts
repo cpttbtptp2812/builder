@@ -2,6 +2,16 @@
 
 import { allRunnableSkills, scoreSkillDetailed, type AgentSkill, type SkillDiscoveryRow } from "./agentSkills";
 import { classifyCapability } from "./policyDesk";
+import { matchKnowledgeSection } from "./ownKnowledge";
+import { matchFaq, matchFaqLoose } from "../data/productFaq";
+
+/** 资料库问答段优先，内置产品问答兜底 */
+function matchProductQuestion(query: string): { q: string; score: number } | null {
+  const kb = matchKnowledgeSection(query);
+  const faq = matchFaq(query);
+  if (kb && (!faq || kb.score >= faq.score)) return { q: kb.section.q, score: kb.score };
+  return faq ? { q: faq.entry.q, score: faq.score } : null;
+}
 
 export const HEALTH_INTENT = /检查|正不正常|正常吗|能不能打开|打得开|探活|健康|体检|性能|ttfb|latency|加载慢|慢不慢|可用吗/i;
 export const ABOUT_SITE_INTENT =
@@ -57,6 +67,7 @@ export function rankSkills(query: string, catalog: AgentSkill[]): SkillDiscovery
 
 /**
  * 决策顺序：
+ * 0. 与产品常见问题几乎一致（≥0.8）→ 产品客服；相近（≥0.6）则排在第 1 步之后
  * 1. 触发词强命中（≥2 分）且领先第二名 → 交给该技能（运维改说法能真正生效）
  * 2. 带网址 → 开放工具；健康/性能问法 → 站点分析；问本站 → 本站介绍；制度问法 → 制度值班；经历/项目 → 知识检索
  * 3. 触发词 ≥2 分但与其他技能打平 → 排序第一的技能
@@ -91,9 +102,15 @@ export function routeQuery(query: string, catalog: AgentSkill[] = allRunnableSki
     ranked,
   });
 
+  const faqSkill = find("product-faq");
+  const faq = faqSkill && !URL_RE.test(query) ? matchProductQuestion(query) : null;
+  const toFaq = () => toSkill(faqSkill!, `内置规则：产品常见问题（像「${faq!.q}」，相似度 ${faq!.score.toFixed(2)}）`, 3, [faq!.q]);
+
+  if (faq && faq.score >= 0.8) return toFaq();
   if (top && top.score >= 2 && margin >= 1) {
     return toSkill(top.skill, `命中说法：${top.hits.join("、")}`, top.score, top.hits);
   }
+  if (faq) return toFaq();
   if (URL_RE.test(query)) return toKind("open", "带网址，且没有技能的说法明显命中");
 
   const health = find("site-analyzer");
@@ -110,6 +127,10 @@ export function routeQuery(query: string, catalog: AgentSkill[] = allRunnableSki
 
   if (top && top.score >= 2) {
     return toSkill(top.skill, `命中说法：${top.hits.join("、")}（与其他技能打平，按排序取第一）`, top.score, top.hits);
+  }
+  const near = faqSkill && !URL_RE.test(query) ? matchFaqLoose(query) : null;
+  if (near) {
+    return toSkill(faqSkill!, `内置规则：没有更合适的去向，按最接近的产品问题「${near.entry.q}」作答`, 1, [near.entry.q]);
   }
   return toKind("open", top?.score ? `说法只命中 ${top.score} 分，不够 2 分` : "没有命中任何技能的说法");
 }

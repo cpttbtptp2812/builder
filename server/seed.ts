@@ -1,6 +1,7 @@
 /** 启动时把 knowledge 语料写入 SQLite */
 
 import { PROJECT_DETAILS } from "../src/data/knowledge.ts";
+import { FAQ_TOPICS, PRODUCT_FAQ } from "../src/data/productFaq.ts";
 import { dbAll, dbGet, dbRun, nowIso, type RagChunkRow } from "./db.ts";
 
 type RagSection = RagChunkRow["section"];
@@ -49,6 +50,20 @@ export function seedRagCorpus() {
   );
 
   return chunks.length;
+}
+
+/** 产品问答写进检索库：每次启动覆盖同 id，改了 productFaq.ts 重启即生效 */
+export function seedFaqChunks() {
+  const titleOf = new Map(FAQ_TOPICS.map((t) => [t.id, t]));
+  for (const e of PRODUCT_FAQ) {
+    const topic = titleOf.get(e.topic)!;
+    const text = `问：${e.q}\n答：${e.a}`;
+    dbRun(
+      `INSERT OR REPLACE INTO rag_chunks (chunk_id, project_id, project_name, section, aspect_key, text, char_count) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [`faq:${e.id}`, topic.docId, topic.title, "desc", null, text, text.length],
+    );
+  }
+  return PRODUCT_FAQ.length;
 }
 
 export function getChunkCount() {

@@ -2,6 +2,7 @@
 
 import { randomUUID } from "node:crypto";
 import { dbGet, dbRun, nowIso } from "./db.ts";
+import { faqKnowledgeDocs } from "../src/data/productFaq.ts";
 
 function insertConfig(key: string, value: string) {
   dbRun("INSERT OR IGNORE INTO app_config(key,value,updated_at) VALUES(?,?,?)", [key, value, nowIso()]);
@@ -64,6 +65,14 @@ export function seedCustomerData() {
         [d.id, d.title, d.body, JSON.stringify(d.prompts), JSON.stringify(d.tags), now, now],
       );
     }
+  }
+
+  /* ── 产品问答（按 id 补齐，后台改过的不覆盖） ── */
+  for (const d of faqKnowledgeDocs()) {
+    dbRun(
+      "INSERT OR IGNORE INTO knowledge_docs(id,title,body,prompts,tags,enabled,created_at,updated_at) VALUES(?,?,?,?,?,1,?,?)",
+      [d.id, d.title, d.body, JSON.stringify(d.prompts), JSON.stringify(["产品问答"]), now, now],
+    );
   }
 
   /* ── 知识广场 ── */

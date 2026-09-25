@@ -1,5 +1,14 @@
 /** 客户可配置知识库 — localStorage，检索与欢迎问句同源 */
 
+import {
+  faqKnowledgeDocs,
+  normalizeQuestion,
+  parseQaSections,
+  questionSimilarity,
+  FAQ_MATCH_THRESHOLD,
+  type QaSection,
+} from "../data/productFaq";
+
 export type KnowledgeDoc = {
   id: string;
   title: string;
@@ -40,6 +49,7 @@ const SEED: Omit<KnowledgeDoc, "updatedAt">[] = [
       "阿里剑池项目侧重前端重构与性能优化：拆包、懒加载、关键路径渲染优化，以及与业务稳定性相关的监控与回滚策略。可回答架构取舍、性能指标与团队协作方式。",
     prompts: ["讲讲阿里剑池做了哪些优化"],
   },
+  ...faqKnowledgeDocs(),
 ];
 
 function now() {
@@ -141,7 +151,38 @@ function normPrompt(s: string) {
   return s.trim().toLowerCase();
 }
 
-function formatPresetDocAnswer(doc: KnowledgeDoc, query: string): string {
+export { parseQaSections, type QaSection };
+
+function findSection(doc: KnowledgeDoc, question: string): QaSection | null {
+  const q = normalizeQuestion(question);
+  if (!q) return null;
+  return parseQaSections(doc.body).find((s) => normalizeQuestion(s.q) === q) ?? null;
+}
+
+export type SectionMatch = { doc: KnowledgeDoc; section: QaSection; score: number };
+
+/** 在所有资料的问答段里找最接近的问题（允许换个说法） */
+export function matchKnowledgeSection(query: string, threshold = FAQ_MATCH_THRESHOLD): SectionMatch | null {
+  const q = normalizeQuestion(query);
+  if (q.length < 2) return null;
+  let best: SectionMatch | null = null;
+  for (const doc of listKnowledgeDocs()) {
+    for (const section of parseQaSections(doc.body)) {
+      const f = normalizeQuestion(section.q);
+      const score = f === q ? 1 : questionSimilarity(q, f);
+      if (!best || score > best.score) best = { doc, section, score };
+    }
+  }
+  return best && best.score >= threshold ? best : null;
+}
+
+function formatPresetDocAnswer(doc: KnowledgeDoc, query: string, prompt?: string): string {
+  const section = findSection(doc, prompt ?? query) ?? (prompt ? findSection(doc, query) : null);
+  if (section) return section.a;
+  const sections = parseQaSections(doc.body);
+  if (sections.length >= 2) {
+    return [`## ${doc.title}`, "", `这篇资料回答了 ${sections.length} 个问题，可以直接问其中任意一个：`, "", ...sections.map((s) => `- ${s.q}`)].join("\n");
+  }
   const lines = [`## ${doc.title}`, "", doc.body.trim()];
   if (/怎么|如何|怎样/.test(query)) {
     lines.unshift(`针对「${query.trim()}」，说明如下：`, "");
@@ -161,12 +202,20 @@ export function matchPresetQuery(query: string): PresetMatch | null {
 
   for (const doc of listKnowledgeDocs()) {
     if (!doc.body.trim()) continue;
+    const section = findSection(doc, query);
+    if (section) return { doc, answer: section.a, score: 1 };
+  }
+
+  for (const doc of listKnowledgeDocs()) {
+    if (!doc.body.trim()) continue;
     for (const raw of doc.prompts) {
       const p = normPrompt(raw);
       if (!p) continue;
-      if (p === q || q === normPrompt(doc.title)) {
-        return { doc, answer: formatPresetDocAnswer(doc, query), score: 1 };
-      }
+      if (p === q) return { doc, answer: formatPresetDocAnswer(doc, query, raw), score: 1 };
+    }
+    const title = normPrompt(doc.title);
+    if (q === title || (title.length >= 4 && /^(介绍|讲讲|说说|了解)/.test(q) && q.includes(title))) {
+      return { doc, answer: formatPresetDocAnswer(doc, query), score: 1 };
     }
   }
 
@@ -174,9 +223,9 @@ export function matchPresetQuery(query: string): PresetMatch | null {
     if (!doc.body.trim()) continue;
     for (const raw of doc.prompts) {
       const p = normPrompt(raw);
-      if (!p || p.length < 4) continue;
+      if (!p || p.length < 4 || q.length < 4) continue;
       if (q.includes(p) || p.includes(q)) {
-        return { doc, answer: formatPresetDocAnswer(doc, query), score: 0.88 };
+        return { doc, answer: formatPresetDocAnswer(doc, query, raw), score: 0.88 };
       }
     }
   }

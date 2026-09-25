@@ -2,8 +2,9 @@
 
 import { dbAll, dbRun, nowIso } from "./db.ts";
 import { formatRagContext, retrieveRagFromDb } from "./rag.ts";
-import { explainDiscovery, runSkillOnServer, getSkill } from "./skills.ts";
+import { explainDiscovery, runSkillOnServer, getSkill, matchProductFaqOnServer } from "./skills.ts";
 import { classifyCapability } from "../src/lib/policyDesk.ts";
+import { matchFaqLoose } from "../src/data/productFaq.ts";
 import { ragHitsForMcp } from "./rag.ts";
 
 export function listMemories(sessionId: string) {
@@ -58,6 +59,8 @@ export function buildMemoryContextBlock(sessionId: string) {
 }
 
 function pickSkill(query: string): { skillId: string | null; hits: string[]; score: number; kind: "skill" | "about" | "knowledge" | "none" } {
+  const faq = getSkill("product-faq") ? matchProductFaqOnServer(query) : null;
+  if (faq) return { skillId: "product-faq", hits: [faq.q], score: 3, kind: "skill" };
   if (/检查|正不正常|正常吗|能不能打开|打得开|探活|健康|体检|性能|ttfb|latency|加载慢|慢不慢|可用吗/i.test(query)) {
     return { skillId: "site-analyzer", hits: ["health-intent"], score: 2, kind: "skill" };
   }
@@ -75,6 +78,8 @@ function pickSkill(query: string): { skillId: string | null; hits: string[]; sco
   const top = rows[0];
   if (top && top.score > 0) return { skillId: top.skill.id, hits: top.hits, score: top.score, kind: "skill" };
   if (/dom|元素|snapshot/i.test(query)) return { skillId: "dom-probe", hits: ["fallback"], score: 1, kind: "skill" };
+  const near = getSkill("product-faq") ? matchFaqLoose(query) : null;
+  if (near) return { skillId: "product-faq", hits: [near.entry.q], score: 1, kind: "skill" };
   return { skillId: null, hits: [], score: 0, kind: "none" };
 }
 
