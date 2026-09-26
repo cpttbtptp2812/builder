@@ -127,7 +127,7 @@ function usablePhrase(p: string): boolean {
 }
 
 /** 从提问里切出候选说法：分词后的完整词、相邻两词组合、英文单词 */
-function phraseCandidates(q: string): string[] {
+export function phraseCandidates(q: string): string[] {
   const out = new Set<string>();
   for (const w of q.toLowerCase().match(/[a-z][a-z0-9_-]{2,}/g) ?? []) {
     if (!/^(https?|www|com|example)$/.test(w)) out.add(w);

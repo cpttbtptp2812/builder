@@ -1,7 +1,9 @@
 /** Guest Agent — 浏览器内开放工具循环（不依赖固定演示句） */
 
 import {
+  allRunnableSkills,
   runSkill,
+  SKILL_CATALOG,
   type AgentSkill,
   type SkillResult,
   type SkillTraceStep,
@@ -31,6 +33,8 @@ export type GuestTurnCtx = {
   force?: GuestForce;
   pinned?: string;
   promptAddon?: string;
+  /** 路由已确定的技能（共形路由有把握或用户在反问里选定），跳过关键词路由 */
+  pinSkillId?: string;
 };
 
 type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
@@ -102,7 +106,12 @@ function expandQuery(query: string, history?: AgentChatMessage[]): string {
   return `${lastUser.content}\n追问：${query}`;
 }
 
-function pickSkill(query: string): SkillPick {
+function pickSkill(query: string, pinSkillId?: string): SkillPick {
+  const pinned = pinSkillId ? allRunnableSkills().find((s) => s.id === pinSkillId) : undefined;
+  if (pinned) {
+    logRoutedQuery(query, { kind: "skill", skillId: pinned.id, score: 10 });
+    return { kind: "skill", skill: pinned, hits: ["语义路由"], score: 10 };
+  }
   const d = routeQuery(query);
   logRoutedQuery(query, d);
   if (d.kind === "skill" && d.skill) return { kind: "skill", skill: d.skill, hits: d.hits, score: d.score };
@@ -501,7 +510,8 @@ export async function runGuestAgentTurn(
   if (
     peekRuntimeConfig().features.preferServerGuest &&
     !ctx.force &&
-    !ctx.pinned?.trim()
+    !ctx.pinned?.trim() &&
+    !ctx.pinSkillId
   ) {
     try {
       const remote = await runGuestAgentAsync(query, { snapshotRoot: ctx.snapshotRoot });
@@ -557,7 +567,7 @@ export async function runGuestAgentTurn(
     });
   }
 
-  const pick = pickSkill(working);
+  const pick = pickSkill(working, ctx.pinSkillId);
   const expanded = expandQuery(working, ctx.history);
 
   if (pick.kind === "about-site" || pick.kind === "knowledge" || pick.kind === "open") {
@@ -616,7 +626,7 @@ export async function runGuestAgentTurn(
     {
       snapshotRoot: ctx.snapshotRoot,
       probeUrl:
-        skill.id === "release-inspector"
+        skill.id === "release-inspector" || !SKILL_CATALOG.some((s) => s.id === skill.id)
           ? extractUrlFromText(query) ?? undefined
           : undefined,
       onStepStart: (step) => {

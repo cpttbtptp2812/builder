@@ -30,6 +30,8 @@ export type OwnChatMessage = {
   role: "user" | "assistant";
   createdAt?: number;
   content: string;
+  /** 气泡里显示的是缩写时（如巡检只显示网址），保留用户原话 */
+  rawQuery?: string;
   reasoning?: string;
   mode?: "guest" | "llm" | "multi" | "eval" | "sheet" | "plaza";
   runtime?: "server" | "local";

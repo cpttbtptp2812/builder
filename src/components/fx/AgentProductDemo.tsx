@@ -35,6 +35,8 @@ import { isAuthError, runGuestAgentTurn, toolPreviewFromResult } from "../../lib
 import { appendSessionTurn, clearSessionTurns } from "../../lib/agentMemory";
 import { isLlmConfigured, loadLlmConfig, saveLlmConfig, type LlmConfig } from "../../lib/llmConfig";
 import { downloadText } from "../../lib/importedSkills";
+import { draftFromMessages, type DemoDraft } from "../../lib/skillFromDemo";
+import { SkillFromDemoDialog } from "../ownagent/SkillFromDemo";
 import { runMultiAgentAsync } from "../../lib/backendBridge";
 import type { MultiAgentStep } from "../../lib/multiAgentRuntime";
 import { getRuntimeConfig } from "../../lib/runtimeConfig";
@@ -98,6 +100,14 @@ import {
 } from "../../lib/ownagentSessions";
 import { activePromptLabel, getActiveSystemAddon } from "../../lib/agentPromptRuntime";
 import { evaluatePolicyGate } from "../../lib/policyGate";
+import {
+  ANSWER_CLASS,
+  getConformalRouter,
+  recordRouteFeedback,
+  semanticStatus,
+  upgradeToSemantic,
+  type RouteVerdict,
+} from "../../lib/conformalRouter";
 import { parseSlash, slashSuggestions } from "../../lib/slashCommands";
 import { OwnCommandPalette, type PaletteItem } from "../ownagent/OwnCommandPalette";
 import { getMcpTool } from "../../lib/mcpBridgeLab";
@@ -183,6 +193,7 @@ export function AgentProductDemo({
   const rootRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const clarifyRef = useRef<{ query: string; options: { label: string; id: string }[] } | null>(null);
   const sendLockRef = useRef(false);
   const [footerHeight, setFooterHeight] = useState(120);
   const latestAnswerIdRef = useRef<string | null>(null);
@@ -231,6 +242,8 @@ export function AgentProductDemo({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pinned, setPinned] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [skillDraft, setSkillDraft] = useState<DemoDraft | null>(null);
+  const [skillSavedNote, setSkillSavedNote] = useState<string | null>(null);
   const [threadSearch, setThreadSearch] = useState("");
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [resultFlash, setResultFlash] = useState(false);
@@ -400,8 +413,12 @@ export function AgentProductDemo({
   const send = useCallback(
     async (text: string) => {
       const parsed = parseSlash(text);
-      const q = parsed.query.trim();
-      if (!q || running || sendLockRef.current) return;
+      if (!parsed.query.trim() || running || sendLockRef.current) return;
+      const clarify = clarifyRef.current;
+      clarifyRef.current = null;
+      const picked = clarify?.options.find((o) => o.label === text.trim());
+      const q = picked ? clarify!.query : parsed.query.trim();
+      if (picked) recordRouteFeedback(q, picked.id);
 
       sendLockRef.current = true;
       abortRef.current?.abort();
@@ -413,6 +430,7 @@ export function AgentProductDemo({
         id: uid(),
         role: "user",
         content: inspectPreview ? `巡检 ${inspectPreview.url}` : text.trim(),
+        rawQuery: inspectPreview ? q : undefined,
         createdAt: Date.now(),
       };
       const assistantId = uid();
@@ -468,6 +486,8 @@ export function AgentProductDemo({
       let turnRuntimeLocal: "server" | "local" | undefined;
       let turnRagRuntimeLocal: "server" | "local" | undefined;
       let releaseInspectReport: ReleaseInspectReport | undefined;
+      let forcedFollowUps: string[] | undefined;
+      let pinSkillId: string | undefined;
       let turnDone = false;
 
       const bindStreamJournal = (ev: AgentStreamEvent) => {
@@ -538,7 +558,9 @@ export function AgentProductDemo({
             ? merged.filter((a) => !(a.kind === "table" && a.id.startsWith("md-table-")))
             : merged;
         const asked = [...messages.map((m) => m.content), q, text.trim()];
-        const followUps = releaseInspectReport
+        const followUps = forcedFollowUps
+          ? forcedFollowUps
+          : releaseInspectReport
           ? []
           : followUpsFor({
               policyTrust,
@@ -593,7 +615,7 @@ export function AgentProductDemo({
               route,
               inlineEval,
               followUps,
-              answerInsight,
+              answerInsight: forcedFollowUps ? undefined : answerInsight,
               artifacts: deduped.length ? deduped : undefined,
               plazaSource: plazaSourceLocal,
               releaseInspect: releaseInspectReport,
@@ -722,7 +744,38 @@ export function AgentProductDemo({
           }
         }
 
-        if (!parsed.force && !parsed.evalKind) {
+        if (!parsed.force && !parsed.evalKind && !useLlm && orchMode !== "multi") {
+          const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+          if (semanticStatus().status === "idle" && !conn?.saveData) void upgradeToSemantic();
+          if (picked) {
+            if (picked.id !== ANSWER_CLASS) pinSkillId = picked.id;
+            jChip("route", `你选了：${picked.label}（已记入校准数据）`);
+          } else {
+            const verdict = await (await getConformalRouter()).decide(q);
+            jChip("route", routeVerdictChip(verdict));
+            if (verdict.status === "confident" && verdict.top.id !== ANSWER_CLASS) {
+              pinSkillId = verdict.top.id;
+            } else if (verdict.status === "ambiguous") {
+              clarifyRef.current = { query: q, options: verdict.set.map((c) => ({ label: c.label, id: c.id })) };
+              forcedFollowUps = verdict.set.map((c) => c.label);
+              mode = "guest";
+              route = {
+                skillId: "conformal-router",
+                skillName: "路由把握度不足 · 先确认",
+                score: Math.round(verdict.top.p * 10),
+                hits: verdict.set.map((c) => `${c.label} ${Math.round(c.p * 100)}%`),
+                path: "skill",
+              };
+              const md = clarifyMarkdown(verdict);
+              jActivate("write");
+              setStreamText(md);
+              finish(md, "共形路由 · 预测集含多个去向");
+              return;
+            }
+          }
+        }
+
+        if (!parsed.force && !parsed.evalKind && !pinSkillId) {
           const preset = matchPresetQuery(q);
           if (preset) {
             mode = "guest";
@@ -810,7 +863,7 @@ export function AgentProductDemo({
         if (ws.skillHint) jChip("route", ws.skillHint);
 
         const sheet = synthesizeCompareTable(q);
-        if (sheet && !parsed.force && !parsed.evalKind) {
+        if (sheet && !parsed.force && !parsed.evalKind && !pinSkillId) {
           mode = "sheet";
           route = {
             skillId: "ai-sheet",
@@ -952,6 +1005,7 @@ export function AgentProductDemo({
             history: historyRef.current,
             force: parsed.force,
             pinned: pinned || undefined,
+            pinSkillId,
             promptAddon,
           },
           onEv,
@@ -1169,6 +1223,12 @@ export function AgentProductDemo({
     }
   }
 
+  function openSaveAsSkill() {
+    const draft = draftFromMessages(messages);
+    if (!draft.queries.length) return;
+    setSkillDraft(draft);
+  }
+
   function openSourcesPanel() {
     setFlowOpen(true);
     setRightTab("graph");
@@ -1219,6 +1279,7 @@ export function AgentProductDemo({
       },
       { id: "export", group: "会话", label: "导出 Markdown", run: () => exportActive("md") },
       { id: "export-json", group: "会话", label: "导出 JSON", run: () => exportActive("json") },
+      { id: "save-skill", group: "会话", label: "把这段对话存为技能", run: openSaveAsSkill },
       { id: "retry", group: "会话", label: "重试上一问", run: retryLast },
       { id: "eval", group: "编排", label: "对话内评测 /eval", run: () => void send("/eval") },
       {
@@ -1587,6 +1648,16 @@ export function AgentProductDemo({
                           ↻
                         </button>
                       )}
+                      {m.role === "assistant" && idx === messages.length - 1 && !running && (
+                        <button
+                          type="button"
+                          className="ua-msg-act ua-msg-act--text"
+                          title="以后用户这样问，就按这段对话的步骤自动处理"
+                          onClick={openSaveAsSkill}
+                        >
+                          存为技能
+                        </button>
+                      )}
                     </div>
                   </div>
                   {m.role === "user" ? (
@@ -1938,6 +2009,18 @@ export function AgentProductDemo({
 
       <OwnCommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} items={paletteItems} />
 
+      {skillDraft ? (
+        <SkillFromDemoDialog
+          initial={skillDraft}
+          onClose={() => setSkillDraft(null)}
+          onSaved={(_, name) => {
+            setSkillSavedNote(`已存为技能「${name}」，以后这样问会自动按这些步骤处理；可在技能管理里修改`);
+            window.setTimeout(() => setSkillSavedNote(null), 4000);
+          }}
+        />
+      ) : null}
+      {skillSavedNote ? <div className="own-skm-toast" role="status">{skillSavedNote}</div> : null}
+
       {replayMsg?.flowJournal && (
         <TurnReplayTheater
           query={
@@ -1954,4 +2037,24 @@ export function AgentProductDemo({
       )}
     </div>
   );
+}
+
+function routeVerdictChip(v: RouteVerdict): string {
+  const target = `目标 ${Math.round((1 - v.alpha) * 100)}%`;
+  const pct = (p: number) => `${Math.round(p * 100)}%`;
+  if (v.status === "ood") return `路由：不像已知任何一类（p=${v.inScopeP.toFixed(2)}），走通用流程`;
+  if (v.status === "confident") return `路由把握度：${v.top.label} ${pct(v.top.p)}（${target}）`;
+  if (v.status === "ambiguous") return `路由有 ${v.set.length} 种可能：${v.set.map((c) => c.label).join(" / ")}`;
+  return `路由把握不足（${v.set.length} 个候选），走通用流程`;
+}
+
+function clarifyMarkdown(v: RouteVerdict): string {
+  const lines = v.set.map((c) => `- **${c.label}**（${Math.round(c.p * 100)}%）`);
+  return [
+    `这句话有 ${v.set.length} 种理解，先确认再做：`,
+    "",
+    ...lines,
+    "",
+    "点下面的选项即可，你的选择会用来让之后的判断更准。",
+  ].join("\n");
 }

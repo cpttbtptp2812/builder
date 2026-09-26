@@ -15,6 +15,14 @@ import { applyStepVarWrites } from "./skillVarBindings";
 import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { faqAnswerMarkdown, faqFallbackMarkdown, matchFaq } from "../data/productFaq";
+import { composeStepsMarkdown } from "./composeSteps";
+
+/**
+ * 答案层：只查现成答案（资料库问答段 + 内置产品问答）、不调工具。
+ * 仍以 SKILL.md 形式运行，但不属于「技能」——技能管理里不展示，内容在知识广场 / 资料库维护。
+ */
+export const ANSWER_LAYER_SKILL_ID = "product-faq";
+export const isAnswerLayerSkill = (id: string) => id === ANSWER_LAYER_SKILL_ID;
 
 function answerProductFaq(query: string): SkillResult {
   const kb = matchKnowledgeSection(query);
@@ -294,6 +302,9 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
 
     case "__answer_faq__":
       return { content: answerProductFaq(String(args.query ?? "")) };
+
+    case "__compose_steps__":
+      return { content: { markdown: composeStepsMarkdown(args), meta: { skill: "compose-steps" } } };
 
     case "__run_policy_desk__": {
       const desk = runPolicyDesk(String(args.query ?? ""));

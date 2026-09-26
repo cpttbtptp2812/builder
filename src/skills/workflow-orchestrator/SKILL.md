@@ -1,6 +1,6 @@
 ---
 name: workflow-orchestrator
-description: iMean workflow 入队 + 执行面 snapshot — TaskQueue 上游
+description: 工作流编排 — iMean workflow 入队 + 执行面 snapshot，TaskQueue 上游
 triggers:
   - workflow
   - 自动化

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AGENT_SKILLS, getBuiltinSkill, getLiveCatalog, type AgentSkill } from "../../lib/agentSkills";
+import { AGENT_SKILLS, getBuiltinSkill, getLiveCatalog, isAnswerLayerSkill, type AgentSkill } from "../../lib/agentSkills";
 import { extractUrlFromText } from "../../lib/releaseInspect";
 import {
   candidateVersion,
@@ -49,6 +49,10 @@ import {
   removeImportedSkill,
   type SkillExportRecord,
 } from "../../lib/importedSkills";
+import { buildZip, downloadBlob } from "../../lib/zipStore";
+import { SkillEvolutionPanel } from "./SkillEvolution";
+import { RouteConfidencePanel } from "./RouteConfidence";
+import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { OaBtn, OaPage } from "./OaUi";
 import {
   addTriggerTo,
@@ -131,6 +135,7 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [importOpen, setImportOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
 
@@ -139,7 +144,7 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
 
   const skills = useMemo(() => {
     const live = new Map(getLiveCatalog().map((s) => [s.id, s]));
-    const builtin = AGENT_SKILLS.map((b) => live.get(b.id) ?? b);
+    const builtin = AGENT_SKILLS.filter((b) => !isAnswerLayerSkill(b.id)).map((b) => live.get(b.id) ?? b);
     const extra = loadImportedSkills().filter((s) => !live.has(s.id));
     return [...builtin, ...extra];
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -192,6 +197,36 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     toast.show(`已导出 ${exportTargets.length} 份 SKILL.md`);
   }
 
+  const factoryManifest = useMemo(() => new Map(AGENT_SKILLS.map((s) => [s.id, s.manifest])), []);
+  const changedRows = skills.filter((s) => importedIds.has(s.id) || factoryManifest.get(s.id) !== s.manifest);
+  const repoTargets = selectedRows.length ? selectedRows : changedRows;
+
+  function exportToRepo() {
+    if (!repoTargets.length) {
+      toast.show("没有已发布或导入的改动，线上版本和仓库一致");
+      return;
+    }
+    const readme = [
+      "把本压缩包里的 skills 文件夹解压到项目的 src/ 目录下，覆盖同名文件。",
+      "然后提交并推送：",
+      "",
+      "  git add src/skills",
+      '  git commit -m "update skills"',
+      "  git push",
+      "",
+      "GitHub Actions 构建完成后，所有访客都会用上这些技能。",
+      "",
+      "包含技能：",
+      ...repoTargets.map((s) => `- ${s.id}（${s.name}）`),
+    ].join("\n");
+    const zip = buildZip([
+      ...repoTargets.map((s) => ({ path: `skills/${s.id}/SKILL.md`, text: s.manifest })),
+      { path: "README.txt", text: readme },
+    ]);
+    downloadBlob("ownagent-skills-repo.zip", zip);
+    toast.show(`已打包 ${repoTargets.length} 个技能，解压到 src/ 后提交即可上线`);
+  }
+
   function removeSelectedImported() {
     const ids = selectedRows.filter((s) => importedIds.has(s.id)).map((s) => s.id);
     if (!ids.length) {
@@ -233,7 +268,10 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   }
 
   return (
-    <OaPage title="技能管理" desc="每个技能决定「用户这样说时，AI 按什么步骤回答」。点进去可以查看、修改、检查后发布。">
+    <OaPage
+      title="技能管理"
+      desc="技能负责「做事」：用户这样说时，AI 调哪些工具、按什么步骤做。只需要回答问题的内容，请加到知识广场或资料库。"
+    >
       {toast.node}
       <div className="own-skm-list-bar">
         <input
@@ -246,6 +284,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           <button type="button" className="own-skm-batch-btn" onClick={toggleAll} disabled={!rows.length}>
             {selectedRows.length === rows.length && rows.length ? "取消全选" : "全选"}
           </button>
+          <button type="button" className="own-skm-batch-btn" onClick={() => setCreating(true)}>
+            新建技能
+          </button>
           <button type="button" className="own-skm-batch-btn" onClick={() => setImportOpen((v) => !v)}>
             导入
           </button>
@@ -254,6 +295,14 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           </button>
           <button type="button" className="own-skm-batch-btn" onClick={exportMarkdown} disabled={!exportTargets.length}>
             导出 MD{selectedRows.length ? ` (${selectedRows.length})` : ""}
+          </button>
+          <button
+            type="button"
+            className="own-skm-batch-btn"
+            onClick={exportToRepo}
+            title="打包成 src/skills 目录结构，解压提交后对所有访客生效"
+          >
+            导出到仓库{repoTargets.length ? ` (${repoTargets.length})` : ""}
           </button>
           {selectedRows.some((s) => importedIds.has(s.id)) ? (
             <button type="button" className="own-skm-batch-btn own-skm-batch-btn--danger" onClick={removeSelectedImported}>
@@ -267,6 +316,17 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           {selectedRows.length ? ` · 已选 ${selectedRows.length}` : ""}
         </span>
       </div>
+
+      <RouteConfidencePanel />
+      <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
+
+      {creating ? (
+        <SkillFromDemoDialog
+          initial={{ name: "", description: "", triggers: [], tools: ["knowledge_search"], queries: [], clashes: [] }}
+          onClose={() => setCreating(false)}
+          onSaved={(_, name) => toast.show(`已新建技能「${name}」`)}
+        />
+      ) : null}
 
       {importOpen ? (
         <div

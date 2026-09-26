@@ -36737,6 +36737,92 @@ button.agent-tool-chip {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
+/* 技能进化 */
+.own-evo {
+  margin-bottom: 0.85rem;
+  border: 1px solid #e9d5ff;
+  border-radius: 12px;
+  background: #fdfaff;
+  font-size: 0.78rem;
+  color: #44403c;
+}
+.own-evo--loading { padding: 0.6rem 0.9rem; color: #a8a29e; border-style: dashed; }
+.own-evo-head {
+  all: unset;
+  box-sizing: border-box;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  cursor: pointer;
+}
+.own-evo-dot { width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; flex-shrink: 0; }
+.own-evo-sub { color: #78716c; font-size: 0.72rem; }
+.own-evo-toggle { margin-left: auto; color: #6d28d9; font-size: 0.72rem; }
+.own-evo-body { padding: 0 0.9rem 0.8rem; display: flex; flex-direction: column; gap: 0.75rem; }
+.own-evo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
+.own-evo-list > li { padding: 0.45rem 0.6rem; background: #fff; border: 1px solid #f1f0ef; border-radius: 8px; }
+.own-evo-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.own-evo-acts { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+.own-evo-orphans p { margin: 0 0 0.4rem; }
+.own-evo-orphans ul { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
+.own-evo-orphans label { display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; }
+.own-evo em, .own-sfd em { color: #a8a29e; font-style: normal; font-size: 0.68rem; }
+
+/* 路由把握度 */
+.own-rc { border-color: #d6e4f0; background: #fafcfe; }
+.own-rc-dot { background: #0ea5e9; }
+.own-rc-lead, .own-rc-note { margin: 0; color: #78716c; line-height: 1.55; }
+.own-rc-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.6rem; }
+.own-rc-seg { display: inline-flex; border: 1px solid #e7e5e4; border-radius: 8px; overflow: hidden; }
+.own-rc-seg button { all: unset; cursor: pointer; padding: 0.2rem 0.65rem; font-size: 0.74rem; color: #57534e; }
+.own-rc-seg button + button { border-left: 1px solid #e7e5e4; }
+.own-rc-seg button.is-on { background: #0ea5e9; color: #fff; }
+.own-rc-model { margin-left: auto; display: inline-flex; align-items: center; gap: 0.5rem; color: #78716c; font-size: 0.72rem; }
+.own-rc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.5rem; }
+.own-rc-grid > div { display: flex; flex-direction: column; gap: 0.1rem; padding: 0.5rem 0.65rem; background: #fff; border: 1px solid #f1f0ef; border-radius: 8px; }
+.own-rc-grid b { font-size: 1.1rem; color: #1c1917; font-variant-numeric: tabular-nums; }
+.own-rc-grid b.is-ok { color: #047857; }
+.own-rc-grid b.is-warn { color: #b45309; }
+.own-rc-grid small { color: #a8a29e; font-size: 0.68rem; }
+.own-rc-try input { width: 100%; box-sizing: border-box; padding: 0.4rem 0.6rem; border: 1px solid #e7e5e4; border-radius: 8px; font: inherit; }
+.own-rc-verdict { margin-top: 0.45rem; }
+.own-rc-verdict ul { list-style: none; margin: 0.3rem 0 0; padding: 0; display: flex; flex-direction: column; gap: 0.25rem; }
+.own-rc-verdict li { display: grid; grid-template-columns: 8rem 1fr 2.6rem; align-items: center; gap: 0.5rem; }
+.own-rc-verdict li i { display: block; height: 6px; border-radius: 3px; background: #7dd3fc; }
+.own-rc-verdict li em { text-align: right; }
+@media (max-width: 640px) { .own-rc-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* 存为技能 */
+.own-sfd { width: min(600px, 100%); max-height: calc(100vh - 2rem); overflow: auto; font-size: 0.8rem; color: #44403c; }
+.own-sfd-head { display: flex; flex-direction: column; gap: 0.15rem; }
+.own-sfd-head strong { font-size: 0.95rem; color: #1c1917; }
+.own-sfd-head span, .own-sfd-field small { color: #78716c; font-size: 0.72rem; }
+.own-sfd-field { display: flex; flex-direction: column; gap: 0.3rem; }
+.own-sfd-field > span { font-weight: 600; color: #292524; }
+.own-sfd-field input:not([type="checkbox"]), .own-sfd-field textarea {
+  font: inherit;
+  padding: 0.4rem 0.55rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  resize: vertical;
+}
+.own-sfd-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 0.3rem; padding: 0.3rem; border: 1px solid #e7e5e4; border-radius: 8px; }
+.own-sfd-chips input:not([type="checkbox"]) { border: none; flex: 1; min-width: 8rem; padding: 0.2rem; outline: none; }
+.own-sfd-chip { font: inherit; font-size: 0.74rem; padding: 0.15rem 0.5rem; border: 1px solid #ddd6fe; border-radius: 999px; background: #f5f3ff; color: #5b21b6; cursor: pointer; }
+.own-sfd-tools { display: flex; flex-wrap: wrap; gap: 0.35rem 1rem; }
+.own-sfd-tools label { display: inline-flex; flex-direction: row; align-items: center; gap: 0.3rem; cursor: pointer; }
+.own-sfd-tools input { margin: 0; width: auto; }
+.own-sfd-warn { color: #b45309; margin: 0; font-size: 0.72rem; }
+.own-sfd-trial { margin: 0; padding: 0.6rem; background: #fafaf9; border: 1px solid #f1f0ef; border-radius: 8px; white-space: pre-wrap; max-height: 12rem; overflow: auto; font: inherit; font-size: 0.74rem; }
+.own-sfd-raw summary { cursor: pointer; color: #78716c; font-size: 0.72rem; }
+.own-sfd-raw pre { margin: 0.4rem 0 0; padding: 0.6rem; background: #1c1917; color: #e7e5e4; border-radius: 8px; font-size: 0.7rem; max-height: 14rem; overflow: auto; }
+.own-sfd-actions { display: flex; justify-content: flex-end; gap: 0.4rem; }
+.own-sfd-primary { background: #6d28d9; border-color: #6d28d9; color: #fff; }
+.own-sfd-primary:hover:not(:disabled) { background: #5b21b6; color: #fff; }
+.ua-msg-act.ua-msg-act--text { width: auto; padding: 0 0.45rem; font-size: 0.7rem; }
+
 .own-skm-draft-banner {
   display: flex;
   flex-wrap: wrap;

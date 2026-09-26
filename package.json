@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^1.14.4",
+    "@huggingface/transformers": "^3.8.1",
     "@xyflow/react": "^12.11.5",
     "hono": "^4.7.10",
     "react": "^19.2.0",

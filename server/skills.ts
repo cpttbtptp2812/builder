@@ -22,6 +22,7 @@ import {
   type SkillManifest,
 } from "../src/lib/skillMarkdown.ts";
 import { applyStepVarWrites } from "../src/lib/skillVarBindings.ts";
+import { composeStepsMarkdown } from "../src/lib/composeSteps.ts";
 import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "../src/lib/releaseInspect.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { buildProbeBodyFromHtml, readProbeHtml } from "../src/lib/htmlProbeMeta.ts";
@@ -297,6 +298,9 @@ async function callTool(
           : { markdown: faqFallbackMarkdown(query), dashboard: { faq: { q: null, score: 0 } }, meta: { skill: "product-faq", gap: true } },
       };
     }
+
+    case "__compose_steps__":
+      return { content: { markdown: composeStepsMarkdown(args), meta: { skill: "compose-steps", runtime: "server" } } };
 
     case "__run_policy_desk__": {
       const desk = runPolicyDesk(String(args.query ?? ctx.vars.query ?? ""), { persistTicket: false });

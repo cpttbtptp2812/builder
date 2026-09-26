@@ -22,6 +22,7 @@ export const INTERNAL_TOOLS: InternalToolDef[] = [
   { name: "__compose_workflow_trace__", label: "Workflow 追踪", effect: "pure", availableIn: ["browser", "server"] },
   { name: "__compose_knowledge__", label: "知识检索报告", effect: "pure", availableIn: ["browser", "server"] },
   { name: "__answer_faq__", label: "产品问答", effect: "pure", availableIn: ["browser", "server"] },
+  { name: "__compose_steps__", label: "汇总各步结果", effect: "pure", availableIn: ["browser", "server"] },
 ];
 
 const INTERNAL_BY_NAME = new Map(INTERNAL_TOOLS.map((t) => [t.name, t]));
