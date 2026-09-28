@@ -26,6 +26,7 @@ import {
   type TraceDiff,
   type TraceEvalRow,
 } from "../../lib/provingGround";
+import { ScmAttributionPanel } from "./ScmAttributionPanel";
 import { SKILL_CATALOG as BUILTIN_CATALOG } from "../../lib/agentSkills";
 import { getAppliedSkill, getPublishedVersion, submitCompareDraft, SKILL_PUBLISH_EVENT } from "../../lib/skillCompareStore";
 import {
@@ -607,6 +608,12 @@ function DeveloperModeSheet({
                 {proveRow.pass ? "回归通过" : "回归失败"}：{proveRow.detail}
               </p>
             ) : null}
+            <ScmAttributionPanel
+              skillId={skill.id}
+              observedTrace={proveRow?.trace ?? (trace.length ? trace : undefined)}
+              liveTrace={trace.length > 0 && runtime !== "server"}
+              autoOpen={proveRow?.pass === false || (trace.length > 0 && trace.some((t) => !t.ok))}
+            />
             {shadowDiff ? (
               <p className={`own-skill-prove-result ${shadowDiff.sameSkeleton ? "ok" : "fail"}`}>
                 与基线对比：{shadowDiff.sameSkeleton ? "工具链未变" : shadowDiff.summary}

@@ -44,6 +44,15 @@ function edit(raw: string, fn: (p: Parts) => void): string {
   return join(p);
 }
 
+export function setName(raw: string, name: string): string {
+  return edit(raw, (p) => {
+    const line = `name: ${yamlScalar(name)}`;
+    const r = blockRange(p.fm, "name");
+    if (r) p.fm.splice(r[0], r[1] - r[0], line);
+    else p.fm.unshift(line);
+  });
+}
+
 export function setDescription(raw: string, description: string): string {
   return edit(raw, (p) => {
     const line = `description: ${yamlScalar(description)}`;

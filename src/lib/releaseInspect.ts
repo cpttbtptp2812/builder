@@ -150,6 +150,7 @@ function formatProbeError(raw: string, via?: string): string {
 function probeDetailSuffix(via?: unknown): string {
   if (via === "server") return " · 服务端探活";
   if (via === "browser") return " · 浏览器直连";
+  if (via === "demo") return " · 演示探活（未连 API，example.com 等预制 URL）";
   return "";
 }
 

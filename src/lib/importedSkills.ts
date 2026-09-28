@@ -8,6 +8,7 @@ import {
   type SkillManifest,
   type SkillPeer,
 } from "./skillMarkdown";
+import { repairSkillMarkdown } from "./skillRepair";
 
 function readBuiltinSkillFiles(): Record<string, string> {
   const globFn = (import.meta as ImportMeta & { glob?: (p: string, o: object) => Record<string, string> }).glob;
@@ -94,7 +95,8 @@ export function installImportedMarkdown(raw: string, taken: Set<string>, preferr
   const looksLikeFilename = Boolean(preferredId && /\.(md|markdown|json)$/i.test(preferredId));
   const seed = looksLikeFilename ? parsed.name || fromFile : fromFile || parsed.name;
   const id = uniqueImportedId(seed || skillIdFromPath(preferredId ?? "") || "imported-skill", taken);
-  const record: ImportedRecord = { id, raw, importedAt: new Date().toISOString() };
+  const repaired = repairSkillMarkdown(raw, id);
+  const record: ImportedRecord = { id, raw: repaired.raw, importedAt: new Date().toISOString() };
   const rows = readImportedRecords().filter((r) => r.id !== id).concat(record);
   writeImportedRecords(rows);
   const core = hydrateSkill(raw, { id, skillPath: `imported://${id}` });

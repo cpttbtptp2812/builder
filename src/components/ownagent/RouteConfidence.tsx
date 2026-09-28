@@ -11,6 +11,8 @@ import {
   type RouteVerdict,
   type RouterStats,
 } from "../../lib/conformalRouter";
+import { forkDeltaForAmbiguous, type ForkDeltaReport } from "../../lib/deterministicScm";
+import { ScmForkViz } from "./ScmVisuals";
 import { SKILL_PUBLISH_EVENT } from "../../lib/skillCompareStore";
 
 const ALPHAS = [0.2, 0.1, 0.05];
@@ -31,6 +33,7 @@ export function RouteConfidencePanel() {
   const [model, setModel] = useState(semanticStatus);
   const [probe, setProbe] = useState("");
   const [verdict, setVerdict] = useState<RouteVerdict | null>(null);
+  const [fork, setFork] = useState<ForkDeltaReport | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -53,11 +56,21 @@ export function RouteConfidencePanel() {
   useEffect(() => {
     if (!router || !probe.trim()) {
       setVerdict(null);
+      setFork(null);
       return;
     }
     let alive = true;
     const t = window.setTimeout(() => {
-      void router.decide(probe.trim(), alpha).then((v) => alive && setVerdict(v));
+      void router.decide(probe.trim(), alpha).then(async (v) => {
+        if (!alive) return;
+        setVerdict(v);
+        if (v.status === "ambiguous" && v.set.length >= 2) {
+          const ids = v.set.map((c) => c.id).filter((id) => !id.startsWith("@"));
+          setFork(await forkDeltaForAmbiguous(probe.trim(), ids));
+        } else {
+          setFork(null);
+        }
+      });
     }, 250);
     return () => {
       alive = false;
@@ -162,6 +175,12 @@ export function RouteConfidencePanel() {
                     </li>
                   ))}
                 </ul>
+                {fork && verdict.status === "ambiguous" && verdict.set.length >= 2 ? (
+                  <div className="own-rc-fork">
+                    <strong>SCM 选哪条路差多少</strong>
+                    <ScmForkViz fork={fork} />
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

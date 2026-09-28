@@ -387,6 +387,85 @@ export function parseSkillResult(output: unknown): SkillResult {
   return { meta: { raw: output } };
 }
 
+export function seedContextFromTrace(
+  skill: AgentSkill,
+  query: string,
+  trace: SkillTraceStep[],
+  throughExclusive: number,
+): SkillRunContext {
+  const ctx: SkillRunContext = { query, skillId: skill.id, vars: {} };
+  for (let i = 0; i < throughExclusive && i < trace.length; i += 1) {
+    const row = trace[i]!;
+    applyStepVarWrites(ctx.vars, row.stepId, row.tool, row.result);
+  }
+  return ctx;
+}
+
+export async function runSkillFromIndex(
+  skill: AgentSkill,
+  ctx: SkillRunContext,
+  startIndex: number,
+  onStep?: (step: SkillTraceStep) => void,
+  opts?: {
+    snapshotRoot?: Element | null;
+    onStepStart?: (step: SkillStep) => void;
+    probeUrl?: string;
+    mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
+    /** do(action): 跳过这些 step 索引，不执行也不写入 trace */
+    skipIndices?: number[];
+    /** do(action): 指定索引处换工具名 */
+    toolAt?: Record<number, string>;
+    /** do(action): 指定索引处注入观测，不调用工具 */
+    injectAt?: Record<number, unknown>;
+  },
+): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
+  const trace: SkillTraceStep[] = [];
+  let lastResult: unknown = null;
+  const snapRoot = opts?.snapshotRoot ?? null;
+  const probeUrl = opts?.probeUrl ?? PROBE_URL;
+  const skip = new Set(opts?.skipIndices ?? []);
+
+  for (let i = startIndex; i < skill.steps.length; i += 1) {
+    const step = skill.steps[i]!;
+    if (skip.has(i)) continue;
+
+    opts?.onStepStart?.(step);
+    const tool = opts?.toolAt?.[i] ?? step.tool;
+    const injected = opts?.injectAt?.[i];
+    const t0 = performance.now();
+    const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
+    const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
+
+    const mockFn = opts?.mockProfile?.[tool];
+    const out = injected != null
+      ? { content: injected }
+      : mockFn
+        ? { content: mockFn(args) }
+        : tool.startsWith("__")
+          ? await runInternalTool(tool, args)
+          : await mcpServer.callTool(tool, args, { snapshotRoot: snapRoot });
+
+    const ms = Math.max(1, Math.round(performance.now() - t0));
+    lastResult = out.content;
+    storeStepResult(ctx, { ...step, tool }, out.content);
+
+    const row: SkillTraceStep = {
+      stepId: step.id,
+      label: step.label,
+      tool,
+      ms,
+      ok: !out.isError,
+      result: out.content,
+    };
+    trace.push(row);
+    onStep?.(row);
+    if (out.isError) break;
+    await sleep(step.tool.startsWith("__") ? 60 : 180);
+  }
+
+  return { trace, output: lastResult, result: parseSkillResult(lastResult) };
+}
+
 export async function runSkill(
   skill: AgentSkill,
   query: string,
@@ -399,41 +478,5 @@ export async function runSkill(
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
   const ctx: SkillRunContext = { query, skillId: skill.id, vars: {} };
-  const trace: SkillTraceStep[] = [];
-  let lastResult: unknown = null;
-  const snapRoot = opts?.snapshotRoot ?? null;
-  const probeUrl = opts?.probeUrl ?? PROBE_URL;
-
-  for (const step of skill.steps) {
-    opts?.onStepStart?.(step);
-    const t0 = performance.now();
-    const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
-    const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
-
-    const mockFn = opts?.mockProfile?.[step.tool];
-    const out = mockFn
-      ? { content: mockFn(args) }
-      : step.tool.startsWith("__")
-        ? await runInternalTool(step.tool, args)
-        : await mcpServer.callTool(step.tool, args, { snapshotRoot: snapRoot });
-
-    const ms = Math.max(1, Math.round(performance.now() - t0));
-    lastResult = out.content;
-    storeStepResult(ctx, step, out.content);
-
-    const row: SkillTraceStep = {
-      stepId: step.id,
-      label: step.label,
-      tool: step.tool,
-      ms,
-      ok: !out.isError,
-      result: out.content,
-    };
-    trace.push(row);
-    onStep?.(row);
-    if (out.isError) break;
-    await sleep(step.tool.startsWith("__") ? 60 : 180);
-  }
-
-  return { trace, output: lastResult, result: parseSkillResult(lastResult) };
+  return runSkillFromIndex(skill, ctx, 0, onStep, opts);
 }

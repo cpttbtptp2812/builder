@@ -2,6 +2,7 @@
 
 import type { AgentSkill, SkillTraceStep } from "./agentSkills";
 import type { SkillEffect } from "./skillSemcompiler";
+import type { OutcomeGrader } from "./scmOutcome";
 
 export type TraceExpectation = {
   stepId: string;
@@ -14,6 +15,7 @@ export type SkillTraceCase = {
   skillId: string;
   query: string;
   probeUrl?: string;
+  grader?: OutcomeGrader;
   expect: {
     steps: TraceExpectation[];
     effectBound?: SkillEffect;
@@ -23,8 +25,43 @@ export type SkillTraceCase = {
 export type TraceEvalRow = SkillTraceCase & {
   pass: boolean;
   actualSteps: { stepId: string; tool: string; ok: boolean }[];
+  trace?: SkillTraceStep[];
   detail: string;
   ms: number;
+};
+
+/** 反事实干预：把某步观测换成「修复/破坏」值，供 SCM do(obs) 精确传播 */
+export const COUNTERFACTUAL_OBS: Record<string, Record<string, { fix?: unknown; break?: unknown }>> = {
+  "release-inspector": {
+    probe: {
+      fix: { ok: true, status: 200, latencyMs: 12, url: "https://example.com" },
+      break: { ok: false, status: 503, latencyMs: 900, error: "upstream timeout" },
+    },
+    snapshot: {
+      fix: { compact: true, nodeCount: 10, nodes: [] },
+      break: { compact: true, nodeCount: 0, nodes: [], error: "snapshot empty" },
+    },
+    docs: {
+      fix: { hits: [{ docId: "d1", score: 0.9, title: "mock" }] },
+      break: { hits: [] },
+    },
+  },
+  "site-analyzer": {
+    probe: {
+      fix: { ok: true, status: 200, latencyMs: 8 },
+      break: { ok: false, status: 502 },
+    },
+    snapshot: {
+      fix: { nodeCount: 5, nodes: [] },
+      break: { nodeCount: 0, nodes: [] },
+    },
+  },
+  "knowledge-lookup": {
+    search: {
+      fix: { hits: [{ title: "hit", chunkId: "c1", score: 0.8 }] },
+      break: { hits: [] },
+    },
+  },
 };
 
 export const MOCK_PROFILES: Record<string, Record<string, (args: Record<string, unknown>) => unknown>> = {
@@ -75,6 +112,21 @@ export const SKILL_TRACE_CASES: SkillTraceCase[] = [
         { stepId: "report", tool: "__compose_release_report__" },
       ],
       effectBound: "read_remote",
+    },
+  },
+  {
+    id: "ri-t2",
+    skillId: "release-inspector",
+    query: "帮我巡检 https://example.com 能否上线",
+    probeUrl: "https://example.com",
+    grader: { kind: "release_overall", min: "pass" },
+    expect: {
+      steps: [
+        { stepId: "probe", tool: "http_probe" },
+        { stepId: "snapshot", tool: "browser_snapshot" },
+        { stepId: "docs", tool: "knowledge_search" },
+        { stepId: "report", tool: "__compose_release_report__" },
+      ],
     },
   },
   {
@@ -163,6 +215,7 @@ export async function runTraceCase(c: SkillTraceCase): Promise<TraceEvalRow> {
     ...c,
     pass: pass && effectOk,
     actualSteps: trace.map((t) => ({ stepId: t.stepId, tool: t.tool, ok: t.ok })),
+    trace,
     detail: effectOk ? detail : `${detail}；副作用 ${skill.effectUpperBound} 超过 ${c.expect.effectBound}`,
     ms: Math.round(performance.now() - t0),
   };

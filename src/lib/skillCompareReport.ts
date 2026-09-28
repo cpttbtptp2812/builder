@@ -6,8 +6,11 @@ import { diagLabel } from "../components/ownagent/skillDevLabels";
 import { effectLabel } from "./skillSemcompiler";
 import type { SkillDiagnostic } from "./skillSemcompiler";
 import { runSkillCompare, type CompareVerdict, type SkillCompareResult } from "./skillCompareEngine";
+import { scmSummaryForCompare, type ScmCompareSummary } from "./deterministicScm";
 import { SKILL_TRACE_CASES } from "./provingGround";
 import { extractUrlFromText } from "./releaseInspect";
+
+export type { ScmCompareSummary };
 
 export type RiskItem = {
   level: "high" | "medium" | "low";
@@ -59,6 +62,7 @@ export type SkillFullCompareReport = {
     newErrors: SkillDiagnostic[];
   };
   queryResults: QueryCompareRow[];
+  scm: ScmCompareSummary | null;
   risks: RiskItem[];
   verdict: CompareVerdict;
   markdown: string;
@@ -157,8 +161,23 @@ function buildRisks(
   structural: StructuralDiff,
   compile: SkillFullCompareReport["compile"],
   queryResults: QueryCompareRow[],
+  scm: ScmCompareSummary | null,
 ): RiskItem[] {
   const risks: RiskItem[] = [];
+
+  if (scm && scm.deltaSuccess < 0) {
+    risks.push({
+      level: "high",
+      title: "因果后果：mock eval 通过率下降",
+      detail: `ΔP(pass) = ${scm.deltaSuccess}${scm.pivotalStepId ? `，现用版失败根因步 \`${scm.pivotalStepId}\`` : ""}。`,
+    });
+  } else if (scm && scm.pivotalStepId && scm.baselinePass !== scm.candidatePass) {
+    risks.push({
+      level: "medium",
+      title: "因果后果：eval 结果翻转",
+      detail: `ΔP(pass) = ${scm.deltaSuccess > 0 ? "+" : ""}${scm.deltaSuccess}，关键步 \`${scm.pivotalStepId}\`（${scm.pivotalTool ?? "—"}）。`,
+    });
+  }
 
   if (compile.newErrors.length) {
     risks.push({
@@ -315,6 +334,17 @@ export function reportToMarkdown(r: SkillFullCompareReport): string {
         `| ${q.query.replace(/\|/g, "\\|").slice(0, 40)} | ${q.routeBaseline ?? "—"} | ${q.routeCandidate ?? "—"} | ${q.routeDrift ? "是" : "否"} | ${q.traceChanged ? q.traceSummary : "否"} |`,
     ),
     ``,
+    ...(r.scm
+      ? [
+          `## 因果后果 SCM`,
+          `- 首句 ΔP(pass)：${r.scm.deltaSuccess > 0 ? "+" : ""}${r.scm.deltaSuccess}（${r.scm.baselinePass ? "pass" : "fail"} → ${r.scm.candidatePass ? "pass" : "fail"}）`,
+          r.scm.pivotalStepId ? `- 根因步：\`${r.scm.pivotalStepId}\`（${r.scm.pivotalTool ?? "—"}）` : "",
+          r.scm.perQuery.length > 1
+            ? `- 逐句 ΔP：${r.scm.perQuery.map((q) => `${q.query.slice(0, 16)}… ${q.deltaSuccess >= 0 ? "+" : ""}${q.deltaSuccess}`).join("；")}`
+            : "",
+          ``,
+        ].filter(Boolean)
+      : []),
   ];
   return lines.filter(Boolean).join("\n");
 }
@@ -337,6 +367,7 @@ export async function runFullSkillCompare(opts: {
   if (opts.extraQuery?.trim()) queries.unshift(opts.extraQuery.trim());
 
   const queryResults: QueryCompareRow[] = [];
+  const compareRuns: Array<{ query: string; baselineTrace: SkillCompareResult["baseline"]["trace"]; candidateTrace: SkillCompareResult["candidate"]["trace"] }> = [];
   for (const query of queries) {
     const probeUrl = extractUrlFromText(query) ?? undefined;
     const result = await runSkillCompare({
@@ -347,9 +378,15 @@ export async function runFullSkillCompare(opts: {
       probeUrl,
     });
     queryResults.push(toQueryRow(query, result));
+    compareRuns.push({
+      query,
+      baselineTrace: result.baseline.trace,
+      candidateTrace: result.candidate.trace,
+    });
   }
 
-  const risks = buildRisks(structural, compile, queryResults);
+  const scm = await scmSummaryForCompare(opts.skillId, compareRuns);
+  const risks = buildRisks(structural, compile, queryResults, scm);
   const verdict = aggregateVerdict(risks, queryResults);
   const generatedAt = new Date().toISOString();
   const report: SkillFullCompareReport = {
@@ -361,6 +398,7 @@ export async function runFullSkillCompare(opts: {
     structural,
     compile,
     queryResults,
+    scm,
     risks,
     verdict,
     markdown: "",

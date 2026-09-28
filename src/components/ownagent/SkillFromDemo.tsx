@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import type { AgentSkill } from "../../lib/agentSkills";
-import { allRunnableSkills, runSkill } from "../../lib/agentSkills";
+import { allRunnableSkills, runSkill, type AgentSkill } from "../../lib/agentSkills";
+import { analyzeDemoSkill } from "../../lib/deterministicScm";
+import { caseFromSkillSteps, saveCustomCase } from "../../lib/skillTraceCaseStore";
 import { installImportedMarkdown, readImportedRecords, recordsToSkills } from "../../lib/importedSkills";
 import { SKILL_PUBLISH_EVENT } from "../../lib/skillCompareStore";
 import { extractUrlFromText } from "../../lib/releaseInspect";
@@ -33,6 +34,7 @@ export function SkillFromDemoDialog({
   const [tools, setTools] = useState(initial.tools);
   const [queriesText, setQueriesText] = useState(initial.queries.join("\n"));
   const [trial, setTrial] = useState<{ running: boolean; text?: string }>({ running: false });
+  const [pivotalHint, setPivotalHint] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const queries = queriesText.split("\n").map((q) => q.trim()).filter(Boolean);
@@ -62,10 +64,21 @@ export function SkillFromDemoDialog({
     }
     setError(null);
     setTrial({ running: true });
+    setPivotalHint(null);
     try {
       const skill = recordsToSkills([{ id: "__trial__", raw, importedAt: "" }])[0] as unknown as AgentSkill;
-      const { result } = await runSkill(skill, q, undefined, { probeUrl: extractUrlFromText(q) ?? undefined });
+      const { trace, result } = await runSkill(skill, q, undefined, { probeUrl: extractUrlFromText(q) ?? undefined });
       setTrial({ running: false, text: result.markdown ?? "已跑完，但没有产出文字结果。" });
+      const report = await analyzeDemoSkill(skill, q, trace);
+      if (report?.missingSteps?.length) {
+        setPivotalHint(`SCM：工具链缺步 ${report.missingSteps.join("、")}，请补 SKILL 步骤。`);
+      } else if (report?.rootCause) {
+        setPivotalHint(
+          `SCM：关键步 ${report.rootCause.stepId}（${report.rootCause.intervention}）— ${report.baseline.pass ? "baseline 已过" : "修复此步可过 eval"}`,
+        );
+      } else if (report && !report.baseline.pass) {
+        setPivotalHint(`SCM：eval 未过（${report.baseline.detail}），可在技能管理里展开因果归因。`);
+      }
     } catch (e) {
       setTrial({ running: false, text: `试运行失败：${e instanceof Error ? e.message : "未知错误"}` });
     }
@@ -82,6 +95,17 @@ export function SkillFromDemoDialog({
     }
     const taken = new Set([...allRunnableSkills().map((s) => s.id), ...readImportedRecords().map((r) => r.id)]);
     const { record } = installImportedMarkdown(raw, taken);
+    const savedSkill = recordsToSkills([record])[0] as unknown as AgentSkill;
+    if (queries[0] && savedSkill?.steps?.length) {
+      saveCustomCase(
+        caseFromSkillSteps(
+          record.id,
+          queries[0],
+          savedSkill.steps.map((s) => ({ id: s.id, tool: s.tool })),
+          { grader: { kind: "all_ok" }, probeUrl: extractUrlFromText(queries[0]) ?? undefined },
+        ),
+      );
+    }
     window.dispatchEvent(new CustomEvent(SKILL_PUBLISH_EVENT));
     onSaved?.(record.id, name.trim());
     onClose();
@@ -158,6 +182,7 @@ export function SkillFromDemoDialog({
         {trial.running || trial.text ? (
           <pre className="own-sfd-trial">{trial.running ? "试运行中…" : trial.text}</pre>
         ) : null}
+        {pivotalHint ? <p className="own-sfd-scm">{pivotalHint}</p> : null}
         {error ? <p className="own-sfd-warn">{error}</p> : null}
 
         <details className="own-sfd-raw">

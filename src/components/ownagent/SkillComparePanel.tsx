@@ -28,6 +28,7 @@ import {
   setTriggers,
   splitTriggerInput,
 } from "../../lib/skillFormEdit";
+import { needsSkillRepair, repairSkillMarkdown } from "../../lib/skillRepair";
 import { diffStats, foldDiff, lineDiff } from "../../lib/lineDiff";
 import { INITIAL_SKILL_VERSION } from "../../lib/skillVersion";
 import {
@@ -52,6 +53,8 @@ import {
 import { buildZip, downloadBlob } from "../../lib/zipStore";
 import { SkillEvolutionPanel } from "./SkillEvolution";
 import { RouteConfidencePanel } from "./RouteConfidence";
+import { ScmAttributionPanel } from "./ScmAttributionPanel";
+import { ScmCompareViz } from "./ScmVisuals";
 import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { OaBtn, OaPage } from "./OaUi";
 import {
@@ -431,7 +434,16 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
   const builtin = getBuiltinSkill(skillId);
 
   const [online, setOnline] = useState(() => onlineRaw(skillId));
-  const [draft, setDraft] = useState(() => newestDraftForSkill(skillId)?.raw ?? onlineRaw(skillId));
+  const [draft, setDraft] = useState(() => {
+    const base = newestDraftForSkill(skillId)?.raw ?? onlineRaw(skillId);
+    const { raw, changed, fixes } = repairSkillMarkdown(base, skillId);
+    return changed ? raw : base;
+  });
+  const [repairNote, setRepairNote] = useState<string | null>(() => {
+    const base = newestDraftForSkill(skillId)?.raw ?? onlineRaw(skillId);
+    const { changed, fixes } = repairSkillMarkdown(base, skillId);
+    return changed && fixes.length ? fixes.join("、") : null;
+  });
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
   const [tab, setTab] = useState<Tab>(() => (newestDraftForSkill(skillId) ? "check" : "overview"));
   const [liveVersion, setLiveVersion] = useState(() => getPublishedVersion(skillId));
@@ -452,6 +464,14 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
   const skillName = builtin?.name ?? skillId;
   const impact = useSkillImpact(skillId, online, draft);
   const realLost = impact.lost.filter((s) => s.source === "real");
+
+  useEffect(() => {
+    if (repairNote) {
+      toast.show(`已自动修复：${repairNote}`);
+      setRepairNote(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 仅首次打开提示
+  }, []);
 
   useEffect(() => {
     if (!hasChanges) {
@@ -843,8 +863,20 @@ function Editor({
   onRestore: () => void;
 }) {
   const formOk = canFormEdit(raw);
-  const [mode, setMode] = useState<"form" | "source">(formOk ? "form" : "source");
+  const needsRepair = needsSkillRepair(raw);
+  const [mode, setMode] = useState<"form" | "source">(formOk && !needsRepair ? "form" : "source");
   const changed = raw.trim() !== online.trim();
+
+  function runRepair() {
+    const { raw: fixed, fixes, changed: did } = repairSkillMarkdown(raw, skillId);
+    if (!did) {
+      onNotify("没有需要修复的内容");
+      return;
+    }
+    onChange(fixed);
+    onNotify(`已修复：${fixes.join("、")}`);
+    if (canFormEdit(fixed)) setMode("form");
+  }
 
   return (
     <section className="own-skm-editor">
@@ -860,6 +892,11 @@ function Editor({
         <span className="own-ver-hint">
           {changed ? "改动会自动存成草稿，线上不受影响，检查后再发布。" : "现在和线上一致。改任何内容都会自动存成草稿。"}
         </span>
+        {needsRepair ? (
+          <button type="button" className="own-skm-batch-btn" onClick={runRepair}>
+            一键修复格式
+          </button>
+        ) : null}
         {changed ? (
           <button type="button" className="own-skill-inline-btn" onClick={onRestore}>
             撤销全部修改
@@ -881,7 +918,13 @@ function Editor({
         <FormEditor skillId={skillId} raw={raw} online={online} onChange={onChange} />
       ) : (
         <>
-          {!formOk ? <p className="own-ver-parse-warn">这份配置格式特殊，只能用源码修改。</p> : null}
+          {!formOk ? (
+            <p className="own-ver-parse-warn">
+              缺少标准 YAML frontmatter（需以 <code>---</code> 开头）。点「一键修复格式」可自动生成。
+            </p>
+          ) : needsRepair ? (
+            <p className="own-ver-parse-warn">配置不完整（缺 name / triggers / steps 等），建议点「一键修复格式」。</p>
+          ) : null}
           <textarea
             className="own-ver-textarea own-ver-textarea--solo"
             value={raw}
@@ -1237,6 +1280,26 @@ function CheckView({
             <CompareSideColumn title={`现用 v${liveVersion}`} side={single.baseline} other={single.candidate} />
             <CompareSideColumn title={`新版 v${draftVersion}`} side={single.candidate} other={single.baseline} highlight />
           </div>
+          <ScmAttributionPanel
+            skillId={skillId}
+            autoOpen={
+              !single.baseline.traceOk ||
+              !single.candidate.traceOk ||
+              single.verdict.level !== "approve"
+            }
+            compare={{
+              query: single.query,
+              baselineTrace: single.baseline.trace,
+              candidateTrace: single.candidate.trace,
+            }}
+            forkPeerId={
+              single.baseline.routedSkillId &&
+              single.candidate.routedSkillId &&
+              single.baseline.routedSkillId !== single.candidate.routedSkillId
+                ? single.candidate.routedSkillId
+                : undefined
+            }
+          />
         </div>
       ) : null}
 
@@ -1314,6 +1377,39 @@ function FullCompareReport({ report, skillId }: { report: SkillFullCompareReport
           下载检查报告
         </button>
       </section>
+
+      {report.scm ? (
+        <section className="own-compare-report-section own-scm-inline">
+          <h3>因果后果 SCM</h3>
+          <ScmCompareViz
+            consequence={{
+              baselinePass: report.scm.baselinePass,
+              candidatePass: report.scm.candidatePass,
+              deltaSuccess: report.scm.deltaSuccess,
+              pivotalOnBaseline: report.scm.pivotalStepId
+                ? {
+                    stepId: report.scm.pivotalStepId,
+                    tool: report.scm.pivotalTool ?? "",
+                    stepIndex: 0,
+                    mode: "exact",
+                    baselinePass: report.scm.baselinePass,
+                    counterfactualPass: true,
+                    deltaSuccess: 1,
+                    pivotal: true,
+                    intervention: "fix",
+                    detail: "",
+                  }
+                : null,
+            }}
+          />
+          {report.scm.pivotalStepId ? (
+            <p className="own-scm-note">
+              根因步 <code>{report.scm.pivotalStepId}</code>
+              {report.scm.pivotalTool ? ` · ${report.scm.pivotalTool}` : ""}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
 
       {issues.length ? (
         <section className="own-compare-report-section">
