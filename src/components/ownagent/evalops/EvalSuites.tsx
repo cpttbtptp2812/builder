@@ -1,10 +1,11 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { evalStore } from "../../../lib/evalops/client";
 import { casesToCsv, dedupeCases, parseCases, SAMPLE_CSV, splitList, type ParseResult } from "../../../lib/evalops/dataset";
 import type { SourceDoc } from "../../../lib/evalops/generate";
 import { newId, type EvalCase, type EvalSuite } from "../../../lib/evalops/types";
 import { listKnowledgeDocs } from "../../../lib/ownKnowledge";
 import { listQueryLog } from "../../../lib/skillQueryLog";
+import { routeQuery } from "../../../lib/skillRouter";
 import { OaBadge, OaBtn, OaCard, OaCheck, OaEmpty, OaField, OaInput, OaTextarea } from "../OaUi";
 
 const ORIGIN_LABEL: Record<string, string> = {
@@ -35,16 +36,34 @@ function readFiles(files: FileList | null): Promise<{ name: string; text: string
   return Promise.all(Array.from(files ?? []).map(async (f) => ({ name: f.name.replace(/\.[^.]+$/, ""), text: await f.text() })));
 }
 
+function whoTakes(question: string) {
+  const q = question.trim();
+  if (!q) return "";
+  const d = routeQuery(q);
+  return d.kind === "skill" ? `交给 ${d.label}` : "还没有技能会接";
+}
+
 export function EvalSuites({
   suites,
   onChanged,
   notify,
+  openSuiteId = null,
 }: {
   suites: EvalSuite[];
   onChanged: () => void;
   notify: (msg: string) => void;
+  openSuiteId?: string | null;
 }) {
   const [editing, setEditing] = useState<EvalSuite | null>(null);
+  const opened = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!openSuiteId || opened.current === openSuiteId) return;
+    const hit = suites.find((s) => s.id === openSuiteId);
+    if (!hit) return;
+    opened.current = openSuiteId;
+    setEditing(hit);
+  }, [openSuiteId, suites]);
 
   if (editing) {
     return (
@@ -242,7 +261,10 @@ function SuiteEditor({ initial, onCancel, onSaved }: { initial: EvalSuite; onCan
               <li key={c.id} className={open === c.id ? "open" : ""}>
                 <button type="button" className="eo-case-head" onClick={() => setOpen(open === c.id ? null : c.id)}>
                   <span className="eo-case-no">{i + 1}</span>
-                  <span className="eo-case-q">{c.question || <em className="eo-muted">（空题目）</em>}</span>
+                  <span className="eo-case-q">
+                    <span>{c.question || <em className="eo-muted">（空题目）</em>}</span>
+                    {c.question.trim() ? <small className="eo-case-route">{whoTakes(c.question)}</small> : null}
+                  </span>
                   <span className="eo-case-tags">
                     {c.reference ? <OaBadge tone="ok">有参考答案</OaBadge> : null}
                     {c.mustInclude?.length ? <OaBadge tone="info">含 {c.mustInclude.length} 个关键词</OaBadge> : null}

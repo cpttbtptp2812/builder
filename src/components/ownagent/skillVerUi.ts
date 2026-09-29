@@ -55,12 +55,12 @@ export function fmtUpdatedAt(iso: string | undefined): string {
 
 export function humanVerdict(level: SkillFullCompareReport["verdict"]["level"]) {
   if (level === "approve") {
-    return { title: "可以发布", hint: "常见问法下，新版和现在的表现一致或更好。" };
+    return { title: "允许发布", gate: "PASS", hint: "考试题都过了，改动没有把原来能答对的题答错。" };
   }
   if (level === "warn") {
-    return { title: "建议再看一眼", hint: "有些场景可能和现版不一样，确认符合预期再发。" };
+    return { title: "谨慎发布", gate: "WARN", hint: "部分 case 表现变化，确认符合预期后再发。" };
   }
-  return { title: "先别发布", hint: "新版可能答错、漏答，或用户说法对不上。请继续改。" };
+  return { title: "阻止发布", gate: "BLOCK", hint: "检测到 flip 或成功率显著下降，请修改后重新检查。" };
 }
 
 export function plainDiffLines(report: SkillFullCompareReport): string[] {

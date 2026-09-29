@@ -17,7 +17,7 @@ import { WorkStreamProbe } from "./WorkStreamProbe";
 const LEGACY_VIEW: Record<string, string> = {
   agent: "chat",
   "dev-debug": "theory",
-  skills: "chat",
+  skills: "skills",
   platform: "rag",
   eval: "eval",
   "agent-trace": "trace",

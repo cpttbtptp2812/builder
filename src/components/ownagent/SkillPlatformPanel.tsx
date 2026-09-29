@@ -295,7 +295,7 @@ function RunDock({
   const applied = getAppliedSkill(skill.id);
 
   function submitToCompare() {
-    const draft = submitCompareDraft(skill.id, skill.manifest, skill.name, "开发者模式提交");
+    const draft = submitCompareDraft(skill.id, skill.manifest, skill.name, "运行追踪提交");
     setSubmitToast(`已提交 v${draft.version}，去「技能管理」发布`);
     window.setTimeout(() => setSubmitToast(null), 4000);
   }
@@ -385,7 +385,7 @@ function RunDock({
             提交新版本
           </button>
           <button type="button" className="own-dev-mode-trigger" onClick={() => setDevOpen(true)}>
-            开发者检查
+            深度检查
             {issues > 0 ? <em>{issues}</em> : null}
           </button>
         </div>
@@ -405,7 +405,7 @@ function RunDock({
           ))}
         </ol>
       ) : (
-        <p className="own-skill-empty-stage">这份技能没有可执行步骤。请从左侧导入带 steps 的 SKILL.md，或在开发者检查里看原文。</p>
+        <p className="own-skill-empty-stage">这份技能没有可执行步骤。请从左侧导入带 steps 的 SKILL.md，或在深度检查里看原文。</p>
       )}
 
       {skill.runnable ? (
@@ -538,7 +538,7 @@ function DeveloperModeSheet({
         <header className="own-dev-sheet-head">
           <div>
             <p className="own-skill-kicker">{isImported ? "已导入" : "内置"}技能</p>
-            <h2 id="own-dev-sheet-title">开发者检查</h2>
+            <h2 id="own-dev-sheet-title">深度检查</h2>
             <p className="own-dev-sheet-sub">改 SKILL.md 前先看这里：工具对不对、变量连没连上、触发词会不会抢。</p>
           </div>
           <button type="button" className="own-dev-sheet-close" onClick={onClose} aria-label="关闭">

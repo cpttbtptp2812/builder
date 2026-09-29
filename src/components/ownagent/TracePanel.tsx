@@ -96,14 +96,18 @@ function TraceRail({ spans }: { spans: TraceSpan[] }) {
 }
 
 /** OwnAgent · 运行追踪 — 真实 Agent 运行 + 时间线 + 历史 */
-export function TracePanel() {
+export function TracePanel({ initialQuery = "" }: { initialQuery?: string } = {}) {
   const [sessions, setSessions] = useState<StoredTraceSession[]>(() => listTraceSessions());
   const [selectedId, setSelectedId] = useState<string | null>(() => listTraceSessions()[0]?.id ?? null);
   const [liveSpans, setLiveSpans] = useState<TraceSpan[] | null>(null);
   const [running, setRunning] = useState(false);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialQuery);
   const [lastReply, setLastReply] = useState("");
   const rootRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (initialQuery) setInput(initialQuery);
+  }, [initialQuery]);
 
   const selected = selectedId ? getTraceSession(selectedId) : null;
   const displaySpans = liveSpans ?? selected?.spans ?? [];
@@ -160,8 +164,8 @@ export function TracePanel() {
     <div className="oa-ui oa-page" ref={rootRef}>
       <header className="oa-page-head">
         <div className="oa-page-head-main">
-          <h1>处理过程</h1>
-          <p>开发者工具：查看 AI 收到问题后的每一步。历史记录保存在本机。</p>
+          <h1>处理记录</h1>
+          <p>输入客户会问的一句话，查看系统怎么理解、调用了什么、最后怎么回答。记录保存在本机。</p>
         </div>
       </header>
 
@@ -169,14 +173,14 @@ export function TracePanel() {
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="例如：帮我对本站做发布前检查"
+          placeholder="输入一句客户会问的话"
           disabled={running}
           onKeyDown={(e) => {
             if (e.key === "Enter") void send(input);
           }}
         />
         <button type="button" className="agent-trace-send" disabled={running} onClick={() => void send(input)}>
-          {running ? "运行中…" : "运行"}
+          {running ? "处理中…" : "查看处理过程"}
         </button>
       </div>
       <div className="agent-trace-quick">
@@ -189,7 +193,7 @@ export function TracePanel() {
 
       {lastReply ? (
         <div className="agent-trace-reply-preview">
-          <strong>Agent 回复</strong>
+          <strong>回答</strong>
           <p>{plainText(lastReply).slice(0, 400)}{lastReply.length > 400 ? "…" : ""}</p>
         </div>
       ) : null}
@@ -197,8 +201,8 @@ export function TracePanel() {
       {chatNeuralTraces.length > 0 ? (
         <section className="agent-trace-neural card">
           <header>
-            <strong>最近对话记录</strong>
-            <span>来自当前会话的处理摘要</span>
+            <strong>对话里问过的</strong>
+            <span>点开可对照这次是怎么答的</span>
           </header>
           <ul>
             {chatNeuralTraces.map((m) => {
@@ -207,9 +211,7 @@ export function TracePanel() {
                 <li key={m.id}>
                   <span>{m.content.replace(/\s+/g, " ").slice(0, 56)}…</span>
                   <em>
-                    {stats.doneSteps}/4 步 · {stats.evidenceCount} 证据
-                    {m.runtime ? ` · Agent ${m.runtime}` : ""}
-                    {m.ragRuntime ? ` · RAG ${m.ragRuntime}` : ""}
+                    已完成 {stats.doneSteps} 步 · 引用 {stats.evidenceCount} 处
                   </em>
                 </li>
               );
@@ -221,7 +223,7 @@ export function TracePanel() {
       <div className="agent-trace-layout">
         <aside className="agent-trace-history">
           <div className="agent-trace-history-head">
-            <strong>历史</strong>
+            <strong>以往提问</strong>
             {sessions.length > 0 ? (
               <button
                 type="button"
@@ -254,7 +256,7 @@ export function TracePanel() {
                     }}
                   >
                     <span>{s.query.slice(0, 30)}{s.query.length > 30 ? "…" : ""}</span>
-                    <small>{s.spans.length} 步 · {s.totalMs}ms · {s.runtime ?? "local"}</small>
+                    <small>{s.spans.length} 步 · {s.totalMs < 1000 ? `${s.totalMs} 毫秒` : `${(s.totalMs / 1000).toFixed(1)} 秒`}</small>
                   </button>
                 </li>
               ))}
@@ -265,7 +267,7 @@ export function TracePanel() {
         <section className="agent-trace-main">
           {selected && !liveSpans ? (
             <div className="agent-trace-query card">
-              <span className="agent-trace-query-label">用户</span>
+              <span className="agent-trace-query-label">客户问了</span>
               <p>{selected.query}</p>
               <span className="agent-trace-total">
                 {new Date(selected.createdAt).toLocaleString("zh-CN")} · {selected.totalMs}ms ·{" "}

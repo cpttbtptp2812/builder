@@ -175,12 +175,12 @@ export function scoreSkillDetailed(skill: AgentSkill, q: string): SkillDiscovery
 
   for (const trigger of skill.triggers) {
     const t = trigger.toLowerCase();
-    if (q.includes(t)) {
-      const points = t.length >= 4 ? 2 : 1;
-      score += points;
-      hits.push(trigger);
-      breakdown.push({ trigger, points });
-    }
+    if (!t || !q.includes(t)) continue;
+    const exact = q === t;
+    const points = exact || t.length >= 4 ? 2 : 1;
+    score += points;
+    hits.push(trigger);
+    breakdown.push({ trigger, points });
   }
   if (skill.name.includes(q) || q.includes(skill.name)) {
     score += 3;

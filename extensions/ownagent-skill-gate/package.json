@@ -1,0 +1,19 @@
+{
+  "name": "ownagent-skill-gate",
+  "displayName": "OwnAgent Skill Gate",
+  "description": "SKILL.md 旁路显示发版门禁提示，运行 ownagent check",
+  "version": "0.1.0",
+  "publisher": "ownagent",
+  "engines": { "vscode": "^1.85.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onLanguage:markdown"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "ownagent.runCheck",
+        "title": "OwnAgent: Check SKILL.md"
+      }
+    ]
+  }
+}

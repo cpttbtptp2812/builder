@@ -1,5 +1,99 @@
 import type { AgentSkill, SkillTraceStep } from "../../lib/agentSkills";
-import type { CompareConsequence, ForkDeltaReport, PivotalReport } from "../../lib/deterministicScm";
+import type { CompareConsequence, ForkDeltaReport, PivotalReport, ScmCompareSummary } from "../../lib/deterministicScm";
+import type { SkillFullCompareReport } from "../../lib/skillCompareReport";
+
+export type ReleaseGateLevel = "pass" | "warn" | "block";
+
+export function releaseGateLevel(level: SkillFullCompareReport["verdict"]["level"]): ReleaseGateLevel {
+  if (level === "approve") return "pass";
+  if (level === "warn") return "warn";
+  return "block";
+}
+
+/** 发版门禁首屏 — ΔP / Pivotal / Verdict 三指标 */
+export function ReleaseGateHero({
+  skillName,
+  baselineVersion,
+  candidateVersion,
+  verdictLevel,
+  verdictTitle,
+  scm,
+  caseCount,
+  reasons,
+}: {
+  skillName: string;
+  baselineVersion: string;
+  candidateVersion: string;
+  verdictLevel: SkillFullCompareReport["verdict"]["level"];
+  verdictTitle: string;
+  scm: ScmCompareSummary | null;
+  caseCount?: number;
+  reasons?: string[];
+}) {
+  const gate = releaseGateLevel(verdictLevel);
+  const gateLabel = gate === "pass" ? "PASS" : gate === "warn" ? "WARN" : "BLOCK";
+  const deltaPct =
+    scm != null ? `${scm.deltaSuccess > 0 ? "+" : ""}${Math.round(scm.deltaSuccess * 100)}%` : "—";
+  const pivotal = scm?.pivotalStepId
+    ? `${scm.pivotalStepId}${scm.pivotalTool ? ` · ${scm.pivotalTool}` : ""}`
+    : "无";
+
+  return (
+    <section className={`oa-release-gate oa-release-gate--${gate}`} aria-label="发版门禁">
+      <header className="oa-release-gate-head">
+        <div>
+          <p className="oa-release-gate-eyebrow">发版门禁</p>
+          <h3>
+            {skillName}{" "}
+            <span className="oa-release-gate-ver">
+              v{baselineVersion} → v{candidateVersion}
+            </span>
+          </h3>
+        </div>
+        <div className={`oa-release-gate-verdict oa-release-gate-verdict--${gate}`}>
+          <strong>{gateLabel}</strong>
+          <span>{verdictTitle}</span>
+        </div>
+      </header>
+      <div className="oa-release-gate-metrics">
+        <div className="oa-release-gate-metric">
+          <small>ΔP 成功率</small>
+          <strong className={scm && scm.deltaSuccess < 0 ? "down" : scm && scm.deltaSuccess > 0 ? "up" : ""}>
+            {deltaPct}
+          </strong>
+          <span>相对现用版</span>
+        </div>
+        <div className="oa-release-gate-metric">
+          <small>根因步骤</small>
+          <strong className="oa-release-gate-pivotal">{pivotal}</strong>
+          <span>因果归因</span>
+        </div>
+        <div className="oa-release-gate-metric">
+          <small>基线 / 候选</small>
+          <strong className="oa-release-gate-passpair">
+            {scm ? (
+              <>
+                <em className={scm.baselinePass ? "pass" : "fail"}>{scm.baselinePass ? "PASS" : "FAIL"}</em>
+                <span aria-hidden>→</span>
+                <em className={scm.candidatePass ? "pass" : "fail"}>{scm.candidatePass ? "PASS" : "FAIL"}</em>
+              </>
+            ) : (
+              "—"
+            )}
+          </strong>
+          <span>{caseCount != null ? `${caseCount} 条 case` : "SCM case"}</span>
+        </div>
+      </div>
+      {reasons?.length ? (
+        <ul className="oa-release-gate-reasons">
+          {reasons.map((r, i) => (
+            <li key={i}>{r}</li>
+          ))}
+        </ul>
+      ) : null}
+    </section>
+  );
+}
 
 /** 工具链管道 — 标出 ok / fail / 缺步 / 根因 */
 export function ScmPipelineViz({

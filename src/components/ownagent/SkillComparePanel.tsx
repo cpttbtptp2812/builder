@@ -15,7 +15,9 @@ import {
   SKILL_PUBLISH_EVENT,
   takePendingSkillOpen,
 } from "../../lib/skillCompareStore";
+import { buildReleaseGateSummary, downloadReportJson } from "../../lib/releaseGate";
 import { reportToMarkdown, runFullSkillCompare, type SkillFullCompareReport } from "../../lib/skillCompareReport";
+import { approvePending, getBaselineTag, listPendingApprovals, requestApproval, tagBaselineEnv } from "../../lib/teamStore";
 import { runSkillCompare, type SkillCompareResult } from "../../lib/skillCompareEngine";
 import { parseSkillMarkdown, type ParsedSkillDoc } from "../../lib/skillMarkdown";
 import {
@@ -54,7 +56,8 @@ import { buildZip, downloadBlob } from "../../lib/zipStore";
 import { SkillEvolutionPanel } from "./SkillEvolution";
 import { RouteConfidencePanel } from "./RouteConfidence";
 import { ScmAttributionPanel } from "./ScmAttributionPanel";
-import { ScmCompareViz } from "./ScmVisuals";
+import { ScmCaseEditor } from "./ScmCaseEditor";
+import { ReleaseGateHero, ScmCompareViz } from "./ScmVisuals";
 import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { OaBtn, OaPage } from "./OaUi";
 import {
@@ -69,7 +72,7 @@ import {
 import type { SkillImpact } from "../../lib/skillImpact";
 import { skillQueryStats } from "../../lib/skillQueryLog";
 
-type Tab = "overview" | "edit" | "check" | "history";
+type Tab = "overview" | "edit" | "cases" | "check" | "history";
 
 function onlineRaw(skillId: string): string {
   return resolveBaselineRaw(skillId, getBuiltinSkill(skillId)?.manifest ?? "");
@@ -103,7 +106,7 @@ function useToast() {
 }
 
 /** 技能管理 — 列表 → 概览 / 编辑 / 检查发布 / 发布记录 */
-export function SkillComparePanel() {
+export function SkillComparePanel({ initialTab }: { initialTab?: Tab } = {}) {
   const [skillId, setSkillId] = useState<string | null>(takePendingSkillOpen);
   const [tick, setTick] = useState(0);
 
@@ -126,6 +129,7 @@ export function SkillComparePanel() {
     <SkillDetail
       key={skillId}
       skillId={skillId}
+      initialTab={initialTab}
       onBack={() => {
         setSkillId(null);
         setTick((n) => n + 1);
@@ -270,12 +274,32 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     }
   }
 
+  const runningCount = skills.filter((s) => !newestDraftForSkill(s.id)).length;
+
   return (
     <OaPage
-      title="技能管理"
-      desc="技能负责「做事」：用户这样说时，AI 调哪些工具、按什么步骤做。只需要回答问题的内容，请加到知识广场或资料库。"
+      title="技能"
+      desc="改完先检查，通过后再发布。线上版本不会被草稿直接影响。"
     >
       {toast.node}
+      <div className="oa-skill-dashboard">
+        <div className="oa-dash-card">
+          <strong>{skills.length}</strong>
+          <span>技能总数</span>
+        </div>
+        <div className={`oa-dash-card${pendingCount ? " oa-dash-card--warn" : ""}`}>
+          <strong>{pendingCount}</strong>
+          <span>待发布草稿</span>
+        </div>
+        <div className="oa-dash-card oa-dash-card--ok">
+          <strong>{runningCount}</strong>
+          <span>线上运行中</span>
+        </div>
+        <div className="oa-dash-card oa-dash-card--muted">
+          <strong>{importedIds.size}</strong>
+          <span>已导入</span>
+        </div>
+      </div>
       <div className="own-skm-list-bar">
         <input
           className="own-skm-search"
@@ -320,6 +344,8 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
         </span>
       </div>
 
+      <BatchCheckBar skills={skills} onToast={toast.show} />
+      <TeamApprovalBar onToast={toast.show} />
       <RouteConfidencePanel />
       <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
 
@@ -340,9 +366,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
             void onImportFiles(e.dataTransfer.files);
           }}
         >
-          <p><strong>批量导入</strong> — 支持 JSON 技能包、多个 .md 文件，或拖入文件夹。</p>
+          <p><strong>导入 SKILL.md</strong> — 支持 JSON 技能包、多个 .md 文件，或拖入文件夹。</p>
           <p className="own-skm-import-hint">
-            新技能会进「已导入」目录；若 id 对应内置技能，则写入草稿，到该技能里检查并发布。
+            导入后请进入该技能 → <strong>发版检查</strong>，查看 PASS/WARN/BLOCK 门禁与 ΔP，确认无误再发布。若 id 对应内置技能，改动写入草稿。
           </p>
           <div className="own-skm-import-actions">
             <button type="button" className="own-skm-batch-btn" onClick={() => fileRef.current?.click()}>
@@ -400,6 +426,8 @@ function SkillListCard({
   onOpen: () => void;
 }) {
   const ver = getPublishedVersion(skill.id);
+  const prod = getBaselineTag(skill.id, "prod");
+  const staging = getBaselineTag(skill.id, "staging");
   const draft = newestDraftForSkill(skill.id);
   const applied = getAppliedSkill(skill.id);
   const samples = sampleTriggers(skill.triggers);
@@ -415,6 +443,8 @@ function SkillListCard({
           <strong>{skillDisplayTitle(skill)}</strong>
           <span className="own-skill-ver-tag">v{ver}</span>
           {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
+          {prod ? <span className="own-skill-ver-tag">prod {prod}</span> : null}
+          {staging ? <span className="own-skill-ver-tag">staging {staging}</span> : null}
         </header>
         <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
         <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps)}</p>
@@ -429,7 +459,7 @@ function SkillListCard({
   );
 }
 
-function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void }) {
+function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack: () => void; initialTab?: Tab }) {
   const toast = useToast();
   const builtin = getBuiltinSkill(skillId);
 
@@ -445,7 +475,7 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
     return changed && fixes.length ? fixes.join("、") : null;
   });
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
-  const [tab, setTab] = useState<Tab>(() => (newestDraftForSkill(skillId) ? "check" : "overview"));
+  const [tab, setTab] = useState<Tab>(() => initialTab ?? (newestDraftForSkill(skillId) ? "check" : "overview"));
   const [liveVersion, setLiveVersion] = useState(() => getPublishedVersion(skillId));
   const [testQuery, setTestQuery] = useState(() => defaultSampleQuery(skillId, builtin?.triggers ?? []));
   const [single, setSingle] = useState<SkillCompareResult | null>(null);
@@ -551,7 +581,17 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
       toast.show(`检查建议先别发布：${r.verdict.title}。看下方报告，确认无碍可点「我确认，仍要发布」`);
       return;
     }
-    if (r.verdict.level === "warn" && !window.confirm("检查发现有需要注意的地方，确定发布吗？")) return;
+    if (r.verdict.level === "warn") {
+      const gate = buildReleaseGateSummary(r);
+      requestApproval({
+        skillId,
+        draftVersion: draftVersion,
+        gate: gate.gate,
+        requestedBy: "local",
+        note: gate.reasons[0],
+      });
+      if (!window.confirm("检查为 WARN，已加入审批队列。确定仍要直接发布吗？")) return;
+    }
     if (
       realLost.length &&
       !window.confirm(
@@ -560,6 +600,7 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
     )
       return;
     const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
+    tagBaselineEnv(skillId, applied.version, "prod");
     const next = reloadOnline();
     setDraft(next);
     setReport(null);
@@ -580,12 +621,19 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
   }
 
   function startFrom(raw: string, label: string) {
+    if (hasChanges && !window.confirm(`草稿里还有没发布的修改。用 ${label} 换掉草稿？`)) return;
     setDraft(raw);
     setReport(null);
     setSingle(null);
     setReportRaw(null);
     setTab("check");
-    toast.show(`已把 ${label} 的内容放进草稿，检查后可发布`);
+    toast.show(`已把 ${label} 放进草稿。检查通过后才能发布。`);
+  }
+
+  function askInChat(query?: string) {
+    const text = (query ?? defaultSampleQuery(skillId, onlineParsed.triggers)).trim();
+    if (text) sessionStorage.setItem("oa-pending-ask", text);
+    window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "chat" } }));
   }
 
   function rollbackTo(raw: string, version: string) {
@@ -598,9 +646,10 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
 
   const tabs: { id: Tab; label: string; badge?: string }[] = [
     { id: "overview", label: "概览" },
-    { id: "edit", label: "修改", badge: hasChanges ? "草稿" : undefined },
-    { id: "check", label: "检查并发布", badge: hasChanges ? `v${draftVersion}` : undefined },
-    { id: "history", label: "发布记录" },
+    { id: "edit", label: "编辑", badge: hasChanges ? "草稿" : undefined },
+    { id: "cases", label: "测试问题" },
+    { id: "check", label: "发版检查", badge: hasChanges ? `v${draftVersion}` : undefined },
+    { id: "history", label: "版本记录" },
   ];
 
   return (
@@ -625,20 +674,42 @@ function SkillDetail({ skillId, onBack }: { skillId: string; onBack: () => void 
         </nav>
 
         {tab === "overview" ? (
-          <Overview
-            parsed={onlineParsed}
-            skillId={skillId}
-            hasChanges={hasChanges}
-            draftVersion={draftVersion}
-            stats={stats}
-            onEdit={() => setTab("edit")}
-            onCheck={() => setTab("check")}
-            onTry={(q) => {
-              setTestQuery(q);
-              setTab(hasChanges ? "check" : "edit");
-              if (!hasChanges) toast.show("已记下这句话。先改点内容，再到「检查并发布」用它对比");
-            }}
-          />
+          <>
+            <Overview
+              parsed={onlineParsed}
+              skillId={skillId}
+              hasChanges={hasChanges}
+              draftVersion={draftVersion}
+              stats={stats}
+              onEdit={() => setTab("edit")}
+              onCheck={() => setTab("check")}
+              onTry={(q) => {
+                setTestQuery(q);
+                setTab(hasChanges ? "check" : "edit");
+                if (!hasChanges) toast.show("已记下这句话。先改点内容，再到「检查并发布」用它对比");
+              }}
+            />
+            <details className="own-skill-sidepaths">
+              <summary>还想细看这套问题</summary>
+              <button type="button" onClick={() => askInChat()}>去对话里问一句</button>
+              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "cases" } }))}>每句交给谁</button>
+              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "eval" } }))}>这批过不过</button>
+              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "evalops" } }))}>和上一版比</button>
+              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "trace" } }))}>一次怎么跑的</button>
+            </details>
+          </>
+        ) : null}
+
+        {tab === "cases" ? (
+          <section className="own-skill-showcase-block">
+            <h3>客户会怎么问</h3>
+            <p className="own-ver-hint">发版时会拿下面这些话再问一遍。写上一句，右边可以直接去对话里问。</p>
+            <ScmCaseEditor
+              skillId={skillId}
+              onAsk={askInChat}
+              onChanged={() => toast.show("已更新。下次发版检查会用这些问法。")}
+            />
+          </section>
         ) : null}
 
         {tab === "edit" ? (
@@ -1282,6 +1353,7 @@ function CheckView({
           </div>
           <ScmAttributionPanel
             skillId={skillId}
+            defaultExpanded
             autoOpen={
               !single.baseline.traceOk ||
               !single.candidate.traceOk ||
@@ -1305,6 +1377,16 @@ function CheckView({
 
       {report && !checking ? (
         <div className={reportStale ? "own-skm-stale-box" : undefined}>
+          <ReleaseGateHero
+            skillName={report.skillName}
+            baselineVersion={report.baselineVersion}
+            candidateVersion={report.candidateVersion}
+            verdictLevel={report.verdict.level}
+            verdictTitle={humanVerdict(report.verdict.level).title}
+            scm={report.scm}
+            caseCount={report.queryResults.length}
+            reasons={buildReleaseGateSummary(report).reasons}
+          />
           <FullCompareReport report={report} skillId={skillId} />
         </div>
       ) : null}
@@ -1369,18 +1451,25 @@ function FullCompareReport({ report, skillId }: { report: SkillFullCompareReport
   return (
     <div className="own-skill-ver-report">
       <section className={`own-skill-ver-summary own-skill-ver-summary--${verdictTone(report.verdict.level)}`}>
-        <h3>检查结论：{v.title}</h3>
+        <h3>
+          详细结论 · {v.gate} · {v.title}
+        </h3>
         <p>
-          {v.hint} 共试了 {report.queryResults.length} 句常见说法，{bad ? `${bad} 句表现和现用版不同` : "表现全部一致"}。
+          {v.hint} 共 {report.queryResults.length} 条 case，{bad ? `${bad} 条表现与现用版不同` : "全部一致"}。
         </p>
-        <button type="button" className="own-skill-inline-btn" onClick={download}>
-          下载检查报告
-        </button>
+        <div className="own-skm-report-dl">
+          <button type="button" className="own-skill-inline-btn" onClick={download}>
+            导出 Markdown
+          </button>
+          <button type="button" className="own-skill-inline-btn" onClick={() => downloadReportJson(report)}>
+            导出 JSON
+          </button>
+        </div>
       </section>
 
       {report.scm ? (
         <section className="own-compare-report-section own-scm-inline">
-          <h3>因果后果 SCM</h3>
+          <h3>因果传播</h3>
           <ScmCompareViz
             consequence={{
               baselinePass: report.scm.baselinePass,
@@ -1402,12 +1491,6 @@ function FullCompareReport({ report, skillId }: { report: SkillFullCompareReport
                 : null,
             }}
           />
-          {report.scm.pivotalStepId ? (
-            <p className="own-scm-note">
-              根因步 <code>{report.scm.pivotalStepId}</code>
-              {report.scm.pivotalTool ? ` · ${report.scm.pivotalTool}` : ""}
-            </p>
-          ) : null}
         </section>
       ) : null}
 
@@ -1488,40 +1571,172 @@ function History({
 
   return (
     <section className="own-skm-history">
-      <p className="own-ver-hint">每次发布都会留一条记录。回滚也会生成新版本号，旧记录不会被覆盖。</p>
+      <p className="own-ver-hint">现在客户用的在最上面。换回旧版会再发一个新版本，原来的记录还留着。</p>
       <ul>
         {entries.map((e) => {
           const isLive = e.version === liveVersion;
-          const diff = diffStats(lineDiff(online, e.raw));
+          const parsed = parseSkillMarkdown(e.raw);
+          const story = isLive ? "客户现在用的就是这版。" : versionStory(online, e.raw);
+          const when = e.at
+            ? new Date(e.at).toLocaleString("zh-CN", { hour12: false })
+            : "最初就有";
+          const note = e.note && e.note !== "出厂内置配置" ? e.note : "";
           return (
             <li key={e.key} className={isLive ? "own-skm-history-row own-skm-history-row--live" : "own-skm-history-row"}>
-              <div className="own-skm-history-main">
-                <strong>v{e.version}</strong>
-                {isLive ? <span className="own-skill-ver-ok">线上正在用</span> : null}
-                <span className="own-skm-history-time">{e.at ? new Date(e.at).toLocaleString("zh-CN") : "出厂"}</span>
-                {e.note ? <span className="own-skm-history-note">{e.kind === "rollback" ? "↺ " : ""}{e.note}</span> : null}
-                {!isLive ? <span className="own-skm-history-time">与线上相差 +{diff.added} −{diff.removed} 行</span> : null}
+              <div className="own-skm-history-top">
+                <div className="own-skm-history-main">
+                  <div className="own-skm-history-title">
+                    <strong>v{e.version}</strong>
+                    {isLive ? <span className="own-skill-ver-ok">正在用</span> : null}
+                    <span className="own-skm-history-time">{when}</span>
+                  </div>
+                  <p>{story}</p>
+                  {note ? <p className="own-skm-history-note">发布当时的结论：{e.kind === "rollback" ? "从旧版换回。" : ""}{note}</p> : null}
+                </div>
+                <div className="own-skm-history-ops">
+                  <button type="button" className="own-compare-secondary-btn" onClick={() => setOpen(open === e.key ? null : e.key)}>
+                    {open === e.key ? "收起" : "看看这版"}
+                  </button>
+                </div>
               </div>
-              <div className="own-skm-history-ops">
-                <button type="button" className="own-skill-inline-btn" onClick={() => setOpen(open === e.key ? null : e.key)}>
-                  {open === e.key ? "收起" : "查看内容"}
-                </button>
-                {!isLive ? (
-                  <>
-                    <button type="button" className="own-skill-inline-btn" onClick={() => onView(e.raw, `v${e.version}`)}>
-                      和线上对比
-                    </button>
-                    <button type="button" className="own-compare-secondary-btn" onClick={() => onRollback(e.raw, e.version)}>
-                      回滚到这版
-                    </button>
-                  </>
-                ) : null}
-              </div>
-              {open === e.key ? <pre className="own-ver-readonly own-skm-history-pre">{e.raw}</pre> : null}
+              {open === e.key ? (
+                <div className="own-skm-history-body">
+                  <p>客户这样说会用到：{parsed.triggers.length ? parsed.triggers.join("、") : "还没写"}</p>
+                  {parsed.steps.length ? (
+                    <ol>
+                      {parsed.steps.map((s, i) => (
+                        <li key={s.id || i}>{s.label || s.tool}</li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p>这版没有写步骤。</p>
+                  )}
+                  {!isLive ? (
+                    <div className="own-skm-history-ops">
+                      <button type="button" className="own-compare-secondary-btn" onClick={() => onView(e.raw, `v${e.version}`)}>
+                        放进草稿去检查
+                      </button>
+                      <button type="button" className="own-compare-secondary-btn own-compare-secondary-btn--danger" onClick={() => onRollback(e.raw, e.version)}>
+                        换回这版
+                      </button>
+                    </div>
+                  ) : null}
+                  <details>
+                    <summary>完整内容</summary>
+                    <pre className="own-ver-readonly own-skm-history-pre">{e.raw}</pre>
+                  </details>
+                </div>
+              ) : null}
             </li>
           );
         })}
       </ul>
     </section>
+  );
+}
+
+function versionStory(onlineRaw: string, raw: string): string {
+  const now = parseSkillMarkdown(onlineRaw);
+  const then = parseSkillMarkdown(raw);
+  const parts: string[] = [];
+  const added = now.triggers.filter((t) => !then.triggers.includes(t));
+  const removed = then.triggers.filter((t) => !now.triggers.includes(t));
+  if (added.length) parts.push(`现在会接「${added.slice(0, 4).join("、")}」`);
+  if (removed.length) parts.push(`这版会接「${removed.slice(0, 4).join("、")}」，现在不接`);
+  if (then.steps.length !== now.steps.length) {
+    parts.push(`步骤从 ${then.steps.length} 步变成现在的 ${now.steps.length} 步`);
+  } else if (then.steps.some((s, i) => now.steps[i]?.label !== s.label || now.steps[i]?.tool !== s.tool)) {
+    parts.push("回答步骤和现在不一样");
+  }
+  if (parts.length) return `${parts.join("。")}。`;
+  const diff = diffStats(lineDiff(onlineRaw, raw));
+  if (diff.added === 0 && diff.removed === 0) return "和现在线上一样。";
+  return "说法和步骤没变，正文有改动。";
+}
+
+function BatchCheckBar({
+  skills,
+  onToast,
+}: {
+  skills: AgentSkill[];
+  onToast: (msg: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const pending = skills.filter((s) => newestDraftForSkill(s.id));
+
+  async function runBatch() {
+    if (!pending.length) {
+      onToast("没有待发布草稿");
+      return;
+    }
+    setBusy(true);
+    let block = 0;
+    let warn = 0;
+    let pass = 0;
+    try {
+      for (const s of pending) {
+        const draft = newestDraftForSkill(s.id)!;
+        const online = resolveBaselineRaw(s.id, getBuiltinSkill(s.id)?.manifest ?? "");
+        const report = await runFullSkillCompare({
+          skillId: s.id,
+          skillName: skillDisplayTitle(s),
+          baselineRaw: online,
+          candidateRaw: draft.raw,
+          baselineVersion: getPublishedVersion(s.id),
+          candidateVersion: draft.version,
+        });
+        const gate = buildReleaseGateSummary(report);
+        if (gate.level === "block") block += 1;
+        else if (gate.level === "warn") warn += 1;
+        else pass += 1;
+      }
+      onToast(`批量检查完成：PASS ${pass} · WARN ${warn} · BLOCK ${block}`);
+    } catch (e) {
+      onToast(e instanceof Error ? e.message : "批量检查失败");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (!pending.length) return null;
+
+  return (
+    <div className="oa-batch-check">
+      <span>{pending.length} 个技能有待发布草稿</span>
+      <button type="button" className="own-skm-batch-btn" disabled={busy} onClick={() => void runBatch()}>
+        {busy ? "批量检查中…" : "批量发版检查"}
+      </button>
+    </div>
+  );
+}
+
+function TeamApprovalBar({ onToast }: { onToast: (msg: string) => void }) {
+  const [tick, setTick] = useState(0);
+  const pending = useMemo(() => listPendingApprovals(), [tick]);
+
+  if (!pending.length) return null;
+
+  return (
+    <div className="oa-team-approval">
+      <strong>待审批 {pending.length}</strong>
+      <ul>
+        {pending.map((p) => (
+          <li key={p.id}>
+            <span>{p.skillId} v{p.draftVersion} · {p.gate}</span>
+            <button
+              type="button"
+              className="own-skill-inline-btn"
+              onClick={() => {
+                approvePending(p.id);
+                setTick((n) => n + 1);
+                onToast(`已批准 ${p.skillId}`);
+              }}
+            >
+              批准
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }

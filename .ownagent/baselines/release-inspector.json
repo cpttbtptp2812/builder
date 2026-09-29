@@ -1,0 +1,6 @@
+{
+  "skillId": "release-inspector",
+  "version": "0.10",
+  "note": "CLI / CI baseline — 更新发版前请同步",
+  "raw": "---\nname: release-inspector\ndescription: 发布前巡检 — 检查 URL 能否上线\ntriggers:\n  - 上线\n  - 巡检\n  - 验收\ntools:\n  - http_probe\n  - knowledge_search\nsteps:\n  - id: probe\n    label: http_probe · 探活\n    tool: http_probe\n    args:\n      url: \"{{probeUrl}}\"\n  - id: search\n    label: knowledge_search · 规范召回\n    tool: knowledge_search\n    args:\n      query: \"{{query}}\"\n      topK: 3\n  - id: compose\n    label: 合成巡检报告\n    tool: __compose_release__\n    args:\n      probe: $probeResult\n      hits: $searchResult\n---\n"
+}

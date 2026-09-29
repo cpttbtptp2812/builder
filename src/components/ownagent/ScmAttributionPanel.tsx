@@ -8,6 +8,7 @@ import {
   type PivotalReport,
 } from "../../lib/deterministicScm";
 import { getSkill, type SkillTraceStep } from "../../lib/agentSkills";
+import { computeScmCoverage } from "../../lib/scmCoverage";
 import { ScmCaseEditor } from "./ScmCaseEditor";
 import {
   ScmCompareViz,
@@ -20,6 +21,8 @@ import {
 type Props = {
   skillId: string;
   autoOpen?: boolean;
+  /** 默认展开（成功/失败路径均可见） */
+  defaultExpanded?: boolean;
   observedTrace?: SkillTraceStep[];
   liveTrace?: boolean;
   compare?: {
@@ -41,13 +44,14 @@ function interventionLabel(r: PivotalReport["rows"][0]): string {
 export function ScmAttributionPanel({
   skillId,
   autoOpen,
+  defaultExpanded = true,
   observedTrace,
   liveTrace,
   compare,
   forkPeerId,
 }: Props) {
   const skill = getSkill(skillId);
-  const [open, setOpen] = useState(Boolean(autoOpen));
+  const [open, setOpen] = useState(defaultExpanded || Boolean(autoOpen));
   const [tab, setTab] = useState<Tab>("viz");
   const [selectedStepId, setSelectedStepId] = useState<string | null>(null);
   const [caseTick, setCaseTick] = useState(0);
@@ -122,6 +126,10 @@ export function ScmAttributionPanel({
 
   const rootId = pivotal?.rootCause?.stepId ?? null;
   const pivotalN = pivotal?.rows.filter((r) => r.pivotal).length ?? 0;
+  const coverage = useMemo(
+    () => computeScmCoverage(skillId, { observedTrace, liveTrace: liveTrace ?? Boolean(observedTrace?.length) }),
+    [skillId, observedTrace, liveTrace],
+  );
 
   return (
     <section className={`own-evo own-scm${autoOpen ? " own-scm--auto" : ""}`}>
@@ -165,6 +173,22 @@ export function ScmAttributionPanel({
             <div className="own-scm-skeleton" aria-busy>
               <div className="own-scm-skeleton-pipe" />
               <div className="own-scm-skeleton-bars" />
+            </div>
+          ) : null}
+
+          {!loading && coverage ? (
+            <div className="own-scm-coverage">
+              <div className="own-scm-coverage-head">
+                <span>传播覆盖率</span>
+                <strong>{coverage.exactPct}% exact</strong>
+                <small>{coverage.exact}/{coverage.total} 步 · {coverage.sample} sample</small>
+              </div>
+              <div className="own-scm-coverage-bar" role="progressbar" aria-valuenow={coverage.exactPct}>
+                <span style={{ width: `${coverage.exactPct}%` }} />
+              </div>
+              {coverage.mockHints.length ? (
+                <p className="own-scm-note">提升精确度：{coverage.mockHints.join("；")}</p>
+              ) : null}
             </div>
           ) : null}
 
@@ -255,7 +279,17 @@ export function ScmAttributionPanel({
           ) : null}
 
           {!loading && tab === "cases" ? (
-            <ScmCaseEditor skillId={skillId} onChanged={() => setCaseTick((n) => n + 1)} />
+            <ScmCaseEditor
+              skillId={skillId}
+              onChanged={() => setCaseTick((n) => n + 1)}
+              fromTrace={
+                observedTrace?.length && compare?.query
+                  ? { query: compare.query, trace: observedTrace }
+                  : observedTrace?.length
+                    ? { query: pivotal?.query ?? "", trace: observedTrace }
+                    : undefined
+              }
+            />
           ) : null}
 
           {!loading && consequence && compare ? (

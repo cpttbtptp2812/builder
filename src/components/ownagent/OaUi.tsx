@@ -6,14 +6,20 @@ export function OaPage({
   desc,
   toast,
   actions,
+  chrome = true,
   children,
 }: {
   title: string;
   desc?: string;
   toast?: string | null;
   actions?: React.ReactNode;
+  /** 嵌进上线前检查时不重复画标题 */
+  chrome?: boolean;
   children: React.ReactNode;
 }) {
+  if (!chrome) {
+    return <div className="oa-ui">{children}</div>;
+  }
   return (
     <div className="oa-ui oa-page">
       <header className="oa-page-head">

@@ -29,6 +29,7 @@ import { dbGet, dbAll, dbRun } from "./db.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { randomUUID } from "node:crypto";
 import { registerEvalOps } from "./evalops.ts";
+import { registerSkillGate } from "./skillGate.ts";
 
 const app = new Hono();
 
@@ -50,6 +51,7 @@ seedRagCorpus();
 seedFaqChunks();
 seedCustomerData();
 registerEvalOps(app);
+registerSkillGate(app);
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");

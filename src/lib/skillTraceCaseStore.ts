@@ -54,6 +54,36 @@ export function deleteCustomCase(skillId: string, caseId: string) {
   writeStore(store);
 }
 
+export function listAllCustomCases(): CustomSkillTraceCase[] {
+  const store = readStore();
+  return Object.values(store).flat();
+}
+
+export function exportCustomCasesJson(): string {
+  return JSON.stringify(readStore(), null, 2);
+}
+
+export function importCustomCasesJson(raw: string): { skills: number; cases: number } {
+  const parsed = JSON.parse(raw) as Store;
+  const store = readStore();
+  let cases = 0;
+  for (const [skillId, rows] of Object.entries(parsed)) {
+    if (!Array.isArray(rows)) continue;
+    const merged = [...(store[skillId] ?? [])];
+    for (const row of rows) {
+      if (!row?.id || !row.query) continue;
+      const i = merged.findIndex((c) => c.id === row.id);
+      const next: CustomSkillTraceCase = { ...row, skillId, custom: true };
+      if (i >= 0) merged[i] = next;
+      else merged.push(next);
+      cases += 1;
+    }
+    store[skillId] = merged;
+  }
+  writeStore(store);
+  return { skills: Object.keys(parsed).length, cases };
+}
+
 export function caseFromSkillSteps(
   skillId: string,
   query: string,

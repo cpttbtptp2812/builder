@@ -1,0 +1,19 @@
+{
+  "release-inspector": [
+    {
+      "id": "ri-custom-1",
+      "skillId": "release-inspector",
+      "query": "帮我巡检 https://example.com 能否上线",
+      "probeUrl": "https://example.com",
+      "grader": { "kind": "skeleton" },
+      "expect": {
+        "steps": [
+          { "stepId": "probe", "tool": "http_probe" },
+          { "stepId": "snapshot", "tool": "browser_snapshot" },
+          { "stepId": "docs", "tool": "knowledge_search" },
+          { "stepId": "report", "tool": "__compose_release__" }
+        ]
+      }
+    }
+  ]
+}

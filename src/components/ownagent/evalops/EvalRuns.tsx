@@ -54,6 +54,7 @@ export function EvalRuns({
   onChanged,
   goTab,
   notify,
+  onEditSuite,
 }: {
   runs: EvalRun[];
   suites: EvalSuite[];
@@ -64,13 +65,14 @@ export function EvalRuns({
   onChanged: () => void;
   goTab: (tab: "targets" | "suites") => void;
   notify: (msg: string) => void;
+  onEditSuite?: (id: string) => void;
 }) {
   if (openId) {
     return <RunReport id={openId} onBack={() => onOpen(null)} onChanged={onChanged} onOpen={onOpen} notify={notify} />;
   }
   return (
     <div className="eo-stack">
-      <NewRunForm suites={suites} targets={targets} judge={judge} goTab={goTab} onStarted={(r) => (onChanged(), onOpen(r.id))} />
+      <NewRunForm suites={suites} targets={targets} judge={judge} goTab={goTab} onStarted={(r) => (onChanged(), onOpen(r.id))} onEditSuite={onEditSuite} />
       <section className="eo-stack">
         <strong>历次实验</strong>
         {!runs.length ? (
@@ -127,12 +129,14 @@ function NewRunForm({
   judge,
   goTab,
   onStarted,
+  onEditSuite,
 }: {
   suites: EvalSuite[];
   targets: EvalTarget[];
   judge: JudgeInfo;
   goTab: (tab: "targets" | "suites") => void;
   onStarted: (r: EvalRun) => void;
+  onEditSuite?: (id: string) => void;
 }) {
   const [suiteId, setSuiteId] = useState("");
   const [aId, setAId] = useState("");
@@ -170,7 +174,7 @@ function NewRunForm({
           ) : null}
           {!targets.length && !suites.length ? "，以及" : ""}
           {!suites.length ? (
-            <button type="button" className="eo-link" onClick={() => goTab("suites")}>
+            <button type="button" className="eo-link" onClick={() => (onEditSuite ? onEditSuite("") : goTab("suites"))}>
               准备一个测试集
             </button>
           ) : null}
@@ -210,6 +214,11 @@ function NewRunForm({
               </option>
             ))}
           </OaSelect>
+          {onEditSuite && suite ? (
+            <button type="button" className="eo-link" onClick={() => onEditSuite(suite.id)}>
+              编辑这套题
+            </button>
+          ) : null}
         </OaField>
         <OaField label="A · 基准（通常是线上版）">
           <OaSelect value={aId} onChange={(e) => setAId(e.target.value)}>

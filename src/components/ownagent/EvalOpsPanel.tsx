@@ -23,8 +23,17 @@ function demoCases(): EvalCase[] {
   return out;
 }
 
-export function EvalOpsPanel() {
-  const [tab, setTab] = useState<Tab>("runs");
+export function EvalOpsPanel({
+  focus = "all",
+  openSuiteId = null,
+  onEditSuite,
+}: {
+  /** suites = 只编辑题目；compare = 对比和版本；all = 原来的整页 */
+  focus?: "all" | "suites" | "compare";
+  openSuiteId?: string | null;
+  onEditSuite?: (id: string) => void;
+} = {}) {
+  const [tab, setTab] = useState<Tab>(focus === "suites" ? "suites" : "runs");
   const [mode, setMode] = useState<StoreMode | null>(null);
   const [judge, setJudge] = useState<JudgeInfo>(null);
   const [targets, setTargets] = useState<EvalTarget[]>([]);
@@ -91,10 +100,24 @@ export function EvalOpsPanel() {
     { done: suites.length > 0, title: "准备测试集", desc: "上传、粘贴、从日志导入或从文档出题", tab: "suites" as const },
     { done: runs.length > 0, title: "跑一次对比", desc: "改动前后各跑一遍，看哪些题变差", tab: "runs" as const },
   ];
-  const showGuide = loaded && !runs.length;
+  const showGuide = loaded && !runs.length && focus !== "suites";
+  const embedded = focus !== "all";
+  const tabs = (
+    onEditSuite
+      ? [
+          { id: "runs" as const, label: `对比${runs.length ? ` ${runs.length}` : ""}` },
+          { id: "targets" as const, label: `版本${targets.length ? ` ${targets.length}` : ""}` },
+        ]
+      : [
+          { id: "runs" as const, label: `实验${runs.length ? ` ${runs.length}` : ""}` },
+          { id: "suites" as const, label: `测试集${suites.length ? ` ${suites.length}` : ""}` },
+          { id: "targets" as const, label: `被测对象${targets.length ? ` ${targets.length}` : ""}` },
+        ]
+  );
 
   return (
     <OaPage
+      chrome={!embedded}
       title="回归评测"
       desc="改提示词、换模型、更新知识库之前，用同一批问题把新旧两版各跑一遍，逐题告诉你哪些变好、哪些变坏、能不能上线。"
       toast={toast}
@@ -112,7 +135,11 @@ export function EvalOpsPanel() {
           <ol className="eo-steps">
             {steps.map((s, i) => (
               <li key={s.title} className={s.done ? "done" : ""}>
-                <button type="button" onClick={() => (setOpenRun(null), setTab(s.tab))}>
+                <button type="button" onClick={() => {
+                  setOpenRun(null);
+                  if (s.tab === "suites" && onEditSuite) onEditSuite("");
+                  else setTab(s.tab);
+                }}>
                   <span className="eo-step-no">{s.done ? "✓" : i + 1}</span>
                   <span>
                     <strong>{s.title}</strong>
@@ -131,23 +158,23 @@ export function EvalOpsPanel() {
         </section>
       ) : null}
 
+      {focus === "suites" ? null : (
       <OaTabs<Tab>
         label="回归评测"
-        value={tab}
+        value={tabs.some((t) => t.id === tab) ? tab : "runs"}
         onChange={(t) => {
           setTab(t);
           if (t === "runs") setOpenRun(null);
         }}
-        tabs={[
-          { id: "runs", label: `实验${runs.length ? ` ${runs.length}` : ""}` },
-          { id: "suites", label: `测试集${suites.length ? ` ${suites.length}` : ""}` },
-          { id: "targets", label: `被测对象${targets.length ? ` ${targets.length}` : ""}` },
-        ]}
+        tabs={tabs}
       />
+      )}
 
       <div className="eo-body">
         {!loaded ? (
           <p className="eo-muted">加载中…</p>
+        ) : focus === "suites" || tab === "suites" ? (
+          <EvalSuites suites={suites} onChanged={() => void reload()} notify={notify} openSuiteId={openSuiteId} />
         ) : tab === "runs" ? (
           <EvalRuns
             runs={runs}
@@ -159,9 +186,8 @@ export function EvalOpsPanel() {
             onChanged={() => void reload()}
             goTab={setTab}
             notify={notify}
+            onEditSuite={onEditSuite}
           />
-        ) : tab === "suites" ? (
-          <EvalSuites suites={suites} onChanged={() => void reload()} notify={notify} />
         ) : (
           <EvalTargets targets={targets} onChanged={() => void reload()} notify={notify} />
         )}

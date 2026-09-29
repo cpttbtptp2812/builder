@@ -7,7 +7,9 @@ import { effectLabel } from "./skillSemcompiler";
 import type { SkillDiagnostic } from "./skillSemcompiler";
 import { runSkillCompare, type CompareVerdict, type SkillCompareResult } from "./skillCompareEngine";
 import { scmSummaryForCompare, type ScmCompareSummary } from "./deterministicScm";
+import { buildReleaseGateSummary, reportToJson } from "./releaseGate";
 import { SKILL_TRACE_CASES } from "./provingGround";
+import { listAllCasesForSkill } from "./skillTraceCaseStore";
 import { extractUrlFromText } from "./releaseInspect";
 
 export type { ScmCompareSummary };
@@ -129,13 +131,15 @@ export function buildStructuralDiff(baseline: AgentSkill, candidate: AgentSkill)
 
 function buildTestQueries(skillId: string, skill: AgentSkill): string[] {
   const out = new Set<string>();
-  for (const c of SKILL_TRACE_CASES.filter((x) => x.skillId === skillId)) out.add(c.query);
+  for (const c of listAllCasesForSkill(skillId, SKILL_TRACE_CASES)) out.add(c.query);
   for (const q of EXTRA_QUERIES[skillId] ?? []) out.add(q);
   for (const t of skill.triggers.slice(0, 4)) {
     if (t.length >= 2) out.add(`用户说：${t}，请处理`);
   }
-  return [...out].slice(0, 10);
+  return [...out].slice(0, 12);
 }
+
+export { reportToJson };
 
 function compileDiff(baseline: AgentSkill, candidate: AgentSkill) {
   const baseErr = baseline.diagnostics.filter((d) => d.level === "error");

@@ -89,10 +89,10 @@ export function McpToolsPanel({ embedded = false }: { embedded?: boolean }) {
       {!embedded && (
         <header className="oa-panel-head">
           <div>
-            <h1>工具沙箱</h1>
-            <p>选择工具、填写参数、沙箱调用验证返回结果。</p>
+            <h1>可用工具</h1>
+            <p>勾选后，对话里才会调用。选中一项可以试一次，确认返回是否符合预期。</p>
           </div>
-          <span className="oa-mcp-enabled-badge">已启用 {enabled.length}/{MCP_TOOLS.length}</span>
+          <span className="oa-mcp-enabled-badge">对话可用 {enabled.length}/{MCP_TOOLS.length}</span>
         </header>
       )}
 
@@ -131,7 +131,7 @@ export function McpToolsPanel({ embedded = false }: { embedded?: boolean }) {
               </header>
 
               <div className="oa-mcp-scenarios">
-                <span>快捷场景</span>
+                <span>填入示例</span>
                 {MCP_SCENARIOS.filter((s) => s.tool === tool.name).map((s) => (
                   <button
                     key={s.id}
@@ -145,7 +145,7 @@ export function McpToolsPanel({ embedded = false }: { embedded?: boolean }) {
               </div>
 
               <label className="oa-mcp-json-label">
-                参数 JSON
+                调用参数
                 <textarea
                   rows={10}
                   value={paramsJson}
@@ -156,7 +156,7 @@ export function McpToolsPanel({ embedded = false }: { embedded?: boolean }) {
 
               <div className="oa-mcp-actions">
                 <button type="button" className="oa-panel-primary" disabled={test.running} onClick={() => void runTest()}>
-                  {test.running ? "调用中…" : "沙箱调用"}
+                  {test.running ? "运行中…" : "试运行"}
                 </button>
                 {test.ms != null && (
                   <span className={`oa-mcp-latency${test.error ? " err" : ""}`}>

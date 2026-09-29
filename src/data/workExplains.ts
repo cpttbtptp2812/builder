@@ -188,13 +188,13 @@ export const WORK_EXPLAINS: Record<string, WorkExplain> = {
 
   ownagent: {
     slug: "ownagent",
-    oneLiner: "产品里直接对话、跑技能、看追踪；理论里是能力全景。",
-    demoProves: "对话会调 MCP；技能能导入 SKILL.md；能力锁问 VPN 只出工单；评测给出路由命中率。",
+    oneLiner: "Skill 发版安全：改一步会不会 flip，哪步是根因，PASS/WARN/BLOCK 门禁。",
+    demoProves: "发版检查给出 ΔP 与 pivotal step；对话试跑验证体感；导入 SKILL.md 自动修复格式。",
     steps: [
-      "产品默认是对话，直接问一句",
-      "技能里跑或导入 SKILL.md",
-      "知识 / 能力锁 / 追踪 / 评测都在左侧",
-      "理论页签看能力全景，点一层看这一层",
+      "默认进入技能列表，管理 Skill 版本",
+      "编辑草稿 → 发版检查 → 看门禁三指标",
+      "对话试跑确认问法，资料库支撑 knowledge 类 skill",
+      "顶栏「理论」查看 Parse·2 架构与全链路编排",
     ],
     compare: {
       usual: { title: "SDK 封成黑盒", desc: "前端只消费一条 pending SSE" },
