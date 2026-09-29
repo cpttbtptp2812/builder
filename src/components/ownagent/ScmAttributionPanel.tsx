@@ -8,6 +8,7 @@ import {
   type PivotalReport,
 } from "../../lib/deterministicScm";
 import { getSkill, type SkillTraceStep } from "../../lib/agentSkills";
+import { clauseText } from "../../lib/skillHost";
 import { computeScmCoverage } from "../../lib/scmCoverage";
 import { ScmCaseEditor } from "./ScmCaseEditor";
 import {
@@ -35,10 +36,12 @@ type Props = {
 
 type Tab = "viz" | "detail" | "cases";
 
-function interventionLabel(r: PivotalReport["rows"][0]): string {
-  if (r.intervention === "skip") return `skip ${r.stepId}`;
-  if (r.intervention === "swap_tool") return r.interventionDetail ?? "swap";
-  return r.intervention === "fix" ? "fix obs" : "break obs";
+function interventionLabel(r: PivotalReport["rows"][0], stepLabel?: string): string {
+  const name = stepLabel ? `「${stepLabel}」` : r.stepId;
+  if (r.intervention === "skip") return `跳过${name}`;
+  if (r.intervention === "swap_tool") return `把${name}换成别的`;
+  if (r.intervention === "fix") return `修好${name}`;
+  return `弄坏${name}`;
 }
 
 export function ScmAttributionPanel({
@@ -207,7 +210,10 @@ export function ScmAttributionPanel({
                 <ScmOutcomeFlip
                   baselinePass={pivotal.baseline.pass}
                   counterfactualPass={pivotal.rootCause.counterfactualPass}
-                  rootLabel={interventionLabel(pivotal.rootCause)}
+                  rootLabel={interventionLabel(
+                    pivotal.rootCause,
+                    clauseText(skill.steps.find((step) => step.id === pivotal.rootCause?.stepId)?.label ?? pivotal.rootCause.stepId),
+                  )}
                 />
               ) : (
                 <div className="own-scm-flip own-scm-flip--solo">
@@ -223,6 +229,7 @@ export function ScmAttributionPanel({
 
               <ScmImpactBars
                 rows={pivotal.rows}
+                steps={skill.steps}
                 selectedStepId={selectedStepId}
                 onSelectStep={setSelectedStepId}
               />
@@ -259,7 +266,7 @@ export function ScmAttributionPanel({
                           <code>{r.stepId}</code>
                           <small>{r.tool}</small>
                         </td>
-                        <td>{interventionLabel(r)}</td>
+                        <td>{interventionLabel(r, clauseText(skill.steps.find((step) => step.id === r.stepId)?.label ?? r.stepId))}</td>
                         <td className={r.deltaSuccess > 0 ? "up" : r.deltaSuccess < 0 ? "down" : ""}>
                           {r.deltaSuccess > 0 ? "+" : ""}
                           {r.deltaSuccess}

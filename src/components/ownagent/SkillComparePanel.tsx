@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { previewClause, renderSkillHost, type SkillClause } from "../../lib/skillHost";
 import { AGENT_SKILLS, getBuiltinSkill, getLiveCatalog, isAnswerLayerSkill, type AgentSkill } from "../../lib/agentSkills";
 import { extractUrlFromText } from "../../lib/releaseInspect";
 import {
@@ -57,6 +58,10 @@ import { SkillEvolutionPanel } from "./SkillEvolution";
 import { RouteConfidencePanel } from "./RouteConfidence";
 import { ScmAttributionPanel } from "./ScmAttributionPanel";
 import { ScmCaseEditor } from "./ScmCaseEditor";
+import { SkillBreakPanel } from "./SkillBreak";
+import { PageToolWalk } from "./PageToolWalk";
+import { CheckQuestions } from "./CheckQuestions";
+import { SkillClauseNote, useSkillClauses } from "./SkillClauseNote";
 import { ReleaseGateHero, ScmCompareViz } from "./ScmVisuals";
 import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { OaBtn, OaPage } from "./OaUi";
@@ -486,6 +491,9 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
 
   const onlineParsed = useMemo(() => parseSkillMarkdown(online), [online]);
   const draftParsed = useMemo(() => parseSkillMarkdown(draft), [draft]);
+  useEffect(() => {
+    renderSkillHost(skillId, onlineParsed.steps, draftParsed.steps);
+  }, [skillId, onlineParsed, draftParsed]);
   const hasChanges = draft.trim() !== online.trim();
   const draftVersion = candidateVersion(skillId);
   const stats = useMemo(() => diffStats(lineDiff(online, draft)), [online, draft]);
@@ -610,6 +618,29 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     setTab("overview");
   }
 
+  const publishRef = useRef(publish);
+  publishRef.current = publish;
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const onlineRef = useRef(online);
+  onlineRef.current = online;
+
+  useEffect(() => {
+    function run() {
+      if (sessionStorage.getItem("oa-page-publish") !== skillId) return;
+      sessionStorage.removeItem("oa-page-publish");
+      setTab("check");
+      if (draftRef.current.trim() === onlineRef.current.trim()) {
+        toast.show("这个技能没有要发布的草稿");
+        return;
+      }
+      void publishRef.current(false);
+    }
+    window.addEventListener("ownagent:page-publish", run);
+    run();
+    return () => window.removeEventListener("ownagent:page-publish", run);
+  }, [skillId]);
+
   function discard() {
     if (!window.confirm(`放弃草稿 v${draftVersion}？线上 v${liveVersion} 不受影响。`)) return;
     discardDraftsForSkill(skillId);
@@ -706,7 +737,12 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
             <p className="own-ver-hint">发版时会拿下面这些话再问一遍。写上一句，右边可以直接去对话里问。</p>
             <ScmCaseEditor
               skillId={skillId}
+              draftRaw={draft}
               onAsk={askInChat}
+              onClaim={(phrase) => {
+                setDraft((d) => addTriggerTo(d, phrase));
+                toast.show(`说法里写上「${phrase}」，这句归这个技能`);
+              }}
               onChanged={() => toast.show("已更新。下次发版检查会用这些问法。")}
             />
           </section>
@@ -744,11 +780,17 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               reportStale={reportStale}
               impact={impact}
               onCheck={() => void runCheck()}
+              onAsk={askInChat}
             />
           ) : (
             <div className="own-skm-empty">
-              <p>现在和线上 v{liveVersion} 一模一样，没有要检查的内容。</p>
+              <CheckQuestions skillId={skillId} report={null} checking={false} canCheck={false} onAsk={askInChat} />
               <OaBtn onClick={() => setTab("edit")}>去修改</OaBtn>
+              <details className="own-check-more">
+                <summary>还想看别的</summary>
+                <PageToolWalk skillId={skillId} draftRaw={online} />
+                <SkillBreakPanel skillId={skillId} draftRaw={online} />
+              </details>
             </div>
           )
         ) : null}
@@ -1035,6 +1077,7 @@ function FormEditor({
 }) {
   const parsed = useMemo(() => parseSkillMarkdown(raw), [raw]);
   const base = useMemo(() => parseSkillMarkdown(online), [online]);
+  const clauses = useSkillClauses(skillId);
   const [desc, setDesc] = useState(parsed.description);
   const [body, setBodyText] = useState(parsed.body);
   const [newTrigger, setNewTrigger] = useState("");
@@ -1133,6 +1176,8 @@ function FormEditor({
               total={parsed.steps.length}
               label={s.label}
               tool={s.tool}
+              clause={clauses.find((clause) => clause.stepId === s.id)}
+              onPreview={() => previewClause(skillId, s.id)}
               isNew={!base.steps.some((b) => b.id === s.id)}
               onRename={(label) => onChange(renameStep(raw, i, label))}
               onMove={(d) => onChange(moveStep(raw, i, d))}
@@ -1172,6 +1217,8 @@ function StepRow({
   total,
   label,
   tool,
+  clause,
+  onPreview,
   isNew,
   onRename,
   onMove,
@@ -1181,6 +1228,8 @@ function StepRow({
   total: number;
   label: string;
   tool: string;
+  clause?: SkillClause;
+  onPreview: () => void;
   isNew: boolean;
   onRename: (label: string) => void;
   onMove: (d: -1 | 1) => void;
@@ -1188,8 +1237,8 @@ function StepRow({
 }) {
   const [text, setText] = useState(label);
   useEffect(() => setText(label), [label]);
-  const commit = () => {
-    const v = text.trim();
+  const commitValue = (raw: string) => {
+    const v = raw.trim();
     if (!v) setText(label);
     else if (v !== label) onRename(v);
   };
@@ -1201,14 +1250,18 @@ function StepRow({
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          onBlur={commit}
+          onBlur={(e) => commitValue(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter") (e.target as HTMLInputElement).blur();
+            if (e.key === "Enter") {
+              commitValue((e.target as HTMLInputElement).value);
+              (e.target as HTMLInputElement).blur();
+            }
             if (e.key === "Escape") setText(label);
           }}
           aria-label={`第 ${index + 1} 步名称`}
         />
         <small>使用工具：{tool.startsWith("__") ? "汇总生成回答" : tool}</small>
+        {clause ? <SkillClauseNote clause={clause} onPreview={onPreview} /> : null}
       </div>
       <div className="own-skm-step-ops">
         <button type="button" onClick={() => onMove(-1)} disabled={index === 0} title="上移">↑</button>
@@ -1237,6 +1290,7 @@ function CheckView({
   reportStale,
   impact,
   onCheck,
+  onAsk,
 }: {
   skillId: string;
   online: string;
@@ -1253,6 +1307,7 @@ function CheckView({
   reportStale: boolean;
   impact: SkillImpact;
   onCheck: () => void;
+  onAsk: (query: string) => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const diff = useMemo(() => lineDiff(online, draft), [online, draft]);
@@ -1275,6 +1330,36 @@ function CheckView({
 
   return (
     <div className="own-skill-ver-compare">
+      <CheckQuestions
+        skillId={skillId}
+        report={reportStale ? null : report}
+        checking={checking}
+        canCheck
+        onCheck={onCheck}
+        onAsk={onAsk}
+      />
+      {checking ? <p className="own-skm-checking">正在用现用版和新版分别回答上面这些句子…</p> : null}
+      {reportStale && !checking ? (
+        <p className="own-skm-stale">下面是改动之前的检查结果，内容已经又改过了，请重新检查。</p>
+      ) : null}
+      {report && !checking ? (
+        <div className={reportStale ? "own-skm-stale-box" : undefined}>
+          <ReleaseGateHero
+            skillName={report.skillName}
+            baselineVersion={report.baselineVersion}
+            candidateVersion={report.candidateVersion}
+            verdictLevel={report.verdict.level}
+            verdictTitle={humanVerdict(report.verdict.level).title}
+            scm={report.scm}
+            caseCount={report.queryResults.length}
+            reasons={buildReleaseGateSummary(report).reasons}
+          />
+          <FullCompareReport report={report} skillId={skillId} />
+        </div>
+      ) : null}
+
+      <details className="own-check-more">
+        <summary>改了哪些字，以及别的查法</summary>
       <section className="own-compare-report-section">
         <h3>
           改了什么 <span className="own-skm-ver-arrow">v{liveVersion} → v{draftVersion}</span>
@@ -1330,19 +1415,8 @@ function CheckView({
           onChange={(e) => setTestQuery(e.target.value)}
           placeholder="例如：帮我看看 https://example.com 能不能上线"
         />
-        <p className="own-ver-hint">检查会用这句话 + 约 10 句常见说法，同时跑一遍现用版和新版；直接点底部「检查并发布」也会先跑这一步。</p>
-        <div>
-          <OaBtn onClick={onCheck} disabled={checking}>
-            {checking ? "检查中…" : "检查改动"}
-          </OaBtn>
-        </div>
+        <p className="own-ver-hint">上面的「检查这些问题」会带上这一句。</p>
       </section>
-
-      {checking ? <p className="own-skm-checking">正在分别用 v{liveVersion} 和 v{draftVersion} 回答，稍等几秒…</p> : null}
-
-      {reportStale && !checking ? (
-        <p className="own-skm-stale">下面是改动之前的检查结果，内容已经又改过了，请重新检查。</p>
-      ) : null}
 
       {single && !checking ? (
         <div className={reportStale ? "own-skm-stale-box" : undefined}>
@@ -1375,21 +1449,9 @@ function CheckView({
         </div>
       ) : null}
 
-      {report && !checking ? (
-        <div className={reportStale ? "own-skm-stale-box" : undefined}>
-          <ReleaseGateHero
-            skillName={report.skillName}
-            baselineVersion={report.baselineVersion}
-            candidateVersion={report.candidateVersion}
-            verdictLevel={report.verdict.level}
-            verdictTitle={humanVerdict(report.verdict.level).title}
-            scm={report.scm}
-            caseCount={report.queryResults.length}
-            reasons={buildReleaseGateSummary(report).reasons}
-          />
-          <FullCompareReport report={report} skillId={skillId} />
-        </div>
-      ) : null}
+        <PageToolWalk skillId={skillId} draftRaw={draft} />
+        <SkillBreakPanel skillId={skillId} draftRaw={draft} />
+      </details>
     </div>
   );
 }

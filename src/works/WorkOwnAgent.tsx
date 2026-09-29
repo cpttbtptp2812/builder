@@ -6,6 +6,7 @@ import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentWorkbenchPanel } from "../components/ownagent/AgentWorkbenchPanel";
 import { MaterialsLine, RulesLine, SkillLine, lineOf } from "../components/ownagent/MainLines";
+import { PageToolHost } from "../components/ownagent/PageToolHost";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 
 type TabId = "product" | "theory";
@@ -519,6 +520,7 @@ export function WorkOwnAgent() {
           </div>
         </>
       )}
+      {tab === "product" ? <PageToolHost /> : null}
     </div>
   );
 }

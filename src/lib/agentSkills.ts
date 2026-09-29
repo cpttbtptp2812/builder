@@ -3,6 +3,7 @@
 import { loadImportedSkills } from "./importedSkills";
 import { overlayPublishedCatalog } from "./skillPublished";
 import { mcpServer } from "./mcpServer";
+import { executePageTool, getPageTool } from "./pageTools";
 import { runPolicyDesk } from "./policyDesk";
 import {
   enrichSkillCatalog,
@@ -411,6 +412,8 @@ export async function runSkillFromIndex(
     onStepStart?: (step: SkillStep) => void;
     probeUrl?: string;
     mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
+    /** 步骤优先调用当前页面注册的工具；页面上没有的外部工具直接失败 */
+    preferPageTools?: boolean;
     /** do(action): 跳过这些 step 索引，不执行也不写入 trace */
     skipIndices?: number[];
     /** do(action): 指定索引处换工具名 */
@@ -437,13 +440,21 @@ export async function runSkillFromIndex(
     const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
 
     const mockFn = opts?.mockProfile?.[tool];
+    const pageTool = opts?.preferPageTools ? getPageTool(tool) : undefined;
     const out = injected != null
       ? { content: injected }
-      : mockFn
-        ? { content: mockFn(args) }
-        : tool.startsWith("__")
-          ? await runInternalTool(tool, args)
-          : await mcpServer.callTool(tool, args, { snapshotRoot: snapRoot });
+      : pageTool
+        ? await (async () => {
+            const page = await executePageTool(tool, args);
+            return { content: page.content, isError: page.isError };
+          })()
+        : opts?.preferPageTools && !tool.startsWith("__")
+          ? { content: { error: "这一页没有这个能力", tool }, isError: true }
+        : mockFn
+          ? { content: mockFn(args) }
+          : tool.startsWith("__")
+            ? await runInternalTool(tool, args)
+            : await mcpServer.callTool(tool, args, { snapshotRoot: snapRoot });
 
     const ms = Math.max(1, Math.round(performance.now() - t0));
     lastResult = out.content;
@@ -475,6 +486,7 @@ export async function runSkill(
     onStepStart?: (step: SkillStep) => void;
     probeUrl?: string;
     mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
+    preferPageTools?: boolean;
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
   const ctx: SkillRunContext = { query, skillId: skill.id, vars: {} };

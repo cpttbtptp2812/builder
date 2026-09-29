@@ -36,6 +36,8 @@ import { appendSessionTurn, clearSessionTurns } from "../../lib/agentMemory";
 import { isLlmConfigured, loadLlmConfig, saveLlmConfig, type LlmConfig } from "../../lib/llmConfig";
 import { downloadText } from "../../lib/importedSkills";
 import { draftFromMessages, type DemoDraft } from "../../lib/skillFromDemo";
+import { executePageTool } from "../../lib/pageTools";
+import { interpretPageUtterance } from "../../lib/pageUtterance";
 import { SkillFromDemoDialog } from "../ownagent/SkillFromDemo";
 import { runMultiAgentAsync } from "../../lib/backendBridge";
 import type { MultiAgentStep } from "../../lib/multiAgentRuntime";
@@ -650,6 +652,21 @@ export function AgentProductDemo({
       };
 
       try {
+        const pageUtterance = interpretPageUtterance(q);
+        if (pageUtterance) {
+          mode = "guest";
+          jChip("route", "这一页的功能");
+          jActivate("fetch");
+          if (pageUtterance.kind === "say") {
+            finish(pageUtterance.text, "这一页认不出能做的事");
+            return;
+          }
+          const page = await executePageTool(pageUtterance.name, pageUtterance.args);
+          jChip("fetch", page.denied ? "你拒绝了" : pageUtterance.name);
+          finish(pageUtterance.told(page), "调用了当前页面注册的功能");
+          return;
+        }
+
         const cfg = await getRuntimeConfig();
         const promptAddon = getActiveSystemAddon();
         jChip("read", q.length > 48 ? `${q.slice(0, 48)}…` : q);
@@ -1134,16 +1151,17 @@ export function AgentProductDemo({
     [running, scrollToBottom],
   );
 
-  const pendingAskRef = useRef(false);
   const sendRef = useRef(send);
   sendRef.current = send;
   useEffect(() => {
-    if (pendingAskRef.current) return;
     const pending = sessionStorage.getItem("oa-pending-ask");
     if (!pending) return;
-    pendingAskRef.current = true;
-    sessionStorage.removeItem("oa-pending-ask");
-    void sendRef.current(pending);
+    const timer = window.setTimeout(() => {
+      if (sessionStorage.getItem("oa-pending-ask") !== pending) return;
+      sessionStorage.removeItem("oa-pending-ask");
+      void sendRef.current(pending);
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   function stop() {

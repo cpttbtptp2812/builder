@@ -8,8 +8,18 @@ import {
 } from "../../lib/skillTraceCaseStore";
 import { SKILL_TRACE_CASES, type SkillTraceCase } from "../../lib/provingGround";
 import type { OutcomeGrader } from "../../lib/scmOutcome";
-import { getSkill, type SkillTraceStep } from "../../lib/agentSkills";
-import { routeQuery } from "../../lib/skillRouter";
+import { allRunnableSkills, getSkill, type AgentSkill, type SkillTraceStep } from "../../lib/agentSkills";
+import { routeQuery, skillLabel } from "../../lib/skillRouter";
+import { catalogWith } from "../../lib/skillImpact";
+import { parseSkillMarkdown } from "../../lib/skillMarkdown";
+import {
+  catchPhrase,
+  draftCatches,
+  graspAgainst,
+  rivalName,
+  weekQueriesForSkill,
+  type GraspSide,
+} from "../../lib/skillSentence";
 import { suggestCaseFromTrace, applyTraceSuggestion } from "../../lib/traceCaseSuggest";
 
 const GRADERS: { id: OutcomeGrader["kind"]; label: string }[] = [
@@ -36,15 +46,24 @@ export function ScmCaseEditor({
   skillId,
   onChanged,
   onAsk,
+  onClaim,
+  draftRaw,
   fromTrace,
 }: {
   skillId: string;
   onChanged: () => void;
   /** 带着这句去对话里问 */
   onAsk?: (query: string) => void;
+  /** 把抽出的说法写进技能草稿 */
+  onClaim?: (phrase: string) => void;
+  draftRaw?: string;
   fromTrace?: { query: string; trace: SkillTraceStep[] };
 }) {
   const skill = getSkill(skillId);
+  const catalog = useMemo(() => {
+    const live = allRunnableSkills();
+    return draftRaw ? catalogWith(skillId, draftRaw, live) : live;
+  }, [skillId, draftRaw]);
   const [query, setQuery] = useState("");
   const [tick, setTick] = useState(0);
   const [hint, setHint] = useState<string | null>(null);
@@ -53,6 +72,10 @@ export function ScmCaseEditor({
   const [minSteps, setMinSteps] = useState(2);
   const cases = useMemo(() => listAllCasesForSkill(skillId, SKILL_TRACE_CASES), [skillId, tick]);
   const mine = cases.filter(isCustom).length;
+  const week = useMemo(
+    () => weekQueriesForSkill(skillId).filter((q) => !cases.some((c) => c.query.trim() === q)),
+    [skillId, cases],
+  );
 
   function buildGrader(kind = grader, count = minSteps): OutcomeGrader {
     if (kind === "release_overall") return { kind: "release_overall", min: "pass" };
@@ -97,7 +120,33 @@ export function ScmCaseEditor({
     );
     saveCustomCase(row);
     setQuery("");
-    bump("已加上。下次发版检查会问这句。");
+    bump(claimMessage(text));
+  }
+
+  function claimMessage(text: string) {
+    const triggers = parseSkillMarkdown(draftRaw ?? skill?.manifest ?? "").triggers;
+    if (draftCatches(text, skillId, catalog)) return "已加上。这句归这个技能，发版时会问。";
+    const rival = rivalName(text, skillId, catalog);
+    if (rival) return `已加上。这句话现在更会交给「${rival}」。比一比谁答得过，再决定接不接住。`;
+    const phrase = catchPhrase(text, triggers);
+    if (phrase && onClaim) {
+      onClaim(phrase);
+      return `已加上，并写进说法「${phrase}」。这句现在归这个技能。`;
+    }
+    return "已加上。下次发版检查会问这句。";
+  }
+
+  function adoptWeek(text: string) {
+    if (!skill?.steps.length) return;
+    if (cases.some((c) => c.query.trim() === text)) return;
+    const row = caseFromSkillSteps(
+      skillId,
+      text,
+      skill.steps.map((s) => ({ id: s.id, tool: s.tool })),
+      { grader: buildGrader(), probeUrl: urlIn(text) },
+    );
+    saveCustomCase(row);
+    bump(claimMessage(text));
   }
 
   function changeRule(row: CustomSkillTraceCase, kind: OutcomeGrader["kind"], count?: number) {
@@ -163,8 +212,22 @@ export function ScmCaseEditor({
       {hint ? <p className="own-qbank-hint">{hint}</p> : null}
 
       <p className="own-qbank-count">
-        发版时会问这 {cases.length} 句{mine ? `，其中 ${mine} 句是你加的` : ""}。自带的会一直用来检查。
+        发版时会问这 {cases.length} 句{mine ? `，其中 ${mine} 句是你加的` : ""}。这周客户真问过、还没记下的，也会挡发布。
       </p>
+
+      {week.length ? (
+        <div className="own-week">
+          <p>这周客户问过，还没收进必问</p>
+          <ul>
+            {week.map((q) => (
+              <li key={q}>
+                <span>{q}</span>
+                <button type="button" onClick={() => adoptWeek(q)}>收进必问</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
 
       {cases.length ? (
         <ul className="own-qbank-list">
@@ -172,8 +235,11 @@ export function ScmCaseEditor({
             <QuestionRow
               key={row.id}
               skillId={skillId}
+              catalog={catalog}
+              triggers={parseSkillMarkdown(draftRaw ?? skill?.manifest ?? "").triggers}
               row={row}
               onAsk={onAsk}
+              onClaim={onClaim}
               onDelete={() => {
                 deleteCustomCase(skillId, row.id);
                 bump("已删掉。发版检查不再问这句。");
@@ -194,22 +260,40 @@ export function ScmCaseEditor({
 
 function QuestionRow({
   skillId,
+  catalog,
+  triggers,
   row,
   onAsk,
+  onClaim,
   onDelete,
   onRule,
 }: {
   skillId: string;
+  catalog: AgentSkill[];
+  triggers: string[];
   row: SkillTraceCase;
   onAsk?: (query: string) => void;
+  onClaim?: (phrase: string) => void;
   onDelete: () => void;
   onRule: (kind: OutcomeGrader["kind"], count?: number) => void;
 }) {
-  const who = routeQuery(row.query);
+  const who = routeQuery(row.query, catalog);
   const mine = isCustom(row);
   const kind = row.grader?.kind ?? "skeleton";
   const matched = who.kind === "skill" && who.skillId === skillId;
   const elsewhere = who.kind === "skill" && who.skillId !== skillId;
+  const phrase = matched ? null : catchPhrase(row.query, triggers);
+  const [racing, setRacing] = useState(false);
+  const [race, setRace] = useState<GraspSide[] | null>(null);
+
+  async function compare() {
+    setRacing(true);
+    try {
+      setRace(await graspAgainst(row.query, skillId, catalog));
+    } finally {
+      setRacing(false);
+    }
+  }
 
   return (
     <li className={mine ? "is-mine" : "is-builtin"}>
@@ -221,6 +305,28 @@ function QuestionRow({
           </button>
         ) : null}
       </div>
+      {!matched && phrase && onClaim ? (
+        <button type="button" className="own-qbank-claim" onClick={() => onClaim(phrase)}>
+          用「{phrase}」接住这句
+        </button>
+      ) : null}
+      <button type="button" className="own-qbank-quiet" disabled={racing} onClick={() => void compare()}>
+        {racing ? "正在两边各跑一遍…" : "比一比谁更能答对"}
+      </button>
+      {race ? (
+        <ul className="own-grasp">
+          {race.map((s) => (
+            <li key={s.id} className={s.pass ? "is-pass" : ""}>
+              <strong>{s.label}</strong>
+              <span>{s.total ? `${s.ok}/${s.total} 步成功` : "跑不起来"}{s.pass ? " · 这句能过" : " · 这句过不了"}</span>
+              {s.here && !matched && phrase && onClaim ? (
+                <button type="button" onClick={() => onClaim(phrase)}>归这个技能</button>
+              ) : null}
+              {s.here && matched ? <em>就是现在这家</em> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
       <div className="own-qbank-meta">
         <span>{mine ? "你加的" : "自带"}</span>
         {mine ? (
@@ -246,10 +352,8 @@ function QuestionRow({
           </button>
         ) : null}
       </div>
-      {elsewhere ? (
-        <small>这句话对不上这个技能，发版检查用不上。换成这个技能能接住的问法，或先去编辑里加上对应说法。</small>
-      ) : null}
-      {who.kind !== "skill" ? <small>还没有技能会接这句话，发版检查覆盖不到。</small> : null}
+      {elsewhere ? <small>现在会交给{skillLabel(who.skill ?? { name: who.label, description: who.label })}。比完再决定要不要用一句话接回来。</small> : null}
+      {who.kind !== "skill" ? <small>还没有技能会接。用上面抽出的说法接住，发版才会问到这句。</small> : null}
     </li>
   );
 }

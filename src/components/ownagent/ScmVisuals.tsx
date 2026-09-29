@@ -1,6 +1,7 @@
 import type { AgentSkill, SkillTraceStep } from "../../lib/agentSkills";
-import type { CompareConsequence, ForkDeltaReport, PivotalReport, ScmCompareSummary } from "../../lib/deterministicScm";
+import type { CompareConsequence, ForkDeltaReport, PivotalReport, PivotalStepRow, ScmCompareSummary } from "../../lib/deterministicScm";
 import type { SkillFullCompareReport } from "../../lib/skillCompareReport";
+import { clauseText } from "../../lib/skillHost";
 
 export type ReleaseGateLevel = "pass" | "warn" | "block";
 
@@ -143,60 +144,87 @@ export function ScmPipelineViz({
   );
 }
 
-/** 逐步 ΔP 影响条 — 点击筛选详情表 */
+const BOARD_ACTIONS = [
+  { key: "break", label: "弄坏" },
+  { key: "skip", label: "跳过" },
+  { key: "swap_tool", label: "换成别的" },
+] as const;
+
+function cellWord(row: PivotalStepRow | undefined): { text: string; tone: "bad" | "good" | "same" | "empty" } {
+  if (!row) return { text: "没试", tone: "empty" };
+  if (row.baselinePass !== row.counterfactualPass) {
+    return row.counterfactualPass ? { text: "变好了", tone: "good" } : { text: "会挂", tone: "bad" };
+  }
+  return { text: "没变", tone: "same" };
+}
+
+function boardLead(rows: PivotalStepRow[]): string {
+  const tried = rows.filter((row) => row.intervention !== "fix");
+  const hung = tried.filter((row) => row.baselinePass && !row.counterfactualPass);
+  const saved = tried.filter((row) => !row.baselinePass && row.counterfactualPass);
+  if (!tried.length) return "还没有试过单独改某一步。";
+  if (hung.length === tried.length) return "每一种改法都会让结果从能过变成不过，看不出单独哪一步是原因。";
+  if (!hung.length && !saved.length) return "这些改法都不会改变能不能过。";
+  if (hung.length && !saved.length) return "标红的改法会把结果弄挂，其余改了也还过。";
+  if (saved.length && !hung.length) return "标绿的改法能把不过变成能过。";
+  return "红色会弄挂，绿色能救回来。";
+}
+
+/** 按步骤看：弄坏 / 跳过 / 换成别的，会不会把结果弄挂 */
 export function ScmImpactBars({
   rows,
+  steps,
   selectedStepId,
   onSelectStep,
 }: {
   rows: PivotalReport["rows"];
+  steps?: AgentSkill["steps"];
   selectedStepId?: string | null;
   onSelectStep?: (stepId: string) => void;
 }) {
-  const top = [...rows]
-    .filter((r) => r.pivotal || Math.abs(r.deltaSuccess) > 0)
-    .slice(0, 10);
+  const order = steps?.map((step) => step.id) ?? [];
+  const stepIds = [...new Set([...order, ...rows.map((row) => row.stepId)])];
+  const labelOf = (stepId: string) => {
+    const step = steps?.find((item) => item.id === stepId);
+    return step ? clauseText(step.label) : stepId;
+  };
+  const visible = stepIds.filter((stepId) => rows.some((row) => row.stepId === stepId && row.intervention !== "fix"));
 
-  if (!top.length) {
-    return <p className="own-scm-note">暂无显著干预影响。</p>;
+  if (!visible.length) {
+    return <p className="own-scm-note">还没有试过单独改某一步。</p>;
   }
 
   return (
-    <div className="own-scm-bars" role="img" aria-label="逐步干预 ΔP 影响">
-      <div className="own-scm-bars-head">
-        <span>干预影响 ΔP</span>
-        <span className="own-scm-bars-legend">
-          <i className="up" /> 翻转变过
-          <i className="down" /> 翻转变挂
-        </span>
-      </div>
-      {top.map((r, i) => {
-        const w = Math.min(100, Math.abs(r.deltaSuccess) * 100);
-        const up = r.deltaSuccess > 0;
-        return (
+    <div className="own-scm-board" role="img" aria-label="动哪一步会挂">
+      <p className="own-scm-board-lead">{boardLead(rows)}</p>
+      <div className="own-scm-board-grid">
+        <span />
+        {BOARD_ACTIONS.map((action) => (
+          <span key={action.key} className="own-scm-board-col">
+            {action.label}
+          </span>
+        ))}
+        {visible.map((stepId) => (
           <button
-            key={`${r.stepId}-${r.intervention}-${i}`}
+            key={stepId}
             type="button"
-            className={`own-scm-bar-row${r.pivotal ? " is-pivotal" : ""}${selectedStepId === r.stepId ? " is-selected" : ""}`}
-            onClick={() => onSelectStep?.(r.stepId)}
+            className={`own-scm-board-step${selectedStepId === stepId ? " is-selected" : ""}`}
+            style={{ gridColumn: "1 / -1" }}
+            onClick={() => onSelectStep?.(stepId)}
           >
-            <span className="own-scm-bar-label">
-              <code>{r.stepId}</code>
-              <small>{r.intervention}</small>
-            </span>
-            <span className="own-scm-bar-track">
-              <span
-                className={`own-scm-bar-fill ${up ? "up" : "down"}`}
-                style={{ width: `${Math.max(w, r.pivotal ? 12 : 4)}%` }}
-              />
-            </span>
-            <em className={up ? "up" : "down"}>
-              {up ? "+" : ""}
-              {r.deltaSuccess}
-            </em>
+            <span className="own-scm-board-name">{labelOf(stepId)}</span>
+            {BOARD_ACTIONS.map((action) => {
+              const row = rows.find((item) => item.stepId === stepId && item.intervention === action.key);
+              const cell = cellWord(row);
+              return (
+                <span key={action.key} className={`own-scm-board-cell is-${cell.tone}`}>
+                  {cell.text}
+                </span>
+              );
+            })}
           </button>
-        );
-      })}
+        ))}
+      </div>
     </div>
   );
 }
@@ -214,20 +242,20 @@ export function ScmOutcomeFlip({
   return (
     <div className="own-scm-flip">
       <div className={`own-scm-flip-node${baselinePass ? " pass" : " fail"}`}>
-        <small>baseline</small>
-        <strong>{baselinePass ? "PASS" : "FAIL"}</strong>
+        <small>现在</small>
+        <strong>{baselinePass ? "能过" : "不过"}</strong>
       </div>
       {counterfactualPass != null && rootLabel ? (
         <>
           <div className="own-scm-flip-arrow">
-            <span>do({rootLabel})</span>
+            <span>{rootLabel}</span>
             <svg viewBox="0 0 80 24" aria-hidden>
               <path d="M4 12 H68 M58 6 L68 12 L58 18" fill="none" stroke="currentColor" strokeWidth="2" />
             </svg>
           </div>
           <div className={`own-scm-flip-node${counterfactualPass ? " pass" : " fail"}`}>
-            <small>反事实</small>
-            <strong>{counterfactualPass ? "PASS" : "FAIL"}</strong>
+            <small>动过之后</small>
+            <strong>{counterfactualPass ? "能过" : "不过"}</strong>
           </div>
         </>
       ) : null}
@@ -272,15 +300,18 @@ export function ScmCompareViz({ consequence }: { consequence: CompareConsequence
     <div className="own-scm-compare-viz">
       <div className={`own-scm-compare-node${consequence.baselinePass ? " pass" : " fail"}`}>
         <small>现用版</small>
-        <strong>{consequence.baselinePass ? "PASS" : "FAIL"}</strong>
+        <strong>{consequence.baselinePass ? "能过" : "不过"}</strong>
       </div>
-      <div className={`own-scm-compare-delta${consequence.deltaSuccess >= 0 ? " up" : " down"}`}>
-        ΔP {consequence.deltaSuccess > 0 ? "+" : ""}
-        {consequence.deltaSuccess}
+      <div className={`own-scm-compare-delta${consequence.candidatePass === consequence.baselinePass ? "" : consequence.candidatePass ? " up" : " down"}`}>
+        {consequence.candidatePass === consequence.baselinePass
+          ? "还是一样"
+          : consequence.candidatePass
+            ? "变成能过"
+            : "变成不过"}
       </div>
       <div className={`own-scm-compare-node${consequence.candidatePass ? " pass" : " fail"}`}>
         <small>新版</small>
-        <strong>{consequence.candidatePass ? "PASS" : "FAIL"}</strong>
+        <strong>{consequence.candidatePass ? "能过" : "不过"}</strong>
       </div>
     </div>
   );
