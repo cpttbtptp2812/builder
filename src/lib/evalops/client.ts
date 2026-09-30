@@ -3,6 +3,7 @@
 import { apiUrl, checkBackendHealth } from "../apiClient";
 import { isLlmConfigured, loadLlmConfig, resolveLlmBaseUrl } from "../llmConfig";
 import { callChat, citationsFromTraces, invokeHttp, maskTarget, openAiToHttp, unmaskTarget } from "./targets";
+import { resolveEvalSuiteCases } from "../skillGateQuestions";
 import { runExperiment } from "./runner";
 import { generateCases, type SourceDoc } from "./generate";
 import {
@@ -200,7 +201,8 @@ export const evalStore = {
     const a = targets.find((t) => t.id === input.targetAId);
     const b = input.targetBId ? targets.find((t) => t.id === input.targetBId) ?? null : null;
     if (!suite || !a) throw new Error("测试集或被测对象不存在");
-    if (!suite.cases.length) throw new Error("测试集是空的");
+    const resolvedCases = resolveEvalSuiteCases(suite);
+    if (!resolvedCases.length) throw new Error("测试集是空的（绑定技能时请先在「考试题」里加必问句）");
     const judge = input.options.useLlmJudge ? browserJudge() : null;
     const run: EvalRun = {
       id: newId("run"),
@@ -211,7 +213,7 @@ export const evalStore = {
       targetB: b ? { id: b.id, name: b.name } : null,
       options: { ...DEFAULT_RUN_OPTIONS, ...input.options, useLlmJudge: Boolean(judge) },
       status: "queued",
-      progress: { done: 0, total: suite.cases.length },
+      progress: { done: 0, total: resolvedCases.length },
       results: [],
       judgeModel: judge?.model,
       createdAt: new Date().toISOString(),

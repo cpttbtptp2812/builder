@@ -69,7 +69,16 @@ export const MOCK_PROFILES: Record<string, Record<string, (args: Record<string, 
     http_probe: () => ({ ok: true, status: 200, latencyMs: 12, url: "https://example.com" }),
     browser_snapshot: () => ({ compact: true, nodeCount: 10, nodes: [] }),
     knowledge_search: () => ({ hits: [{ docId: "d1", score: 0.9, title: "mock" }] }),
-    __compose_release_report__: () => ({ markdown: "## Pass", meta: { skill: "release-inspector" } }),
+    __compose_release_report__: (args: Record<string, unknown>) => {
+      const probe = (args.probe ?? {}) as { ok?: boolean; status?: number; error?: string };
+      const fail = probe.ok === false || (typeof probe.status === "number" && probe.status >= 400) || Boolean(probe.error);
+      const overall = fail ? "fail" : "pass";
+      return {
+        dashboard: { releaseInspect: { overall, targetUrl: "https://example.com", checks: [] } },
+        markdown: overall === "pass" ? "## 能过" : "## 不能过",
+        meta: { skill: "release-inspector", overall },
+      };
+    },
   },
   "site-analyzer": {
     http_probe: () => ({ ok: true, status: 200, latencyMs: 8 }),

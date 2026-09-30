@@ -13,7 +13,7 @@ import {
   type SkillManifest,
 } from "./skillMarkdown";
 import { applyStepVarWrites } from "./skillVarBindings";
-import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
+import { composeReleaseReportTraced, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { faqAnswerMarkdown, faqFallbackMarkdown, matchFaq } from "../data/productFaq";
 import { composeStepsMarkdown } from "./composeSteps";
@@ -253,18 +253,22 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
       const targetUrl = String(args.targetUrl ?? probe?.url ?? PROBE_URL);
       const snapshot = args.snapshot as Record<string, unknown> | null | undefined;
       const skipped = !isSameOriginUrl(targetUrl);
-      const report = composeReleaseReport({
+      const now = Date.now();
+      const { report, frame } = composeReleaseReportTraced({
         targetUrl,
         probe,
         snapshot: skipped ? null : snapshot,
         snapshotSkipped: skipped,
         knowledgeQuery: String(args.query ?? targetUrl),
+        knowledge: (args.knowledge as Record<string, unknown> | null | undefined) ?? null,
+        now,
       });
       return {
         content: {
           dashboard: { releaseInspect: report },
           markdown: releaseReportMarkdown(report),
-          meta: { skill: "release-inspector", ts: Date.now() },
+          meta: { skill: "release-inspector", ts: now },
+          frame,
         },
       };
     }

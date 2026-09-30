@@ -17,7 +17,19 @@ import {
   takePendingSkillOpen,
 } from "../../lib/skillCompareStore";
 import { buildReleaseGateSummary, downloadReportJson } from "../../lib/releaseGate";
-import { reportToMarkdown, runFullSkillCompare, type SkillFullCompareReport } from "../../lib/skillCompareReport";
+import { buildReleaseWitness, downloadReleaseWitness } from "../../lib/releaseWitness";
+import { runRouteFuzzScan, type RouteFuzzReport } from "../../lib/skillRouteFuzz";
+import { runShadowReplayGate, type ShadowReplayReport } from "../../lib/skillShadowReplay";
+import { ReleaseCheckExtras } from "./ReleaseCheckExtras";
+import { ReleaseDependencyCard } from "./ReleaseDependencyCard";
+import { CompareSideColumn, downloadFullReportMd, FullCompareReport } from "./releaseCompareUi";
+import { ScmAttributionPanel } from "./ScmAttributionPanel";
+import { releaseGateLevel, gateLead, customerReason } from "./ScmVisuals";
+import { runPageToolWalk, type PageWalkResult } from "./PageToolWalk";
+import { buildReleaseDependencyProof, type ReleaseDependencyProof } from "../../lib/releaseDependencyProof";
+import { listGateQuestionRows } from "../../lib/skillGateQuestions";
+import { listPageTools } from "../../lib/pageTools";
+import { runFullSkillCompare, type SkillFullCompareReport } from "../../lib/skillCompareReport";
 import { approvePending, getBaselineTag, listPendingApprovals, requestApproval, tagBaselineEnv } from "../../lib/teamStore";
 import { runSkillCompare, type SkillCompareResult } from "../../lib/skillCompareEngine";
 import { parseSkillMarkdown, type ParsedSkillDoc } from "../../lib/skillMarkdown";
@@ -38,6 +50,7 @@ import {
   defaultSampleQuery,
   fmtUpdatedAt,
   humanVerdict,
+  queryComparePresentation,
   sampleTriggers,
   skillDisplayTitle,
   skillSubtitle,
@@ -56,21 +69,16 @@ import {
 import { buildZip, downloadBlob } from "../../lib/zipStore";
 import { SkillEvolutionPanel } from "./SkillEvolution";
 import { RouteConfidencePanel } from "./RouteConfidence";
-import { ScmAttributionPanel } from "./ScmAttributionPanel";
 import { ScmCaseEditor } from "./ScmCaseEditor";
 import { SkillBreakPanel } from "./SkillBreak";
 import { PageToolWalk } from "./PageToolWalk";
-import { CheckQuestions } from "./CheckQuestions";
 import { SkillClauseNote, useSkillClauses } from "./SkillClauseNote";
-import { ReleaseGateHero, ScmCompareViz } from "./ScmVisuals";
 import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { OaBtn, OaPage } from "./OaUi";
 import {
   addTriggerTo,
   ImpactPanel,
   NlEditBox,
-  RecentQueries,
-  RouteProbe,
   TriggerAdvice,
   useSkillImpact,
 } from "./SkillInsights";
@@ -81,21 +89,6 @@ type Tab = "overview" | "edit" | "cases" | "check" | "history";
 
 function onlineRaw(skillId: string): string {
   return resolveBaselineRaw(skillId, getBuiltinSkill(skillId)?.manifest ?? "");
-}
-
-function verdictTone(level: SkillFullCompareReport["verdict"]["level"]) {
-  if (level === "approve") return "ok";
-  if (level === "warn") return "warn";
-  return "fail";
-}
-
-function plainBody(body: string): string {
-  return body
-    .replace(/^#{1,4}\s+.*$/gm, "")
-    .replace(/\*\*(.+?)\*\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
 }
 
 function useToast() {
@@ -373,7 +366,7 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
         >
           <p><strong>导入 SKILL.md</strong> — 支持 JSON 技能包、多个 .md 文件，或拖入文件夹。</p>
           <p className="own-skm-import-hint">
-            导入后请进入该技能 → <strong>发版检查</strong>，查看 PASS/WARN/BLOCK 门禁与 ΔP，确认无误再发布。若 id 对应内置技能，改动写入草稿。
+            导入后请进入该技能 → <strong>发版检查</strong>，看这几句过不过，再发布。若 id 对应内置技能，改动写入草稿。
           </p>
           <div className="own-skm-import-actions">
             <button type="button" className="own-skm-batch-btn" onClick={() => fileRef.current?.click()}>
@@ -480,12 +473,18 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     return changed && fixes.length ? fixes.join("、") : null;
   });
   const [saved, setSaved] = useState<"idle" | "saving" | "saved">("idle");
-  const [tab, setTab] = useState<Tab>(() => initialTab ?? (newestDraftForSkill(skillId) ? "check" : "overview"));
+  const [historyOpen, setHistoryOpen] = useState(initialTab === "history");
+  const [editing, setEditing] = useState(initialTab === "edit");
+  const [casesOpen, setCasesOpen] = useState(initialTab === "cases");
   const [liveVersion, setLiveVersion] = useState(() => getPublishedVersion(skillId));
   const [testQuery, setTestQuery] = useState(() => defaultSampleQuery(skillId, builtin?.triggers ?? []));
   const [single, setSingle] = useState<SkillCompareResult | null>(null);
   const [report, setReport] = useState<SkillFullCompareReport | null>(null);
   const [reportRaw, setReportRaw] = useState<string | null>(null);
+  const [shadowReport, setShadowReport] = useState<ShadowReplayReport | null>(null);
+  const [fuzzReport, setFuzzReport] = useState<RouteFuzzReport | null>(null);
+  const [pageWalkReport, setPageWalkReport] = useState<PageWalkResult | null>(null);
+  const [depProof, setDepProof] = useState<ReleaseDependencyProof | null>(null);
   const [checking, setChecking] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
 
@@ -535,22 +534,33 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
 
   async function runCheck(): Promise<SkillFullCompareReport | null> {
     if (!hasChanges) return null;
-    setTab("check");
     setChecking(true);
     setSingle(null);
+    setShadowReport(null);
+    setFuzzReport(null);
+    setPageWalkReport(null);
+    setDepProof(null);
     const snapshot = draft;
     try {
       const q = testQuery.trim();
-      const [one, full] = await Promise.all([
-        q
-          ? runSkillCompare({
-              skillId,
-              baselineRaw: online,
-              candidateRaw: snapshot,
-              query: q,
-              probeUrl: extractUrlFromText(q) ?? undefined,
-            })
-          : Promise.resolve(null),
+      const urlQuery =
+        q ||
+        listGateQuestionRows(skillId).map((r) => r.query).find((text) => extractUrlFromText(text)) ||
+        "";
+      const pageWalkPromise =
+        listPageTools().length > 0
+          ? Promise.race([
+              runPageToolWalk(skillId, snapshot),
+              new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 28_000)),
+            ]).catch(() => null)
+          : Promise.resolve(null);
+
+      const depPromise =
+        skillId === "release-inspector" && urlQuery && extractUrlFromText(urlQuery)
+          ? buildReleaseDependencyProof(urlQuery).catch(() => null)
+          : Promise.resolve(null);
+
+      const [full, shadow, fuzz, pageWalk, dep] = await Promise.all([
         runFullSkillCompare({
           skillId,
           skillName: title,
@@ -560,9 +570,16 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           candidateVersion: draftVersion,
           extraQuery: q || undefined,
         }),
+        runShadowReplayGate({ skillId, baselineRaw: online, candidateRaw: snapshot }),
+        runRouteFuzzScan({ skillId, baselineRaw: online, candidateRaw: snapshot }),
+        pageWalkPromise,
+        depPromise,
       ]);
-      setSingle(one);
       setReport(full);
+      setShadowReport(shadow);
+      setFuzzReport(fuzz);
+      setPageWalkReport(pageWalk);
+      setDepProof(dep);
       setReportRaw(snapshot);
       return full;
     } catch (err) {
@@ -573,12 +590,30 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     }
   }
 
+  /** 只跑单句对比，不触发全量检查 */
+  async function runSingleOnly(query: string) {
+    const q = query.trim();
+    if (!q) return;
+    setTestQuery(q);
+    try {
+      const result = await runSkillCompare({
+        skillId,
+        baselineRaw: online,
+        candidateRaw: draft,
+        query: q,
+        probeUrl: extractUrlFromText(q) ?? undefined,
+      });
+      setSingle(result);
+    } catch {
+      /* silent */
+    }
+  }
+
   const publishBlock: string | null = !hasChanges
     ? "还没有改动"
     : !draftParsed.ok
       ? `配置有错误：${draftParsed.issues.find((i) => i.level === "error")?.message ?? "格式不对"}`
       : null;
-  const checkHint = !report ? "点发布会先自动检查一遍" : reportStale ? "检查后又改过，发布时会重新检查" : null;
 
   /** 没检查过（或检查后又改过）就先自动检查，再按结果确认发布 */
   async function publish(force = false) {
@@ -607,15 +642,38 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
       )
     )
       return;
+    const shadow = shadowReport && reportRaw === draft ? shadowReport : null;
+    const fuzz = fuzzReport && reportRaw === draft ? fuzzReport : null;
+    if (shadow?.routeDriftCount && !window.confirm(`真实回流：${shadow.routeDriftCount} 条历史问句在新版下路由变了。仍要发布？`)) return;
+    if (fuzz?.lostCount && !window.confirm(`路由邻域：${fuzz.lostCount} 种说法变体会被别的技能抢走。仍要发布？`)) return;
     const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
     tagBaselineEnv(skillId, applied.version, "prod");
+    try {
+      const witness = await buildReleaseWitness({
+        skillId,
+        skillName: title,
+        version: applied.version,
+        manifest: draft,
+        report: r,
+        shadow,
+        fuzz,
+      });
+      downloadReleaseWitness(witness);
+    } catch {
+      /* 见证包失败不挡发布 */
+    }
     const next = reloadOnline();
     setDraft(next);
     setReport(null);
     setSingle(null);
     setReportRaw(null);
-    toast.show(`已发布 v${applied.version}，用户提问时立即生效`);
-    setTab("overview");
+    setShadowReport(null);
+    setFuzzReport(null);
+    setPageWalkReport(null);
+    setDepProof(null);
+    toast.show(`已发布 v${applied.version}，见证包已下载，用户提问时立即生效`);
+    setHistoryOpen(false);
+    setEditing(false);
   }
 
   const publishRef = useRef(publish);
@@ -629,7 +687,6 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     function run() {
       if (sessionStorage.getItem("oa-page-publish") !== skillId) return;
       sessionStorage.removeItem("oa-page-publish");
-      setTab("check");
       if (draftRef.current.trim() === onlineRef.current.trim()) {
         toast.show("这个技能没有要发布的草稿");
         return;
@@ -657,7 +714,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     setReport(null);
     setSingle(null);
     setReportRaw(null);
-    setTab("check");
+    setHistoryOpen(false);
     toast.show(`已把 ${label} 放进草稿。检查通过后才能发布。`);
   }
 
@@ -675,178 +732,147 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     toast.show(`已回滚：线上现为 v${applied.version}（内容同 v${version}）`);
   }
 
-  const tabs: { id: Tab; label: string; badge?: string }[] = [
-    { id: "overview", label: "概览" },
-    { id: "edit", label: "编辑", badge: hasChanges ? "草稿" : undefined },
-    { id: "cases", label: "测试问题" },
-    { id: "check", label: "发版检查", badge: hasChanges ? `v${draftVersion}` : undefined },
-    { id: "history", label: "版本记录" },
-  ];
+  const sentenceCount = listGateQuestionRows(skillId).length;
 
   return (
     <OaPage title={title} desc={skillSubtitle({ description: onlineParsed.description })}>
       <div className="own-skill-ver-detail">
-        <div className="own-skill-ver-topbar">
+        <div className="sk-work-bar">
           <button type="button" className="own-skill-ver-back" onClick={onBack}>
             ← 全部技能
           </button>
-          <div className="own-skm-live-pill">
-            线上 v{liveVersion} · {fmtUpdatedAt(getAppliedSkill(skillId)?.appliedAt)}
+          <div className="sk-work-ver">
+            <span className="sk-work-ver-live">
+              <i className="sk-status-dot is-live" />
+              PROD v{liveVersion}
+            </span>
+            <span className="sk-work-ver-arrow">→</span>
+            {hasChanges ? (
+              <span className="sk-work-ver-draft">
+                <i className="sk-status-dot is-draft" />
+                DRAFT v{draftVersion}
+                <em>{saved === "saving" ? "● 同步中…" : "✓ 已同步"}</em>
+              </span>
+            ) : (
+              <span className="sk-work-ver-synced">环境一致 (In Sync)</span>
+            )}
+            <span className="sk-work-telemetry">
+              {stats.added || stats.removed ? `Δ +${stats.added} -${stats.removed}` : "基线无漂移"}
+              {" · "}
+              {sentenceCount} 评测样本
+            </span>
           </div>
+          <button type="button" className="own-compare-secondary-btn sk-history-btn" onClick={() => setHistoryOpen(true)}>
+            版本审计历史
+          </button>
         </div>
 
-        <nav className="own-skill-ver-tabs" aria-label="技能管理">
-          {tabs.map((t) => (
-            <button key={t.id} type="button" className={tab === t.id ? "on" : ""} onClick={() => setTab(t.id)}>
-              {t.label}
-              {t.badge ? <em>{t.badge}</em> : null}
-            </button>
-          ))}
-        </nav>
-
-        {tab === "overview" ? (
-          <>
-            <Overview
-              parsed={onlineParsed}
-              skillId={skillId}
-              hasChanges={hasChanges}
-              draftVersion={draftVersion}
-              stats={stats}
-              onEdit={() => setTab("edit")}
-              onCheck={() => setTab("check")}
-              onTry={(q) => {
-                setTestQuery(q);
-                setTab(hasChanges ? "check" : "edit");
-                if (!hasChanges) toast.show("已记下这句话。先改点内容，再到「检查并发布」用它对比");
-              }}
-            />
-            <details className="own-skill-sidepaths">
-              <summary>还想细看这套问题</summary>
-              <button type="button" onClick={() => askInChat()}>去对话里问一句</button>
-              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "cases" } }))}>每句交给谁</button>
-              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "eval" } }))}>这批过不过</button>
-              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "evalops" } }))}>和上一版比</button>
-              <button type="button" onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "trace" } }))}>一次怎么跑的</button>
-            </details>
-          </>
-        ) : null}
-
-        {tab === "cases" ? (
-          <section className="own-skill-showcase-block">
-            <h3>客户会怎么问</h3>
-            <p className="own-ver-hint">发版时会拿下面这些话再问一遍。写上一句，右边可以直接去对话里问。</p>
-            <ScmCaseEditor
-              skillId={skillId}
-              draftRaw={draft}
-              onAsk={askInChat}
-              onClaim={(phrase) => {
-                setDraft((d) => addTriggerTo(d, phrase));
-                toast.show(`说法里写上「${phrase}」，这句归这个技能`);
-              }}
-              onChanged={() => toast.show("已更新。下次发版检查会用这些问法。")}
-            />
-          </section>
-        ) : null}
-
-        {tab === "edit" ? (
-          <Editor
-            skillId={skillId}
-            raw={draft}
-            online={online}
-            onChange={(next) => setDraft(next)}
-            onNotify={toast.show}
-            onRestore={() => {
-              if (hasChanges && !window.confirm("撤销全部修改，恢复成线上内容？")) return;
-              setDraft(online);
-            }}
-          />
-        ) : null}
-
-        {tab === "check" ? (
-          hasChanges ? (
-            <CheckView
-              skillId={skillId}
-              online={online}
-              draft={draft}
+        <div className="sk-work">
+          <section className="sk-col">
+            <header className="sk-col-h">
+              <div className="sk-col-h-title">
+                <span className="sk-col-h-tag">SPEC & PIPELINE</span>
+                <h2>变更差异与流水线契约</h2>
+              </div>
+              <span className="sk-col-h-badge">{hasChanges ? `+${stats.added} −${stats.removed} 行变更` : "与线上基线一致"}</span>
+            </header>
+            <LiveSkillCompare
               liveVersion={liveVersion}
               draftVersion={draftVersion}
-              onlineParsed={onlineParsed}
-              draftParsed={draftParsed}
-              testQuery={testQuery}
-              setTestQuery={setTestQuery}
-              checking={checking}
-              single={single}
-              report={report}
-              reportStale={reportStale}
-              impact={impact}
-              onCheck={() => void runCheck()}
-              onAsk={askInChat}
+              online={onlineParsed}
+              draft={draftParsed}
             />
-          ) : (
-            <div className="own-skm-empty">
-              <CheckQuestions skillId={skillId} report={null} checking={false} canCheck={false} onAsk={askInChat} />
-              <OaBtn onClick={() => setTab("edit")}>去修改</OaBtn>
-              <details className="own-check-more">
-                <summary>还想看别的</summary>
-                <PageToolWalk skillId={skillId} draftRaw={online} />
-                <SkillBreakPanel skillId={skillId} draftRaw={online} />
-              </details>
-            </div>
-          )
-        ) : null}
+            <details className="sk-fold" open={editing} onToggle={(e) => setEditing(e.currentTarget.open)}>
+              <summary>草稿配置与流水线编排器 (Manifest Spec & Visual Editor)</summary>
+              <Editor
+                skillId={skillId}
+                raw={draft}
+                online={online}
+                onChange={(next) => setDraft(next)}
+                onNotify={toast.show}
+                onRestore={() => {
+                  if (hasChanges && !window.confirm("撤销全部修改，恢复成线上内容？")) return;
+                  setDraft(online);
+                }}
+              />
+            </details>
+          </section>
 
-        {tab === "history" ? (
-          <History
-            key={historyTick}
-            skillId={skillId}
-            liveVersion={liveVersion}
-            builtinRaw={builtin?.manifest ?? ""}
-            online={online}
-            onView={startFrom}
-            onRollback={rollbackTo}
-          />
-        ) : null}
-
-        {hasChanges && (tab === "edit" || tab === "check") ? (
-          <div className="own-ver-sticky">
-            <div className="own-ver-sticky-main">
-              <div className="own-skm-bar-status">
-                <strong>草稿 v{draftVersion}</strong>
-                <span>
-                  +{stats.added} −{stats.removed} 行 · {saved === "saving" ? "保存中…" : "已自动保存，关掉页面也不会丢"}
-                </span>
-                {impact.gained.length || impact.lost.length ? (
-                  <button type="button" className={realLost.length ? "own-si-bar-impact is-lose" : "own-si-bar-impact"} onClick={() => setTab("check")}>
-                    路由变化：新接手 {impact.gained.length} 句 · 不再接手 {impact.lost.length} 句
-                  </button>
-                ) : null}
-                {report && !reportStale ? (
-                  <span className={`own-ver-sticky-verdict own-ver-sticky-verdict--${verdictTone(report.verdict.level)}`}>
-                    检查结果：{humanVerdict(report.verdict.level).title}
-                  </span>
-                ) : publishBlock || checkHint ? (
-                  <span className="own-skm-bar-block">{publishBlock ?? checkHint}</span>
-                ) : null}
+          <section className="sk-col sk-col--right">
+            <header className="sk-col-h">
+              <div className="sk-col-h-title">
+                <span className="sk-col-h-tag">QUALITY GATE</span>
+                <h2>发布质量门禁与风险评级</h2>
               </div>
-              <div className="own-ver-sticky-actions">
-                <button type="button" className="own-compare-secondary-btn" onClick={discard}>
-                  放弃草稿
-                </button>
+              <span className="sk-col-h-badge">{hasChanges ? `目标 v${draftVersion}` : "等待草稿变更"}</span>
+            </header>
+            <details className="sk-fold" open={casesOpen} onToggle={(e) => setCasesOpen(e.currentTarget.open)}>
+              <summary>黄金回归评测集 ({sentenceCount} 条基准样本受管)</summary>
+              <ScmCaseEditor
+                skillId={skillId}
+                draftRaw={hasChanges ? draft : online}
+                onAsk={(q) => askInChat(q)}
+                onClaim={(phrase) => {
+                  setDraft((d) => addTriggerTo(d, phrase));
+                  toast.show(`已在草稿触发词中注入「${phrase}」`);
+                }}
+                onChanged={() => toast.show("已更新评测断言库。下次门禁检查将自动纳入。")}
+              />
+            </details>
+            {hasChanges ? (
+              <CheckView
+                skillId={skillId}
+                online={online}
+                draft={draft}
+                liveVersion={liveVersion}
+                draftVersion={draftVersion}
+                onlineParsed={onlineParsed}
+                draftParsed={draftParsed}
+                checking={checking}
+                peek={single}
+                report={report}
+                reportStale={reportStale}
+                impact={impact}
+                shadowReport={shadowReport}
+                fuzzReport={fuzzReport}
+                pageWalkReport={pageWalkReport}
+                depProof={depProof}
+                onPeek={(q) => void runSingleOnly(q)}
+                onClosePeek={() => setSingle(null)}
+              />
+            ) : (
+              <div className="sk-gate-empty-box">
+                <p className="sk-gate-empty">在左侧修改草稿配置后，质量门禁系统将自动调度 {sentenceCount} 条基准断言样本，进行语义一致性与意图漂移双跑校验。</p>
+              </div>
+            )}
+            <div className="sk-release-actions">
+              <button type="button" className="own-compare-secondary-btn" onClick={discard} disabled={!hasChanges}>
+                放弃草稿
+              </button>
+              <button
+                type="button"
+                className="own-compare-secondary-btn sk-check-trigger-btn"
+                onClick={() => void runCheck()}
+                disabled={Boolean(publishBlock) || checking}
+              >
+                {checking ? "门禁扫描中…" : report && !reportStale ? "重新执行门禁" : "执行门禁校验"}
+              </button>
+              {report && !reportStale && report.verdict.level !== "reject" ? (
                 <button
                   type="button"
                   className="own-compare-secondary-btn"
-                  onClick={() => void runCheck()}
+                  onClick={() => askInChat(testQuery.trim() || defaultSampleQuery(skillId, draftParsed.triggers))}
                   disabled={checking}
                 >
-                  {checking ? "检查中…" : report && !reportStale ? "重新检查" : "只检查不发布"}
+                  交互沙盒探活
                 </button>
-                <OaBtn
-                  onClick={() => void publish()}
-                  disabled={Boolean(publishBlock) || checking || (report?.verdict.level === "reject" && !reportStale)}
-                >
-                  {checking ? "检查中…" : !report || reportStale ? `检查并发布 v${draftVersion}` : `发布 v${draftVersion}`}
-                </OaBtn>
-              </div>
+              ) : null}
+              <OaBtn
+                onClick={() => void publish()}
+                disabled={Boolean(publishBlock) || checking || (report?.verdict.level === "reject" && !reportStale)}
+              >
+                {checking ? "检查中…" : !report || reportStale ? `执行门禁并发布` : `发布上线 v${draftVersion}`}
+              </OaBtn>
             </div>
             {report && !reportStale && report.verdict.level === "reject" ? (
               <p className="own-ver-sticky-note own-ver-sticky-note--bad">
@@ -862,101 +888,31 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
                 </button>
               </p>
             ) : null}
-          </div>
-        ) : null}
+          </section>
+        </div>
       </div>
+      {historyOpen ? (
+        <div className="sk-history-layer">
+          <button type="button" className="sk-history-backdrop" aria-label="关闭历史版本" onClick={() => setHistoryOpen(false)} />
+          <aside className="sk-history-drawer" role="dialog" aria-label="历史版本">
+            <header className="sk-history-head">
+              <strong>历史版本</strong>
+              <button type="button" className="own-compare-secondary-btn" onClick={() => setHistoryOpen(false)}>关闭</button>
+            </header>
+            <History
+              key={historyTick}
+              skillId={skillId}
+              liveVersion={liveVersion}
+              builtinRaw={builtin?.manifest ?? ""}
+              online={online}
+              onView={startFrom}
+              onRollback={rollbackTo}
+            />
+          </aside>
+        </div>
+      ) : null}
       {toast.node}
     </OaPage>
-  );
-}
-
-function Overview({
-  parsed,
-  skillId,
-  hasChanges,
-  draftVersion,
-  stats,
-  onEdit,
-  onCheck,
-  onTry,
-}: {
-  parsed: ParsedSkillDoc;
-  skillId: string;
-  hasChanges: boolean;
-  draftVersion: string;
-  stats: { added: number; removed: number };
-  onEdit: () => void;
-  onCheck: () => void;
-  onTry: (q: string) => void;
-}) {
-  const sample = defaultSampleQuery(skillId, parsed.triggers);
-  const detail = plainBody(parsed.body);
-
-  return (
-    <div className="own-skill-showcase">
-      {hasChanges ? (
-        <div className="own-skm-draft-banner">
-          <span>
-            有一份未发布的草稿 <strong>v{draftVersion}</strong>（+{stats.added} −{stats.removed} 行）
-          </span>
-          <div>
-            <button type="button" className="own-skill-inline-btn" onClick={onEdit}>
-              继续修改
-            </button>
-            <OaBtn onClick={onCheck}>去检查并发布</OaBtn>
-          </div>
-        </div>
-      ) : (
-        <div className="own-skm-draft-banner own-skm-draft-banner--idle">
-          <span>以下是线上正在用的内容。</span>
-          <OaBtn onClick={onEdit}>修改这个技能</OaBtn>
-        </div>
-      )}
-
-      <section className="own-skill-showcase-block">
-        <h3>这个技能做什么</h3>
-        <p>{parsed.description || "（还没写说明）"}</p>
-        {detail ? <p className="own-skm-detail-text">{detail}</p> : null}
-      </section>
-
-      <section className="own-skill-showcase-block">
-        <h3>用户这样说时会用到它（{parsed.triggers.length}）</h3>
-        {parsed.triggers.length ? (
-          <div className="own-skill-ver-chips">
-            {parsed.triggers.map((t) => (
-              <span key={t}>{t}</span>
-            ))}
-          </div>
-        ) : (
-          <p className="own-ver-parse-warn">没有设置说法，这个技能永远不会被用到。</p>
-        )}
-      </section>
-
-      <section className="own-skill-showcase-block">
-        <h3>回答步骤（按顺序执行）</h3>
-        <ol className="own-skm-steps-view">
-          {parsed.steps.map((s, i) => (
-            <li key={`${s.id}-${i}`}>
-              <em>{i + 1}</em>
-              <div>
-                <strong>{stepShortLabel(s)}</strong>
-                <small>{s.tool.startsWith("__") ? "汇总生成回答" : `使用工具 ${s.tool}`}</small>
-              </div>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section className="own-skill-showcase-block">
-        <h3>试一句话：会交给哪个技能？</h3>
-        <RouteProbe skillId={skillId} initial={sample} onCompare={onTry} />
-      </section>
-
-      <section className="own-skill-showcase-block">
-        <h3>最近用户问了什么</h3>
-        <RecentQueries skillId={skillId} />
-      </section>
-    </div>
   );
 }
 
@@ -1274,23 +1230,160 @@ function StepRow({
   );
 }
 
+function LiveSkillCompare({
+  liveVersion,
+  draftVersion,
+  online,
+  draft,
+}: {
+  liveVersion: string;
+  draftVersion: string;
+  online: ParsedSkillDoc;
+  draft: ParsedSkillDoc;
+}) {
+  const addedTriggers = draft.triggers.filter((t) => !online.triggers.includes(t));
+  const removedTriggers = online.triggers.filter((t) => !draft.triggers.includes(t));
+  const onlineById = new Map(online.steps.map((s) => [s.id, s]));
+  const draftById = new Map(draft.steps.map((s) => [s.id, s]));
+  const descChanged = online.description !== draft.description;
+  const stepsChanged = stepPipelineText(online.steps) !== stepPipelineText(draft.steps);
+  const bodyChanged = online.body.trim() !== draft.body.trim();
+  const notes: string[] = [];
+  if (addedTriggers.length) notes.push(`新增说法 ${addedTriggers.length} 个`);
+  if (removedTriggers.length) notes.push(`删除说法 ${removedTriggers.length} 个`);
+  if (stepsChanged) notes.push("步骤有改动");
+  if (descChanged) notes.push("说明有改动");
+  if (bodyChanged && !descChanged) notes.push("详细说明有改动");
+  if (!notes.length) notes.push("配置和现用版一样");
+
+  return (
+    <div className="rv-compare">
+      <div className="rv-pane">
+        <div className="rv-pane-head">
+          <span className="rv-kicker">生产基线 (BASELINE)</span>
+          <span className="rv-ver">v{liveVersion}</span>
+        </div>
+        <div className="rv-block">
+          <p className="rv-k">意图槽位与触发词元 (Triggers & Slot Tokens)</p>
+          <div className="rv-triggers">
+            {online.triggers.length
+              ? online.triggers.map((t) => (
+                  <span key={t} className={removedTriggers.includes(t) ? "rv-tag rv-tag--del" : "rv-tag"}>{t}</span>
+                ))
+              : <span className="rv-empty">未定义触发词</span>}
+          </div>
+        </div>
+        <div className="rv-block">
+          <p className="rv-k">执行流水线契约 (Pipeline & Tools)</p>
+          {online.steps.length ? (
+            <ol className="rv-pipeline">
+              {online.steps.map((s, idx) => (
+                <li key={s.id} className={draftById.has(s.id) ? undefined : "is-gone"}>
+                  <span className="rv-pipeline-step-idx">{idx + 1}</span>
+                  {stepShortLabel(s)}
+                </li>
+              ))}
+            </ol>
+          ) : <span className="rv-empty">无执行步骤</span>}
+        </div>
+        {online.description ? (
+          <div className="rv-block">
+            <p className="rv-k">语义职责说明 (Scope Definition)</p>
+            <p className="rv-desc">{online.description}</p>
+          </div>
+        ) : null}
+      </div>
+      <div className="rv-pane rv-pane--new">
+        <div className="rv-pane-head">
+          <span className="rv-kicker rv-kicker--new">候选草稿 (CANDIDATE)</span>
+          <span className="rv-ver">v{draftVersion}</span>
+        </div>
+        <div className="rv-block">
+          <p className="rv-k">意图槽位与触发词元 (Triggers & Slot Tokens)</p>
+          <div className="rv-triggers">
+            {draft.triggers.length
+              ? draft.triggers.map((t) => (
+                  <span key={t} className={addedTriggers.includes(t) ? "rv-tag rv-tag--add" : "rv-tag"}>{t}</span>
+                ))
+              : <span className="rv-empty">未定义触发词</span>}
+          </div>
+        </div>
+        <div className="rv-block">
+          <p className="rv-k">执行流水线契约 (Pipeline & Tools)</p>
+          {draft.steps.length ? (
+            <ol className="rv-pipeline">
+              {draft.steps.map((s, idx) => (
+                <li key={s.id} className={onlineById.has(s.id) ? undefined : "is-new"}>
+                  <span className="rv-pipeline-step-idx">{idx + 1}</span>
+                  {stepShortLabel(s)}
+                </li>
+              ))}
+            </ol>
+          ) : <span className="rv-empty">无执行步骤</span>}
+        </div>
+        {draft.description ? (
+          <div className="rv-block">
+            <p className="rv-k">语义职责说明 (Scope Definition)</p>
+            <p className={descChanged ? "rv-desc rv-desc--changed" : "rv-desc"}>{draft.description}</p>
+          </div>
+        ) : null}
+        <div className="rv-change-note-bar">
+          <span className="rv-change-note-icon">⚡</span>
+          <span className="rv-change-note-text">{notes.join(" · ")}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PeekCompare({
+  skillId,
+  liveVersion,
+  draftVersion,
+  peek,
+}: {
+  skillId: string;
+  liveVersion: string;
+  draftVersion: string;
+  peek: SkillCompareResult;
+}) {
+  return (
+    <div className="rv-peek">
+      <div className="rv-single-cols">
+        <CompareSideColumn title={`现用 v${liveVersion}`} side={peek.baseline} other={peek.candidate} />
+        <CompareSideColumn title={`新版 v${draftVersion}`} side={peek.candidate} other={peek.baseline} highlight />
+      </div>
+      <ScmAttributionPanel
+        skillId={skillId} defaultExpanded={false} customerMode
+        autoOpen={!peek.baseline.traceOk || !peek.candidate.traceOk || peek.verdict.level !== "approve"}
+        compare={{ query: peek.query, baselineTrace: peek.baseline.trace, candidateTrace: peek.candidate.trace }}
+        forkPeerId={
+          peek.baseline.routedSkillId && peek.candidate.routedSkillId &&
+          peek.baseline.routedSkillId !== peek.candidate.routedSkillId
+            ? peek.candidate.routedSkillId : undefined
+        }
+      />
+    </div>
+  );
+}
+
 function CheckView({
   skillId,
   online,
   draft,
   liveVersion,
   draftVersion,
-  onlineParsed,
-  draftParsed,
-  testQuery,
-  setTestQuery,
   checking,
-  single,
+  peek,
   report,
   reportStale,
   impact,
-  onCheck,
-  onAsk,
+  shadowReport,
+  fuzzReport,
+  pageWalkReport,
+  depProof,
+  onPeek,
+  onClosePeek,
 }: {
   skillId: string;
   online: string;
@@ -1299,307 +1392,203 @@ function CheckView({
   draftVersion: string;
   onlineParsed: ParsedSkillDoc;
   draftParsed: ParsedSkillDoc;
-  testQuery: string;
-  setTestQuery: (q: string) => void;
   checking: boolean;
-  single: SkillCompareResult | null;
+  peek: SkillCompareResult | null;
   report: SkillFullCompareReport | null;
   reportStale: boolean;
   impact: SkillImpact;
-  onCheck: () => void;
-  onAsk: (query: string) => void;
+  shadowReport: ShadowReplayReport | null;
+  fuzzReport: RouteFuzzReport | null;
+  pageWalkReport: PageWalkResult | null;
+  depProof: ReleaseDependencyProof | null;
+  onPeek: (query: string) => void;
+  onClosePeek: () => void;
 }) {
   const [showAll, setShowAll] = useState(false);
   const diff = useMemo(() => lineDiff(online, draft), [online, draft]);
-  const rows = useMemo(() => (showAll ? diff : foldDiff(diff)), [diff, showAll]);
+  const diffRows = useMemo(() => (showAll ? diff : foldDiff(diff)), [diff, showAll]);
+  const gateCount = listGateQuestionRows(skillId).length;
 
-  const addedT = draftParsed.triggers.filter((t) => !onlineParsed.triggers.includes(t));
-  const removedT = onlineParsed.triggers.filter((t) => !draftParsed.triggers.includes(t));
-  const stepsBefore = stepPipelineText(onlineParsed.steps);
-  const stepsAfter = stepPipelineText(draftParsed.steps);
-  const summary: string[] = [];
-  if (onlineParsed.description !== draftParsed.description) summary.push(`说明改成：「${draftParsed.description}」`);
-  if (addedT.length) summary.push(`新增说法：${addedT.join("、")}`);
-  if (removedT.length) summary.push(`删掉说法：${removedT.join("、")}`);
-  if (stepsBefore !== stepsAfter) summary.push(`回答步骤原来是「${stepsBefore}」，改成「${stepsAfter}」`);
-  if (onlineParsed.body.trim() !== draftParsed.body.trim()) summary.push("详细说明有改动");
-  if (!summary.length) summary.push("只改了格式或参数，具体见下方逐行对比");
-
-  const samples = sampleTriggers(draftParsed.triggers, 6);
-  const recommended = defaultSampleQuery(skillId, draftParsed.triggers);
+  const activeReport = reportStale ? null : report;
+  const hasReport = Boolean(activeReport && !checking);
+  const gateReasons = activeReport ? buildReleaseGateSummary(activeReport).reasons : [];
+  const gate = activeReport ? releaseGateLevel(activeReport.verdict.level) : null;
+  const lead = activeReport && gate ? gateLead(gate, activeReport.scm) : null;
+  const notes = gate && gate !== "pass"
+    ? [...new Set(gateReasons.map(customerReason))].slice(0, 3)
+    : [];
+  const effectRows = activeReport?.queryResults ?? [];
+  const badRows = effectRows.filter((q) => q.routeDrift || q.traceChanged || q.verdictLevel === "reject");
+  const badCount = badRows.length;
 
   return (
-    <div className="own-skill-ver-compare">
-      <CheckQuestions
-        skillId={skillId}
-        report={reportStale ? null : report}
-        checking={checking}
-        canCheck
-        onCheck={onCheck}
-        onAsk={onAsk}
-      />
-      {checking ? <p className="own-skm-checking">正在用现用版和新版分别回答上面这些句子…</p> : null}
-      {reportStale && !checking ? (
-        <p className="own-skm-stale">下面是改动之前的检查结果，内容已经又改过了，请重新检查。</p>
-      ) : null}
-      {report && !checking ? (
-        <div className={reportStale ? "own-skm-stale-box" : undefined}>
-          <ReleaseGateHero
-            skillName={report.skillName}
-            baselineVersion={report.baselineVersion}
-            candidateVersion={report.candidateVersion}
-            verdictLevel={report.verdict.level}
-            verdictTitle={humanVerdict(report.verdict.level).title}
-            scm={report.scm}
-            caseCount={report.queryResults.length}
-            reasons={buildReleaseGateSummary(report).reasons}
-          />
-          <FullCompareReport report={report} skillId={skillId} />
-        </div>
-      ) : null}
-
-      <details className="own-check-more">
-        <summary>改了哪些字，以及别的查法</summary>
-      <section className="own-compare-report-section">
-        <h3>
-          改了什么 <span className="own-skm-ver-arrow">v{liveVersion} → v{draftVersion}</span>
-        </h3>
-        <ul className="own-skm-summary-list">
-          {summary.map((s, i) => (
-            <li key={i}>{s}</li>
-          ))}
-        </ul>
-        <div className="own-skm-diff-head">
-          <strong>逐行对比</strong>
-          <button type="button" className="own-skill-inline-btn" onClick={() => setShowAll((v) => !v)}>
-            {showAll ? "只看改动" : "显示全文"}
-          </button>
-        </div>
-        <div className="own-skm-diff" role="table" aria-label="逐行对比">
-          {rows.map((r, i) =>
-            r.kind === "fold" ? (
-              <button key={i} type="button" className="own-skm-diff-fold" onClick={() => setShowAll(true)}>
-                … {r.count} 行没有改动（点击展开）
-              </button>
-            ) : (
-              <div key={i} className={`own-skm-diff-line own-skm-diff-line--${r.kind}`}>
-                <span className="own-skm-diff-no">{r.oldNo ?? ""}</span>
-                <span className="own-skm-diff-no">{r.newNo ?? ""}</span>
-                <span className="own-skm-diff-sign">{r.kind === "add" ? "+" : r.kind === "del" ? "−" : ""}</span>
-                <code>{r.text || " "}</code>
-              </div>
-            ),
-          )}
-        </div>
-      </section>
-
-      <ImpactPanel impact={impact} />
-
-      <section className="own-skill-ver-try">
-        <label htmlFor="skill-test-query">用一句用户可能说的话，对比改动前后怎么回答</label>
-        <div className="own-skill-ver-chips own-skill-ver-chips--click">
-          <button type="button" className={testQuery === recommended ? "on" : ""} onClick={() => setTestQuery(recommended)}>
-            推荐例句
-          </button>
-          {samples.map((t) => (
-            <button key={t} type="button" className={testQuery === `帮我${t}` ? "on" : ""} onClick={() => setTestQuery(`帮我${t}`)}>
-              {t}
-            </button>
-          ))}
-        </div>
-        <textarea
-          id="skill-test-query"
-          className="own-skill-ver-query-input"
-          rows={2}
-          value={testQuery}
-          onChange={(e) => setTestQuery(e.target.value)}
-          placeholder="例如：帮我看看 https://example.com 能不能上线"
-        />
-        <p className="own-ver-hint">上面的「检查这些问题」会带上这一句。</p>
-      </section>
-
-      {single && !checking ? (
-        <div className={reportStale ? "own-skm-stale-box" : undefined}>
-          <p className="own-skill-ver-try-caption">「{single.query}」这句话：</p>
-          <div className="own-compare-columns">
-            <CompareSideColumn title={`现用 v${liveVersion}`} side={single.baseline} other={single.candidate} />
-            <CompareSideColumn title={`新版 v${draftVersion}`} side={single.candidate} other={single.baseline} highlight />
+    <div id="skill-release-checklist" className="rv-page rv-page--bare">
+      {checking ? (
+        <div className="rv-checking-bar">
+          <div className="rv-checking-laser" />
+          <div className="rv-checking-content">
+            <span className="rv-checking-spin" />
+            <div className="rv-checking-text">
+              <strong>多维自动化质量门禁扫描中 (Quality Gate Verification)...</strong>
+              <span>并发验证 {gateCount} 条黄金基准断言、生产影子流量双跑、邻域语义扰动与环境探活</span>
+            </div>
           </div>
-          <ScmAttributionPanel
-            skillId={skillId}
-            defaultExpanded
-            autoOpen={
-              !single.baseline.traceOk ||
-              !single.candidate.traceOk ||
-              single.verdict.level !== "approve"
-            }
-            compare={{
-              query: single.query,
-              baselineTrace: single.baseline.trace,
-              candidateTrace: single.candidate.trace,
-            }}
-            forkPeerId={
-              single.baseline.routedSkillId &&
-              single.candidate.routedSkillId &&
-              single.baseline.routedSkillId !== single.candidate.routedSkillId
-                ? single.candidate.routedSkillId
-                : undefined
-            }
-          />
+          <div className="rv-checking-vectors">
+            <span className="rv-vector-pill is-active">INTENT DRIFT</span>
+            <span className="rv-vector-pill is-active">SHADOW REPLAY</span>
+            <span className="rv-vector-pill is-active">FUZZ RESILIENCE</span>
+            <span className="rv-vector-pill is-active">PROBE LIVENESS</span>
+          </div>
         </div>
       ) : null}
 
-        <PageToolWalk skillId={skillId} draftRaw={draft} />
-        <SkillBreakPanel skillId={skillId} draftRaw={draft} />
-      </details>
-    </div>
-  );
-}
-
-function CompareSideColumn({
-  title,
-  side,
-  other,
-  highlight,
-}: {
-  title: string;
-  side: SkillCompareResult["baseline"];
-  other: SkillCompareResult["baseline"];
-  highlight?: boolean;
-}) {
-  const routeChanged = side.routedSkillId !== other.routedSkillId;
-  return (
-    <article className={highlight ? "own-compare-col own-compare-col--new" : "own-compare-col"}>
-      <header>
-        <h3>{title}</h3>
-        <span className={side.traceOk ? "own-skill-badge ok" : "own-skill-badge warn"}>{side.traceOk ? "回答成功" : "回答失败"}</span>
-      </header>
-      <dl className="own-compare-facts">
-        <div>
-          <dt>交给哪个技能处理</dt>
-          <dd className={routeChanged ? "own-compare-warn" : ""}>
-            {side.routedSkillName ?? "没有技能接手"}
-            {routeChanged ? "（和另一版不同）" : ""}
-          </dd>
+      {!hasReport && !checking ? (
+        <div className="rv-gate-prompt-card">
+          <div className="rv-gate-prompt-icon">🛡️</div>
+          <div className="rv-gate-prompt-info">
+            <strong>就绪等待执行门禁校验</strong>
+            <p>已就绪 {gateCount} 条评测断言样本。点击下方「执行门禁校验」以生成风险评估报告与因果归因矩阵。</p>
+          </div>
         </div>
-        <div>
-          <dt>执行的步骤</dt>
-          <dd>{side.steps.map((s) => stepShortLabel(s)).join(" → ") || "无"}</dd>
-        </div>
-        <div>
-          <dt>回答内容</dt>
-          <dd className="own-compare-answer">{side.answerPreview}</dd>
-        </div>
-      </dl>
-    </article>
-  );
-}
-
-function FullCompareReport({ report, skillId }: { report: SkillFullCompareReport; skillId: string }) {
-  const v = humanVerdict(report.verdict.level);
-  const issues = report.risks.filter((r) => r.level !== "low");
-  const bad = report.queryResults.filter((q) => q.routeDrift || q.traceChanged).length;
-
-  function download() {
-    const blob = new Blob([reportToMarkdown(report)], { type: "text/markdown;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${skillId}-v${report.baselineVersion}-to-v${report.candidateVersion}-检查报告.md`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
-  return (
-    <div className="own-skill-ver-report">
-      <section className={`own-skill-ver-summary own-skill-ver-summary--${verdictTone(report.verdict.level)}`}>
-        <h3>
-          详细结论 · {v.gate} · {v.title}
-        </h3>
-        <p>
-          {v.hint} 共 {report.queryResults.length} 条 case，{bad ? `${bad} 条表现与现用版不同` : "全部一致"}。
-        </p>
-        <div className="own-skm-report-dl">
-          <button type="button" className="own-skill-inline-btn" onClick={download}>
-            导出 Markdown
-          </button>
-          <button type="button" className="own-skill-inline-btn" onClick={() => downloadReportJson(report)}>
-            导出 JSON
-          </button>
-        </div>
-      </section>
-
-      {report.scm ? (
-        <section className="own-compare-report-section own-scm-inline">
-          <h3>因果传播</h3>
-          <ScmCompareViz
-            consequence={{
-              baselinePass: report.scm.baselinePass,
-              candidatePass: report.scm.candidatePass,
-              deltaSuccess: report.scm.deltaSuccess,
-              pivotalOnBaseline: report.scm.pivotalStepId
-                ? {
-                    stepId: report.scm.pivotalStepId,
-                    tool: report.scm.pivotalTool ?? "",
-                    stepIndex: 0,
-                    mode: "exact",
-                    baselinePass: report.scm.baselinePass,
-                    counterfactualPass: true,
-                    deltaSuccess: 1,
-                    pivotal: true,
-                    intervention: "fix",
-                    detail: "",
-                  }
-                : null,
-            }}
-          />
-        </section>
       ) : null}
 
-      {issues.length ? (
-        <section className="own-compare-report-section">
-          <h3>需要注意（{issues.length}）</h3>
-          <ul className="own-compare-risk-list">
-            {issues.map((r, i) => (
-              <li key={i} className={`own-compare-risk own-compare-risk--${r.level === "high" ? "fail" : "warn"}`}>
-                <span className="own-compare-risk-badge">{r.level === "high" ? "严重" : "注意"}</span>
-                <div>
-                  <strong>{r.title}</strong>
-                  <p>{r.detail}</p>
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
+      {!checking && hasReport && activeReport && gate && lead ? (
+        <div id="skill-release-verdict" className={`rv-verdict rv-verdict--${gate}`}>
+          <div className="rv-verdict-top-bar">
+            <span className={`rv-verdict-status-pill rv-verdict-status-pill--${gate}`}>
+              <i className="rv-pulse-dot" />
+              {gate === "pass" ? "GATE: PASSED" : gate === "warn" ? "GATE: REVIEW REQUIRED" : "GATE: BLOCKED"}
+            </span>
+            <span className="rv-verdict-engine-tag">SCM CAUSAL ATTRIBUTION</span>
+            <div className="rv-docs-acts">
+              <button type="button" className="rv-btn" onClick={() => downloadFullReportMd(activeReport, skillId)}>
+                导出 Markdown
+              </button>
+              <button type="button" className="rv-btn" onClick={() => downloadReportJson(activeReport)}>
+                JSON 门禁契约
+              </button>
+            </div>
+          </div>
+
+          <div className="rv-verdict-main">
+            <span className="rv-verdict-icon">{gate === "pass" ? "✓" : gate === "warn" ? "⚠" : "✕"}</span>
+            <div className="rv-verdict-body">
+              <strong className="rv-verdict-title">
+                {gate === "pass"
+                  ? "基准契约全部达成 · 准予发布上线"
+                  : gate === "warn"
+                    ? "检测到潜在意图冲突或轻微语义漂移"
+                    : "质量门禁拦截 · 存在回归倒退或破坏性变更"}
+              </strong>
+              <span className="rv-verdict-reason">{notes[0] ?? lead.note}</span>
+            </div>
+          </div>
+
+          <div className="rv-metrics-ribbon">
+            <div className="rv-metric-item">
+              <span className="rv-metric-k">评测基准样本</span>
+              <strong className="rv-metric-v">{effectRows.length} 条已断言</strong>
+            </div>
+            <div className="rv-metric-item">
+              <span className="rv-metric-k">行为漂移异常</span>
+              <strong className={`rv-metric-v ${badCount ? "is-drift" : "is-safe"}`}>
+                {badCount ? `${badCount} 条变异` : "0 漂移 · 完全对齐"}
+              </strong>
+            </div>
+            <div className="rv-metric-item">
+              <span className="rv-metric-k">发布风险评级</span>
+              <strong className={`rv-metric-v is-${gate}`}>
+                {gate === "pass" ? "LOW RISK (低风险)" : gate === "warn" ? "MEDIUM (需核验)" : "HIGH RISK (高阻断)"}
+              </strong>
+            </div>
+          </div>
+        </div>
       ) : null}
 
-      <details className="own-compare-report-section own-skm-details" open={bad > 0}>
-        <summary>
-          <h3>逐句测试结果（{report.queryResults.length} 句{bad ? `，${bad} 句不同` : ""}）</h3>
-        </summary>
-        <div className="own-compare-table-wrap">
-          <table className="own-compare-table">
-            <thead>
-              <tr>
-                <th>用户说法</th>
-                <th>现用版交给</th>
-                <th>新版交给</th>
-                <th>结果</th>
-              </tr>
-            </thead>
-            <tbody>
-              {report.queryResults.map((q, i) => (
-                <tr key={i} className={q.routeDrift || q.traceChanged ? "own-compare-row-warn" : undefined}>
-                  <td>{q.query}</td>
-                  <td>{q.routeBaseline ?? "没有技能接手"}</td>
-                  <td>{q.routeCandidate ?? "没有技能接手"}</td>
-                  <td>{q.routeDrift ? "交给的技能变了" : q.traceChanged ? `步骤变了：${q.traceSummary}` : "一致"}</td>
+      {!checking && hasReport && activeReport && badRows.length ? (
+        <div className="rv-effect">
+          <p className="rv-report-kicker rv-report-kicker--in">和线上不一样</p>
+          <div className="rv-effect-wrap">
+            <table className="rv-effect-table">
+              <thead>
+                <tr>
+                  <th>客户的话</th>
+                  <th>现用交给</th>
+                  <th>新版交给</th>
+                  <th>结果</th>
+                  <th />
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              {badRows.map((q, i) => {
+                const pres = queryComparePresentation(q);
+                const open = peek?.query === q.query;
+                return (
+                  <tbody key={`${q.query}-${i}`}>
+                    <tr className={pres.tone === "ok" ? undefined : pres.tone === "bad" ? "is-bad" : "is-warn"}>
+                      <td>{q.query}</td>
+                      <td>{q.routeBaseline ?? "没有技能接手"}</td>
+                      <td>{q.routeCandidate ?? "没有技能接手"}</td>
+                      <td><span className={`rv-effect-pill is-${pres.tone}`}>{pres.badge}</span></td>
+                      <td>
+                        <button type="button" className="rv-act" onClick={() => (open ? onClosePeek() : onPeek(q.query))}>
+                          {open ? "收起" : "看看这句"}
+                        </button>
+                      </td>
+                    </tr>
+                    {open && peek ? (
+                      <tr className="rv-effect-peek">
+                        <td colSpan={5}>
+                          <PeekCompare skillId={skillId} liveVersion={liveVersion} draftVersion={draftVersion} peek={peek} />
+                        </td>
+                      </tr>
+                    ) : null}
+                  </tbody>
+                );
+              })}
+            </table>
+          </div>
+          {activeReport.liveProbeUsed ? <p className="rv-probe-note">含链接的句子已做真实探活。</p> : null}
         </div>
-      </details>
+      ) : null}
+
+      {hasReport && activeReport ? (
+        <details className="rv-tech">
+          <summary className="rv-tech-summary">细看 <span>源码 · 回流 · 压测 · 本页试跑</span></summary>
+          {skillId === "release-inspector" && depProof ? (
+            <div className="own-check-board-dep"><ReleaseDependencyCard proof={depProof} /></div>
+          ) : null}
+          <FullCompareReport report={activeReport} skillId={skillId} heroReasons={gateReasons} hideQueryTable />
+          <ReleaseCheckExtras skillId={skillId} draftRaw={draft} checking={false} shadow={shadowReport} fuzz={fuzzReport} pageWalk={pageWalkReport} flat />
+          {impact.gained.length || impact.lost.length ? <ImpactPanel impact={impact} /> : null}
+          <section className="own-compare-report-section">
+            <h3>逐行对比 <span className="own-skm-ver-arrow">v{liveVersion} → v{draftVersion}</span></h3>
+            <div className="own-skm-diff-head">
+              <strong>源码</strong>
+              <button type="button" className="own-skill-inline-btn" onClick={() => setShowAll((v) => !v)}>
+                {showAll ? "只看改动" : "显示全文"}
+              </button>
+            </div>
+            <div className="own-skm-diff" role="table" aria-label="逐行对比">
+              {diffRows.map((r, i) =>
+                r.kind === "fold" ? (
+                  <button key={i} type="button" className="own-skm-diff-fold" onClick={() => setShowAll(true)}>
+                    … {r.count} 行没有改动（点击展开）
+                  </button>
+                ) : (
+                  <div key={i} className={`own-skm-diff-line own-skm-diff-line--${r.kind}`}>
+                    <span className="own-skm-diff-no">{r.oldNo ?? ""}</span>
+                    <span className="own-skm-diff-no">{r.newNo ?? ""}</span>
+                    <span className="own-skm-diff-sign">{r.kind === "add" ? "+" : r.kind === "del" ? "−" : ""}</span>
+                    <code>{r.text || " "}</code>
+                  </div>
+                ),
+              )}
+            </div>
+            <PageToolWalk skillId={skillId} draftRaw={draft} />
+            <SkillBreakPanel skillId={skillId} draftRaw={draft} />
+          </section>
+        </details>
+      ) : null}
     </div>
   );
 }

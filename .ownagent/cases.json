@@ -5,7 +5,7 @@
       "skillId": "release-inspector",
       "query": "帮我巡检 https://example.com 能否上线",
       "probeUrl": "https://example.com",
-      "grader": { "kind": "skeleton" },
+      "grader": { "kind": "release_overall", "min": "pass" },
       "expect": {
         "steps": [
           { "stepId": "probe", "tool": "http_probe" },

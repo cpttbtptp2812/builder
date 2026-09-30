@@ -70,6 +70,8 @@ export type EvalSuite = {
   id: string;
   name: string;
   description?: string;
+  /** 与「考试题 / 发版检查」同源：运行时自动并入该技能的必问句 */
+  linkedSkillId?: string;
   cases: EvalCase[];
   createdAt: string;
   updatedAt: string;

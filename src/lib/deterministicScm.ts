@@ -188,7 +188,7 @@ export async function analyzePivotalSteps(
   const skill = getSkill(skillId);
   if (!skill?.runnable) return null;
 
-  const tc =
+  let tc =
     opts.traceCase ??
     resolveTraceCase(skillId) ??
     caseFromSkillSteps(
@@ -196,6 +196,9 @@ export async function analyzePivotalSteps(
       opts.observedTrace ? "live" : skill.triggers[0] ?? "测试",
       skill.steps.map((s) => ({ id: s.id, tool: s.tool })),
     );
+  if (skillId === "release-inspector" && (!tc.grader || tc.grader.kind === "skeleton")) {
+    tc = { ...tc, grader: { kind: "release_overall", min: "pass" } };
+  }
 
   const useMock = opts.useMock ?? !opts.liveTrace;
   const mockProfile = useMock ? MOCK_PROFILES[skillId] : undefined;

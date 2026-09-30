@@ -9,6 +9,8 @@ export type QueryLogEntry = {
   /** 技能 id 或 @open / @knowledge / @about-site */
   route: string;
   score: number;
+  /** 实际跑完的技能（路由可能是 @open，但走了 release-inspector 等） */
+  handledSkillId?: string;
 };
 
 const KEY = "ownagent:skill-query-log";
@@ -48,6 +50,38 @@ export function logRoutedQuery(query: string, decision: Pick<RouteDecision, "kin
   write(list);
 }
 
+/** 记录「这句问话实际由哪个技能跑完」— 供真实回流使用 */
+export function logSkillHandled(query: string, skillId: string) {
+  logSkillTurn(query, skillId, 0);
+}
+
+/** 一次写入 route + handledSkillId，避免只记路由不记执行 */
+export function logSkillTurn(query: string, skillId: string, score = 8) {
+  const q = normalizeQuery(query);
+  if (q.length < 2 || !skillId) return;
+  const list = read();
+  const now = Date.now();
+  for (let i = list.length - 1; i >= 0; i -= 1) {
+    const row = list[i]!;
+    if (row.q === q && now - Date.parse(row.at) < 600_000) {
+      row.route = skillId;
+      row.handledSkillId = skillId;
+      row.score = Math.max(row.score, score);
+      row.at = new Date().toISOString();
+      write(list);
+      return;
+    }
+  }
+  list.push({
+    q,
+    at: new Date().toISOString(),
+    route: skillId,
+    score,
+    handledSkillId: skillId,
+  });
+  write(list);
+}
+
 /** 最新在前 */
 export function listQueryLog(): QueryLogEntry[] {
   return read().reverse();
@@ -60,8 +94,50 @@ export function clearQueryLog() {
 export function skillQueryStats(skillId: string, days = 7) {
   const since = Date.now() - days * 86_400_000;
   const recent = read().filter((e) => Date.parse(e.at) >= since);
-  const mine = recent.filter((e) => e.route === skillId);
+  const mine = recent.filter((e) => e.route === skillId || e.handledSkillId === skillId);
   return { total: recent.length, handled: mine.length, latest: mine.slice(-5).reverse() };
+}
+
+function looksLikeReleaseInspectQuery(q: string): boolean {
+  const t = q.trim();
+  if (/^\/inspect\b/i.test(t)) return true;
+  if (!/https?:\/\//i.test(t)) return false;
+  return /巡检|发布|验收|探活|检查|上线|发版|smoke|inspect|release|health|能不能发|能否上线|发布前/i.test(t);
+}
+
+/** 把历史上像巡检、但被记成 @open 的问句补记为 release-inspector */
+export function backfillReleaseInspectorHandled() {
+  if (typeof localStorage === "undefined") return;
+  const list = read();
+  let changed = false;
+  for (const row of list) {
+    if (row.handledSkillId === "release-inspector") continue;
+    if (!looksLikeReleaseInspectQuery(row.q)) continue;
+    row.handledSkillId = "release-inspector";
+    if (row.route === "@open") row.route = "release-inspector";
+    changed = true;
+  }
+  if (changed) write(list);
+}
+
+/** 该技能最近被接手的真实问句（去重，最新优先）— 供发版「真实回流」使用 */
+export function listRecentQueriesForSkill(skillId: string, opts?: { days?: number; max?: number }): QueryLogEntry[] {
+  if (skillId === "release-inspector") backfillReleaseInspectorHandled();
+  const days = opts?.days ?? 14;
+  const max = opts?.max ?? 12;
+  const since = Date.now() - days * 86_400_000;
+  const seen = new Set<string>();
+  const out: QueryLogEntry[] = [];
+  for (const e of listQueryLog()) {
+    if (e.route !== skillId && e.handledSkillId !== skillId) continue;
+    if (Date.parse(e.at) < since) continue;
+    const q = normalizeQuery(e.q);
+    if (q.length < 2 || seen.has(q)) continue;
+    seen.add(q);
+    out.push({ ...e, q });
+    if (out.length >= max) break;
+  }
+  return out;
 }
 
 /**

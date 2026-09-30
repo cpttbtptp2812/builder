@@ -32,16 +32,24 @@ type Props = {
     candidateTrace: SkillTraceStep[];
   };
   forkPeerId?: string;
+  /** 发版检查折叠区：隐藏实验室用语 */
+  customerMode?: boolean;
 };
 
 type Tab = "viz" | "detail" | "cases";
 
-function interventionLabel(r: PivotalReport["rows"][0], stepLabel?: string): string {
-  const name = stepLabel ? `「${stepLabel}」` : r.stepId;
-  if (r.intervention === "skip") return `跳过${name}`;
-  if (r.intervention === "swap_tool") return `把${name}换成别的`;
-  if (r.intervention === "fix") return `修好${name}`;
-  return `弄坏${name}`;
+function interventionLabel(r: PivotalReport["rows"][0], stepLabel?: string, customer?: boolean): string {
+  const quoted = stepLabel ? `「${stepLabel}」` : r.stepId;
+  if (customer) {
+    if (r.intervention === "skip") return `假设：跳过 ${quoted}`;
+    if (r.intervention === "swap_tool") return `假设：${quoted} 换一种做法`;
+    if (r.intervention === "fix") return `假设：修好 ${quoted}`;
+    return `假设：${quoted} 这步出错`;
+  }
+  if (r.intervention === "skip") return `跳过${quoted}`;
+  if (r.intervention === "swap_tool") return `把${quoted}换成别的`;
+  if (r.intervention === "fix") return `修好${quoted}`;
+  return `弄坏${quoted}`;
 }
 
 export function ScmAttributionPanel({
@@ -52,6 +60,7 @@ export function ScmAttributionPanel({
   liveTrace,
   compare,
   forkPeerId,
+  customerMode,
 }: Props) {
   const skill = getSkill(skillId);
   const [open, setOpen] = useState(defaultExpanded || Boolean(autoOpen));
@@ -138,9 +147,11 @@ export function ScmAttributionPanel({
     <section className={`own-evo own-scm${autoOpen ? " own-scm--auto" : ""}`}>
       <button type="button" className="own-evo-head" onClick={() => setOpen((v) => !v)}>
         <span className="own-evo-dot own-scm-dot" />
-        <strong>因果归因 SCM</strong>
+        <strong>{customerMode ? "详细排查" : "因果归因 SCM"}</strong>
         <span className="own-evo-sub">
-          {autoOpen && rootId ? (
+          {customerMode ? (
+            "点开看每一步做了什么、哪一步出了问题"
+          ) : autoOpen && rootId ? (
             <>
               <span className="own-scm-badge warn">根因 {rootId}</span>
               {pivotalN ? ` · ${pivotalN} 个 pivotal` : ""}
@@ -156,18 +167,20 @@ export function ScmAttributionPanel({
         <div className="own-evo-body">
           <nav className="own-scm-tabs" aria-label="SCM 视图">
             <button type="button" className={tab === "viz" ? "on" : ""} onClick={() => setTab("viz")}>
-              概览图
+              {customerMode ? "处理流程" : "概览图"}
             </button>
             <button type="button" className={tab === "detail" ? "on" : ""} onClick={() => setTab("detail")}>
-              干预明细
+              {customerMode ? "逐步分析" : "干预明细"}
               {pivotalN ? <em>{pivotalN}</em> : null}
             </button>
-            <button type="button" className={tab === "cases" ? "on" : ""} onClick={() => setTab("cases")}>
-              测试 case
-            </button>
+            {!customerMode ? (
+              <button type="button" className={tab === "cases" ? "on" : ""} onClick={() => setTab("cases")}>
+                测试 case
+              </button>
+            ) : null}
             {selectedStepId ? (
               <button type="button" className="own-scm-clear-filter" onClick={() => setSelectedStepId(null)}>
-                取消筛选 · {selectedStepId}
+                {customerMode ? "看全部步骤" : `取消筛选 · ${selectedStepId}`}
               </button>
             ) : null}
           </nav>
@@ -179,7 +192,7 @@ export function ScmAttributionPanel({
             </div>
           ) : null}
 
-          {!loading && coverage ? (
+          {!loading && coverage && !customerMode ? (
             <div className="own-scm-coverage">
               <div className="own-scm-coverage-head">
                 <span>传播覆盖率</span>
@@ -210,20 +223,24 @@ export function ScmAttributionPanel({
                 <ScmOutcomeFlip
                   baselinePass={pivotal.baseline.pass}
                   counterfactualPass={pivotal.rootCause.counterfactualPass}
+                  customerMode={customerMode}
                   rootLabel={interventionLabel(
                     pivotal.rootCause,
                     clauseText(skill.steps.find((step) => step.id === pivotal.rootCause?.stepId)?.label ?? pivotal.rootCause.stepId),
+                    customerMode,
                   )}
                 />
               ) : (
                 <div className="own-scm-flip own-scm-flip--solo">
                   <div className={`own-scm-flip-node${pivotal.baseline.pass ? " pass" : " fail"}`}>
-                    <small>baseline · {pivotal.baseline.grader}</small>
-                    <strong>{pivotal.baseline.pass ? "PASS" : "FAIL"}</strong>
+                    <small>{customerMode ? "检查结果" : `baseline · ${pivotal.baseline.grader}`}</small>
+                    <strong>{pivotal.baseline.pass ? (customerMode ? "能正常回答" : "PASS") : (customerMode ? "回答不了" : "FAIL")}</strong>
                   </div>
-                  <span className="own-scm-meta">
-                    {pivotal.allExact ? "全 exact" : "含 sample"} · {pivotal.liveTrace ? "live" : "mock"}
-                  </span>
+                  {!customerMode ? (
+                    <span className="own-scm-meta">
+                      {pivotal.allExact ? "全 exact" : "含 sample"} · {pivotal.liveTrace ? "live" : "mock"}
+                    </span>
+                  ) : null}
                 </div>
               )}
 
@@ -232,6 +249,8 @@ export function ScmAttributionPanel({
                 steps={skill.steps}
                 selectedStepId={selectedStepId}
                 onSelectStep={setSelectedStepId}
+                baselinePass={pivotal.baseline.pass}
+                customerMode={customerMode}
               />
 
               {pivotal.missingSteps?.length ? (
@@ -266,7 +285,7 @@ export function ScmAttributionPanel({
                           <code>{r.stepId}</code>
                           <small>{r.tool}</small>
                         </td>
-                        <td>{interventionLabel(r, clauseText(skill.steps.find((step) => step.id === r.stepId)?.label ?? r.stepId))}</td>
+                        <td>{interventionLabel(r, clauseText(skill.steps.find((step) => step.id === r.stepId)?.label ?? r.stepId), customerMode)}</td>
                         <td className={r.deltaSuccess > 0 ? "up" : r.deltaSuccess < 0 ? "down" : ""}>
                           {r.deltaSuccess > 0 ? "+" : ""}
                           {r.deltaSuccess}

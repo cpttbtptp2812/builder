@@ -1,3 +1,4 @@
+import { useEffect, useState, type ReactNode } from "react";
 import type { AgentSkill, SkillTraceStep } from "../../lib/agentSkills";
 import type { CompareConsequence, ForkDeltaReport, PivotalReport, PivotalStepRow, ScmCompareSummary } from "../../lib/deterministicScm";
 import type { SkillFullCompareReport } from "../../lib/skillCompareReport";
@@ -11,16 +12,120 @@ export function releaseGateLevel(level: SkillFullCompareReport["verdict"]["level
   return "block";
 }
 
-/** 发版门禁首屏 — ΔP / Pivotal / Verdict 三指标 */
+export function customerReason(raw: string): string {
+  const splitAt = raw.indexOf("：");
+  const title = splitAt >= 0 ? raw.slice(0, splitAt) : raw;
+  const detail = splitAt >= 0 ? raw.slice(splitAt + 1) : "";
+  if (title.includes("新增触发词")) {
+    const names = detail.replace(/^新增：/, "").split("，")[0]?.trim();
+    return names ? `新加了说法「${names}」，可能和别的技能抢同一句话。` : "新加的说法可能和别的技能抢同一句话。";
+  }
+  if (title.includes("进错技能")) return "有的话会交给别的技能。";
+  if (title.includes("触发词被删除")) return detail.replace(/^用户可能再说/, "客户再说").replace(/时不再触发。?$/, "时，这个技能不再接。");
+  if (title.includes("少了步骤")) return "回答少了步骤，可能漏掉内容。";
+  if (title.includes("静态错误")) return "新版写得有问题，先改再发。";
+  if (title.includes("换了工具")) return "有一步换成了别的做法。";
+  if (title.includes("权限")) return "这版能动的范围和现在不一样。";
+  if (title.includes("翻转") || title.includes("通过率")) return "有的问法，新版和现用版结果相反。";
+  return detail || title;
+}
+
+export function gateLead(
+  gate: ReleaseGateLevel,
+  scm: ScmCompareSummary | null,
+): { title: string; note: string } {
+  const bothPass = !!(scm?.baselinePass && scm?.candidatePass);
+  const flipped = !!(scm && scm.baselinePass !== scm.candidatePass);
+  if (gate === "block") {
+    return {
+      title: "先别发",
+      note: flipped && scm?.baselinePass ? "现用版这些问法答得上，新版有的答不上。" : "有问法过不了。",
+    };
+  }
+  if (gate === "warn") {
+    return {
+      title: "先看一眼再发",
+      note: bothPass ? "这些问法两边都答得上，和现用版一样。下面这一条，发之前看一眼。" : "有一处和现用版不一样。",
+    };
+  }
+  return {
+    title: "可以发",
+    note: bothPass ? "这些问法两边都答得上，和现用版一样。" : "检查过了。",
+  };
+}
+
+/** 检查过程：三步依次停住，结论最后用大字落下。 */
+export function CheckSeal({
+  phase,
+  seen,
+  total,
+  title,
+  note,
+  baselineVersion,
+  candidateVersion,
+  tone,
+}: {
+  phase: "run" | "read" | "hold" | "done";
+  seen: number;
+  total: number;
+  title?: string;
+  note?: string;
+  baselineVersion?: string;
+  candidateVersion?: string;
+  tone?: ReleaseGateLevel;
+}) {
+  const [prep, setPrep] = useState(0);
+  useEffect(() => {
+    if (phase !== "run") return;
+    setPrep(0);
+    const timer = window.setTimeout(() => setPrep(1), 1200);
+    return () => window.clearTimeout(timer);
+  }, [phase]);
+
+  const asking = phase === "run";
+  const reading = phase === "read";
+  const closed = phase === "hold" || phase === "done";
+  const steps: { label: string; state: "wait" | "now" | "done" }[] = [
+    { label: "问现用版", state: asking ? (prep > 0 ? "done" : "now") : "done" },
+    { label: "问新版", state: asking ? (prep > 0 ? "now" : "wait") : "done" },
+    {
+      label: reading ? `对着第 ${Math.min(seen + 1, Math.max(total, 1))} 句` : closed ? "这几句对完了" : "对着这几句",
+      state: closed ? "done" : reading ? "now" : "wait",
+    },
+  ];
+
+  return (
+    <section className={`oa-pass oa-pass--${tone || "run"}`} aria-live="polite">
+      <p className="oa-pass-ver">
+        {baselineVersion && candidateVersion ? `v${baselineVersion} → v${candidateVersion}` : "现用版 → 新版"}
+      </p>
+      <ol className="oa-pass-steps">
+        {steps.map((step, index) => (
+          <li key={index} className={`is-${step.state}`}>
+            <i />
+            <span>{step.label}</span>
+          </li>
+        ))}
+      </ol>
+      {phase === "done" ? (
+        <div className="oa-pass-end">
+          <h3>{title || "可以发"}</h3>
+          {note ? <p>{note}</p> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/** 发版检查的结论：一句话，加上现用版到新版的图。 */
 export function ReleaseGateHero({
-  skillName,
   baselineVersion,
   candidateVersion,
   verdictLevel,
-  verdictTitle,
   scm,
-  caseCount,
   reasons,
+  caseCount,
+  actions,
 }: {
   skillName: string;
   baselineVersion: string;
@@ -30,68 +135,63 @@ export function ReleaseGateHero({
   scm: ScmCompareSummary | null;
   caseCount?: number;
   reasons?: string[];
+  actions?: ReactNode;
 }) {
   const gate = releaseGateLevel(verdictLevel);
-  const gateLabel = gate === "pass" ? "PASS" : gate === "warn" ? "WARN" : "BLOCK";
-  const deltaPct =
-    scm != null ? `${scm.deltaSuccess > 0 ? "+" : ""}${Math.round(scm.deltaSuccess * 100)}%` : "—";
-  const pivotal = scm?.pivotalStepId
-    ? `${scm.pivotalStepId}${scm.pivotalTool ? ` · ${scm.pivotalTool}` : ""}`
-    : "无";
+  const lead = gateLead(gate, scm);
+  const notes = gate === "pass" ? [] : [...new Set((reasons ?? []).map(customerReason))].slice(0, 3);
+  const baseOk = scm ? scm.baselinePass : gate !== "block";
+  const nextOk = scm ? scm.candidatePass : gate === "pass";
+  const scmFlat = scm && scm.baselinePass === scm.candidatePass;
 
   return (
-    <section className={`oa-release-gate oa-release-gate--${gate}`} aria-label="发版门禁">
-      <header className="oa-release-gate-head">
-        <div>
-          <p className="oa-release-gate-eyebrow">发版门禁</p>
-          <h3>
-            {skillName}{" "}
-            <span className="oa-release-gate-ver">
-              v{baselineVersion} → v{candidateVersion}
-            </span>
-          </h3>
+    <section className={`oa-release-gate oa-release-gate--${gate}`} aria-label="检查结果">
+      <div className="oa-gate-top">
+        <span className="oa-gate-badge">{gate === "pass" ? "PASS" : gate === "warn" ? "WARN" : "BLOCK"}</span>
+        <span className="oa-gate-meta">
+          v{baselineVersion} → v{candidateVersion}
+          {typeof caseCount === "number" ? ` · ${caseCount} 条必问` : ""}
+        </span>
+        {actions ? <div className="oa-gate-actions">{actions}</div> : null}
+      </div>
+      <div className="oa-gate-stage">
+        <div className="oa-gate-fig" aria-hidden>
+          <div className={`oa-gate-disc${baseOk ? " is-ok" : " is-bad"}`}>
+            <small>现用版</small>
+            <strong>v{baselineVersion}</strong>
+          </div>
+          <svg className="oa-gate-bridge" viewBox="0 0 88 24">
+            <path d="M2 12 H78" />
+            <path d="M70 6 L80 12 L70 18" />
+          </svg>
+          <div className={`oa-gate-disc is-b${nextOk ? " is-ok" : " is-bad"}`}>
+            <small>新版</small>
+            <strong>v{candidateVersion}</strong>
+          </div>
         </div>
-        <div className={`oa-release-gate-verdict oa-release-gate-verdict--${gate}`}>
-          <strong>{gateLabel}</strong>
-          <span>{verdictTitle}</span>
-        </div>
-      </header>
-      <div className="oa-release-gate-metrics">
-        <div className="oa-release-gate-metric">
-          <small>ΔP 成功率</small>
-          <strong className={scm && scm.deltaSuccess < 0 ? "down" : scm && scm.deltaSuccess > 0 ? "up" : ""}>
-            {deltaPct}
-          </strong>
-          <span>相对现用版</span>
-        </div>
-        <div className="oa-release-gate-metric">
-          <small>根因步骤</small>
-          <strong className="oa-release-gate-pivotal">{pivotal}</strong>
-          <span>因果归因</span>
-        </div>
-        <div className="oa-release-gate-metric">
-          <small>基线 / 候选</small>
-          <strong className="oa-release-gate-passpair">
-            {scm ? (
-              <>
-                <em className={scm.baselinePass ? "pass" : "fail"}>{scm.baselinePass ? "PASS" : "FAIL"}</em>
-                <span aria-hidden>→</span>
-                <em className={scm.candidatePass ? "pass" : "fail"}>{scm.candidatePass ? "PASS" : "FAIL"}</em>
-              </>
-            ) : (
-              "—"
-            )}
-          </strong>
-          <span>{caseCount != null ? `${caseCount} 条 case` : "SCM case"}</span>
+        <div className="oa-gate-copy">
+          <h3>{lead.title}</h3>
+          <p>{lead.note}</p>
+          {notes.length ? (
+            <ul className="oa-gate-reasons">
+              {notes.map((note) => (
+                <li key={note}>{note}</li>
+              ))}
+            </ul>
+          ) : scm && !scmFlat ? (
+            <div className="oa-gate-scm-inline">
+              <ScmCompareViz
+                consequence={{
+                  baselinePass: scm.baselinePass,
+                  candidatePass: scm.candidatePass,
+                  deltaSuccess: scm.deltaSuccess,
+                  pivotalOnBaseline: null,
+                }}
+              />
+            </div>
+          ) : null}
         </div>
       </div>
-      {reasons?.length ? (
-        <ul className="oa-release-gate-reasons">
-          {reasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
-      ) : null}
     </section>
   );
 }
@@ -145,29 +245,30 @@ export function ScmPipelineViz({
 }
 
 const BOARD_ACTIONS = [
-  { key: "break", label: "弄坏" },
-  { key: "skip", label: "跳过" },
-  { key: "swap_tool", label: "换成别的" },
+  { key: "break", label: "这步出错" },
+  { key: "skip", label: "跳过这步" },
+  { key: "swap_tool", label: "换一种做法" },
 ] as const;
 
 function cellWord(row: PivotalStepRow | undefined): { text: string; tone: "bad" | "good" | "same" | "empty" } {
-  if (!row) return { text: "没试", tone: "empty" };
+  if (!row) return { text: "—", tone: "empty" };
   if (row.baselinePass !== row.counterfactualPass) {
-    return row.counterfactualPass ? { text: "变好了", tone: "good" } : { text: "会挂", tone: "bad" };
+    return row.counterfactualPass ? { text: "会变好", tone: "good" } : { text: "会出问题", tone: "bad" };
   }
-  return { text: "没变", tone: "same" };
+  return { text: "没影响", tone: "same" };
 }
 
-function boardLead(rows: PivotalStepRow[]): string {
+function boardLead(rows: PivotalStepRow[], baselinePass: boolean): string {
   const tried = rows.filter((row) => row.intervention !== "fix");
-  const hung = tried.filter((row) => row.baselinePass && !row.counterfactualPass);
-  const saved = tried.filter((row) => !row.baselinePass && row.counterfactualPass);
-  if (!tried.length) return "还没有试过单独改某一步。";
-  if (hung.length === tried.length) return "每一种改法都会让结果从能过变成不过，看不出单独哪一步是原因。";
-  if (!hung.length && !saved.length) return "这些改法都不会改变能不能过。";
-  if (hung.length && !saved.length) return "标红的改法会把结果弄挂，其余改了也还过。";
-  if (saved.length && !hung.length) return "标绿的改法能把不过变成能过。";
-  return "红色会弄挂，绿色能救回来。";
+  const flip = tried.filter((row) => row.baselinePass !== row.counterfactualPass);
+  if (!tried.length) return "还没有测试过单独改某一步会怎样。";
+  if (baselinePass) {
+    return flip.length
+      ? "正常情况能回答。下面看如果某一步出错，回答会不会受影响。"
+      : "正常情况能回答，而且不管哪一步出问题，回答都不受影响。";
+  }
+  if (flip.length) return "目前回答不了。标红的那一步是关键——修好它就有可能正常。";
+  return "目前回答不了，但没有找到单独一步是问题所在。";
 }
 
 /** 按步骤看：弄坏 / 跳过 / 换成别的，会不会把结果弄挂 */
@@ -176,11 +277,15 @@ export function ScmImpactBars({
   steps,
   selectedStepId,
   onSelectStep,
+  baselinePass = true,
+  customerMode,
 }: {
   rows: PivotalReport["rows"];
   steps?: AgentSkill["steps"];
   selectedStepId?: string | null;
   onSelectStep?: (stepId: string) => void;
+  baselinePass?: boolean;
+  customerMode?: boolean;
 }) {
   const order = steps?.map((step) => step.id) ?? [];
   const stepIds = [...new Set([...order, ...rows.map((row) => row.stepId)])];
@@ -195,8 +300,9 @@ export function ScmImpactBars({
   }
 
   return (
-    <div className="own-scm-board" role="img" aria-label="动哪一步会挂">
-      <p className="own-scm-board-lead">{boardLead(rows)}</p>
+    <div className="own-scm-board" role="img" aria-label={customerMode ? "哪一步最关键" : "假如只改一步"}>
+      <h4 className="own-scm-board-title">{customerMode ? "哪一步最关键（假设推演）" : "假如只改一步"}</h4>
+      <p className="own-scm-board-lead">{boardLead(rows, baselinePass)}</p>
       <div className="own-scm-board-grid">
         <span />
         {BOARD_ACTIONS.map((action) => (
@@ -234,16 +340,37 @@ export function ScmOutcomeFlip({
   baselinePass,
   counterfactualPass,
   rootLabel,
+  customerMode,
 }: {
   baselinePass: boolean;
   counterfactualPass?: boolean;
   rootLabel?: string;
+  /** 客户视图：左=实测，右=假设推演，避免和发版结论「能过/不过」打架 */
+  customerMode?: boolean;
 }) {
+  const leftSmall = customerMode ? "这次试句（实测）" : "现在";
+  const leftStrong = customerMode
+    ? baselinePass
+      ? "答对了"
+      : "答错了"
+    : baselinePass
+      ? "能过"
+      : "不过";
+  const rightSmall = customerMode ? "假设推演（不是实测）" : "动过之后";
+  const rightStrong = customerMode
+    ? counterfactualPass
+      ? "仍能答对"
+      : "会答不对"
+    : counterfactualPass
+      ? "能过"
+      : "不过";
+  const hypotheticalFail = customerMode && baselinePass && counterfactualPass === false;
+
   return (
-    <div className="own-scm-flip">
+    <div className={`own-scm-flip${customerMode ? " own-scm-flip--customer" : ""}`}>
       <div className={`own-scm-flip-node${baselinePass ? " pass" : " fail"}`}>
-        <small>现在</small>
-        <strong>{baselinePass ? "能过" : "不过"}</strong>
+        <small>{leftSmall}</small>
+        <strong>{leftStrong}</strong>
       </div>
       {counterfactualPass != null && rootLabel ? (
         <>
@@ -253,11 +380,18 @@ export function ScmOutcomeFlip({
               <path d="M4 12 H68 M58 6 L68 12 L58 18" fill="none" stroke="currentColor" strokeWidth="2" />
             </svg>
           </div>
-          <div className={`own-scm-flip-node${counterfactualPass ? " pass" : " fail"}`}>
-            <small>动过之后</small>
-            <strong>{counterfactualPass ? "能过" : "不过"}</strong>
+          <div
+            className={`own-scm-flip-node${hypotheticalFail ? " hypo" : counterfactualPass ? " pass" : " fail"}`}
+          >
+            <small>{rightSmall}</small>
+            <strong>{rightStrong}</strong>
           </div>
         </>
+      ) : null}
+      {hypotheticalFail ? (
+        <p className="own-scm-flip-note">
+          发版检查结论不变：这版仍然能过。这里只是说明——若这一步真的出错，回答就会挂，所以这一步最关键。
+        </p>
       ) : null}
     </div>
   );

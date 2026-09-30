@@ -5,6 +5,28 @@ import { routeQuery } from "./skillRouter";
 import { attachCompileToManifest, hydrateSkill } from "./skillMarkdown";
 import { diffTrace, MOCK_PROFILES, type TraceDiff } from "./provingGround";
 import type { SkillTraceStep } from "./agentSkills";
+import { extractUrlFromText } from "./releaseInspect";
+
+const LIVE_PROBE_TOOLS = new Set(["http_probe", "browser_snapshot"]);
+
+export function usesLiveProbeInCompare(skill: AgentSkill, query: string, probeUrl?: string): boolean {
+  const url = probeUrl ?? extractUrlFromText(query);
+  if (!url) return false;
+  return skill.tools.some((t) => LIVE_PROBE_TOOLS.has(t));
+}
+
+function mockProfileForCompare(
+  skill: AgentSkill,
+  query: string,
+  probeUrl?: string,
+): Record<string, (args: Record<string, unknown>) => unknown> | undefined {
+  const base = MOCK_PROFILES[skill.id];
+  if (!base) return undefined;
+  if (!usesLiveProbeInCompare(skill, query, probeUrl)) return base;
+  const filtered = { ...base };
+  for (const t of LIVE_PROBE_TOOLS) delete filtered[t];
+  return Object.keys(filtered).length ? filtered : undefined;
+}
 
 export type CompareSide = {
   versionLabel: string;
@@ -124,11 +146,11 @@ async function runSide(
   catalog: AgentSkill[],
   probeUrl?: string,
 ): Promise<CompareSide> {
-  const mockProfile = MOCK_PROFILES[skill.id];
+  const mockProfile = mockProfileForCompare(skill, query, probeUrl);
   const route = routeQuery(query, catalog);
   const { trace, output } = await runSkill(skill, query, undefined, {
     probeUrl,
-    mockProfile: mockProfile ?? undefined,
+    mockProfile,
   });
   return {
     versionLabel,

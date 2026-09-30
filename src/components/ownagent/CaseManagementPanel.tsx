@@ -97,7 +97,7 @@ export function CaseManagementPanel({
     <OaPage
       chrome={!embedded}
       title="发布前要问的问题"
-      desc="写下客户会问这个技能的话。发版时会拿这些问题再跑一遍：以前答对的，改完之后还得答对，否则不能发布。"
+      desc="写下客户会问这个技能的话。发版检查与「回归评测」绑定同一技能时，都会读这里的必问句，不必在两处各维护一份。"
       actions={
         <>
           <OaBtn size="sm" variant="ghost" disabled={syncing} onClick={() => void syncToRepo()}>

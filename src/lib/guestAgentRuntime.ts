@@ -13,7 +13,8 @@ import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
 import { getTicket, type TicketDraft } from "./policyDesk";
 import { ABOUT_SITE_INTENT, HEALTH_INTENT, routeQuery, URL_RE } from "./skillRouter";
-import { logRoutedQuery } from "./skillQueryLog";
+import { logRoutedQuery, logSkillHandled } from "./skillQueryLog";
+import { parseReleaseInspectRequest, releaseReportMarkdown, runReleaseInspect } from "./releaseInspect";
 import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
 import { runGuestAgentAsync } from "./backendBridge";
 import { peekRuntimeConfig } from "./runtimeConfig";
@@ -529,10 +530,13 @@ export async function runGuestAgentTurn(
           }
         }
         await streamText(remote.assistantText, onEvent);
+        const handled = inferHandledSkillFromTraces(remote.traces);
+        if (handled) logSkillHandled(query, handled);
+        else logRoutedQuery(query, { kind: "open", skillId: null, score: remote.traces.length ? 1 : 0 });
         return wrap(remote.assistantText, remote.traces, remote.runtime, {
           route: {
-            skillId: "server-guest",
-            skillName: "自研 Agent · Server",
+            skillId: handled ?? "server-guest",
+            skillName: handled ? skillLabelFromId(handled) : "自研 Agent · Server",
             score: 4,
             hits: ["hybrid-rag", "mcp"],
             path: "guest",
@@ -540,6 +544,31 @@ export async function runGuestAgentTurn(
         });
       }
     } catch { /* 回退浏览器内 Agent Loop */ }
+  }
+
+  const inspectReq = parseReleaseInspectRequest(query);
+  if (inspectReq && !ctx.force && !ctx.pinSkillId) {
+    await streamReasoning(`发布前巡检 · ${inspectReq.url}`, onEvent);
+    try {
+      const report = await runReleaseInspect(inspectReq.url, inspectReq.query, {
+        snapshotRoot: ctx.snapshotRoot ?? null,
+      });
+      const md = releaseReportMarkdown(report);
+      await streamText(md, onEvent);
+      return wrap(md, [], "local", {
+        route: {
+          skillId: "release-inspector",
+          skillName: "发布前巡检",
+          score: 8,
+          hits: ["http_probe", inspectReq.url],
+          path: "skill",
+        },
+      });
+    } catch (err) {
+      const msg = `巡检失败：${err instanceof Error ? err.message : "未知错误"}`;
+      await streamText(msg, onEvent);
+      return wrap(msg, [], "local");
+    }
   }
 
   if (ctx.force === "knowledge") {
@@ -644,6 +673,8 @@ export async function runGuestAgentTurn(
     },
   );
 
+  logSkillHandled(query, skill.id);
+
   const finalTraces = [skillTraceToAgentTrace(trace.filter((s) => !s.tool.startsWith("__")), reasoning)];
   onEvent({ type: "trace-sync", traces: finalTraces });
 
@@ -683,6 +714,24 @@ export async function runGuestAgentTurn(
       path: "skill",
     },
   });
+}
+
+function inferHandledSkillFromTraces(traces: AgentTurnTrace[]): string | null {
+  const tools = new Set<string>();
+  for (const tr of traces) {
+    for (const tool of tr.tools) tools.add(tool.name);
+  }
+  if (tools.has("http_probe") && (tools.has("knowledge_search") || tools.has("browser_snapshot"))) {
+    return "release-inspector";
+  }
+  if (tools.has("policy_search")) return "policy-desk";
+  if (tools.has("http_probe") && tools.has("browser_snapshot")) return "site-analyzer";
+  if (tools.has("knowledge_search") && !tools.has("http_probe")) return "knowledge-lookup";
+  return null;
+}
+
+function skillLabelFromId(id: string): string {
+  return allRunnableSkills().find((s) => s.id === id)?.name ?? id;
 }
 
 export function isAuthError(err: unknown): boolean {

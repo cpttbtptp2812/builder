@@ -1,8 +1,10 @@
 /** 发布前巡检 — 任意 URL：http_probe +（同源）snapshot + 资料库对照 */
 
+import { createFrameTrace, finishFrame, membrane, type CallFrame, type FrameTrace } from "./callFrame";
+import { logSkillTurn } from "./skillQueryLog";
 import { extractHtmlMeta } from "./htmlProbeMeta";
 import { mcpServer } from "./mcpServer";
-import { retrieveRagEnhanced, formatRagContext } from "./ragEngine";
+import { buildRagCorpus, retrieveRagEnhanced, formatRagContext } from "./ragEngine";
 
 export type InspectCheckStatus = "pass" | "warn" | "fail";
 
@@ -105,6 +107,23 @@ export function isProjectInspectUrl(url: string): boolean {
   }
 }
 
+function foldOverall(checks: InspectCheck[], trace?: FrameTrace): InspectCheckStatus {
+  const core = checks.filter((check) => {
+    trace?.foldReads.push(`check.${check.id}.id`);
+    return check.id === "http" || check.id === "html" || check.id === "site";
+  });
+  const failed = core.some((check) => {
+    trace?.foldReads.push(`check.${check.id}.status`);
+    return check.status === "fail";
+  });
+  if (failed) return "fail";
+  const warned = core.some((check) => {
+    trace?.foldReads.push(`check.${check.id}.status`);
+    return check.status === "warn";
+  });
+  return warned ? "warn" : "pass";
+}
+
 function pageMetaFromProbe(probe: Record<string, unknown>, preview?: string) {
   const body = probe.body as Record<string, unknown> | undefined;
   const pageTitle =
@@ -170,9 +189,19 @@ export function composeReleaseReport(opts: {
   snapshot?: Record<string, unknown> | null;
   snapshotSkipped?: boolean;
   knowledgeQuery?: string;
+  /** docs 步骤已经拿到的观测。传入后不再二次检索。 */
+  knowledge?: Record<string, unknown> | null;
+  trace?: FrameTrace;
 }): ReleaseInspectReport {
   const checks: InspectCheck[] = [];
-  const probe = opts.probe;
+  const trace = opts.trace;
+  const probe = (trace ? membrane("probe", opts.probe, trace) : opts.probe) as Record<string, unknown>;
+  const snapshot = (
+    opts.snapshot && trace ? membrane("snapshot", opts.snapshot, trace) : opts.snapshot
+  ) as Record<string, unknown> | null | undefined;
+  const knowledge = (
+    opts.knowledge && trace ? membrane("knowledge", opts.knowledge, trace) : opts.knowledge
+  ) as Record<string, unknown> | null | undefined;
   const ok = Boolean(probe.ok);
   const status = typeof probe.status === "number" ? probe.status : 0;
   const latencyMs = typeof probe.latencyMs === "number" ? probe.latencyMs : null;
@@ -267,9 +296,9 @@ export function composeReleaseReport(opts: {
         ? `外链 ${host} · 已通过 HTML 抓取分析（浏览器内无法快照第三方 DOM）`
         : "已通过 HTML 预览分析",
     });
-  } else if (opts.snapshot) {
-    const nodes = (opts.snapshot.nodeCount as number) ?? (opts.snapshot.nodes as unknown[] | undefined)?.length ?? 0;
-    const interactive = (opts.snapshot.nodes as { role?: string }[] | undefined)?.filter((n) =>
+  } else if (snapshot) {
+    const nodes = (snapshot.nodeCount as number) ?? (snapshot.nodes as unknown[] | undefined)?.length ?? 0;
+    const interactive = (snapshot.nodes as { role?: string }[] | undefined)?.filter((n) =>
       ["button", "link", "textbox"].includes(n.role ?? ""),
     ).length;
     if (nodes < 3) {
@@ -290,38 +319,57 @@ export function composeReleaseReport(opts: {
   }
 
   let knowledgeHits = 0;
-  if (isProjectInspectUrl(opts.targetUrl)) {
-    const kq = opts.knowledgeQuery ?? opts.targetUrl;
-    try {
-      const rag = retrieveRagEnhanced(kq, 3, { rewrite: true });
-      knowledgeHits = rag.hits.length;
-      if (knowledgeHits === 0) {
-        checks.push({
-          id: "docs",
-          label: "项目资料库",
-          status: "warn",
-          detail: "未命中本项目文档，不影响外链可用性判断",
-        });
-      } else {
-        const top = rag.hits[0]!;
-        checks.push({
-          id: "docs",
-          label: "项目资料库",
-          status: "pass",
-          detail: `命中 ${knowledgeHits} 条 · ${top.projectName} · ${top.section}`,
-        });
+  const projectSite = isProjectInspectUrl(opts.targetUrl);
+  if (trace) trace.ambient.origin = typeof window !== "undefined" ? window.location.origin : "";
+  if (projectSite) {
+    const provided = knowledge && Array.isArray(knowledge.hits) ? (knowledge.hits as { projectName?: string; section?: string }[]) : null;
+    if (provided) {
+      knowledgeHits = provided.length;
+      const top = provided[0];
+      checks.push({
+        id: "docs",
+        label: "项目资料库",
+        status: knowledgeHits === 0 ? "warn" : "pass",
+        detail:
+          knowledgeHits === 0
+            ? "未命中本项目文档，不影响外链可用性判断"
+            : `命中 ${knowledgeHits} 条 · ${top?.projectName ?? ""} · ${top?.section ?? ""}`,
+      });
+    } else {
+      const kq = opts.knowledgeQuery ?? opts.targetUrl;
+      if (trace) trace.dead.push("knowledge");
+      try {
+        if (trace) {
+          trace.ambient.corpusEpoch = buildRagCorpus().length;
+          trace.nested.push({ tool: "retrieveRagEnhanced", key: `knowledge:${kq}`, reads: ["corpus"] });
+        }
+        const rag = retrieveRagEnhanced(kq, 3, { rewrite: true });
+        knowledgeHits = rag.hits.length;
+        if (knowledgeHits === 0) {
+          checks.push({
+            id: "docs",
+            label: "项目资料库",
+            status: "warn",
+            detail: "未命中本项目文档，不影响外链可用性判断",
+          });
+        } else {
+          const top = rag.hits[0]!;
+          checks.push({
+            id: "docs",
+            label: "项目资料库",
+            status: "pass",
+            detail: `命中 ${knowledgeHits} 条 · ${top.projectName} · ${top.section}`,
+          });
+        }
+      } catch {
+        /* 资料库可选 */
       }
-    } catch {
-      /* 资料库可选 */
     }
+  } else if (trace) {
+    trace.dead.push("knowledge");
   }
 
-  const core = checks.filter((c) => c.id === "http" || c.id === "html" || c.id === "site");
-  const overall: InspectCheckStatus = core.some((c) => c.status === "fail")
-    ? "fail"
-    : core.some((c) => c.status === "warn")
-      ? "warn"
-      : "pass";
+  const overall = foldOverall(checks, trace);
 
   const siteSummary =
     pageMeta.title && ok
@@ -334,7 +382,7 @@ export function composeReleaseReport(opts: {
     targetUrl: opts.targetUrl,
     overall,
     checks,
-    probe,
+    probe: opts.probe,
     snapshotSkipped: opts.snapshotSkipped,
     knowledgeHits,
     ms: 0,
@@ -342,6 +390,23 @@ export function composeReleaseReport(opts: {
     siteSummary,
     external,
   };
+}
+
+export function composeReleaseReportTraced(opts: {
+  targetUrl: string;
+  probe: Record<string, unknown>;
+  snapshot?: Record<string, unknown> | null;
+  snapshotSkipped?: boolean;
+  knowledgeQuery?: string;
+  knowledge?: Record<string, unknown> | null;
+  now?: number;
+}): { report: ReleaseInspectReport; frame: CallFrame } {
+  const now = opts.now ?? Date.now();
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const trace = createFrameTrace(now, origin, !opts.snapshotSkipped);
+  const report = composeReleaseReport({ ...opts, trace });
+  const continuation = opts.probe.error ? "cut" : "value";
+  return { report, frame: finishFrame(trace, continuation) };
 }
 
 export function releaseReportMarkdown(report: ReleaseInspectReport): string {
@@ -424,5 +489,7 @@ export async function runReleaseInspect(
     knowledgeQuery: contextQuery || url,
   });
   report.ms = Math.max(1, Math.round(performance.now() - t0));
+  const logQ = contextQuery.trim() || targetUrl;
+  logSkillTurn(logQ, "release-inspector");
   return report;
 }

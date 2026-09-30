@@ -1,7 +1,7 @@
 /** 版本更新页 — 给人看的文案，不是给编译器看的 */
 
 import type { AgentSkill } from "../../lib/agentSkills";
-import type { SkillFullCompareReport } from "../../lib/skillCompareReport";
+import type { QueryCompareRow, SkillFullCompareReport } from "../../lib/skillCompareReport";
 
 export function skillDisplayTitle(skill: Pick<AgentSkill, "name" | "description">): string {
   const head = skill.description.split(/[—–\-]/)[0]?.trim();
@@ -53,14 +53,57 @@ export function fmtUpdatedAt(iso: string | undefined): string {
   return `${d.toLocaleDateString("zh-CN")} 更新`;
 }
 
+export function verdictTone(level: SkillFullCompareReport["verdict"]["level"]) {
+  if (level === "approve") return "ok";
+  if (level === "warn") return "warn";
+  return "fail";
+}
+
+const ROUTE_NONE = "没有技能接手";
+
+/** 逐句对比：状态 + 路由一行展示（与清单共用，避免再开一张表） */
+export function queryComparePresentation(q: QueryCompareRow): {
+  tone: "ok" | "warn" | "bad";
+  badge: string;
+  routeLine: string;
+  detail: string | null;
+} {
+  const rb = q.routeBaseline ?? ROUTE_NONE;
+  const rc = q.routeCandidate ?? ROUTE_NONE;
+  let tone: "ok" | "warn" | "bad" = "ok";
+  let badge = "过";
+  if (q.verdictLevel === "reject") {
+    tone = "bad";
+    badge = "不过";
+  } else if (q.routeDrift) {
+    tone = "warn";
+    badge = "路由变";
+  } else if (q.traceChanged) {
+    tone = "warn";
+    badge = "步骤变";
+  } else if (q.verdictLevel === "warn") {
+    tone = "warn";
+    badge = "注意";
+  }
+
+  let routeLine: string;
+  if (q.routeDrift) routeLine = `${rb} → ${rc}`;
+  else if (q.traceChanged) routeLine = `${rc} · ${q.traceSummary || "步骤与现用版不同"}`;
+  else routeLine = `${rc} · 一致`;
+
+  const note = q.note?.trim() || null;
+  const detail = tone === "bad" || tone === "warn" ? note || (q.traceChanged ? q.traceSummary : null) : null;
+  return { tone, badge, routeLine, detail };
+}
+
 export function humanVerdict(level: SkillFullCompareReport["verdict"]["level"]) {
   if (level === "approve") {
-    return { title: "允许发布", gate: "PASS", hint: "考试题都过了，改动没有把原来能答对的题答错。" };
+    return { title: "可以发", gate: "PASS", hint: "这些问法都过了，和现用版一样。" };
   }
   if (level === "warn") {
-    return { title: "谨慎发布", gate: "WARN", hint: "部分 case 表现变化，确认符合预期后再发。" };
+    return { title: "先看一眼再发", gate: "WARN", hint: "问法还能答上，有一处发之前要看一眼。" };
   }
-  return { title: "阻止发布", gate: "BLOCK", hint: "检测到 flip 或成功率显著下降，请修改后重新检查。" };
+  return { title: "先别发", gate: "BLOCK", hint: "有问法过不了，改完再检查。" };
 }
 
 export function plainDiffLines(report: SkillFullCompareReport): string[] {

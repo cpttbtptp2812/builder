@@ -3,6 +3,8 @@ import { evalStore } from "../../../lib/evalops/client";
 import { casesToCsv, dedupeCases, parseCases, SAMPLE_CSV, splitList, type ParseResult } from "../../../lib/evalops/dataset";
 import type { SourceDoc } from "../../../lib/evalops/generate";
 import { newId, type EvalCase, type EvalSuite } from "../../../lib/evalops/types";
+import { gateQuestionsToEvalCases, resolveEvalSuiteCases } from "../../../lib/skillGateQuestions";
+import { getLiveCatalog } from "../../../lib/agentSkills";
 import { listKnowledgeDocs } from "../../../lib/ownKnowledge";
 import { listQueryLog } from "../../../lib/skillQueryLog";
 import { routeQuery } from "../../../lib/skillRouter";
@@ -86,7 +88,7 @@ export function EvalSuites({
       <div className="eo-callout">
         <strong>测试集 = 一批固定的问题</strong>
         <span>
-          每次改动都用同一批题去跑，才能看出变好还是变坏。题目可以只有问题；有参考答案、必须包含的关键词时，判得更准。
+          技能发版请把测试集「绑定技能」，题目与「考试题」同源，只在一处改必问句。追加题仍可写在测试集里（例如带参考答案的难例）。
         </span>
       </div>
       <div className="eo-row-between">
@@ -98,15 +100,20 @@ export function EvalSuites({
       ) : (
         <div className="eo-grid">
           {suites.map((s) => {
-            const withRef = s.cases.filter((c) => c.reference).length;
+            const effective = resolveEvalSuiteCases(s);
+            const withRef = effective.filter((c) => c.reference).length;
+            const skillName = s.linkedSkillId
+              ? getLiveCatalog().find((sk) => sk.id === s.linkedSkillId)?.name ?? s.linkedSkillId
+              : null;
             return (
               <OaCard key={s.id} className="eo-target-card">
                 <div className="eo-row-between">
                   <strong>{s.name}</strong>
-                  <OaBadge tone="info">{s.cases.length} 题</OaBadge>
+                  <OaBadge tone="info">{effective.length} 题</OaBadge>
                 </div>
                 <p className="eo-muted">
-                  {s.description || (withRef ? `${withRef} 题有参考答案` : "都没有参考答案，靠规则和裁判判断")}
+                  {skillName ? `与「考试题 · ${skillName}」同源` : s.description || (withRef ? `${withRef} 题有参考答案` : "都没有参考答案，靠规则和裁判判断")}
+                  {s.linkedSkillId && s.cases.length ? ` · 另加 ${s.cases.length} 道追加题` : ""}
                 </p>
                 <div className="eo-actions">
                   <OaBtn size="sm" variant="ghost" onClick={() => setEditing(s)}>
@@ -147,8 +154,10 @@ const ADD_MODES: { id: AddMode; label: string }[] = [
 ];
 
 function SuiteEditor({ initial, onCancel, onSaved }: { initial: EvalSuite; onCancel: () => void; onSaved: (s: EvalSuite) => void }) {
+  const runnableSkills = useMemo(() => getLiveCatalog().filter((s) => s.runnable), []);
   const [name, setName] = useState(initial.name);
   const [desc, setDesc] = useState(initial.description ?? "");
+  const [linkedSkillId, setLinkedSkillId] = useState(initial.linkedSkillId ?? "");
   const [cases, setCases] = useState<EvalCase[]>(initial.cases);
   const [mode, setMode] = useState<AddMode | null>(initial.cases.length ? null : "file");
   const [dirty, setDirty] = useState(false);
@@ -175,9 +184,15 @@ function SuiteEditor({ initial, onCancel, onSaved }: { initial: EvalSuite; onCan
     setDirty(true);
   }
 
+  const gatePreview = linkedSkillId ? gateQuestionsToEvalCases(linkedSkillId) : [];
+
   async function save() {
     if (!name.trim()) return setErr("给测试集起个名字，比如「报销制度 · 常见问题」");
-    if (!cases.length) return setErr("至少加一道题");
+    const extra = cases.filter((c) => c.question.trim());
+    if (!linkedSkillId && !extra.length) return setErr("至少加一道题，或绑定一个技能的必问句");
+    if (linkedSkillId && !gatePreview.length && !extra.length) {
+      return setErr("绑定的技能还没有必问句，请先到「考试题」里添加");
+    }
     setSaving(true);
     setErr(null);
     try {
@@ -186,7 +201,8 @@ function SuiteEditor({ initial, onCancel, onSaved }: { initial: EvalSuite; onCan
         id: initial.id || newId("suite"),
         name: name.trim(),
         description: desc.trim() || undefined,
-        cases: cases.filter((c) => c.question.trim()),
+        linkedSkillId: linkedSkillId || undefined,
+        cases: extra,
       });
       onSaved(s);
     } catch (e) {
@@ -223,7 +239,29 @@ function SuiteEditor({ initial, onCancel, onSaved }: { initial: EvalSuite; onCan
         <OaField label="说明（可选）">
           <OaInput value={desc} placeholder="如：客服高频 50 问，9 月整理" onChange={(e) => (setDesc(e.target.value), setDirty(true))} />
         </OaField>
+        <OaField label="绑定技能（与「考试题」同源）">
+          <select
+            className="oa-input"
+            value={linkedSkillId}
+            onChange={(e) => {
+              setLinkedSkillId(e.target.value);
+              setDirty(true);
+            }}
+          >
+            <option value="">不绑定 — 题目只在本测试集维护</option>
+            {runnableSkills.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </OaField>
       </div>
+      {linkedSkillId ? (
+        <p className="eo-muted">
+          已并入 {gatePreview.length} 道必问句（在「考试题」里改）。下方「追加题」可再加带参考答案的难例，不会和必问句重复。
+        </p>
+      ) : null}
 
       <section className="eo-add">
         <div className="eo-row-between">

@@ -8,10 +8,10 @@ import type { SkillDiagnostic } from "./skillSemcompiler";
 import { runSkillCompare, type CompareVerdict, type SkillCompareResult } from "./skillCompareEngine";
 import { scmSummaryForCompare, type ScmCompareSummary } from "./deterministicScm";
 import { buildReleaseGateSummary, reportToJson } from "./releaseGate";
-import { SKILL_TRACE_CASES } from "./provingGround";
-import { listAllCasesForSkill } from "./skillTraceCaseStore";
 import { weekQueriesForSkill } from "./skillSentence";
 import { extractUrlFromText } from "./releaseInspect";
+import { listGateQueriesForCheck } from "./skillGateQuestions";
+import { usesLiveProbeInCompare } from "./skillCompareEngine";
 
 export type { ScmCompareSummary };
 
@@ -69,13 +69,8 @@ export type SkillFullCompareReport = {
   risks: RiskItem[];
   verdict: CompareVerdict;
   markdown: string;
-};
-
-const EXTRA_QUERIES: Record<string, string[]> = {
-  "release-inspector": ["发布前验收 example.com", "上线前健康检查"],
-  "site-analyzer": ["站点探活 metrics", "页面加载慢不慢"],
-  "knowledge-lookup": ["查一下知识库里的 API 说明"],
-  "policy-desk": ["VPN 权限怎么申请"],
+  /** 至少有一句用了与对话相同的真实探活（非 mock http_probe） */
+  liveProbeUsed: boolean;
 };
 
 function hydrateFromRaw(raw: string, skillId: string, label: string): AgentSkill {
@@ -131,14 +126,7 @@ export function buildStructuralDiff(baseline: AgentSkill, candidate: AgentSkill)
 }
 
 function buildTestQueries(skillId: string, skill: AgentSkill): string[] {
-  const out = new Set<string>();
-  for (const q of weekQueriesForSkill(skillId)) out.add(q);
-  for (const c of listAllCasesForSkill(skillId, SKILL_TRACE_CASES)) out.add(c.query);
-  for (const q of EXTRA_QUERIES[skillId] ?? []) out.add(q);
-  for (const t of skill.triggers.slice(0, 4)) {
-    if (t.length >= 2) out.add(`用户说：${t}，请处理`);
-  }
-  return [...out].slice(0, 16);
+  return listGateQueriesForCheck(skillId, skill);
 }
 
 export { reportToJson };
@@ -373,9 +361,11 @@ export async function runFullSkillCompare(opts: {
   if (opts.extraQuery?.trim()) queries.unshift(opts.extraQuery.trim());
 
   const queryResults: QueryCompareRow[] = [];
+  let liveProbeUsed = false;
   const compareRuns: Array<{ query: string; baselineTrace: SkillCompareResult["baseline"]["trace"]; candidateTrace: SkillCompareResult["candidate"]["trace"] }> = [];
   for (const query of queries) {
     const probeUrl = extractUrlFromText(query) ?? undefined;
+    if (usesLiveProbeInCompare(baseline, query, probeUrl)) liveProbeUsed = true;
     const result = await runSkillCompare({
       skillId: opts.skillId,
       baselineRaw: opts.baselineRaw,
@@ -420,6 +410,7 @@ export async function runFullSkillCompare(opts: {
     risks,
     verdict,
     markdown: "",
+    liveProbeUsed,
   };
   report.markdown = reportToMarkdown(report);
   return report;

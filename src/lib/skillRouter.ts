@@ -111,6 +111,21 @@ export function routeQuery(query: string, catalog: AgentSkill[] = allRunnableSki
     return toSkill(top.skill, `命中说法：${top.hits.join("、")}`, top.score, top.hits);
   }
   if (faq) return toFaq();
+
+  const inspectSkill = find("release-inspector");
+  if (inspectSkill) {
+    const t = query.trim();
+    if (/^\/inspect\b/i.test(t)) {
+      return toSkill(inspectSkill, "内置规则：/inspect 发布前巡检", 3, ["/inspect"]);
+    }
+    if (
+      URL_RE.test(query) &&
+      /巡检|发布|验收|探活|检查|上线|发版|smoke|inspect|release|health|能不能发|能否上线|发布前/i.test(query)
+    ) {
+      return toSkill(inspectSkill, "内置规则：带链接的发布前巡检", 3, ["release-inspect"]);
+    }
+  }
+
   if (URL_RE.test(query)) return toKind("open", "带网址，且没有技能的说法明显命中");
 
   const health = find("site-analyzer");

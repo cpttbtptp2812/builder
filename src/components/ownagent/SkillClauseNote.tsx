@@ -55,7 +55,7 @@ export function SkillClauseRead({
 }: {
   skillId: string;
   query: string;
-  onAsk: (query: string) => void;
+  onAsk?: (query: string) => void;
 }) {
   const clauses = useSkillClauses(skillId);
   if (!clauses.length) return null;

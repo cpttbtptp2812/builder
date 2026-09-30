@@ -97,7 +97,9 @@ export function caseFromSkillSteps(
     query,
     probeUrl: opts?.probeUrl,
     custom: true,
-    grader: opts?.grader ?? { kind: "skeleton" },
+    grader:
+      opts?.grader ??
+      (skillId === "release-inspector" ? { kind: "release_overall", min: "pass" } : { kind: "skeleton" }),
     expect: { steps: expectSteps },
   };
 }

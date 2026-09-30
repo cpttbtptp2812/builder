@@ -139,26 +139,29 @@ function isCrossOriginUrl(url: string): boolean {
   }
 }
 
+const PROBE_SERVER_TIMEOUT_MS = 6_000;
+const probeResultCache = new Map<string, { at: number; result: ProbeResult }>();
+const PROBE_CACHE_TTL_MS = 45_000;
+
+function cacheProbeKey(url: string, method: "GET" | "HEAD") {
+  return `${method}:${url}`;
+}
+
 async function probeHttpViaServer(url: string, method: "GET" | "HEAD"): Promise<ProbeResult | null> {
-  for (let attempt = 0; attempt < 2; attempt += 1) {
-    try {
-      const res = await fetch(apiUrl("/tools/http-probe"), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, method }),
-        signal: AbortSignal.timeout(35_000),
-      });
-      if (!res.ok) continue;
-      const data = (await res.json()) as ProbeResult;
-      if (data.ok || data.error || data.status != null) return data;
-    } catch {
-      /* retry */
-    }
+  try {
+    const res = await fetch(apiUrl("/tools/http-probe"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, method }),
+      signal: AbortSignal.timeout(PROBE_SERVER_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as ProbeResult;
+    if (data.ok || data.error || data.status != null) return data;
+  } catch {
+    return null;
   }
-  return apiFetch<ProbeResult>("/tools/http-probe", {
-    method: "POST",
-    body: JSON.stringify({ url, method }),
-  });
+  return null;
 }
 
 async function probeHttpDirect(url: string, method: "GET" | "HEAD" = "GET"): Promise<ProbeResult> {
@@ -204,18 +207,35 @@ async function probeHttpDirect(url: string, method: "GET" | "HEAD" = "GET"): Pro
   }
 }
 
-async function probeHttp(url: string, method: "GET" | "HEAD" = "GET") {
+async function probeHttp(url: string, method: "GET" | "HEAD" = "GET"): Promise<ProbeResult> {
+  const cacheKey = cacheProbeKey(url, method);
+  const hit = probeResultCache.get(cacheKey);
+  if (hit && Date.now() - hit.at < PROBE_CACHE_TTL_MS) return hit.result;
+
+  let result: ProbeResult;
   if (isCrossOriginUrl(url)) {
     const remote = await probeHttpViaServer(url, method);
-    if (remote) return remote;
-    const direct = await probeHttpDirect(url, method);
-    if (!direct.ok && direct.error) {
+    if (remote) result = remote;
+    else {
       const demo = demoProbeFallback(url, method);
-      if (demo) return demo;
+      if (demo) result = demo;
+      else {
+        result = {
+          url,
+          method,
+          ok: false,
+          latencyMs: 0,
+          error: "服务端探活未就绪（本地请 npm run dev:full）；浏览器无法直连此外链",
+          via: "server",
+        };
+      }
     }
-    return direct;
+  } else {
+    result = await probeHttpDirect(url, method);
   }
-  return probeHttpDirect(url, method);
+
+  probeResultCache.set(cacheKey, { at: Date.now(), result });
+  return result;
 }
 
 export class McpInProcessServer {

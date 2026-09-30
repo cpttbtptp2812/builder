@@ -1,5 +1,6 @@
 /** 实验执行 — 并发调用 A/B、重复采样、打分、汇总与上线建议 */
 
+import { resolveEvalSuiteCases } from "../skillGateQuestions";
 import { gradeSide, judgePair } from "./graders";
 import { median, pct, signTest, wilson } from "./stats";
 import type {
@@ -91,7 +92,7 @@ export async function runExperiment(
   opt: RunOptions,
   deps: RunnerDeps,
 ): Promise<{ results: CaseResult[]; summary: RunSummary; stopped: boolean }> {
-  const cases = suite.cases;
+  const cases = resolveEvalSuiteCases(suite);
   const results: (CaseResult | undefined)[] = new Array(cases.length);
   let next = 0;
   let done = 0;
