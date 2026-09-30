@@ -27,10 +27,10 @@ export type HubAiDraft = {
   edges: Array<{ from: string; to: string }>;
 };
 
-export const HUB_STORAGE_KEY = "ua-hub-xyflow-v5";
+export const HUB_STORAGE_KEY = "ua-hub-xyflow-v7";
 
 export const LANE_X = [28, 248, 468, 688];
-export const STEP_Y = [64, 156, 248, 340, 432];
+export const STEP_Y = [94, 184, 274, 364, 454];
 
 export const LANES = [
   { id: "lane-nlu", label: "1 · 理解", hint: "读懂问句", x: LANE_X[0]!, ids: ["nlu", "intent", "entity", "plan", "context"] as StepId[] },
@@ -112,7 +112,7 @@ export function laneNodes(): Node<HubNodeData>[] {
   return LANES.map((lane) => ({
     id: lane.id,
     type: "hubLane",
-    position: { x: lane.x, y: 8 },
+    position: { x: lane.x, y: 12 },
     draggable: false,
     selectable: false,
     connectable: false,
@@ -181,13 +181,18 @@ export function parseFlow(raw: unknown): { nodes: Node<HubNodeData>[]; edges: Ed
     const meta = STEP_REGISTRY[bind];
     const pos = (n as { position?: { x?: number; y?: number } }).position;
     const at = PLACES[bind];
+    const rawX = Number(pos?.x);
+    const rawY = Number(pos?.y);
+    const x = Number.isFinite(rawX) && rawX !== 0 ? rawX : LANE_X[at?.c ?? 0]!;
+    // 防御旧缓存与导出数据纵向压缩：若未指定 Y 或对出厂卡片 Y < 85（叠在泳道标头上），自动对齐至 STEP_Y
+    let y = Number.isFinite(rawY) && rawY !== 0 ? rawY : STEP_Y[at?.r ?? 0]!;
+    if (at && !data?.custom && y < 85) {
+      y = STEP_Y[at.r]!;
+    }
     nodes.push({
       id,
       type: "hubStep",
-      position: {
-        x: Number(pos?.x) || LANE_X[at.c]!,
-        y: Number(pos?.y) || STEP_Y[at.r]!,
-      },
+      position: { x, y },
       data: {
         label: data?.label || meta.label,
         sub: data?.sub || meta.sub,
@@ -224,10 +229,12 @@ export function hydrateDraft(
     used.add(id);
     const at = PLACES[item.bind];
     const old = prev.get(id);
+    const oldPos = old?.position;
+    const y = oldPos?.y && oldPos.y >= 85 ? oldPos.y : STEP_Y[at.r]!;
     nodes.push({
       id,
       type: "hubStep",
-      position: old?.position ?? { x: LANE_X[at.c]!, y: STEP_Y[at.r]! },
+      position: { x: oldPos?.x ?? LANE_X[at.c]!, y },
       data: {
         label: item.label || old?.data.label || meta.label,
         sub: old?.data.sub || meta.sub,
@@ -258,8 +265,17 @@ export function hydrateDraft(
 export function loadSaved(): { nodes: Node<HubNodeData>[]; edges: Edge[] } | null {
   try {
     const raw = localStorage.getItem(HUB_STORAGE_KEY);
-    if (!raw) return null;
-    return parseFlow(JSON.parse(raw));
+    if (raw) return parseFlow(JSON.parse(raw));
+    // 兼容旧版缓存：读出后经 parseFlow 自动将 Y 坐标校准（y < 85 下移至 94），并平滑迁移至 v7
+    const legacy = localStorage.getItem("ua-hub-xyflow-v6");
+    if (legacy) {
+      const parsed = parseFlow(JSON.parse(legacy));
+      if (parsed) {
+        persistFlow(parsed.nodes, parsed.edges);
+        return parsed;
+      }
+    }
+    return null;
   } catch {
     return null;
   }

@@ -433,26 +433,41 @@ function SkillListCard({
 
   return (
     <li className={checked ? "own-skill-ver-item own-skill-ver-item--on" : "own-skill-ver-item"}>
-      <label className="own-skill-ver-check" onClick={(e) => e.stopPropagation()}>
-        <input type="checkbox" checked={checked} onChange={onToggle} aria-label={`选择 ${skill.name}`} />
-      </label>
-      <button type="button" className={draft ? "own-skill-ver-card own-skill-ver-card--draft" : "own-skill-ver-card"} onClick={onOpen}>
-        <header>
-          <strong>{skillDisplayTitle(skill)}</strong>
-          <span className="own-skill-ver-tag">v{ver}</span>
-          {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
-          {prod ? <span className="own-skill-ver-tag">prod {prod}</span> : null}
-          {staging ? <span className="own-skill-ver-tag">staging {staging}</span> : null}
-        </header>
-        <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
-        <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps)}</p>
-        {samples.length ? <p className="own-skill-ver-samples">用户常说：{samples.join("、")}</p> : null}
-        <footer>
-          <span>{fmtUpdatedAt(applied?.appliedAt)}</span>
-          {usage.handled ? <span>近 7 天接手 {usage.handled} 句</span> : null}
-          {draft ? <em className="own-skill-ver-pending">草稿 v{draft.version} 未发布</em> : <span className="own-skill-ver-ok">运行中</span>}
-        </footer>
-      </button>
+      <div className="own-skill-ver-card-inner">
+        <label
+          className="own-skill-ver-check"
+          title={`选择 ${skill.name}`}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={onToggle}
+            aria-label={`选择 ${skill.name}`}
+          />
+        </label>
+        <button
+          type="button"
+          className={draft ? "own-skill-ver-card own-skill-ver-card--draft" : "own-skill-ver-card"}
+          onClick={onOpen}
+        >
+          <header>
+            <strong>{skillDisplayTitle(skill)}</strong>
+            <span className="own-skill-ver-tag">v{ver}</span>
+            {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
+            {prod ? <span className="own-skill-ver-tag">prod {prod}</span> : null}
+            {staging ? <span className="own-skill-ver-tag">staging {staging}</span> : null}
+          </header>
+          <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
+          <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps)}</p>
+          {samples.length ? <p className="own-skill-ver-samples">用户常说：{samples.join("、")}</p> : null}
+          <footer>
+            <span>{fmtUpdatedAt(applied?.appliedAt)}</span>
+            {usage.handled ? <span>近 7 天接手 {usage.handled} 句</span> : null}
+            {draft ? <em className="own-skill-ver-pending">草稿 v{draft.version} 未发布</em> : <span className="own-skill-ver-ok">运行中</span>}
+          </footer>
+        </button>
+      </div>
     </li>
   );
 }

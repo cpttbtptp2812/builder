@@ -400,6 +400,7 @@ function NavButton({
     >
       <span className="own-nav-icon">{item.icon}</span>
       <span className="own-nav-label">{item.label}</span>
+      <span className="own-nav-tip">{item.desc}</span>
     </button>
   );
 }
@@ -463,8 +464,17 @@ export function WorkOwnAgent() {
           <button type="button" className="own-cmd" onClick={() => window.dispatchEvent(new Event("ownagent:palette"))}>
             搜索
           </button>
-          <Link to="/" className="own-exit" title="返回网站">
-            退出
+          <Link to="/" className="own-exit" title="返回主页" aria-label="返回主页">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path
+                d="M6 3H3.5A1.5 1.5 0 0 0 2 4.5v7A1.5 1.5 0 0 0 3.5 13H6M10.5 11.5L14 8l-3.5-3.5M14 8H5.5"
+                stroke="currentColor"
+                strokeWidth="1.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span>退出</span>
           </Link>
         </div>
       </header>

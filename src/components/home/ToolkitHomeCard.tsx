@@ -12,26 +12,58 @@ function triggerDownload(e: MouseEvent) {
   a.click();
 }
 
-/** 首页 — 前端联调工具包（与个人扩展同款紧凑卡片） */
+/** 首页 — 前端联调工具包（与 OwnAgent 卡片同等工业级质感与视觉对齐） */
 export function ToolkitHomeCard() {
   const tk = FRONTEND_DEBUG_TOOLKIT;
 
   return (
-    <article className="ext-home-card ext-home-card--toolkit" style={{ "--ext-accent": tk.accent } as CSSProperties}>
-      <Link to="/tools/extensions" className="ext-home-card-link">
-        <span className="ext-home-icon" aria-hidden>
-          {tk.icon}
-        </span>
+    <article
+      className="home-featured-card home-featured-card--product"
+      style={{ "--card-accent": tk.accent } as CSSProperties}
+    >
+      <div className="home-featured-top">
+        <div className="home-featured-meta">
+          <span className="home-featured-badge">Chrome MV3 扩展</span>
+          <span className="home-featured-impact">三合一工具箱</span>
+        </div>
         <h3>{tk.name}</h3>
-        <p className="ext-home-tagline">{tk.tagline}</p>
-        <span className="ext-home-enter">
+        <p className="home-featured-hook">{tk.tagline}</p>
+        <p className="home-featured-desc">{tk.desc}</p>
+        <div className="home-featured-tech-row" style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap", margin: "0.4rem 0 0.6rem" }}>
+          {["ClipHub 网页摘录", "Env 域名切环境", "Wire 帧级看 SSE"].map((tag) => (
+            <span key={tag} className="tech-badge">
+              {tag}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="home-featured-demo">
+        <div className="mini-live mini-toolkit-preview">
+          <div className="mini-live-head">
+            <span className="live-pulse plaza" style={{ background: "#0d9488", color: "#ffffff" }}>解压即用</span>
+            <span className="mini-live-label">本地离线 · 数据不外泄</span>
+          </div>
+          <p className="mini-turn-replay-q" style={{ margin: "0.35rem 0 0.45rem", fontSize: "0.82rem", color: "#1e293b", fontWeight: 600 }}>
+            日常联调三件套：随手切环境、查流式帧、记原文定位
+          </p>
+          <div style={{ display: "flex", gap: "0.75rem", fontSize: "0.74rem", color: "#64748b" }}>
+            <span>✓ 开发者模式一键载入</span>
+            <span>✓ 本地存储零依赖</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="home-featured-actions">
+        <button type="button" className="home-featured-cta" onClick={triggerDownload}>
+          下载 v{tk.version}
+          <span aria-hidden style={{ marginLeft: "0.3rem" }}>↓</span>
+        </button>
+        <Link to="/tools/extensions" className="home-note-btn">
           安装说明
-          <span aria-hidden>→</span>
-        </span>
-      </Link>
-      <button type="button" className="ext-home-dl" onClick={triggerDownload}>
-        下载 v{tk.version}
-      </button>
+          <span aria-hidden style={{ marginLeft: "0.2rem" }}>→</span>
+        </Link>
+      </div>
     </article>
   );
 }

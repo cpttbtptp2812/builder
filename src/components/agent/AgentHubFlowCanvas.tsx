@@ -182,16 +182,16 @@ export function AgentHubFlowCanvas({
           }}
           nodeTypes={nodeTypes}
           fitView
-          fitViewOptions={{ padding: 0.08, minZoom: 0.65, maxZoom: 1 }}
-          minZoom={0.55}
-          maxZoom={1.4}
+          fitViewOptions={{ padding: 0.14, minZoom: 0.45, maxZoom: 1.1 }}
+          minZoom={0.4}
+          maxZoom={1.6}
           nodesDraggable
           nodesConnectable
           edgesFocusable
           elementsSelectable
           selectNodesOnDrag={false}
           panOnDrag
-          zoomOnScroll={false}
+          zoomOnScroll={true}
           deleteKeyCode={["Backspace", "Delete"]}
           defaultEdgeOptions={{
             type: "straight",

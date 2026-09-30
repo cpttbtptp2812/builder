@@ -38,7 +38,7 @@ export function HomePage() {
           </div>
           <div className="home-featured-grid home-featured-grid--platform">
             {IMEAN_WORKS.map((w) => (
-              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
+              <FeaturedWorkCard key={w.id} work={w} compact={false} onBrief={() => setBriefSlug(w.slug)} />
             ))}
           </div>
         </section>
@@ -50,7 +50,7 @@ export function HomePage() {
           </div>
           <div className="home-featured-grid home-featured-grid--personal">
             {PERSONAL_WORKS.map((w) => (
-              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
+              <FeaturedWorkCard key={w.id} work={w} compact={false} onBrief={() => setBriefSlug(w.slug)} />
             ))}
             {PERSONAL_EXTENSIONS.map((ext) => (
               <ExtensionHomeCard key={ext.id} ext={ext} />
@@ -66,7 +66,7 @@ export function HomePage() {
           </div>
           <div className="home-featured-grid home-featured-grid--solo">
             {ENGINEERING_WORKS.map((w) => (
-              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
+              <FeaturedWorkCard key={w.id} work={w} compact={false} onBrief={() => setBriefSlug(w.slug)} />
             ))}
           </div>
         </section>
