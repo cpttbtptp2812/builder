@@ -39249,7 +39249,7 @@ button.agent-tool-chip {
   font-size: 0.68rem;
   font-weight: 700;
   color: #a1a1aa;
-  transition: all 0.25s;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
 }
 .mini-turn-replay-dot.on {
   background: #eef2ff;
@@ -39260,7 +39260,6 @@ button.agent-tool-chip {
   background: #6366f1;
   border-color: #6366f1;
   color: #fff;
-  transform: scale(1.08);
 }
 .mini-turn-replay-detail {
   font-size: 0.68rem;
@@ -44178,6 +44177,26 @@ button {
   border-color: #4338ca !important;
   color: #ffffff !important;
   box-shadow: 0 0 12px rgba(99, 102, 241, 0.45) !important;
+  transform: none !important;
+}
+.home-featured-card--flagship {
+  transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease, background-color 0.24s ease !important;
+}
+.home-featured-card--flagship .home-featured-demo {
+  height: 118px;
+  min-height: 118px;
+  max-height: 118px;
+}
+.mini-turn-replay-status {
+  height: 2.55rem;
+  overflow: hidden;
+}
+.mini-turn-replay-detail span,
+.mini-turn-replay-done {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .mini-turn-replay-detail {
   background: #ffffff !important;

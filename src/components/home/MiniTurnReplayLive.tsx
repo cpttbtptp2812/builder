@@ -37,17 +37,18 @@ export function MiniTurnReplayLive() {
           </span>
         ))}
       </div>
-      {activeNode && (
-        <div className="mini-turn-replay-detail">
-          <strong>{activeNode.label}</strong>
-          <span>{activeNode.chips[0] ?? activeNode.hint}</span>
-        </div>
-      )}
-      {step >= DEMO_REPLAY_JOURNAL.length && (
-        <div className="mini-turn-replay-done">
-          广场命中 · 省 ~820 Token · {(DEMO_REPLAY_MS / 1000).toFixed(1)}s
-        </div>
-      )}
+      <div className="mini-turn-replay-status">
+        {activeNode ? (
+          <div className="mini-turn-replay-detail">
+            <strong>{activeNode.label}</strong>
+            <span>{activeNode.chips[0] ?? activeNode.hint}</span>
+          </div>
+        ) : (
+          <div className="mini-turn-replay-done">
+            广场命中 · 省 ~820 Token · {(DEMO_REPLAY_MS / 1000).toFixed(1)}s
+          </div>
+        )}
+      </div>
     </div>
   );
 }
