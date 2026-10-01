@@ -20,6 +20,13 @@ export function SkillGovernancePanel() {
       </summary>
       <div>
         <p>依赖边：{report.dependencyGraph.edges.length || "无显式依赖"}</p>
+        {report.dependencyGraph.edges.length ? (
+          <ul>
+            {report.dependencyGraph.edges.map((edge) => (
+              <li key={`${edge.from}->${edge.to}`}>{edge.from} → {edge.to}</li>
+            ))}
+          </ul>
+        ) : null}
         {report.ambiguity.pairs.length ? (
           <ul>
             {report.ambiguity.pairs.slice(0, 6).map((pair) => (

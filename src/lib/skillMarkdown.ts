@@ -24,6 +24,7 @@ export type ParsedSkillDoc = {
   description: string;
   triggers: string[];
   tools: string[];
+  depends: string[];
   steps: ParsedSkillStep[];
   headings: { level: number; text: string }[];
   issues: SkillParseIssue[];
@@ -43,6 +44,8 @@ export type SkillManifestCore = {
   skillPath: string;
   triggers: string[];
   tools: string[];
+  /** Other Skill ids this Skill calls. Not inferred from shared tool names. */
+  depends: string[];
   steps: { id: string; label: string; tool: string; args: Record<string, unknown> }[];
   manifest: string;
   plan: string[];
@@ -264,6 +267,7 @@ export function parseSkillMarkdown(raw: string): ParsedSkillDoc {
   const description = String(fm.description ?? "").trim();
   const triggers = asStringList(fm.triggers);
   const tools = asStringList(fm.tools);
+  const depends = [...new Set(asStringList(fm.depends))];
   const stepRaw = Array.isArray(fm.steps) ? fm.steps : [];
   const steps = stepRaw.map((s, i) => asStep(s, i, issues)).filter((s): s is ParsedSkillStep => Boolean(s));
 
@@ -284,6 +288,7 @@ export function parseSkillMarkdown(raw: string): ParsedSkillDoc {
     description,
     triggers,
     tools: derivedTools,
+    depends,
     steps,
     headings: parseHeadings(split.body),
     issues,
@@ -302,6 +307,7 @@ export function hydrateSkill(raw: string, loc: { id: string; skillPath: string }
     skillPath: loc.skillPath,
     triggers: parsed.triggers,
     tools: parsed.tools,
+    depends: parsed.depends,
     steps,
     manifest: raw,
     plan: steps.map((s) => s.label),

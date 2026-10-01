@@ -107,6 +107,22 @@ function useToast() {
 }
 
 /** 技能管理 — 列表 → 概览 / 编辑 / 检查发布 / 发布记录 */
+async function alignCanonicalGate(report: SkillFullCompareReport, raw: string, version: string) {
+  const apiGate = await apiFetch<NonNullable<SkillFullCompareReport["canonicalGate"]>>("/skill-gate/check", {
+    method: "POST",
+    body: JSON.stringify({
+      skillId: report.skillId,
+      raw,
+      environment: "prod",
+      candidateVersion: version,
+    }),
+  });
+  if (apiGate?.gate && apiGate.skillId === report.skillId && apiGate.coverage && Array.isArray(apiGate.failedCases)) {
+    report.canonicalGate = apiGate;
+  }
+  return report;
+}
+
 export function SkillComparePanel({ initialTab }: { initialTab?: Tab } = {}) {
   const [skillId, setSkillId] = useState<string | null>(takePendingSkillOpen);
   const [tick, setTick] = useState(0);
@@ -581,7 +597,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           ? buildReleaseDependencyProof(urlQuery).catch(() => null)
           : Promise.resolve(null);
 
-      const [full, shadow, fuzz, pageWalk, dep] = await Promise.all([
+      const [compared, shadow, fuzz, pageWalk, dep] = await Promise.all([
         runFullSkillCompare({
           skillId,
           skillName: title,
@@ -596,6 +612,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
         pageWalkPromise,
         depPromise,
       ]);
+      const full = await alignCanonicalGate(compared, snapshot, draftVersion);
       setReport(full);
       tagBaselineEnv(skillId, draftVersion, "staging");
       void apiFetch("/skill-gate/baseline", {
@@ -641,6 +658,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     }
   }
 
+  const decided = report && !reportStale ? buildReleaseGateSummary(report) : null;
   const publishBlock: string | null = !hasChanges
     ? "还没有改动"
     : !draftParsed.ok
@@ -652,12 +670,13 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     if (publishBlock || checking) return;
     const r = report && !reportStale ? report : await runCheck();
     if (!r) return;
-    if (r.verdict.level === "reject" && !force) {
-      toast.show(`检查建议先别发布：${r.verdict.title}。看下方报告，确认无碍可点「我确认，仍要发布」`);
+    const gateNow = buildReleaseGateSummary(r);
+    if (gateNow.gate === "BLOCK" && !force) {
+      toast.show(`检查建议先别发布：${gateNow.reasons[0] ?? r.verdict.title}。看下方报告，确认无碍可点「我确认，仍要发布」`);
       return;
     }
-    if (r.verdict.level === "warn") {
-      const gate = buildReleaseGateSummary(r);
+    if (gateNow.gate === "WARN") {
+      const gate = gateNow;
       requestApproval({
         skillId,
         draftVersion: draftVersion,
@@ -935,14 +954,14 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               </button>
               <OaBtn
                 onClick={() => void publish()}
-                disabled={Boolean(publishBlock) || checking || (report?.verdict.level === "reject" && !reportStale)}
+                disabled={Boolean(publishBlock) || checking || decided?.gate === "BLOCK"}
               >
                 {checking ? "检查中…" : !report || reportStale ? `执行门禁并发布` : `发布上线 v${draftVersion}`}
               </OaBtn>
             </div>
-            {report && !reportStale && report.verdict.level === "reject" ? (
+            {decided?.gate === "BLOCK" ? (
               <p className="own-ver-sticky-note own-ver-sticky-note--bad">
-                {humanVerdict("reject").hint}{" "}
+                {decided.reasons[0] ?? humanVerdict("reject").hint}{" "}
                 <button
                   type="button"
                   className="own-skill-inline-btn"
@@ -1812,14 +1831,18 @@ function BatchCheckBar({
       for (const s of pending) {
         const draft = newestDraftForSkill(s.id)!;
         const online = resolveBaselineRaw(s.id, getBuiltinSkill(s.id)?.manifest ?? "");
-        const report = await runFullSkillCompare({
-          skillId: s.id,
-          skillName: skillDisplayTitle(s),
-          baselineRaw: online,
-          candidateRaw: draft.raw,
-          baselineVersion: getPublishedVersion(s.id),
-          candidateVersion: draft.version,
-        });
+        const report = await alignCanonicalGate(
+          await runFullSkillCompare({
+            skillId: s.id,
+            skillName: skillDisplayTitle(s),
+            baselineRaw: online,
+            candidateRaw: draft.raw,
+            baselineVersion: getPublishedVersion(s.id),
+            candidateVersion: draft.version,
+          }),
+          draft.raw,
+          draft.version,
+        );
         const gate = buildReleaseGateSummary(report);
         if (gate.level === "block") block += 1;
         else if (gate.level === "warn") warn += 1;

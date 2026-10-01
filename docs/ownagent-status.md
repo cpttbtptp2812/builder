@@ -127,7 +127,7 @@
 | **Case 文件** | `.ownagent/cases.json` |
 | **GitHub Action** | `.github/workflows/skill-gate.yml`（prove + check，PR 评论 Verdict 表） |
 
-CLI 输出 JSON schema：`ownagent-check/1`，含每 skill 的 `gate` / `reasons` / trace 通过率。
+CLI 输出 JSON schema：`ownagent-check/2`，含每 skill 的 `gate`、ΔP、Pivotal、coverage completeness、policy 与影响传播。
 
 ---
 
@@ -137,7 +137,7 @@ CLI 输出 JSON schema：`ownagent-check/1`，含每 skill 的 `gate` / `reasons
 
 | 方法 | 路径 | 作用 |
 |------|------|------|
-| POST | `/api/skill-gate/check` | 静态检查 + 基础 gate（完整 SCM 仍在浏览器） |
+| POST | `/api/skill-gate/check` | 与 CLI / 浏览器同源的确定性 compare + SCM |
 | GET/POST | `/api/skill-gate/baseline/:skillId` | 读写 repo baseline |
 | POST | `/api/skill-gate/publish` | 发布并写 baseline（BLOCK 拒绝） |
 | POST | `/api/skill-gate/rollback` | 回滚审计 |
@@ -152,6 +152,21 @@ CLI 输出 JSON schema：`ownagent-check/1`，含每 skill 的 `gate` / `reasons
 | **WARN 审批队列** | WARN 发布时写入待审批；列表可批准 | `teamStore.ts` + 技能列表 `TeamApprovalBar` |
 | **staging/prod baseline 标签** | localStorage 标记（浏览器端） | `teamStore.ts` |
 | **VS Code 插件雏形** | 打开 SKILL.md 状态栏显示 PASS/WARN/BLOCK | `extensions/ownagent-skill-gate/` |
+
+---
+
+### 3.9 战略治理层（2026 Q4）
+
+| 能力 | 实现 |
+|------|------|
+| **同源因果门禁** | `causalGateCore.ts` + `mockGateRunner.ts`；浏览器 / CLI / API golden consistency |
+| **策略即代码** | `.ownagent/policy.yml`；按环境、Skill 风险、Exact 与 ΔP 决策 |
+| **开放协议** | `docs/protocol/ownagent-check-2.schema.json` |
+| **生产回流** | trace 批量接入、幂等、失败聚类、case 建议审核 |
+| **多 Skill 治理** | 依赖图、全局路由含糊、反向影响传播 |
+| **团队治理** | SQLite 用户 / session / RBAC / 审批 / 通知 |
+| **OEM / 私有化** | `packages/ownagent-embed/`、`deploy/private/` |
+| **品类材料** | 白皮书、可复跑 benchmark、演讲稿 |
 
 ---
 
@@ -173,15 +188,13 @@ CLI 输出 JSON schema：`ownagent-check/1`，含每 skill 的 `gate` / `reasons
 
 ## 5. 已知边界（诚实说明）
 
-以下为 **已有基础但未完全产品化** 的部分：
+以下为仍需外部条件的边界：
 
-1. **服务端 SCM** — API check 以静态检查为主；完整 ΔP / pivotal 仍依赖浏览器运行时。  
-2. **Case 同步** — 测试 Case 页可「同步到仓库 / 从仓库拉取」（需 `npm run dev:server`）；无 API 时仍可下载 JSON。  
-3. **团队审批** — 本地 localStorage，无多用户 / SSO / 通知。  
-4. **VS Code 插件** — 调用 CLI 的雏形，未上架 Marketplace。  
-5. **GitHub Action** — PR 评论为 Verdict 表；未在 PR 内嵌完整 ΔP 图。  
-6. **生产 trace 回流** — `traceCaseSuggest` 已有，未接真实生产日志管道。  
-7. **Exact 覆盖率** — 有仪表与提示，mock 需人工补 `MOCK_PROFILES`。
+1. **Marketplace 上架** — VSIX 已构建；真正发布需要 `ownagent` publisher 凭证。  
+2. **企业 SSO** — 当前是 SQLite 本地用户、Bearer session 与环境 RBAC；OIDC/SSO 尚未接入。  
+3. **通知送达** — 飞书 / Slack / 邮件适配器已实现；没有配置 webhook/endpoint 时明确记录 `skipped`。  
+4. **容器实机验收** — 私有化 Compose 已提供；当前开发机未安装 Docker，无法在本机启动容器验证。  
+5. **公开采用证据** — benchmark 是可复跑的仓库 fixture，不冒充外部仓库或会议结果。
 
 ---
 

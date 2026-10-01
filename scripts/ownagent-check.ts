@@ -8,8 +8,8 @@ import {
   SKILL_TRACE_CASES,
   type SkillTraceCase,
 } from "../src/lib/provingGround.ts";
-import { runMockGateComparison } from "../src/lib/mockGateRunner.ts";
-import { applyGatePolicy, DEFAULT_GATE_POLICY, parseGatePolicy, resolveGatePolicy } from "../src/lib/gatePolicy.ts";
+import { evaluateSkillGate } from "../src/lib/evaluateSkillGate.ts";
+import { DEFAULT_GATE_POLICY, parseGatePolicy } from "../src/lib/gatePolicy.ts";
 import { OWNAGENT_CHECK_SCHEMA } from "../src/lib/ownagentProtocol.ts";
 import {
   buildSkillDependencyGraph,
@@ -105,81 +105,36 @@ async function checkSkill(skillId: string, candidateRaw: string, cases: SkillTra
     [hydrateSkill(baseline.raw, { id: skillId, skillPath: `baseline://${skillId}` })],
     "server",
   )[0]!;
-  const reasons: string[] = [];
-  let gate: GateLevel = "PASS";
-
-  const errors = candidate.diagnostics.filter((d) => d.level === "error");
-  if (errors.length) {
-    gate = "BLOCK";
-    reasons.push(...errors.map((e) => `[compile] ${e.message}`));
-  }
-
-  if (baseline.raw.trim() !== candidateRaw.trim()) {
-    reasons.push("相对 baseline 有内容变更");
-  }
-
   const skillCases = cases.filter((c) => c.skillId === skillId);
-  const comparison = await runMockGateComparison(baselineSkill, candidate, skillCases);
-  const {
-    deltaSuccess,
-    pivotalStepId,
-    pivotalTool,
-    failedCases,
-    coverage,
-    tracePass,
-    traceTotal,
-  } = comparison;
   const policy = fs.existsSync(POLICY_FILE)
     ? parseGatePolicy(fs.readFileSync(POLICY_FILE, "utf8"))
     : DEFAULT_GATE_POLICY;
-  const rule = resolveGatePolicy(policy, skillId, environment);
-  const decision = applyGatePolicy({
-    compileOk: errors.length === 0,
-    deltaSuccess,
-    failedCaseCount: failedCases.length,
-    caseCount: traceTotal,
-    exactPct: coverage.exactPct,
-    rule,
+  const decision = await evaluateSkillGate({
+    baseline: baselineSkill,
+    candidate,
+    cases: skillCases,
+    policy,
+    environment,
+    baselineVersion: baseline.version,
+    candidateVersion: "candidate",
   });
-  gate = decision.gate;
-
-  if (failedCases.length) {
-    for (const r of failedCases) reasons.push(`[trace] ${r.id}: ${r.detail}`);
-  }
-  if (deltaSuccess < 0) {
-    reasons.unshift(
-      `[causal] ΔP(pass)=${deltaSuccess}${pivotalStepId ? `；Pivotal=${pivotalStepId} (${pivotalTool ?? "unknown"})` : ""}`,
-    );
-  }
-  if (coverage.exactPct < 80) {
-    reasons.push(`[coverage] exact ${coverage.exactPct}%（未覆盖：${coverage.missingTools.join("、") || "unknown"}）`);
-  }
-  reasons.push(...decision.reasons.filter((reason) => !reasons.includes(reason)));
-
-  if (!reasons.length) reasons.push("compile + trace 全通过");
-
   return {
     skillId,
     environment,
-    gate,
-    compileOk: errors.length === 0,
-    tracePass,
-    traceTotal,
-    deltaSuccess,
-    pivotalStepId,
-    pivotalTool,
-    failedCases,
-    coverage,
-    reasons,
-    baseline: { version: baseline.version },
-    candidate: { version: "candidate" },
-    pivotal: pivotalStepId ? { stepId: pivotalStepId, tool: pivotalTool, exact: !coverage.incomplete } : null,
-    policy: {
-      risk: rule.risk,
-      minExactPct: rule.minExactPct,
-      requireCases: rule.requireCases,
-      requiresApproval: decision.requiresApproval,
-    },
+    gate: decision.gate,
+    compileOk: decision.compileOk,
+    tracePass: decision.tracePass,
+    traceTotal: decision.traceTotal,
+    deltaSuccess: decision.deltaSuccess,
+    pivotalStepId: decision.pivotalStepId,
+    pivotalTool: decision.pivotalTool,
+    failedCases: decision.failedCases,
+    coverage: decision.coverage,
+    reasons: decision.reasons,
+    baseline: decision.baseline,
+    candidate: decision.candidate,
+    pivotal: decision.pivotal,
+    policy: decision.policy,
   };
 }
 

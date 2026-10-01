@@ -7,13 +7,15 @@ import { effectLabel } from "./skillSemcompiler";
 import type { SkillDiagnostic } from "./skillSemcompiler";
 import { runSkillCompare, type CompareVerdict, type SkillCompareResult } from "./skillCompareEngine";
 import { scmSummaryForCompare, type ScmCompareSummary } from "./deterministicScm";
-import { buildReleaseGateSummary, reportToJson } from "./releaseGate";
+import { loadBundledGatePolicy, reportToJson } from "./releaseGate";
 import { weekQueriesForSkill } from "./skillSentence";
 import { extractUrlFromText } from "./releaseInspect";
 import { listGateQueriesForCheck } from "./skillGateQuestions";
 import { usesLiveProbeInCompare } from "./skillCompareEngine";
 import { computeSkillCoverage, type ScmCoverageReport } from "./scmCoverage";
-import { MOCK_PROFILES } from "./provingGround";
+import { MOCK_PROFILES, SKILL_TRACE_CASES, type SkillTraceCase } from "./provingGround";
+import { evaluateSkillGate, type SkillGateEvaluation } from "./evaluateSkillGate";
+import { listAllCasesForSkill } from "./skillTraceCaseStore";
 
 export type { ScmCompareSummary };
 
@@ -74,7 +76,20 @@ export type SkillFullCompareReport = {
   markdown: string;
   /** 至少有一句用了与对话相同的真实探活（非 mock http_probe） */
   liveProbeUsed: boolean;
+  /** Same decision object the CLI and `/api/skill-gate/check` return. */
+  canonicalGate?: SkillGateEvaluation;
 };
+
+function casesForCanonicalGate(skillId: string): SkillTraceCase[] {
+  try {
+    if (typeof localStorage === "undefined") {
+      return SKILL_TRACE_CASES.filter((row) => row.skillId === skillId);
+    }
+    return listAllCasesForSkill(skillId, SKILL_TRACE_CASES);
+  } catch {
+    return SKILL_TRACE_CASES.filter((row) => row.skillId === skillId);
+  }
+}
 
 function hydrateFromRaw(raw: string, skillId: string, label: string): AgentSkill {
   const core = hydrateSkill(raw, { id: skillId, skillPath: `compare://${label}` });
@@ -419,6 +434,15 @@ export async function runFullSkillCompare(opts: {
     });
   }
   const verdict = aggregateVerdict(risks, queryResults);
+  const canonicalGate = await evaluateSkillGate({
+    baseline,
+    candidate,
+    cases: casesForCanonicalGate(opts.skillId),
+    policy: loadBundledGatePolicy(),
+    environment: "prod",
+    baselineVersion: opts.baselineVersion,
+    candidateVersion: opts.candidateVersion,
+  });
   const generatedAt = new Date().toISOString();
   const report: SkillFullCompareReport = {
     skillId: opts.skillId,
@@ -435,6 +459,7 @@ export async function runFullSkillCompare(opts: {
     verdict,
     markdown: "",
     liveProbeUsed,
+    canonicalGate,
   };
   report.markdown = reportToMarkdown(report);
   return report;

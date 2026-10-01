@@ -12,6 +12,8 @@ triggers:
 tools:
   - workflow_run
   - browser_snapshot
+depends:
+  - dom-probe
 steps:
   - id: run
     label: workflow_run · cloud

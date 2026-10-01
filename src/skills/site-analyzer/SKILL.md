@@ -24,6 +24,8 @@ triggers:
 tools:
   - http_probe
   - browser_snapshot
+depends:
+  - dom-probe
 steps:
   - id: probe
     label: http_probe · 真实 fetch

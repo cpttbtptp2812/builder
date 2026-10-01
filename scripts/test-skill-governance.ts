@@ -1,4 +1,7 @@
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import path from "node:path";
+import { hydrateSkill } from "../src/lib/skillMarkdown.ts";
 import {
   buildSkillDependencyGraph,
   propagateReverseImpact,
@@ -112,4 +115,34 @@ assert.deepEqual(ambiguity.pairs[0], {
   queries: ["ship this"],
 });
 
-console.log("skillGovernance: dependency, ambiguity, and reverse-impact checks passed");
+const skillsDir = path.resolve(import.meta.dirname, "../src/skills");
+const catalog = fs
+  .readdirSync(skillsDir, { withFileTypes: true })
+  .filter((entry) => entry.isDirectory() && fs.existsSync(path.join(skillsDir, entry.name, "SKILL.md")))
+  .map((entry) => hydrateSkill(fs.readFileSync(path.join(skillsDir, entry.name, "SKILL.md"), "utf8"), {
+    id: entry.name,
+    skillPath: entry.name,
+  }));
+const catalogGraph = buildSkillDependencyGraph(catalog);
+assert.deepEqual(
+  catalogGraph.edges.map((edge) => `${edge.from}->${edge.to}`),
+  [
+    "release-inspector->dom-probe",
+    "release-inspector->knowledge-lookup",
+    "site-analyzer->dom-probe",
+    "skill-router->dom-probe",
+    "skill-router->knowledge-lookup",
+    "skill-router->policy-desk",
+    "skill-router->release-inspector",
+    "skill-router->site-analyzer",
+    "skill-router->workflow-orchestrator",
+    "workflow-orchestrator->dom-probe",
+  ],
+);
+const domImpact = propagateReverseImpact(catalogGraph, ["dom-probe"]);
+assert.deepEqual(
+  domImpact.impacted.filter((row) => row.distance === 1).map((row) => row.skillId),
+  ["release-inspector", "site-analyzer", "skill-router", "workflow-orchestrator"],
+);
+
+console.log(`skillGovernance: dependency, ambiguity, and reverse-impact checks passed (${catalogGraph.edges.length} catalog edges)`);

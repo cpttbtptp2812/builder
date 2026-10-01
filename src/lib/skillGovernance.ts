@@ -2,7 +2,9 @@
 
 import type { SkillManifest } from "./skillMarkdown";
 
-export type GovernedSkill = Pick<SkillManifest, "id" | "name" | "tools" | "ir">;
+export type GovernedSkill = Pick<SkillManifest, "id" | "name" | "tools" | "ir"> & {
+  depends?: readonly string[];
+};
 
 export type SkillDependencyReason =
   | { kind: "tool"; tool: string }
@@ -150,11 +152,12 @@ function findCycles(nodes: string[], dependencies: Record<string, string[]>): st
 /**
  * Builds a Skill-only graph. A consumer points to its dependency.
  *
- * Dependencies are inferred from:
+ * Dependencies come from:
+ * - `depends:` listing another Skill id;
  * - tools named as another Skill (`id`, `skill:id`, `skill/id`, `@skill/id`);
  * - qualified dataflow sources such as `producer-id.output`.
  *
- * Unqualified slots are local to one Skill and never create cross-Skill edges.
+ * Unqualified slots and shared tool names never create cross-Skill edges.
  */
 export function buildSkillDependencyGraph(skills: readonly GovernedSkill[]): SkillDependencyGraph {
   const nodes = [...new Set(skills.map((skill) => skill.id))].sort();
@@ -169,6 +172,11 @@ export function buildSkillDependencyGraph(skills: readonly GovernedSkill[]): Ski
       toolConsumersMap.set(tool, consumers);
       const dependency = explicitSkillReference(tool, skillIds);
       if (dependency) addReason(edgeReasons, skill.id, dependency, { kind: "tool", tool });
+    }
+    for (const dependency of skill.depends ?? []) {
+      if (skillIds.has(dependency)) {
+        addReason(edgeReasons, skill.id, dependency, { kind: "tool", tool: `skill:${dependency}` });
+      }
     }
   }
 

@@ -18,6 +18,9 @@ tools:
   - http_probe
   - browser_snapshot
   - knowledge_search
+depends:
+  - dom-probe
+  - knowledge-lookup
 steps:
   - id: probe
     label: http_probe · GET 全量

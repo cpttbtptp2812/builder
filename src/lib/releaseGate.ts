@@ -2,8 +2,13 @@
 
 import type { SkillFullCompareReport } from "./skillCompareReport";
 import policyRaw from "../../.ownagent/policy.yml?raw";
-import { applyGatePolicy, parseGatePolicy, resolveGatePolicy } from "./gatePolicy";
+import { applyGatePolicy, parseGatePolicy, resolveGatePolicy, type GatePolicy } from "./gatePolicy";
 import { OWNAGENT_CHECK_SCHEMA } from "./ownagentProtocol";
+import { canonicalGateSummary } from "./evaluateSkillGate";
+
+export function loadBundledGatePolicy(): GatePolicy {
+  return parseGatePolicy(policyRaw);
+}
 
 export type GateLevel = "pass" | "warn" | "block";
 
@@ -32,8 +37,18 @@ export function gateLabel(level: GateLevel): "PASS" | "WARN" | "BLOCK" {
 }
 
 export function buildReleaseGateSummary(report: SkillFullCompareReport): ReleaseGateSummary {
+  if (report.canonicalGate) {
+    const decided = canonicalGateSummary(report.canonicalGate);
+    return {
+      ...decided,
+      level: decided.level as GateLevel,
+      label: report.verdict.title,
+      baselinePass: report.scm?.baselinePass ?? null,
+      candidatePass: report.scm?.candidatePass ?? null,
+    };
+  }
   const originalLevel = gateFromVerdict(report.verdict.level);
-  const rule = resolveGatePolicy(parseGatePolicy(policyRaw), report.skillId, "prod");
+  const rule = resolveGatePolicy(loadBundledGatePolicy(), report.skillId, "prod");
   const failedCaseCount = report.queryResults.filter((row) => row.verdictLevel === "reject").length;
   const decision = applyGatePolicy({
     compileOk: report.compile.candidateOk,
@@ -76,8 +91,9 @@ export function buildReleaseGateSummary(report: SkillFullCompareReport): Release
 
 export function reportToJson(report: SkillFullCompareReport) {
   const gate = buildReleaseGateSummary(report);
-  const rule = resolveGatePolicy(parseGatePolicy(policyRaw), report.skillId, "prod");
-  const failedCases = report.queryResults
+  const canonical = report.canonicalGate;
+  const rule = resolveGatePolicy(loadBundledGatePolicy(), report.skillId, "prod");
+  const failedCases = canonical?.failedCases ?? report.queryResults
     .filter((row) => row.verdictLevel === "reject")
     .map((row, index) => ({ id: `query-${index + 1}`, query: row.query, detail: row.note }));
   return {
@@ -88,27 +104,29 @@ export function reportToJson(report: SkillFullCompareReport) {
       skillId: report.skillId,
       skillName: report.skillName,
       environment: "prod",
-      gate: gate.gate,
-      compileOk: report.compile.candidateOk,
-      baseline: { version: report.baselineVersion },
-      candidate: { version: report.candidateVersion },
-      deltaSuccess: gate.deltaSuccess ?? 0,
-      pivotal: gate.pivotalStepId
+      gate: canonical?.gate ?? gate.gate,
+      compileOk: canonical?.compileOk ?? report.compile.candidateOk,
+      baseline: canonical?.baseline ?? { version: report.baselineVersion },
+      candidate: canonical?.candidate ?? { version: report.candidateVersion },
+      deltaSuccess: canonical?.deltaSuccess ?? gate.deltaSuccess ?? 0,
+      pivotal: canonical?.pivotal ?? (gate.pivotalStepId
         ? { stepId: gate.pivotalStepId, tool: gate.pivotalTool, exact: report.coverage.exactPct === 100 }
-        : null,
+        : null),
       failedCases,
-      coverage: {
-        ...report.coverage,
+      coverage: canonical?.coverage ?? {
+        exact: report.coverage.exact,
+        total: report.coverage.total,
+        exactPct: report.coverage.exactPct,
         missingTools: report.coverage.steps.filter((step) => step.mode === "sample").map((step) => step.tool),
         incomplete: report.queryResults.length === 0 || report.coverage.exactPct < 100,
       },
-      policy: {
+      policy: canonical?.policy ?? {
         risk: rule.risk,
         minExactPct: rule.minExactPct,
         requireCases: rule.requireCases,
         requiresApproval: gate.gate === "WARN" && rule.requireApprovalOnWarn,
       },
-      reasons: gate.reasons,
+      reasons: canonical?.reasons ?? gate.reasons,
       evidence: {
         verdict: report.verdict,
         scm: report.scm,

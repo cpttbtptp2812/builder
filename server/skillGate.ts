@@ -8,8 +8,8 @@ import { randomUUID } from "node:crypto";
 import { dbAll, dbRun } from "./db.ts";
 import { parseSkillMarkdown, hydrateSkill, enrichSkillCatalog } from "../src/lib/skillMarkdown.ts";
 import { SKILL_TRACE_CASES, type SkillTraceCase } from "../src/lib/provingGround.ts";
-import { runMockGateComparison } from "../src/lib/mockGateRunner.ts";
-import { applyGatePolicy, DEFAULT_GATE_POLICY, parseGatePolicy, resolveGatePolicy } from "../src/lib/gatePolicy.ts";
+import { evaluateSkillGate, mergeSkillGateCases } from "../src/lib/evaluateSkillGate.ts";
+import { DEFAULT_GATE_POLICY, parseGatePolicy } from "../src/lib/gatePolicy.ts";
 import { OWNAGENT_CHECK_SCHEMA } from "../src/lib/ownagentProtocol.ts";
 import {
   authenticateTeamSession,
@@ -54,8 +54,7 @@ function loadGateCases(skillId: string): SkillTraceCase[] {
       custom = [];
     }
   }
-  const ids = new Set(custom.map((row) => row.id));
-  return [...custom, ...SKILL_TRACE_CASES.filter((row) => row.skillId === skillId && !ids.has(row.id))];
+  return mergeSkillGateCases(skillId, custom, SKILL_TRACE_CASES);
 }
 
 function teamAccess(
@@ -169,83 +168,29 @@ export function registerSkillGate(app: Hono) {
       [hydrateSkill(baselineRaw, { id: body.skillId, skillPath: `baseline://${body.skillId}` })],
       "server",
     )[0]!;
-    const comparison = await runMockGateComparison(baselineSkill, skill, loadGateCases(body.skillId));
     const environment = body.environment ?? "prod";
     const policy = fs.existsSync(POLICY_FILE)
       ? parseGatePolicy(fs.readFileSync(POLICY_FILE, "utf8"))
       : DEFAULT_GATE_POLICY;
-    const rule = resolveGatePolicy(policy, body.skillId, environment);
-
-    const errors = skill.diagnostics.filter((d) => d.level === "error");
-    let gate: "PASS" | "WARN" | "BLOCK" = "PASS";
-    const reasons: string[] = [];
-
-    if (errors.length) {
-      gate = "BLOCK";
-      reasons.push(...errors.map((e) => e.message));
-    }
-    if (!parsed.triggers.length) {
-      gate = gate === "BLOCK" ? "BLOCK" : "WARN";
-      reasons.push("缺少 triggers");
-    }
-    if (!parsed.steps.length) {
-      gate = "BLOCK";
-      reasons.push("缺少 steps");
-    }
-    const decision = applyGatePolicy({
-      compileOk: errors.length === 0,
-      deltaSuccess: comparison.deltaSuccess,
-      failedCaseCount: comparison.failedCases.length,
-      caseCount: comparison.traceTotal,
-      exactPct: comparison.coverage.exactPct,
-      rule,
+    const decision = await evaluateSkillGate({
+      baseline: baselineSkill,
+      candidate: skill,
+      cases: loadGateCases(body.skillId),
+      policy,
+      environment,
+      baselineVersion: fs.existsSync(baselineFile)
+        ? String((JSON.parse(fs.readFileSync(baselineFile, "utf8")) as { version?: string }).version ?? "baseline")
+        : "candidate",
+      candidateVersion: body.candidateVersion ?? "candidate",
     });
-    gate = decision.gate;
-    if (comparison.failedCases.length) {
-      reasons.push(...comparison.failedCases.map((row) => `[trace] ${row.id}: ${row.detail}`));
-    }
-    if (comparison.coverage.exactPct < 80) {
-      reasons.push(`[coverage] exact ${comparison.coverage.exactPct}%（报告未看全）`);
-    }
-    reasons.push(...decision.reasons.filter((reason) => !reasons.includes(reason)));
-    if (!reasons.length) reasons.push("compile + deterministic trace 全通过");
-
     const result = {
       schema: OWNAGENT_CHECK_SCHEMA,
-      skillId: body.skillId,
-      environment,
-      gate,
-      reasons,
-      compileOk: errors.length === 0,
+      ...decision,
       stepCount: parsed.steps.length,
       triggerCount: parsed.triggers.length,
-      deltaSuccess: comparison.deltaSuccess,
-      pivotalStepId: comparison.pivotalStepId,
-      pivotalTool: comparison.pivotalTool,
-      failedCases: comparison.failedCases,
-      coverage: comparison.coverage,
-      baseline: {
-        version: fs.existsSync(baselineFile)
-          ? String((JSON.parse(fs.readFileSync(baselineFile, "utf8")) as { version?: string }).version ?? "baseline")
-          : "candidate",
-      },
-      candidate: { version: body.candidateVersion ?? "candidate" },
-      pivotal: comparison.pivotalStepId
-        ? {
-            stepId: comparison.pivotalStepId,
-            tool: comparison.pivotalTool,
-            exact: !comparison.coverage.incomplete,
-          }
-        : null,
-      policy: {
-        risk: rule.risk,
-        minExactPct: rule.minExactPct,
-        requireCases: rule.requireCases,
-        requiresApproval: decision.requiresApproval,
-      },
     };
 
-    writeAudit({ skillId: body.skillId, action: "check", gate, actor: body.actor, payload: result });
+    writeAudit({ skillId: body.skillId, action: "check", gate: decision.gate, actor: body.actor, payload: result });
     return c.json(result);
   });
 

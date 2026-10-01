@@ -8,6 +8,13 @@ triggers:
   - discover
   - 路由
 tools: []
+depends:
+  - release-inspector
+  - site-analyzer
+  - dom-probe
+  - workflow-orchestrator
+  - policy-desk
+  - knowledge-lookup
 ---
 
 # skill-router

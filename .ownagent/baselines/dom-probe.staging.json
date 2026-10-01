@@ -1,0 +1,7 @@
+{
+  "skillId": "dom-probe",
+  "version": "0.11",
+  "env": "staging",
+  "raw": "---\nname: dom-probe\ndescription: DOM 定位探针 — 可交互节点分布 · 树深度 · Locator 同源\ntriggers:\n  - dom\n  - 定位\n  - snapshot\n  - a11y\n  - 元素\n  - locator\n  - shadow\n  - 节点\n  - 可交互\n  - 页面结构\n  - 结构\n  - 选择器\n  - 无障碍\n  - 发现\ntools:\n  - browser_snapshot\nsteps:\n  - id: snap\n    label: browser_snapshot · full tree\n    tool: browser_snapshot\n    args:\n      compact: false\n  - id: analyze\n    label: DOM 树分析 · role 分布\n    tool: __analyze_dom_tree__\n    args:\n      snapshot: $snapshotResult\n---\n\n# dom-probe\n\nReplaySDK / Locator 同源能力：对当前页面做 browser_snapshot，统计 button/link/textbox 分布与树深度 — 对接 /work/locator 实验室。\n",
+  "updatedAt": "2026-10-01T14:41:54.470Z"
+}
