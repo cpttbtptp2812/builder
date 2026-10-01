@@ -41,10 +41,17 @@ jobs:
           script: |
             const fs = require('fs');
             const report = JSON.parse(fs.readFileSync('gate-report.json', 'utf8'));
-            const lines = report.results.map(r =>
-              `| ${r.skillId} | **${r.gate}** | ${r.tracePass}/${r.traceTotal} | ${r.reasons[0] ?? ''} |`
-            );
-            const body = `## OwnAgent Skill Gate\n\n| Skill | Verdict | Trace | Reason |\n|-------|---------|-------|--------|\n${lines.join('\n')}\n\nΔP / 全量 SCM 请在本地发版检查中查看。`;
+            const lines = report.results.map(r => {
+              const delta = r.deltaSuccess > 0 ? `+${r.deltaSuccess}` : String(r.deltaSuccess ?? 0);
+              const pivotal = r.pivotalStepId ? `\`${r.pivotalStepId}\` (${r.pivotalTool ?? 'unknown'})` : '—';
+              const failed = r.failedCases?.length
+                ? r.failedCases.map(c => `\`${c.id}\``).join(', ')
+                : '—';
+              const coverage = `${r.coverage?.exactPct ?? 0}%${r.coverage?.incomplete ? '（未看全）' : ''}`;
+              const impact = [...(r.impact?.direct ?? []), ...(r.impact?.transitive ?? [])].filter(x => x !== r.skillId);
+              return `| ${r.skillId} | **${r.gate}** | ${delta} | ${pivotal} | ${coverage} | ${failed} | ${impact.length ? impact.join(', ') : '—'} |`;
+            });
+            const body = `## OwnAgent Skill Gate\n\n协议：\`${report.schema}\` · 环境：\`${report.environment}\`\n\n| Skill | Verdict | ΔP(pass) | Pivotal Step | Exact | Failed cases | Impact |\n|-------|---------|----------|--------------|-------|--------------|--------|\n${lines.join('\n')}\n\n<details><summary>门禁原因</summary>\n\n${report.results.map(r => `### ${r.skillId}\n${(r.reasons ?? []).map(x => `- ${x}`).join('\n')}`).join('\n\n')}\n\n</details>`;
             github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,

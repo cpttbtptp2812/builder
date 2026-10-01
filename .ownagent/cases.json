@@ -11,7 +11,49 @@
           { "stepId": "probe", "tool": "http_probe" },
           { "stepId": "snapshot", "tool": "browser_snapshot" },
           { "stepId": "docs", "tool": "knowledge_search" },
-          { "stepId": "report", "tool": "__compose_release__" }
+          { "stepId": "report", "tool": "__compose_release_report__" }
+        ]
+      }
+    }
+  ],
+  "dom-probe": [
+    {
+      "id": "dom-smoke-1",
+      "skillId": "dom-probe",
+      "query": "分析当前页面的 DOM 结构",
+      "grader": { "kind": "all_ok" },
+      "expect": {
+        "steps": [
+          { "stepId": "snap", "tool": "browser_snapshot" },
+          { "stepId": "analyze", "tool": "__analyze_dom_tree__" }
+        ]
+      }
+    }
+  ],
+  "workflow-orchestrator": [
+    {
+      "id": "workflow-smoke-1",
+      "skillId": "workflow-orchestrator",
+      "query": "执行 workflow 自动化回放流程",
+      "grader": { "kind": "all_ok" },
+      "expect": {
+        "steps": [
+          { "stepId": "run", "tool": "workflow_run" },
+          { "stepId": "snap", "tool": "browser_snapshot" },
+          { "stepId": "summary", "tool": "__compose_workflow_trace__" }
+        ]
+      }
+    }
+  ],
+  "policy-desk": [
+    {
+      "id": "policy-smoke-1",
+      "skillId": "policy-desk",
+      "query": "满一年年假几天",
+      "grader": { "kind": "all_ok" },
+      "expect": {
+        "steps": [
+          { "stepId": "desk", "tool": "__run_policy_desk__" }
         ]
       }
     }

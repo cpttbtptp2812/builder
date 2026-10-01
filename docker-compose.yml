@@ -13,12 +13,15 @@ services:
     environment:
       PORT: "8787"
       DATABASE_PATH: /data/builder.db
+      OWNAGENT_CONFIG_DIR: /data/.ownagent
       # LLM (必填其一)
       DEEPSEEK_API_KEY: "${DEEPSEEK_API_KEY:-}"
       LLM_BASE_URL: "${LLM_BASE_URL:-https://api.deepseek.com/v1}"
       LLM_MODEL: "${LLM_MODEL:-deepseek-chat}"
-      # 管理员密码（默认 admin123，正式部署请修改）
-      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-admin123}"
+      # 管理员密码（必须显式配置）
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD}"
+      OWNAGENT_BOOTSTRAP_TOKEN: "${OWNAGENT_BOOTSTRAP_TOKEN:?Set OWNAGENT_BOOTSTRAP_TOKEN}"
+      OWNAGENT_INGEST_KEY: "${OWNAGENT_INGEST_KEY:?Set OWNAGENT_INGEST_KEY}"
       # CORS 允许来源（多个用逗号分隔）
       CORS_ORIGINS: "${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}"
     volumes:

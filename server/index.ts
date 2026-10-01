@@ -30,6 +30,9 @@ import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { randomUUID } from "node:crypto";
 import { registerEvalOps } from "./evalops.ts";
 import { registerSkillGate } from "./skillGate.ts";
+import { registerTraceFeedback } from "./traceFeedback.ts";
+import { registerSkillGovernanceApi } from "./skillGovernanceApi.ts";
+import { registerTeamGovernanceApi } from "./teamGovernanceApi.ts";
 
 const app = new Hono();
 
@@ -52,6 +55,9 @@ seedFaqChunks();
 seedCustomerData();
 registerEvalOps(app);
 registerSkillGate(app);
+registerTraceFeedback(app);
+registerSkillGovernanceApi(app);
+registerTeamGovernanceApi(app);
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");
@@ -65,6 +71,15 @@ app.get("/api/health", (c) => {
     workflowRuns: workflows?.c ?? 0,
     llm: Boolean(process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY),
   });
+});
+
+app.get("/api/ready", (c) => {
+  try {
+    dbGet<{ ok: number }>("SELECT 1 as ok");
+    return c.json({ ok: true, runtime: "builder-api", ready: true });
+  } catch (error) {
+    return c.json({ ok: false, ready: false, error: error instanceof Error ? error.message : "database unavailable" }, 503);
+  }
 });
 
 app.post("/api/rag/retrieve", async (c) => {

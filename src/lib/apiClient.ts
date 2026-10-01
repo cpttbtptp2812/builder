@@ -13,6 +13,18 @@ export type BackendHealth = {
 let cachedHealth: BackendHealth | null = null;
 let healthCheckedAt = 0;
 const HEALTH_TTL_MS = 15_000;
+const TEAM_TOKEN_KEY = "ownagent:team-token";
+
+export function setTeamToken(token: string | null) {
+  if (typeof localStorage === "undefined") return;
+  if (token) localStorage.setItem(TEAM_TOKEN_KEY, token);
+  else localStorage.removeItem(TEAM_TOKEN_KEY);
+}
+
+export function getTeamToken(): string | null {
+  if (typeof localStorage === "undefined") return null;
+  return localStorage.getItem(TEAM_TOKEN_KEY);
+}
 
 export function getApiBase(): string {
   const env = (import.meta.env.VITE_API_BASE as string | undefined)?.trim();
@@ -29,9 +41,14 @@ export function apiUrl(path: string): string {
 
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
+    const token = getTeamToken();
     const res = await fetch(apiUrl(path), {
       ...init,
-      headers: { "Content-Type": "application/json", ...init?.headers },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...init?.headers,
+      },
     });
     if (!res.ok) return null;
     return (await res.json()) as T;

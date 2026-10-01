@@ -4,8 +4,10 @@
   "description": "SKILL.md 旁路显示发版门禁提示，运行 ownagent check",
   "version": "0.1.0",
   "publisher": "ownagent",
+  "license": "MIT",
   "engines": { "vscode": "^1.85.0" },
-  "categories": ["Other"],
+  "categories": ["Testing", "Other"],
+  "keywords": ["agent", "skill", "gate", "causal", "scm", "ci"],
   "activationEvents": ["onLanguage:markdown"],
   "main": "./extension.js",
   "contributes": {
@@ -15,5 +17,12 @@
         "title": "OwnAgent: Check SKILL.md"
       }
     ]
+  },
+  "scripts": {
+    "package": "vsce package",
+    "publish": "vsce publish"
+  },
+  "devDependencies": {
+    "@vscode/vsce": "^3.6.0"
   }
 }

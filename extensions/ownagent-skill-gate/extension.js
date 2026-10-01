@@ -9,7 +9,8 @@ function isSkillMd(doc) {
 function runCheck(workspaceRoot, filePath) {
   return new Promise((resolve, reject) => {
     const script = path.join(workspaceRoot, "scripts", "ownagent-check.ts");
-    execFile("npx", ["tsx", script, filePath], { cwd: workspaceRoot, maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
+    const npx = process.platform === "win32" ? "npx.cmd" : "npx";
+    execFile(npx, ["tsx", script, filePath], { cwd: workspaceRoot, maxBuffer: 2 * 1024 * 1024 }, (err, stdout) => {
       if (err && !stdout) return reject(err);
       try {
         resolve(JSON.parse(stdout));
@@ -45,7 +46,17 @@ function activate(context) {
           : r.gate === "WARN"
             ? new vscode.ThemeColor("statusBarItem.warningBackground")
             : undefined;
-      status.tooltip = r.reasons?.join("\n") ?? "";
+      const delta = r.deltaSuccess > 0 ? `+${r.deltaSuccess}` : String(r.deltaSuccess ?? 0);
+      const pivotal = r.pivotal ?? (r.pivotalStepId
+        ? { stepId: r.pivotalStepId, tool: r.pivotalTool }
+        : null);
+      status.tooltip = [
+        `Protocol: ${report.schema ?? "legacy"}`,
+        `ΔP(pass): ${delta}`,
+        `Pivotal: ${pivotal?.stepId ?? "—"}${pivotal?.tool ? ` (${pivotal.tool})` : ""}`,
+        `Exact: ${r.coverage?.exactPct ?? 0}%${r.coverage?.incomplete ? "（未看全）" : ""}`,
+        ...(r.reasons ?? []),
+      ].join("\n");
     } catch (e) {
       status.text = "$(error) OwnAgent";
       status.tooltip = String(e);

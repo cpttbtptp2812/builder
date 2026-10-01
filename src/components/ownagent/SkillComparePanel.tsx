@@ -67,6 +67,7 @@ import {
   type SkillExportRecord,
 } from "../../lib/importedSkills";
 import { buildZip, downloadBlob } from "../../lib/zipStore";
+import { apiFetch } from "../../lib/apiClient";
 import { SkillEvolutionPanel } from "./SkillEvolution";
 import { RouteConfidencePanel } from "./RouteConfidence";
 import { ScmCaseEditor } from "./ScmCaseEditor";
@@ -74,6 +75,8 @@ import { SkillBreakPanel } from "./SkillBreak";
 import { PageToolWalk } from "./PageToolWalk";
 import { SkillClauseNote, useSkillClauses } from "./SkillClauseNote";
 import { SkillFromDemoDialog } from "./SkillFromDemo";
+import { TraceFeedbackPanel } from "./TraceFeedbackPanel";
+import { SkillGovernancePanel } from "./SkillGovernancePanel";
 import { OaBtn, OaPage } from "./OaUi";
 import {
   addTriggerTo,
@@ -344,6 +347,8 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
 
       <BatchCheckBar skills={skills} onToast={toast.show} />
       <TeamApprovalBar onToast={toast.show} />
+      <TraceFeedbackPanel onToast={toast.show} />
+      <SkillGovernancePanel />
       <RouteConfidencePanel />
       <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
 
@@ -502,6 +507,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
   const [depProof, setDepProof] = useState<ReleaseDependencyProof | null>(null);
   const [checking, setChecking] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
+  const [baselineTick, setBaselineTick] = useState(0);
 
   const onlineParsed = useMemo(() => parseSkillMarkdown(online), [online]);
   const draftParsed = useMemo(() => parseSkillMarkdown(draft), [draft]);
@@ -591,6 +597,17 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
         depPromise,
       ]);
       setReport(full);
+      tagBaselineEnv(skillId, draftVersion, "staging");
+      void apiFetch("/skill-gate/baseline", {
+        method: "POST",
+        body: JSON.stringify({
+          skillId,
+          raw: snapshot,
+          version: draftVersion,
+          env: "staging",
+        }),
+      });
+      setBaselineTick((n) => n + 1);
       setShadowReport(shadow);
       setFuzzReport(fuzz);
       setPageWalkReport(pageWalk);
@@ -663,6 +680,22 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     if (fuzz?.lostCount && !window.confirm(`路由邻域：${fuzz.lostCount} 种说法变体会被别的技能抢走。仍要发布？`)) return;
     const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
     tagBaselineEnv(skillId, applied.version, "prod");
+    setBaselineTick((n) => n + 1);
+    const gate = buildReleaseGateSummary(r);
+    void apiFetch("/skill-gate/publish", {
+      method: "POST",
+      body: JSON.stringify({
+        skillId,
+        raw: draft,
+        version: applied.version,
+        gate: gate.gate,
+        actor: "local",
+        override: force,
+        overrideReason: force ? "用户确认忽略 BLOCK 并发布" : undefined,
+        environment: "prod",
+        note: gate.reasons[0] ?? r.verdict.title,
+      }),
+    });
     try {
       const witness = await buildReleaseWitness({
         skillId,
@@ -742,9 +775,26 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
   function rollbackTo(raw: string, version: string) {
     if (!window.confirm(`直接把线上换成 v${version} 的内容？会生成新版本号，旧记录都保留。`)) return;
     const applied = publishSkillVersion(skillId, skillName, raw, `回滚到 v${version} 的内容`, "rollback");
+    tagBaselineEnv(skillId, applied.version, "prod");
+    setBaselineTick((n) => n + 1);
+    void apiFetch("/skill-gate/rollback", {
+      method: "POST",
+      body: JSON.stringify({ skillId, version, actor: "local" }),
+    });
     const next = reloadOnline();
     if (!hasChanges) setDraft(next);
     toast.show(`已回滚：线上现为 v${applied.version}（内容同 v${version}）`);
+  }
+
+  async function exportAudit() {
+    const audit = await apiFetch<{ schema: string; generatedAt: string; rows: unknown[] }>(
+      `/skill-gate/audit/export?format=json&skillId=${encodeURIComponent(skillId)}`,
+    );
+    if (!audit) {
+      toast.show("审计导出需要先启动本地服务");
+      return;
+    }
+    downloadText(`ownagent-${skillId}-audit.json`, JSON.stringify(audit, null, 2), "application/json;charset=utf-8");
   }
 
   const sentenceCount = listGateQuestionRows(skillId).length;
@@ -756,11 +806,17 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           <button type="button" className="own-skill-ver-back" onClick={onBack}>
             ← 全部技能
           </button>
-          <div className="sk-work-ver">
+          <div className="sk-work-ver" data-baseline-revision={baselineTick}>
             <span className="sk-work-ver-live">
               <i className="sk-status-dot is-live" />
               PROD v{liveVersion}
             </span>
+            {getBaselineTag(skillId, "staging") ? (
+              <span className="sk-work-ver-draft">
+                <i className="sk-status-dot is-draft" />
+                STAGING v{getBaselineTag(skillId, "staging")}
+              </span>
+            ) : null}
             <span className="sk-work-ver-arrow">→</span>
             {hasChanges ? (
               <span className="sk-work-ver-draft">
@@ -777,9 +833,14 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               {sentenceCount} 评测样本
             </span>
           </div>
-          <button type="button" className="own-compare-secondary-btn sk-history-btn" onClick={() => setHistoryOpen(true)}>
-            版本审计历史
-          </button>
+          <div className="sk-work-actions">
+            <button type="button" className="own-compare-secondary-btn" onClick={() => void exportAudit()}>
+              导出审计
+            </button>
+            <button type="button" className="own-compare-secondary-btn sk-history-btn" onClick={() => setHistoryOpen(true)}>
+              版本审计历史
+            </button>
+          </div>
         </div>
 
         <div className="sk-work">
@@ -872,16 +933,6 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               >
                 {checking ? "门禁扫描中…" : report && !reportStale ? "重新执行门禁" : "执行门禁校验"}
               </button>
-              {report && !reportStale && report.verdict.level !== "reject" ? (
-                <button
-                  type="button"
-                  className="own-compare-secondary-btn"
-                  onClick={() => askInChat(testQuery.trim() || defaultSampleQuery(skillId, draftParsed.triggers))}
-                  disabled={checking}
-                >
-                  交互沙盒探活
-                </button>
-              ) : null}
               <OaBtn
                 onClick={() => void publish()}
                 disabled={Boolean(publishBlock) || checking || (report?.verdict.level === "reject" && !reportStale)}
@@ -1388,6 +1439,8 @@ function CheckView({
   draft,
   liveVersion,
   draftVersion,
+  onlineParsed,
+  draftParsed,
   checking,
   peek,
   report,
@@ -1435,24 +1488,40 @@ function CheckView({
   const effectRows = activeReport?.queryResults ?? [];
   const badRows = effectRows.filter((q) => q.routeDrift || q.traceChanged || q.verdictLevel === "reject");
   const badCount = badRows.length;
+  const changeNotes = useMemo(() => {
+    const notes: string[] = [];
+    const oldTriggers = new Set(onlineParsed.triggers);
+    const newTriggers = new Set(draftParsed.triggers);
+    const addedTriggers = [...newTriggers].filter((t) => !oldTriggers.has(t));
+    const removedTriggers = [...oldTriggers].filter((t) => !newTriggers.has(t));
+    if (addedTriggers.length) notes.push(`新增说法「${addedTriggers.slice(0, 3).join("」「")}」`);
+    if (removedTriggers.length) notes.push(`删除说法「${removedTriggers.slice(0, 3).join("」「")}」`);
+    if (onlineParsed.steps.map((s) => `${s.id}:${s.tool}`).join("|") !== draftParsed.steps.map((s) => `${s.id}:${s.tool}`).join("|")) {
+      notes.push(`执行步骤从 ${onlineParsed.steps.length} 步变为 ${draftParsed.steps.length} 步`);
+    }
+    if (onlineParsed.description !== draftParsed.description) notes.push("技能说明有修改");
+    return notes.slice(0, 3);
+  }, [onlineParsed, draftParsed]);
 
   return (
     <div id="skill-release-checklist" className="rv-page rv-page--bare">
+      <section className="rv-change-summary">
+        <strong>这次改了</strong>
+        {changeNotes.length ? (
+          <ul>{changeNotes.map((note) => <li key={note}>{note}</li>)}</ul>
+        ) : (
+          <p>源码有调整；将用 {gateCount} 句客户的话对比两版。</p>
+        )}
+      </section>
       {checking ? (
         <div className="rv-checking-bar">
           <div className="rv-checking-laser" />
           <div className="rv-checking-content">
             <span className="rv-checking-spin" />
             <div className="rv-checking-text">
-              <strong>多维自动化质量门禁扫描中 (Quality Gate Verification)...</strong>
-              <span>并发验证 {gateCount} 条黄金基准断言、生产影子流量双跑、邻域语义扰动与环境探活</span>
+              <strong>正在用 {gateCount} 句客户的话对比现用版和新版…</strong>
+              <span>这次改动不会在检查期间消失。</span>
             </div>
-          </div>
-          <div className="rv-checking-vectors">
-            <span className="rv-vector-pill is-active">INTENT DRIFT</span>
-            <span className="rv-vector-pill is-active">SHADOW REPLAY</span>
-            <span className="rv-vector-pill is-active">FUZZ RESILIENCE</span>
-            <span className="rv-vector-pill is-active">PROBE LIVENESS</span>
           </div>
         </div>
       ) : null}
@@ -1461,8 +1530,8 @@ function CheckView({
         <div className="rv-gate-prompt-card">
           <div className="rv-gate-prompt-icon">🛡️</div>
           <div className="rv-gate-prompt-info">
-            <strong>就绪等待执行门禁校验</strong>
-            <p>已就绪 {gateCount} 条评测断言样本。点击下方「执行门禁校验」以生成风险评估报告与因果归因矩阵。</p>
+            <strong>用 {gateCount} 句客户的话对比两版</strong>
+            <p>点击下方「检查」，先看结论，再决定是否发布。</p>
           </div>
         </div>
       ) : null}
@@ -1472,17 +1541,9 @@ function CheckView({
           <div className="rv-verdict-top-bar">
             <span className={`rv-verdict-status-pill rv-verdict-status-pill--${gate}`}>
               <i className="rv-pulse-dot" />
-              {gate === "pass" ? "GATE: PASSED" : gate === "warn" ? "GATE: REVIEW REQUIRED" : "GATE: BLOCKED"}
+              {gate === "pass" ? "可以发" : gate === "warn" ? "先看一眼再发" : "先别发"}
             </span>
-            <span className="rv-verdict-engine-tag">SCM CAUSAL ATTRIBUTION</span>
-            <div className="rv-docs-acts">
-              <button type="button" className="rv-btn" onClick={() => downloadFullReportMd(activeReport, skillId)}>
-                导出 Markdown
-              </button>
-              <button type="button" className="rv-btn" onClick={() => downloadReportJson(activeReport)}>
-                JSON 门禁契约
-              </button>
-            </div>
+            <span className="rv-verdict-engine-tag">因果门禁</span>
           </div>
 
           <div className="rv-verdict-main">
@@ -1569,6 +1630,14 @@ function CheckView({
       {hasReport && activeReport ? (
         <details className="rv-tech">
           <summary className="rv-tech-summary">细看 <span>源码 · 回流 · 压测 · 本页试跑</span></summary>
+          <div className="rv-docs-acts">
+            <button type="button" className="rv-btn" onClick={() => downloadFullReportMd(activeReport, skillId)}>
+              导出 Markdown
+            </button>
+            <button type="button" className="rv-btn" onClick={() => downloadReportJson(activeReport)}>
+              导出 JSON
+            </button>
+          </div>
           {skillId === "release-inspector" && depProof ? (
             <div className="own-check-board-dep"><ReleaseDependencyCard proof={depProof} /></div>
           ) : null}

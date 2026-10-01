@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ownagent.dev/spec/ownagent-check-2.schema.json",
+  "title": "OwnAgent Check v2",
+  "type": "object",
+  "required": ["schema", "generatedAt", "environment", "results"],
+  "properties": {
+    "schema": { "const": "ownagent-check/2" },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "environment": { "type": "string" },
+    "results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "skillId", "environment", "gate", "compileOk", "baseline", "candidate",
+          "deltaSuccess", "pivotal", "failedCases", "coverage", "policy", "reasons"
+        ],
+        "properties": {
+          "skillId": { "type": "string", "minLength": 1 },
+          "environment": { "type": "string" },
+          "gate": { "enum": ["PASS", "WARN", "BLOCK"] },
+          "compileOk": { "type": "boolean" },
+          "baseline": { "$ref": "#/$defs/version" },
+          "candidate": { "$ref": "#/$defs/version" },
+          "deltaSuccess": { "type": "number", "minimum": -1, "maximum": 1 },
+          "pivotal": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["stepId", "tool", "exact"],
+                "properties": {
+                  "stepId": { "type": "string" },
+                  "tool": { "type": ["string", "null"] },
+                  "exact": { "type": "boolean" }
+                },
+                "additionalProperties": false
+              }
+            ]
+          },
+          "failedCases": { "type": "array", "items": { "type": "object" } },
+          "coverage": {
+            "type": "object",
+            "required": ["exact", "total", "exactPct", "missingTools", "incomplete"],
+            "properties": {
+              "exact": { "type": "integer", "minimum": 0 },
+              "total": { "type": "integer", "minimum": 0 },
+              "exactPct": { "type": "number", "minimum": 0, "maximum": 100 },
+              "missingTools": { "type": "array", "items": { "type": "string" } },
+              "incomplete": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          },
+          "policy": { "type": "object" },
+          "impact": { "type": "object" },
+          "reasons": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "version": {
+      "type": "object",
+      "required": ["version"],
+      "properties": { "version": { "type": "string" } },
+      "additionalProperties": false
+    }
+  }
+}

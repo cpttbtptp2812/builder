@@ -20,6 +20,8 @@ RUN npm ci --omit=dev
 
 # Copy server source
 COPY server ./server
+COPY src ./src
+COPY .ownagent ./.ownagent
 COPY tsconfig.json ./
 
 # Copy built frontend
@@ -28,6 +30,7 @@ COPY --from=frontend-build /app/dist ./dist
 # SQLite data volume
 RUN mkdir -p /data
 ENV DATABASE_PATH=/data/builder.db
+ENV OWNAGENT_CONFIG_DIR=/data/.ownagent
 
 # Expose port
 EXPOSE 8787

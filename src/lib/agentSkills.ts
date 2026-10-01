@@ -101,11 +101,20 @@ const SKILL_ORDER = [
   "skill-router",
 ];
 
-const skillFiles = import.meta.glob("../skills/*/SKILL.md", {
-  eager: true,
-  query: "?raw",
-  import: "default",
-}) as Record<string, string>;
+// `import.meta.glob` is a Vite compile-time macro, not a runtime function.
+// Detect Node itself (not the macro) so Vite still expands the browser branch.
+const isNodeRuntime = Boolean(
+  (globalThis as typeof globalThis & { process?: { versions?: { node?: string } } }).process?.versions?.node,
+);
+const skillFiles = (
+  isNodeRuntime
+    ? {}
+    : import.meta.glob("../skills/*/SKILL.md", {
+        eager: true,
+        query: "?raw",
+        import: "default",
+      })
+) as Record<string, string>;
 
 function loadCatalog(): AgentSkill[] {
   const cores = Object.entries(skillFiles).map(([filePath, raw]) => {

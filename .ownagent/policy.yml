@@ -1,0 +1,25 @@
+version: 1
+
+defaults:
+  risk: medium
+  minExactPct: 80
+  blockDeltaBelow: -0.01
+  warnDeltaBelow: 0
+  requireCases: true
+  requireApprovalOnWarn: true
+
+environments:
+  staging:
+    minExactPct: 70
+    requireApprovalOnWarn: false
+  prod:
+    minExactPct: 80
+    requireApprovalOnWarn: true
+
+skills:
+  release-inspector:
+    risk: high
+    minExactPct: 90
+  workflow-orchestrator:
+    risk: high
+    minExactPct: 90

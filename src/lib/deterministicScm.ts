@@ -22,6 +22,7 @@ import {
   type CustomSkillTraceCase,
 } from "./skillTraceCaseStore";
 import { evaluateOutcome, type OutcomeGrader, type ScmOutcome } from "./scmOutcome";
+import { analyzeCausalGate, type GateTraceRun } from "./causalGateCore";
 
 export type { ScmOutcome, OutcomeGrader };
 export type PropagationMode = "exact" | "sample";
@@ -427,31 +428,63 @@ export async function consequenceDeltaForCompare(
 export async function scmSummaryForCompare(
   skillId: string,
   runs: Array<{ query: string; baselineTrace: SkillTraceStep[]; candidateTrace: SkillTraceStep[] }>,
+  opts?: {
+    baselineSkill?: AgentSkill;
+    candidateSkill?: AgentSkill;
+    mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
+  },
 ): Promise<ScmCompareSummary | null> {
   if (!runs.length) return null;
-
-  const perQuery: ScmQueryRow[] = [];
-  let pivotal: PivotalStepRow | null = null;
-
-  for (const run of runs) {
-    const row = await consequenceDeltaForCompare(skillId, run.baselineTrace, run.candidateTrace, run.query);
-    perQuery.push({
-      query: run.query,
-      baselinePass: row.baselinePass,
-      candidatePass: row.candidatePass,
-      deltaSuccess: row.deltaSuccess,
-      pivotalStepId: row.pivotalOnBaseline?.stepId ?? null,
-    });
-    if (!pivotal && row.pivotalOnBaseline) pivotal = row.pivotalOnBaseline;
-  }
-
+  const skillCases = listAllCasesForSkill(skillId, SKILL_TRACE_CASES);
+  const coreRuns: GateTraceRun[] = runs.map((run) => ({
+    ...run,
+    traceCase:
+      skillCases.find((row) => row.query === run.query) ??
+      caseFromSkillSteps(
+        skillId,
+        run.query,
+        run.candidateTrace.map((step) => ({ id: step.stepId, tool: step.tool })),
+        { grader: { kind: "all_ok" } },
+      ),
+  }));
+  const candidateSkill = opts?.candidateSkill;
+  const core = await analyzeCausalGate(
+    coreRuns,
+    candidateSkill
+      ? async (run, stepIndex, donorValue, target) => {
+          const targetSkill = target === "candidate" ? candidateSkill : opts?.baselineSkill;
+          const targetTrace = target === "candidate" ? run.candidateTrace : run.baselineTrace;
+          if (!targetSkill) return { trace: targetTrace, exact: false };
+          const trace = await exactDoIntervention(
+            targetSkill,
+            run.query,
+            targetTrace,
+            { kind: "observation", stepIndex, value: donorValue },
+            { mockProfile: opts?.mockProfile },
+          );
+          const modes = identifyStepModes(targetSkill, {
+            hasMock: Boolean(opts?.mockProfile),
+            observedTrace: targetTrace,
+          });
+          return { trace, exact: modes.every((mode) => mode === "exact") };
+        }
+      : undefined,
+  );
+  if (!core) return null;
+  const perQuery: ScmQueryRow[] = core.perQuery.map((row) => ({
+    query: row.query,
+    baselinePass: row.baseline.pass,
+    candidatePass: row.candidate.pass,
+    deltaSuccess: row.deltaSuccess,
+    pivotalStepId: row.pivotal?.stepId ?? null,
+  }));
   const head = perQuery[0]!;
   return {
-    deltaSuccess: head.deltaSuccess,
+    deltaSuccess: core.deltaSuccess,
     baselinePass: head.baselinePass,
     candidatePass: head.candidatePass,
-    pivotalStepId: pivotal?.stepId ?? perQuery.find((q) => q.pivotalStepId)?.pivotalStepId ?? null,
-    pivotalTool: pivotal?.tool ?? null,
+    pivotalStepId: core.pivotalStepId,
+    pivotalTool: core.pivotalTool,
     perQuery,
   };
 }

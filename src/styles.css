@@ -1,3 +1,48 @@
+.oa-trace-feedback {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--border) 78%, #f59e0b);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 94%, #f59e0b);
+}
+
+.oa-trace-feedback ul {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.oa-trace-feedback li,
+.oa-trace-feedback li > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.oa-trace-feedback li {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.oa-trace-feedback li span {
+  color: var(--muted);
+}
+
+.oa-skill-governance {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+
+.oa-skill-governance summary {
+  cursor: pointer;
+  font-weight: 700;
+}
 :root {
   --bg: #07080c;
   --panel: #11141c;
@@ -25918,6 +25963,9 @@ details.sk-fold[open] > summary::before {
   border-top: 1px solid #f1f5f9;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(8px);
+  position: sticky;
+  bottom: 0;
+  z-index: 8;
 }
 .sk-check-trigger-btn {
   font-weight: 600 !important;
@@ -46897,6 +46945,35 @@ details summary {
 }
 .hub-rf-node .react-flow__handle:hover {
   transform: scale(1.35) !important;
+}
+
+.rv-change-summary {
+  margin: 0 0 0.85rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.rv-change-summary > strong {
+  display: block;
+  margin-bottom: 0.35rem;
+  color: #0f172a;
+}
+
+.rv-change-summary ul,
+.rv-change-summary p {
+  margin: 0;
+  padding-left: 1.1rem;
+  color: #475569;
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.sk-work-actions {
+  display: flex;
+  gap: 0.45rem;
+  margin-left: auto;
 }
 
 /* 控制栏 Controls 按钮 */

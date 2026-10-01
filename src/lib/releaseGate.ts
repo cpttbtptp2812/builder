@@ -1,6 +1,9 @@
 /** 发版门禁 — PASS / WARN / BLOCK + 原因 + JSON 报告 */
 
 import type { SkillFullCompareReport } from "./skillCompareReport";
+import policyRaw from "../../.ownagent/policy.yml?raw";
+import { applyGatePolicy, parseGatePolicy, resolveGatePolicy } from "./gatePolicy";
+import { OWNAGENT_CHECK_SCHEMA } from "./ownagentProtocol";
 
 export type GateLevel = "pass" | "warn" | "block";
 
@@ -29,7 +32,20 @@ export function gateLabel(level: GateLevel): "PASS" | "WARN" | "BLOCK" {
 }
 
 export function buildReleaseGateSummary(report: SkillFullCompareReport): ReleaseGateSummary {
-  const level = gateFromVerdict(report.verdict.level);
+  const originalLevel = gateFromVerdict(report.verdict.level);
+  const rule = resolveGatePolicy(parseGatePolicy(policyRaw), report.skillId, "prod");
+  const failedCaseCount = report.queryResults.filter((row) => row.verdictLevel === "reject").length;
+  const decision = applyGatePolicy({
+    compileOk: report.compile.candidateOk,
+    deltaSuccess: report.scm?.deltaSuccess ?? 0,
+    failedCaseCount,
+    caseCount: report.queryResults.length,
+    exactPct: report.coverage.exactPct,
+    rule,
+  });
+  const policyLevel = decision.gate === "BLOCK" ? "block" : decision.gate === "WARN" ? "warn" : "pass";
+  const rank: Record<GateLevel, number> = { pass: 0, warn: 1, block: 2 };
+  const level = rank[policyLevel] > rank[originalLevel] ? policyLevel : originalLevel;
   const reasons: string[] = [];
 
   for (const r of report.risks.filter((x) => x.level === "high" || x.level === "medium")) {
@@ -38,6 +54,7 @@ export function buildReleaseGateSummary(report: SkillFullCompareReport): Release
   if (!reasons.length && report.verdict.bullets.length) {
     reasons.push(...report.verdict.bullets);
   }
+  reasons.push(...decision.reasons.filter((reason) => !reasons.includes(reason)));
   if (report.scm?.pivotalStepId && report.scm.baselinePass !== report.scm.candidatePass) {
     reasons.unshift(
       `因果 flip：步骤 \`${report.scm.pivotalStepId}\`${report.scm.pivotalTool ? `（${report.scm.pivotalTool}）` : ""} 干预后结果翻转`,
@@ -59,20 +76,47 @@ export function buildReleaseGateSummary(report: SkillFullCompareReport): Release
 
 export function reportToJson(report: SkillFullCompareReport) {
   const gate = buildReleaseGateSummary(report);
+  const rule = resolveGatePolicy(parseGatePolicy(policyRaw), report.skillId, "prod");
+  const failedCases = report.queryResults
+    .filter((row) => row.verdictLevel === "reject")
+    .map((row, index) => ({ id: `query-${index + 1}`, query: row.query, detail: row.note }));
   return {
-    schema: "ownagent-skill-gate/1",
+    schema: OWNAGENT_CHECK_SCHEMA,
     generatedAt: report.generatedAt,
-    skillId: report.skillId,
-    skillName: report.skillName,
-    baselineVersion: report.baselineVersion,
-    candidateVersion: report.candidateVersion,
-    gate,
-    verdict: report.verdict,
-    scm: report.scm,
-    risks: report.risks,
-    structural: report.structural,
-    compile: report.compile,
-    queryResults: report.queryResults,
+    environment: "prod",
+    results: [{
+      skillId: report.skillId,
+      skillName: report.skillName,
+      environment: "prod",
+      gate: gate.gate,
+      compileOk: report.compile.candidateOk,
+      baseline: { version: report.baselineVersion },
+      candidate: { version: report.candidateVersion },
+      deltaSuccess: gate.deltaSuccess ?? 0,
+      pivotal: gate.pivotalStepId
+        ? { stepId: gate.pivotalStepId, tool: gate.pivotalTool, exact: report.coverage.exactPct === 100 }
+        : null,
+      failedCases,
+      coverage: {
+        ...report.coverage,
+        missingTools: report.coverage.steps.filter((step) => step.mode === "sample").map((step) => step.tool),
+        incomplete: report.queryResults.length === 0 || report.coverage.exactPct < 100,
+      },
+      policy: {
+        risk: rule.risk,
+        minExactPct: rule.minExactPct,
+        requireCases: rule.requireCases,
+        requiresApproval: gate.gate === "WARN" && rule.requireApprovalOnWarn,
+      },
+      reasons: gate.reasons,
+      evidence: {
+        verdict: report.verdict,
+        scm: report.scm,
+        risks: report.risks,
+        structural: report.structural,
+        queryResults: report.queryResults,
+      },
+    }],
   };
 }
 

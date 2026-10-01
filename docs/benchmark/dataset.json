@@ -1,0 +1,129 @@
+{
+  "schema": "ownagent-benchmark-dataset/1",
+  "name": "OwnAgent agent-change-safety local fixture",
+  "description": "Synthetic, repository-local cases for reproducing release-gate protocol behavior. These are not production traces or external measurements.",
+  "license": "CC0-1.0",
+  "fixture": true,
+  "cases": [
+    {
+      "id": "unchanged-safe",
+      "skillId": "release-inspector",
+      "baselineVersion": "fixture-1.0.0",
+      "candidateVersion": "fixture-1.0.1",
+      "compileOk": true,
+      "routeDrift": false,
+      "baselinePass": true,
+      "candidatePass": true,
+      "coverage": {
+        "total": 4,
+        "exact": 4,
+        "sample": 0,
+        "exactPct": 100
+      },
+      "pivotalStepId": null,
+      "pivotalTool": null,
+      "expectedGate": "PASS",
+      "expectedDeltaSuccess": 0
+    },
+    {
+      "id": "exact-outcome-regression",
+      "skillId": "release-inspector",
+      "baselineVersion": "fixture-1.0.0",
+      "candidateVersion": "fixture-2.0.0",
+      "compileOk": true,
+      "routeDrift": false,
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 4,
+        "exact": 4,
+        "sample": 0,
+        "exactPct": 100
+      },
+      "pivotalStepId": "probe",
+      "pivotalTool": "http_probe",
+      "expectedGate": "BLOCK",
+      "expectedDeltaSuccess": -1
+    },
+    {
+      "id": "low-coverage-regression",
+      "skillId": "site-analyzer",
+      "baselineVersion": "fixture-1.0.0",
+      "candidateVersion": "fixture-1.1.0",
+      "compileOk": true,
+      "routeDrift": false,
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 5,
+        "exact": 3,
+        "sample": 2,
+        "exactPct": 60
+      },
+      "pivotalStepId": "collect-metrics",
+      "pivotalTool": "browser_metrics",
+      "expectedGate": "WARN",
+      "expectedDeltaSuccess": -1
+    },
+    {
+      "id": "route-drift-regression",
+      "skillId": "knowledge-lookup",
+      "baselineVersion": "fixture-3.0.0",
+      "candidateVersion": "fixture-3.1.0",
+      "compileOk": true,
+      "routeDrift": true,
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 3,
+        "exact": 3,
+        "sample": 0,
+        "exactPct": 100
+      },
+      "pivotalStepId": "route",
+      "pivotalTool": "skill_router",
+      "expectedGate": "BLOCK",
+      "expectedDeltaSuccess": -1
+    },
+    {
+      "id": "behavior-change-no-regression",
+      "skillId": "workflow-orchestrator",
+      "baselineVersion": "fixture-2.2.0",
+      "candidateVersion": "fixture-2.3.0",
+      "compileOk": true,
+      "routeDrift": true,
+      "baselinePass": true,
+      "candidatePass": true,
+      "coverage": {
+        "total": 4,
+        "exact": 4,
+        "sample": 0,
+        "exactPct": 100
+      },
+      "pivotalStepId": null,
+      "pivotalTool": null,
+      "expectedGate": "WARN",
+      "expectedDeltaSuccess": 0
+    },
+    {
+      "id": "compile-error",
+      "skillId": "dom-probe",
+      "baselineVersion": "fixture-1.4.0",
+      "candidateVersion": "fixture-1.5.0",
+      "compileOk": false,
+      "routeDrift": false,
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 3,
+        "exact": 3,
+        "sample": 0,
+        "exactPct": 100
+      },
+      "pivotalStepId": null,
+      "pivotalTool": null,
+      "expectedGate": "BLOCK",
+      "expectedDeltaSuccess": -1
+    }
+  ]
+}

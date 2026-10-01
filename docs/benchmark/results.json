@@ -1,0 +1,158 @@
+{
+  "schema": "ownagent-benchmark-results/1",
+  "fixture": true,
+  "evidenceScope": "reproducible-local-fixture",
+  "externalClaims": false,
+  "generatedBy": "scripts/ownagent-benchmark.ts",
+  "datasetSha256": "9866b6388f7cbb43c89377a6708ec3a78f15465bb0d61881d263d0885147a8aa",
+  "policy": {
+    "exactBlockThresholdPct": 80,
+    "note": "Fixture policy only; not an externally validated threshold."
+  },
+  "summary": {
+    "cases": 6,
+    "matched": 6,
+    "mismatched": 0,
+    "fixtureAgreementPct": 100
+  },
+  "cases": [
+    {
+      "id": "unchanged-safe",
+      "skillId": "release-inspector",
+      "baselineVersion": "fixture-1.0.0",
+      "candidateVersion": "fixture-1.0.1",
+      "gate": "PASS",
+      "expectedGate": "PASS",
+      "matchesExpected": true,
+      "reasons": [
+        "compile + fixture outcome passed"
+      ],
+      "deltaSuccess": 0,
+      "pivotalStepId": null,
+      "pivotalTool": null,
+      "baselinePass": true,
+      "candidatePass": true,
+      "coverage": {
+        "total": 4,
+        "exact": 4,
+        "sample": 0,
+        "exactPct": 100
+      }
+    },
+    {
+      "id": "exact-outcome-regression",
+      "skillId": "release-inspector",
+      "baselineVersion": "fixture-1.0.0",
+      "candidateVersion": "fixture-2.0.0",
+      "gate": "BLOCK",
+      "expectedGate": "BLOCK",
+      "matchesExpected": true,
+      "reasons": [
+        "[causal] deterministic outcome regression; pivotal=probe (http_probe)"
+      ],
+      "deltaSuccess": -1,
+      "pivotalStepId": "probe",
+      "pivotalTool": "http_probe",
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 4,
+        "exact": 4,
+        "sample": 0,
+        "exactPct": 100
+      }
+    },
+    {
+      "id": "low-coverage-regression",
+      "skillId": "site-analyzer",
+      "baselineVersion": "fixture-1.0.0",
+      "candidateVersion": "fixture-1.1.0",
+      "gate": "WARN",
+      "expectedGate": "WARN",
+      "matchesExpected": true,
+      "reasons": [
+        "[coverage] regression observed with exact 60%; incomplete causal evidence cannot BLOCK"
+      ],
+      "deltaSuccess": -1,
+      "pivotalStepId": "collect-metrics",
+      "pivotalTool": "browser_metrics",
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 5,
+        "exact": 3,
+        "sample": 2,
+        "exactPct": 60
+      }
+    },
+    {
+      "id": "route-drift-regression",
+      "skillId": "knowledge-lookup",
+      "baselineVersion": "fixture-3.0.0",
+      "candidateVersion": "fixture-3.1.0",
+      "gate": "BLOCK",
+      "expectedGate": "BLOCK",
+      "matchesExpected": true,
+      "reasons": [
+        "[causal] deterministic outcome regression; pivotal=route (skill_router)"
+      ],
+      "deltaSuccess": -1,
+      "pivotalStepId": "route",
+      "pivotalTool": "skill_router",
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 3,
+        "exact": 3,
+        "sample": 0,
+        "exactPct": 100
+      }
+    },
+    {
+      "id": "behavior-change-no-regression",
+      "skillId": "workflow-orchestrator",
+      "baselineVersion": "fixture-2.2.0",
+      "candidateVersion": "fixture-2.3.0",
+      "gate": "WARN",
+      "expectedGate": "WARN",
+      "matchesExpected": true,
+      "reasons": [
+        "[route] candidate route differs without a demonstrated outcome regression"
+      ],
+      "deltaSuccess": 0,
+      "pivotalStepId": null,
+      "pivotalTool": null,
+      "baselinePass": true,
+      "candidatePass": true,
+      "coverage": {
+        "total": 4,
+        "exact": 4,
+        "sample": 0,
+        "exactPct": 100
+      }
+    },
+    {
+      "id": "compile-error",
+      "skillId": "dom-probe",
+      "baselineVersion": "fixture-1.4.0",
+      "candidateVersion": "fixture-1.5.0",
+      "gate": "BLOCK",
+      "expectedGate": "BLOCK",
+      "matchesExpected": true,
+      "reasons": [
+        "[compile] candidate has a static error"
+      ],
+      "deltaSuccess": -1,
+      "pivotalStepId": null,
+      "pivotalTool": null,
+      "baselinePass": true,
+      "candidatePass": false,
+      "coverage": {
+        "total": 3,
+        "exact": 3,
+        "sample": 0,
+        "exactPct": 100
+      }
+    }
+  ]
+}

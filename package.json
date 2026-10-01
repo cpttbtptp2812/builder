@@ -14,6 +14,8 @@
     "preview": "vite preview",
     "start:server": "tsx server/index.ts",
     "prove": "tsx scripts/prove.ts",
+    "test:ownagent": "tsx scripts/test-ownagent-consistency.ts && tsx scripts/test-skill-governance.ts",
+    "benchmark:ownagent": "tsx scripts/ownagent-benchmark.ts",
     "check:skills": "tsx scripts/ownagent-check.ts --all --ci",
     "check:skill": "tsx scripts/ownagent-check.ts"
   },

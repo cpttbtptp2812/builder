@@ -197,7 +197,7 @@ export function parseFlow(raw: unknown): { nodes: Node<HubNodeData>[]; edges: Ed
         label: data?.label || meta.label,
         sub: data?.sub || meta.sub,
         color: data?.color || meta.color,
-        bind,
+        bind: item.bind,
         custom: Boolean(data?.custom),
       },
     });

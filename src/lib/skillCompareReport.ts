@@ -12,6 +12,8 @@ import { weekQueriesForSkill } from "./skillSentence";
 import { extractUrlFromText } from "./releaseInspect";
 import { listGateQueriesForCheck } from "./skillGateQuestions";
 import { usesLiveProbeInCompare } from "./skillCompareEngine";
+import { computeSkillCoverage, type ScmCoverageReport } from "./scmCoverage";
+import { MOCK_PROFILES } from "./provingGround";
 
 export type { ScmCompareSummary };
 
@@ -66,6 +68,7 @@ export type SkillFullCompareReport = {
   };
   queryResults: QueryCompareRow[];
   scm: ScmCompareSummary | null;
+  coverage: ScmCoverageReport;
   risks: RiskItem[];
   verdict: CompareVerdict;
   markdown: string;
@@ -319,6 +322,8 @@ export function reportToMarkdown(r: SkillFullCompareReport): string {
     `- 新版：${r.compile.candidateOk ? "通过" : "有问题"}（${r.compile.candidateIssueCount} 条）`,
     ...r.compile.newErrors.map((e) => `- 新错误 [${diagLabel(e.code)}] ${e.message}`),
     ...r.compile.newWarnings.map((e) => `- 新提醒 [${diagLabel(e.code)}] ${e.message}`),
+    `- Exact 覆盖：${r.coverage.exactPct}%（${r.coverage.exact}/${r.coverage.total} 步）`,
+    ...r.coverage.mockHints.map((hint) => `- 覆盖提示：${hint}`),
     ``,
     `## 全量测试（${r.queryResults.length} 条）`,
     `| 测试句 | 现用路由 | 新版路由 | 路由漂移 | 工具链变化 |`,
@@ -381,8 +386,26 @@ export async function runFullSkillCompare(opts: {
     });
   }
 
-  const scm = await scmSummaryForCompare(opts.skillId, compareRuns);
+  const scm = await scmSummaryForCompare(opts.skillId, compareRuns, {
+    baselineSkill: baseline,
+    candidateSkill: candidate,
+    mockProfile: MOCK_PROFILES[opts.skillId],
+  });
+  const coverage = computeSkillCoverage(candidate, {
+    observedTrace: compareRuns[0]?.candidateTrace,
+    liveTrace: Boolean(compareRuns[0]?.candidateTrace.length),
+  });
   const risks = buildRisks(structural, compile, queryResults, scm);
+  if (coverage.exactPct < 80) {
+    for (const risk of risks) {
+      if (risk.level === "high" && risk.title.startsWith("因果后果")) risk.level = "medium";
+    }
+    risks.push({
+      level: "medium",
+      title: "确定性覆盖不足",
+      detail: `Exact ${coverage.exactPct}%（${coverage.exact}/${coverage.total} 步）；未覆盖部分只给 WARN，不作为因果 BLOCK 依据。${coverage.mockHints[0] ?? ""}`,
+    });
+  }
   const week = new Set(weekQueriesForSkill(opts.skillId));
   const weekFail = queryResults.filter((r) => week.has(r.query) && (r.routeDrift || r.verdictLevel === "reject"));
   if (weekFail.length) {
@@ -407,6 +430,7 @@ export async function runFullSkillCompare(opts: {
     compile,
     queryResults,
     scm,
+    coverage,
     risks,
     verdict,
     markdown: "",

@@ -33,6 +33,16 @@ export function FullCompareReport({
 
   return (
     <div className="own-skill-ver-report own-skill-ver-report--compact">
+      <section className="own-compare-report-section">
+        <h3>确定性覆盖</h3>
+        <p>
+          Exact {report.coverage.exactPct}%（{report.coverage.exact}/{report.coverage.total} 步）
+          {report.coverage.exactPct < 80 ? "；未覆盖步骤只产生 WARN，不作为因果 BLOCK 依据。" : "；达到门禁可信阈值。"}
+        </p>
+        {report.coverage.mockHints.length ? (
+          <ul>{report.coverage.mockHints.map((hint) => <li key={hint}>{hint}</li>)}</ul>
+        ) : null}
+      </section>
       {report.scm && !scmFlat ? (
         <section className="own-compare-report-section own-scm-inline">
           <h3>因果传播</h3>
