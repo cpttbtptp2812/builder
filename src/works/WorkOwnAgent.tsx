@@ -272,7 +272,7 @@ function resolveView(panel: string | null, view: string | null): ViewId {
   if (raw === "check") return "evalops";
   if (raw === "skills" || raw === "codrive") return "skills";
   if (VIEWS.some((v) => v.id === raw)) return raw as ViewId;
-  return "compare";
+  return "chat";
 }
 
 function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
