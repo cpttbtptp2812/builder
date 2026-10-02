@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   getConformalRouter,
   getRouteAlpha,
@@ -83,25 +84,36 @@ export function RouteConfidencePanel() {
     setAlpha(a);
   }
 
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const semantic = router?.embedderKind === "semantic";
   const loadPct =
     model.status === "loading" && model.progress?.total ? Math.round((model.progress.loaded / model.progress.total) * 100) : null;
   const feedbackN = readRouteFeedback().length;
 
   return (
-    <section className="own-evo own-rc">
-      <button type="button" className="own-evo-head" onClick={() => setOpen((v) => !v)}>
-        <span className="own-evo-dot own-rc-dot" />
-        <strong>路由把握度</strong>
-        <span className="own-evo-sub">
-          {stats
-            ? `${semantic ? "语义模型" : "字符模型"} · 实测覆盖 ${pct(stats.coverage)}（承诺 ≥ ${pct(1 - alpha)}） · 直接执行 ${pct(stats.singletonRate)}`
-            : "正在校准…"}
-        </span>
-        <span className="own-evo-toggle">{open ? "收起" : "查看"}</span>
+    <>
+      <button type="button" className="own-skm-batch-btn own-skm-batch-btn--pop" onClick={() => setOpen(true)}>
+        路由把握度{stats ? ` ${pct(stats.coverage)}` : ""}
       </button>
-
-      {open && stats ? (
+      {open
+        ? createPortal(
+            <div className="oa-modal-backdrop" role="dialog" aria-modal="true" aria-label="路由把握度" onClick={() => setOpen(false)}>
+              <div className="oa-modal oa-modal--wide own-rc" onClick={(event) => event.stopPropagation()}>
+                <header>
+                  <strong>路由把握度</strong>
+                  <button type="button" className="own-skm-batch-btn" onClick={() => setOpen(false)}>
+                    关闭
+                  </button>
+                </header>
+                {stats ? (
         <div className="own-evo-body">
           <p className="own-rc-lead">
             每句话会得到一组「可能的去向」，并保证正确去向落在这组里的概率不低于你设的目标。只剩一个就直接执行，剩两三个就先反问，而不是凭一个分数硬猜。
@@ -185,7 +197,14 @@ export function RouteConfidencePanel() {
             ) : null}
           </div>
         </div>
-      ) : null}
-    </section>
+                ) : (
+                  <p className="own-rc-lead">正在校准…</p>
+                )}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

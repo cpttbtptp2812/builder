@@ -26,6 +26,24 @@ const BASELINE_DIR = path.join(CONFIG_DIR, "baselines");
 const CASES_FILE = path.join(CONFIG_DIR, "cases.json");
 const POLICY_FILE = path.join(CONFIG_DIR, "policy.yml");
 
+function writeJsonAtomic(file: string, value: unknown) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
+  fs.writeFileSync(tmp, JSON.stringify(value, null, 2));
+  try {
+    fs.renameSync(tmp, file);
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "EEXIST" || code === "EPERM") {
+      fs.rmSync(file, { force: true });
+      fs.renameSync(tmp, file);
+      return;
+    }
+    fs.rmSync(tmp, { force: true });
+    throw error;
+  }
+}
+
 function seedConfigFile(name: string) {
   const target = path.join(CONFIG_DIR, name);
   const source = path.join(REPO_CONFIG_DIR, name);
@@ -115,6 +133,27 @@ function writeAudit(row: {
 export function registerSkillGate(app: Hono) {
   ensureAuditTable();
 
+  app.get("/api/skill-gate/baselines", (c) => {
+    if (!fs.existsSync(BASELINE_DIR)) return c.json({ tags: {} });
+    const tags: Record<string, { staging?: string; prod?: string }> = {};
+    for (const name of fs.readdirSync(BASELINE_DIR)) {
+      if (!name.endsWith(".json") || name.includes(".tmp")) continue;
+      const staging = name.endsWith(".staging.json");
+      const skillId = staging ? name.slice(0, -".staging.json".length) : name.replace(/\.json$/, "");
+      if (!skillId || skillId.startsWith(".")) continue;
+      try {
+        const version = String((JSON.parse(fs.readFileSync(path.join(BASELINE_DIR, name), "utf8")) as { version?: string }).version ?? "");
+        if (!version) continue;
+        tags[skillId] ??= {};
+        if (staging) tags[skillId].staging = version;
+        else tags[skillId].prod = version;
+      } catch {
+        /* skip unreadable baseline */
+      }
+    }
+    return c.json({ tags });
+  });
+
   app.get("/api/skill-gate/baseline/:skillId", (c) => {
     const skillId = c.req.param("skillId");
     const env = c.req.query("env") === "staging" ? "staging" : "prod";
@@ -128,7 +167,6 @@ export function registerSkillGate(app: Hono) {
     if (!body.skillId || !body.raw) return c.json({ error: "skillId and raw required" }, 400);
     const access = teamAccess(c.req.header("authorization"), body.env ?? "prod", "publish");
     if (!access.ok) return c.json({ error: access.error }, access.status);
-    fs.mkdirSync(BASELINE_DIR, { recursive: true });
     const file = path.join(
       BASELINE_DIR,
       body.env === "staging" ? `${body.skillId}.staging.json` : `${body.skillId}.json`,
@@ -140,7 +178,7 @@ export function registerSkillGate(app: Hono) {
       raw: body.raw,
       updatedAt: new Date().toISOString(),
     };
-    fs.writeFileSync(file, JSON.stringify(payload, null, 2));
+    writeJsonAtomic(file, payload);
     writeAudit({ skillId: body.skillId, action: "baseline.save", note: body.env });
     return c.json({ ok: true, path: file, environment: payload.env });
   });
@@ -296,16 +334,13 @@ export function registerSkillGate(app: Hono) {
         return c.json({ error: "approved release approval required" }, 403);
       }
     }
-    fs.mkdirSync(BASELINE_DIR, { recursive: true });
-    fs.writeFileSync(
-      path.join(BASELINE_DIR, `${body.skillId}.json`),
-      JSON.stringify({
-        skillId: body.skillId,
-        version: body.version,
-        raw: body.raw,
-        publishedAt: new Date().toISOString(),
-      }, null, 2),
-    );
+    writeJsonAtomic(path.join(BASELINE_DIR, `${body.skillId}.json`), {
+      skillId: body.skillId,
+      version: body.version,
+      env: "prod",
+      raw: body.raw,
+      publishedAt: new Date().toISOString(),
+    });
     writeAudit({
       skillId: body.skillId,
       action: body.override ? "publish.override" : "publish",
@@ -335,8 +370,7 @@ export function registerSkillGate(app: Hono) {
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return c.json({ error: "cases object required" }, 400);
     }
-    fs.mkdirSync(path.dirname(CASES_FILE), { recursive: true });
-    fs.writeFileSync(CASES_FILE, JSON.stringify(body, null, 2));
+    writeJsonAtomic(CASES_FILE, body);
     const count = Object.values(body).reduce((n, rows) => n + (Array.isArray(rows) ? rows.length : 0), 0);
     writeAudit({ skillId: "*", action: "cases.sync", note: `${count} cases` });
     return c.json({ ok: true, path: ".ownagent/cases.json", cases: count });

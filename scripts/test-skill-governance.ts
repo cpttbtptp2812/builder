@@ -55,18 +55,23 @@ const transformer = skill("transformer", ["transform"], {
   reads: ["$releasePayload"],
   writes: ["transformedPayload"],
 });
+const caller = skill("caller", ["call"], {
+  tools: ["http_probe"],
+});
+caller.steps = [{ tool: "skill:producer" }];
 const publisher = skill("publisher", ["ship", "release"], {
   reads: ["transformedPayload"],
   flows: [{ from: "transformer.transformedPayload", to: "publisher-step", stepId: "publisher-step" }],
 });
-const skills = [producer, transformer, publisher];
+const skills = [producer, transformer, publisher, caller];
 
 const graph = buildSkillDependencyGraph(skills);
 assert.deepEqual(graph.dependencies.producer, []);
 assert.deepEqual(graph.dependencies.transformer, ["producer"]);
 assert.deepEqual(graph.dependencies.publisher, ["transformer"]);
-assert.deepEqual(graph.dependents.producer, ["transformer"]);
-assert.deepEqual(graph.toolConsumers.http_probe, ["producer", "transformer"]);
+assert.deepEqual(graph.dependencies.caller, ["producer"]);
+assert.deepEqual(graph.dependents.producer, ["caller", "transformer"]);
+assert.deepEqual(graph.toolConsumers.http_probe, ["caller", "producer", "transformer"]);
 assert.deepEqual(graph.cycles, []);
 
 const transformerEdge = graph.edges.find((edge) => edge.from === "transformer" && edge.to === "producer");
@@ -80,6 +85,7 @@ assert.deepEqual(
   impact.impacted.map(({ skillId, distance, path }) => ({ skillId, distance, path })),
   [
     { skillId: "producer", distance: 0, path: ["producer"] },
+    { skillId: "caller", distance: 1, path: ["producer", "caller"] },
     { skillId: "transformer", distance: 1, path: ["producer", "transformer"] },
     { skillId: "publisher", distance: 2, path: ["producer", "transformer", "publisher"] },
   ],

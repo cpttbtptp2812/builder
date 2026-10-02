@@ -4,6 +4,7 @@ import type { SkillManifest } from "./skillMarkdown";
 
 export type GovernedSkill = Pick<SkillManifest, "id" | "name" | "tools" | "ir"> & {
   depends?: readonly string[];
+  steps?: readonly { tool: string }[];
 };
 
 export type SkillDependencyReason =
@@ -154,7 +155,7 @@ function findCycles(nodes: string[], dependencies: Record<string, string[]>): st
  *
  * Dependencies come from:
  * - `depends:` listing another Skill id;
- * - tools named as another Skill (`id`, `skill:id`, `skill/id`, `@skill/id`);
+ * - a step or tool named as another Skill (`id`, `skill:id`, `skill/id`, `@skill/id`);
  * - qualified dataflow sources such as `producer-id.output`.
  *
  * Unqualified slots and shared tool names never create cross-Skill edges.
@@ -177,6 +178,10 @@ export function buildSkillDependencyGraph(skills: readonly GovernedSkill[]): Ski
       if (skillIds.has(dependency)) {
         addReason(edgeReasons, skill.id, dependency, { kind: "tool", tool: `skill:${dependency}` });
       }
+    }
+    for (const step of skill.steps ?? []) {
+      const dependency = explicitSkillReference(step.tool, skillIds);
+      if (dependency) addReason(edgeReasons, skill.id, dependency, { kind: "tool", tool: step.tool });
     }
   }
 

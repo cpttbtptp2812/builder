@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   acceptSuggestion,
   analyzeEvolution,
@@ -54,7 +55,16 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
     };
   }, [refresh]);
 
-  if (!report) return <div className="own-evo own-evo--loading">正在从最近的提问里找改进点…</div>;
+  useEffect(() => {
+    if (!open) return;
+    function onKey(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  if (!report) return null;
 
   const suggestions = report.suggestions.filter((s) => !dismissed.has(keyOf(s)));
   const orphans = report.orphans.slice(0, 8);
@@ -105,20 +115,26 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
   }
 
   return (
-    <section className="own-evo">
-      <button type="button" className="own-evo-head" onClick={() => setOpen((v) => !v)}>
-        <span className="own-evo-dot" />
-        <strong>发现 {total} 处可以改进</strong>
-        <span className="own-evo-sub">
-          来自{report.usingSamples ? "示例提问（真实提问还不够多）" : "最近的真实提问"}
-          {suggestions.length ? ` · ${suggestions.length} 条说法建议` : ""}
-          {orphans.length ? ` · ${report.orphans.length} 句没有技能能接` : ""}
-        </span>
-        <span className="own-evo-toggle">{open ? "收起" : "查看"}</span>
+    <>
+      <button type="button" className="own-skm-batch-btn own-skm-batch-btn--pop" onClick={() => setOpen(true)}>
+        可以改进 ({total})
       </button>
-
-      {open ? (
+      {open
+        ? createPortal(
+            <div className="oa-modal-backdrop" role="dialog" aria-modal="true" aria-label="可以改进" onClick={() => setOpen(false)}>
+              <div className="oa-modal oa-modal--wide" onClick={(event) => event.stopPropagation()}>
+                <header>
+                  <strong>{total} 处可以改进</strong>
+                  <button type="button" className="own-skm-batch-btn" onClick={() => setOpen(false)}>
+                    关闭
+                  </button>
+                </header>
         <div className="own-evo-body">
+          <p className="own-evo-sub">
+            来自{report.usingSamples ? "示例提问，真实提问还不够多" : "最近的真实提问"}
+            {suggestions.length ? ` · ${suggestions.length} 条说法建议` : ""}
+            {orphans.length ? ` · ${report.orphans.length} 句没有技能能接` : ""}
+          </p>
           {suggestions.length ? (
             <ul className="own-evo-list">
               {suggestions.map((s) => (
@@ -184,7 +200,11 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
             </div>
           ) : null}
         </div>
-      ) : null}
+              </div>
+            </div>,
+            document.body,
+          )
+        : null}
 
       {demo ? (
         <SkillFromDemoDialog
@@ -196,6 +216,6 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
           }}
         />
       ) : null}
-    </section>
+    </>
   );
 }

@@ -43,6 +43,15 @@
   cursor: pointer;
   font-weight: 700;
 }
+
+.oa-skill-governance p {
+  margin: 10px 0 6px;
+}
+
+.oa-skill-governance ul {
+  margin: 0 0 4px;
+  padding-left: 1.2em;
+}
 :root {
   --bg: #07080c;
   --panel: #11141c;
@@ -39923,6 +39932,7 @@ button.agent-tool-chip {
 
 .oa-modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 200; display: grid; place-items: center; padding: 1rem; }
 .oa-modal { width: min(520px, 100%); background: #fff; border-radius: 14px; padding: 1rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.oa-modal header strong { font-size: 0.95rem; color: #1c1917; }
 .oa-modal header { display: flex; justify-content: space-between; align-items: center; }
 .oa-modal label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: #64748b; }
 .oa-modal input, .oa-modal select, .oa-modal textarea { padding: 0.45rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; }
@@ -40844,6 +40854,33 @@ button.agent-tool-chip {
 .own-skm-batch-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .own-skm-batch-btn--danger { color: #b91c1c; border-color: #fecaca; }
 .own-skm-batch-btn--danger:hover:not(:disabled) { border-color: #f87171; color: #991b1b; }
+.own-skm-batch-btn--pop {
+  border-color: #c4b5fd;
+  background: #f5f3ff;
+  color: #5b21b6;
+  font-weight: 650;
+  border-radius: 999px;
+  padding-right: 0.55rem;
+}
+.own-skm-batch-btn--pop::after {
+  content: "";
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.42rem;
+  margin-left: 0.4rem;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  box-shadow: 2px -2px 0 -1px #f5f3ff, 2px -2px 0 0 currentColor;
+  vertical-align: -1px;
+}
+.own-skm-batch-btn--pop:hover:not(:disabled) {
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #fff;
+}
+.own-skm-batch-btn--pop:hover:not(:disabled)::after {
+  box-shadow: 2px -2px 0 -1px #6d28d9, 2px -2px 0 0 #fff;
+}
 .own-skm-import-panel {
   margin-bottom: 0.85rem;
   padding: 0.75rem 0.9rem;
@@ -40916,6 +40953,12 @@ button.agent-tool-chip {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
 }
 
+.oa-modal--wide {
+  width: min(760px, 100%);
+  max-height: min(80vh, 760px);
+  overflow: auto;
+}
+
 /* 技能进化 */
 .own-evo {
   margin-bottom: 0.85rem;
@@ -40938,6 +40981,7 @@ button.agent-tool-chip {
 }
 .own-evo-dot { width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; flex-shrink: 0; }
 .own-evo-sub { color: #78716c; font-size: 0.72rem; }
+.own-evo-body > .own-evo-sub { margin: 0; }
 .own-evo-toggle { margin-left: auto; color: #6d28d9; font-size: 0.72rem; }
 .own-evo-body { padding: 0 0.9rem 0.8rem; display: flex; flex-direction: column; gap: 0.75rem; }
 .own-evo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }

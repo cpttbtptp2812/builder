@@ -30,7 +30,16 @@ import { buildReleaseDependencyProof, type ReleaseDependencyProof } from "../../
 import { listGateQuestionRows } from "../../lib/skillGateQuestions";
 import { listPageTools } from "../../lib/pageTools";
 import { runFullSkillCompare, type SkillFullCompareReport } from "../../lib/skillCompareReport";
-import { approvePending, getBaselineTag, listPendingApprovals, requestApproval, tagBaselineEnv } from "../../lib/teamStore";
+import {
+  decideReleaseApproval,
+  ensureTeamSession,
+  findReleaseApproval,
+  loadBaselineTags,
+  listPendingReleaseApprovals,
+  submitReleaseApproval,
+  type BaselineTags,
+  type ReleaseApproval,
+} from "../../lib/teamGateClient";
 import { runSkillCompare, type SkillCompareResult } from "../../lib/skillCompareEngine";
 import { parseSkillMarkdown, type ParsedSkillDoc } from "../../lib/skillMarkdown";
 import {
@@ -162,6 +171,11 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
+  const [envTags, setEnvTags] = useState<BaselineTags>({});
+
+  useEffect(() => {
+    void loadBaselineTags().then(setEnvTags);
+  }, [tick]);
 
   const builtinIds = useMemo(() => new Set(AGENT_SKILLS.map((s) => s.id)), []);
   const importedIds = useMemo(() => new Set(loadImportedSkills().map((s) => s.id)), [tick]);
@@ -353,6 +367,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
               删除导入项
             </button>
           ) : null}
+          <BatchCheckBar skills={skills} onToast={toast.show} />
+          <RouteConfidencePanel />
+          <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
         </div>
         <span className="own-skm-list-count">
           共 {skills.length} 个技能
@@ -361,12 +378,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
         </span>
       </div>
 
-      <BatchCheckBar skills={skills} onToast={toast.show} />
       <TeamApprovalBar onToast={toast.show} />
       <TraceFeedbackPanel onToast={toast.show} />
       <SkillGovernancePanel />
-      <RouteConfidencePanel />
-      <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
 
       {creating ? (
         <SkillFromDemoDialog
@@ -423,6 +437,7 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
               imported={importedIds.has(s.id)}
               onToggle={() => toggle(s.id)}
               onOpen={() => onOpen(s.id)}
+              envTag={envTags[s.id]}
             />
           ))}
         </ul>
@@ -437,16 +452,18 @@ function SkillListCard({
   imported,
   onToggle,
   onOpen,
+  envTag,
 }: {
   skill: AgentSkill;
   checked: boolean;
   imported: boolean;
   onToggle: () => void;
   onOpen: () => void;
+  envTag?: { staging?: string; prod?: string };
 }) {
   const ver = getPublishedVersion(skill.id);
-  const prod = getBaselineTag(skill.id, "prod");
-  const staging = getBaselineTag(skill.id, "staging");
+  const prod = envTag?.prod ?? null;
+  const staging = envTag?.staging ?? null;
   const draft = newestDraftForSkill(skill.id);
   const applied = getAppliedSkill(skill.id);
   const samples = sampleTriggers(skill.triggers);
@@ -524,6 +541,10 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
   const [checking, setChecking] = useState(false);
   const [historyTick, setHistoryTick] = useState(0);
   const [baselineTick, setBaselineTick] = useState(0);
+  const [serverTags, setServerTags] = useState<{ staging?: string; prod?: string }>({});
+  useEffect(() => {
+    void loadBaselineTags().then((tags) => setServerTags(tags[skillId] ?? {}));
+  }, [skillId, baselineTick]);
 
   const onlineParsed = useMemo(() => parseSkillMarkdown(online), [online]);
   const draftParsed = useMemo(() => parseSkillMarkdown(draft), [draft]);
@@ -614,8 +635,8 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
       ]);
       const full = await alignCanonicalGate(compared, snapshot, draftVersion);
       setReport(full);
-      tagBaselineEnv(skillId, draftVersion, "staging");
-      void apiFetch("/skill-gate/baseline", {
+      await ensureTeamSession();
+      await apiFetch("/skill-gate/baseline", {
         method: "POST",
         body: JSON.stringify({
           skillId,
@@ -675,16 +696,25 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
       toast.show(`检查建议先别发布：${gateNow.reasons[0] ?? r.verdict.title}。看下方报告，确认无碍可点「我确认，仍要发布」`);
       return;
     }
+    let approvalId: string | undefined;
     if (gateNow.gate === "WARN") {
-      const gate = gateNow;
-      requestApproval({
-        skillId,
-        draftVersion: draftVersion,
-        gate: gate.gate,
-        requestedBy: "local",
-        note: gate.reasons[0],
-      });
-      if (!window.confirm("检查为 WARN，已加入审批队列。确定仍要直接发布吗？")) return;
+      const approved = await findReleaseApproval(skillId, draftVersion, "approved");
+      if (!approved) {
+        const pending = await findReleaseApproval(skillId, draftVersion, "pending");
+        const created = pending ?? await submitReleaseApproval({
+          skillId,
+          version: draftVersion,
+          gate: gateNow.gate,
+          note: gateNow.reasons[0],
+        });
+        if (!created) {
+          toast.show("审批没有提交到服务端。先确认本地服务已启动。");
+          return;
+        }
+        toast.show(`v${draftVersion} 已进入服务端审批。在技能列表批准后再发布。`);
+        return;
+      }
+      approvalId = approved.id;
     }
     if (
       realLost.length &&
@@ -698,10 +728,9 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     if (shadow?.routeDriftCount && !window.confirm(`真实回流：${shadow.routeDriftCount} 条历史问句在新版下路由变了。仍要发布？`)) return;
     if (fuzz?.lostCount && !window.confirm(`路由邻域：${fuzz.lostCount} 种说法变体会被别的技能抢走。仍要发布？`)) return;
     const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
-    tagBaselineEnv(skillId, applied.version, "prod");
-    setBaselineTick((n) => n + 1);
     const gate = buildReleaseGateSummary(r);
-    void apiFetch("/skill-gate/publish", {
+    await ensureTeamSession();
+    const published = await apiFetch("/skill-gate/publish", {
       method: "POST",
       body: JSON.stringify({
         skillId,
@@ -712,9 +741,12 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
         override: force,
         overrideReason: force ? "用户确认忽略 BLOCK 并发布" : undefined,
         environment: "prod",
+        approvalId,
         note: gate.reasons[0] ?? r.verdict.title,
       }),
     });
+    setBaselineTick((n) => n + 1);
+    if (!published) toast.show("本地已发布，服务端 baseline 没有写上");
     try {
       const witness = await buildReleaseWitness({
         skillId,
@@ -791,10 +823,14 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "chat" } }));
   }
 
-  function rollbackTo(raw: string, version: string) {
+  async function rollbackTo(raw: string, version: string) {
     if (!window.confirm(`直接把线上换成 v${version} 的内容？会生成新版本号，旧记录都保留。`)) return;
     const applied = publishSkillVersion(skillId, skillName, raw, `回滚到 v${version} 的内容`, "rollback");
-    tagBaselineEnv(skillId, applied.version, "prod");
+    await ensureTeamSession();
+    await apiFetch("/skill-gate/baseline", {
+      method: "POST",
+      body: JSON.stringify({ skillId, raw, version: applied.version, env: "prod" }),
+    });
     setBaselineTick((n) => n + 1);
     void apiFetch("/skill-gate/rollback", {
       method: "POST",
@@ -830,10 +866,10 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               <i className="sk-status-dot is-live" />
               PROD v{liveVersion}
             </span>
-            {getBaselineTag(skillId, "staging") ? (
+            {serverTags.staging ? (
               <span className="sk-work-ver-draft">
                 <i className="sk-status-dot is-draft" />
-                STAGING v{getBaselineTag(skillId, "staging")}
+                STAGING v{serverTags.staging}
               </span>
             ) : null}
             <span className="sk-work-ver-arrow">→</span>
@@ -1859,18 +1895,25 @@ function BatchCheckBar({
   if (!pending.length) return null;
 
   return (
-    <div className="oa-batch-check">
-      <span>{pending.length} 个技能有待发布草稿</span>
-      <button type="button" className="own-skm-batch-btn" disabled={busy} onClick={() => void runBatch()}>
-        {busy ? "批量检查中…" : "批量发版检查"}
-      </button>
-    </div>
+    <button
+      type="button"
+      className="own-skm-batch-btn"
+      disabled={busy}
+      title={`${pending.length} 个技能有待发布草稿`}
+      onClick={() => void runBatch()}
+    >
+      {busy ? "批量检查中…" : `批量发版检查 (${pending.length})`}
+    </button>
   );
 }
 
 function TeamApprovalBar({ onToast }: { onToast: (msg: string) => void }) {
   const [tick, setTick] = useState(0);
-  const pending = useMemo(() => listPendingApprovals(), [tick]);
+  const [pending, setPending] = useState<ReleaseApproval[]>([]);
+
+  useEffect(() => {
+    void listPendingReleaseApprovals().then(setPending);
+  }, [tick]);
 
   if (!pending.length) return null;
 
@@ -1880,14 +1923,15 @@ function TeamApprovalBar({ onToast }: { onToast: (msg: string) => void }) {
       <ul>
         {pending.map((p) => (
           <li key={p.id}>
-            <span>{p.skillId} v{p.draftVersion} · {p.gate}</span>
+            <span>{p.skillId} v{p.version} · {p.gate}</span>
             <button
               type="button"
               className="own-skill-inline-btn"
               onClick={() => {
-                approvePending(p.id);
-                setTick((n) => n + 1);
-                onToast(`已批准 ${p.skillId}`);
+                void decideReleaseApproval(p.id, "approved").then((ok) => {
+                  setTick((n) => n + 1);
+                  onToast(ok ? `已批准 ${p.skillId}` : "批准没有写到服务端");
+                });
               }}
             >
               批准
