@@ -118,6 +118,7 @@ export function SkillFromDemoDialog({
           <strong>存为技能</strong>
           <span>以后用户这样问，就按同样的步骤自动处理</span>
         </div>
+        <div className="own-sfd-scroll">
         {handler ? (
           <p className="own-sfd-warn">
             这类问题现在已经由「{handler}」处理。如果只是想让它多认几种说法，去技能管理给它加说法更合适。
@@ -189,6 +190,7 @@ export function SkillFromDemoDialog({
           <summary>查看生成的 SKILL.md</summary>
           <pre>{raw}</pre>
         </details>
+        </div>
 
         <div className="own-sfd-actions">
           <button type="button" className="own-skm-batch-btn" onClick={onClose}>

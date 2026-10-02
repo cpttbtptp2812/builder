@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   acceptSuggestion,
@@ -31,6 +31,7 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
   const [peek, setPeek] = useState<string | null>(null);
   const [picked, setPicked] = useState<Set<string>>(() => new Set());
   const [demo, setDemo] = useState<DemoDraft | null>(null);
+  const seenOrphans = useRef(new Set<string>());
 
   const refresh = useCallback(() => {
     let alive = true;
@@ -64,11 +65,24 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
+  useEffect(() => {
+    if (!report?.orphans.length) return;
+    const fresh = report.orphans.slice(0, 8).filter((o) => !seenOrphans.current.has(o.q));
+    if (!fresh.length) return;
+    for (const o of fresh) seenOrphans.current.add(o.q);
+    setPicked((prev) => {
+      const next = new Set(prev);
+      for (const o of fresh) next.add(o.q);
+      return next;
+    });
+  }, [report]);
+
   if (!report) return null;
 
   const suggestions = report.suggestions.filter((s) => !dismissed.has(keyOf(s)));
   const orphans = report.orphans.slice(0, 8);
   const total = suggestions.length + (orphans.length ? 1 : 0);
+  const onlyOrphans = suggestions.length === 0 && orphans.length > 0;
   if (!total) return null;
 
   function dismiss(s: EvolutionSuggestion) {
@@ -122,19 +136,23 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
       {open
         ? createPortal(
             <div className="oa-modal-backdrop" role="dialog" aria-modal="true" aria-label="可以改进" onClick={() => setOpen(false)}>
-              <div className="oa-modal oa-modal--wide" onClick={(event) => event.stopPropagation()}>
+              <div className="oa-modal oa-modal--wide own-evo-dialog" onClick={(event) => event.stopPropagation()}>
                 <header>
-                  <strong>{total} 处可以改进</strong>
+                  <strong>{onlyOrphans ? `${report.orphans.length} 句话没有技能能接` : `${total} 处可以改进`}</strong>
                   <button type="button" className="own-skm-batch-btn" onClick={() => setOpen(false)}>
                     关闭
                   </button>
                 </header>
         <div className="own-evo-body">
-          <p className="own-evo-sub">
-            来自{report.usingSamples ? "示例提问，真实提问还不够多" : "最近的真实提问"}
-            {suggestions.length ? ` · ${suggestions.length} 条说法建议` : ""}
-            {orphans.length ? ` · ${report.orphans.length} 句没有技能能接` : ""}
-          </p>
+          {onlyOrphans ? (
+            <p className="own-evo-lead">句子已经勾上。直接点下面的紫色按钮，用它们做成一个新技能。</p>
+          ) : (
+            <p className="own-evo-sub">
+              来自{report.usingSamples ? "示例提问，真实提问还不够多" : "最近的真实提问"}
+              {suggestions.length ? ` · ${suggestions.length} 条说法建议` : ""}
+              {orphans.length ? ` · ${report.orphans.length} 句没有技能能接` : ""}
+            </p>
+          )}
           {suggestions.length ? (
             <ul className="own-evo-list">
               {suggestions.map((s) => (
@@ -180,26 +198,37 @@ export function SkillEvolutionPanel({ onToast, onOpenSkill }: { onToast: (msg: s
 
           {orphans.length ? (
             <div className="own-evo-orphans">
-              <p>
-                <b>这些问题现在没有技能能接</b>，勾选同一类的几句，可以直接生成一个新技能：
-              </p>
+              {onlyOrphans ? null : <p>下面这些话，现在没有技能能接。勾上要处理的句子，再做成一个新技能。</p>}
               <ul>
                 {orphans.map((o) => (
                   <li key={o.q}>
                     <label>
                       <input type="checkbox" checked={picked.has(o.q)} onChange={() => togglePick(o.q)} />
-                      「{o.q}」
-                      {o.source === "sample" ? <em> 示例</em> : o.count > 1 ? <em> ×{o.count}</em> : null}
+                      <span>「{o.q}」</span>
                     </label>
                   </li>
                 ))}
               </ul>
-              <button type="button" className="own-skm-batch-btn" disabled={!picked.size} onClick={newSkillFromOrphans}>
-                用勾选的 {picked.size || ""} 句生成新技能
-              </button>
             </div>
           ) : null}
         </div>
+        {orphans.length ? (
+          <footer className="own-evo-foot">
+            <button
+              type="button"
+              className="own-evo-make"
+              onClick={() => {
+                if (!picked.size) {
+                  onToast("先勾上一句，再做成新技能");
+                  return;
+                }
+                newSkillFromOrphans();
+              }}
+            >
+              {picked.size ? `用这 ${picked.size} 句做成新技能` : "先勾上一句"}
+            </button>
+          </footer>
+        ) : null}
               </div>
             </div>,
             document.body,

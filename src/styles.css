@@ -39931,11 +39931,12 @@ button.agent-tool-chip {
 .oa-mcp-enabled-badge { font-size: 0.75rem; color: #6366f1; background: #eef2ff; padding: 0.35rem 0.65rem; border-radius: 999px; white-space: nowrap; }
 
 .oa-modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); z-index: 200; display: grid; place-items: center; padding: 1rem; }
-.oa-modal { width: min(520px, 100%); background: #fff; border-radius: 14px; padding: 1rem; display: flex; flex-direction: column; gap: 0.65rem; }
+.oa-modal { width: min(520px, 100%); background: #fff; border-radius: 14px; padding: 1rem; display: flex; flex-direction: column; gap: 0.65rem; color: #1c1917; }
 .oa-modal header strong { font-size: 0.95rem; color: #1c1917; }
 .oa-modal header { display: flex; justify-content: space-between; align-items: center; }
 .oa-modal label { display: flex; flex-direction: column; gap: 0.3rem; font-size: 0.78rem; color: #64748b; }
-.oa-modal input, .oa-modal select, .oa-modal textarea { padding: 0.45rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; }
+.oa-modal input, .oa-modal select, .oa-modal textarea { padding: 0.45rem 0.6rem; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 0.85rem; color: #1c1917; background: #fff; }
+.oa-modal input[type="checkbox"] { width: 1.05rem; height: 1.05rem; padding: 0; margin: 0; accent-color: #6d28d9; flex: 0 0 auto; cursor: pointer; border-radius: 3px; }
 .oa-modal footer { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.35rem; }
 
 /* 工作台 · 岗位图谱 / 架构理论 */
@@ -40982,15 +40983,47 @@ button.agent-tool-chip {
 .own-evo-dot { width: 8px; height: 8px; border-radius: 50%; background: #8b5cf6; flex-shrink: 0; }
 .own-evo-sub { color: #78716c; font-size: 0.72rem; }
 .own-evo-body > .own-evo-sub { margin: 0; }
+.own-evo-lead { margin: 0; color: #1c1917; font-size: 0.95rem; line-height: 1.55; }
 .own-evo-toggle { margin-left: auto; color: #6d28d9; font-size: 0.72rem; }
 .own-evo-body { padding: 0 0.9rem 0.8rem; display: flex; flex-direction: column; gap: 0.75rem; }
 .own-evo-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.35rem; }
 .own-evo-list > li { padding: 0.45rem 0.6rem; background: #fff; border: 1px solid #f1f0ef; border-radius: 8px; }
 .own-evo-line { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
 .own-evo-acts { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
-.own-evo-orphans p { margin: 0 0 0.4rem; }
-.own-evo-orphans ul { list-style: none; margin: 0 0 0.5rem; padding: 0; display: flex; flex-wrap: wrap; gap: 0.3rem 0.8rem; }
-.own-evo-orphans label { display: inline-flex; align-items: center; gap: 0.25rem; cursor: pointer; }
+.own-evo-orphans p { margin: 0 0 0.45rem; color: #1c1917; font-size: 0.84rem; line-height: 1.55; }
+.own-evo-orphans ul { list-style: none; margin: 0 0 0.65rem; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+.own-evo-orphans label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  color: #1c1917;
+  font-size: 0.84rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e7e5e4;
+  border-radius: 8px;
+  background: #fff;
+}
+.own-evo-orphans label:hover { border-color: #c4b5fd; }
+.oa-modal .own-evo-orphans label { flex-direction: row; color: #1c1917; }
+.own-evo-orphans label:has(input:checked) { border-color: #c4b5fd; background: #f5f3ff; }
+.own-evo-orphans label span { font-size: 1rem; font-weight: 650; line-height: 1.4; }
+.own-evo-dialog { max-height: min(80vh, 760px); overflow: hidden; }
+.own-evo-dialog .own-evo-body { flex: 1 1 auto; overflow: auto; min-height: 0; }
+.own-evo-foot { flex: 0 0 auto; display: flex; justify-content: flex-end; padding-top: 0.35rem; border-top: 1px solid #f1f0ef; }
+.own-evo-make {
+  border: none;
+  background: #6d28d9;
+  color: #fff;
+  font-weight: 650;
+  font-size: 0.92rem;
+  padding: 0.6rem 1rem;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.own-evo-make:hover { background: #5b21b6; }
+.oa-modal .own-evo-sub { color: #44403c; font-size: 0.84rem; line-height: 1.5; }
 .own-evo em, .own-sfd em { color: #a8a29e; font-style: normal; font-size: 0.68rem; }
 
 /* 路由把握度 */
@@ -41915,7 +41948,8 @@ button.agent-tool-chip {
 .own-sfd-scm { margin: 0; font-size: 0.74rem; color: #6d28d9; line-height: 1.45; padding: 0.4rem 0.55rem; background: #faf5ff; border-radius: 8px; border-left: 3px solid #8b5cf6; }
 
 /* 存为技能 */
-.own-sfd { width: min(600px, 100%); max-height: calc(100vh - 2rem); overflow: auto; font-size: 0.8rem; color: #44403c; }
+.own-sfd { width: min(600px, 100%); max-height: calc(100vh - 2rem); overflow: hidden; font-size: 0.8rem; color: #44403c; }
+.own-sfd-scroll { overflow: auto; min-height: 0; flex: 1 1 auto; display: flex; flex-direction: column; gap: 0.65rem; }
 .own-sfd-head { display: flex; flex-direction: column; gap: 0.15rem; }
 .own-sfd-head strong { font-size: 0.95rem; color: #1c1917; }
 .own-sfd-head span, .own-sfd-field small { color: #78716c; font-size: 0.72rem; }
@@ -41938,7 +41972,7 @@ button.agent-tool-chip {
 .own-sfd-trial { margin: 0; padding: 0.6rem; background: #fafaf9; border: 1px solid #f1f0ef; border-radius: 8px; white-space: pre-wrap; max-height: 12rem; overflow: auto; font: inherit; font-size: 0.74rem; }
 .own-sfd-raw summary { cursor: pointer; color: #78716c; font-size: 0.72rem; }
 .own-sfd-raw pre { margin: 0.4rem 0 0; padding: 0.6rem; background: #1c1917; color: #e7e5e4; border-radius: 8px; font-size: 0.7rem; max-height: 14rem; overflow: auto; }
-.own-sfd-actions { display: flex; justify-content: flex-end; gap: 0.4rem; }
+.own-sfd-actions { flex: 0 0 auto; display: flex; justify-content: flex-end; gap: 0.4rem; background: #fff; padding-top: 0.55rem; border-top: 1px solid #f1f0ef; }
 .own-sfd-primary { background: #6d28d9; border-color: #6d28d9; color: #fff; }
 .own-sfd-primary:hover:not(:disabled) { background: #5b21b6; color: #fff; }
 .ua-msg-act.ua-msg-act--text { width: auto; padding: 0 0.45rem; font-size: 0.7rem; }
