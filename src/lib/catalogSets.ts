@@ -1,0 +1,550 @@
+/** 一整套技能的版本：保存客户现在听到的，之后可以改名称、切换回去 */
+
+import { allRunnableSkills, isAnswerLayerSkill, SKILL_CATALOG, type AgentSkill } from "./agentSkills";
+import { routeKey, routeQuery, skillLabel } from "./skillRouter";
+import { enrichSkillCatalog, hydrateSkill, parseSkillMarkdown } from "./skillMarkdown";
+import { listGateQuestionRows } from "./skillGateQuestions";
+import { listQueryLog } from "./skillQueryLog";
+import {
+  discardDraftsForSkill,
+  newestDraftForSkill,
+  publishSkillVersion,
+  revertToBuiltin,
+  skillsWithPendingDrafts,
+  SKILL_PUBLISH_EVENT,
+} from "./skillCompareStore";
+import { installImportedMarkdown, readImportedRecords, removeImportedSkill } from "./importedSkills";
+
+export const CATALOG_SETS_EVENT = "ownagent:catalog-sets";
+
+export type SetSkill = { id: string; name: string; raw: string; imported: boolean };
+
+export type CatalogSet = {
+  id: string;
+  name: string;
+  note: string;
+  savedAt: string;
+  skills: SetSkill[];
+  /** 缺省是已保存的版本。草稿只出现在草稿库。 */
+  status?: "version" | "draft";
+};
+
+export type SentenceMove = { q: string; from: string; to: string };
+export type SkillEdit = { name: string; detail: string };
+export type SetDiff = { moved: SentenceMove[]; edited: SkillEdit[]; same: number };
+
+export type SetSkillRow = {
+  id: string;
+  name: string;
+  thenSay: string;
+  nowSay: string;
+  mark: "same" | "changed" | "only-then" | "only-now";
+  detail: string;
+  lines: string[];
+};
+
+export type HeldAsk = { q: string; who: string };
+
+export type SetCompareFace = {
+  skills: SetSkillRow[];
+  asks: SentenceMove[];
+  held: HeldAsk[];
+  sameAsks: number;
+};
+
+const KEY = "ownagent:catalog-sets";
+const MAX_SETS = 20;
+
+type Store = { sets: CatalogSet[]; hearingId: string | null };
+
+let restoreDepth = 0;
+
+function emptyStore(): Store {
+  return { sets: [], hearingId: null };
+}
+
+function readStore(): Store {
+  if (typeof localStorage === "undefined") return emptyStore();
+  try {
+    const parsed = JSON.parse(localStorage.getItem(KEY) ?? "") as Store;
+    const sets = Array.isArray(parsed?.sets)
+      ? parsed.sets
+          .filter((s) => s?.id && s?.name && Array.isArray(s.skills))
+          .map((s) => ({
+            ...s,
+            note: typeof s.note === "string" ? s.note : "",
+            status: s.status === "draft" ? "draft" as const : "version" as const,
+          }))
+      : [];
+    return { sets, hearingId: parsed?.hearingId ?? null };
+  } catch {
+    return emptyStore();
+  }
+}
+
+function writeStore(store: Store) {
+  localStorage.setItem(KEY, JSON.stringify(store));
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CATALOG_SETS_EVENT));
+}
+
+export function suggestedSetName(now = new Date()): string {
+  return `${now.getMonth() + 1}月${now.getDate()}日`;
+}
+
+let seeding = false;
+
+function buildSampleSets(base: SetSkill[]): CatalogSet[] {
+  return [
+    {
+      id: "set-sample-slim",
+      name: "只要值班和检索",
+      note: "没有工作流，也没有发布前巡检",
+      savedAt: "2026-09-28T09:00:00.000Z",
+      status: "version",
+      skills: cloneSkills(base).filter((s) => s.id !== "workflow-orchestrator" && s.id !== "release-inspector"),
+    },
+    {
+      id: "set-sample-phrases",
+      name: "年假改口",
+      note: "制度值班不再认「年假」，改认「调休」",
+      savedAt: "2026-09-20T11:30:00.000Z",
+      status: "version",
+      skills: cloneSkills(base).map((s) =>
+        s.id === "policy-desk" ? { ...s, raw: s.raw.replace(/年假/g, "调休") } : s,
+      ),
+    },
+    {
+      id: "set-sample-steps",
+      name: "检索改过说明",
+      note: "知识检索的说明和步骤都换了",
+      savedAt: "2026-09-12T15:00:00.000Z",
+      status: "version",
+      skills: cloneSkills(base).map((s) => {
+        if (s.id !== "knowledge-lookup") return s;
+        return {
+          ...s,
+          raw: s.raw
+            .replace(/项目知识检索 — [^\r\n]+/, "项目知识检索 — 先给摘要，再列出出处")
+            .replace(/label: [^\r\n]*分块召回/, "label: 先写三句摘要")
+            .replace(/label: [^\r\n]*引用面板/, "label: 再列出处"),
+        };
+      }),
+    },
+    {
+      id: "set-sample-night",
+      name: "多了夜班答疑",
+      note: "这一版里多一个夜班技能，现在没有",
+      savedAt: "2026-09-02T18:00:00.000Z",
+      status: "version",
+      skills: [
+        ...cloneSkills(base),
+        {
+          id: "night-desk",
+          name: "夜班答疑",
+          imported: true,
+          raw: `---
+name: night-desk
+description: 夜班答疑 — 下班后的请假和报销先记下来
+triggers:
+  - 夜班
+  - 值班电话
+  - 凌晨报销
+tools:
+  - policy_search
+steps:
+  - id: note
+    label: 先记一笔，白天再处理
+    tool: policy_search
+    args:
+      query: "{{query}}"
+---
+
+# night-desk
+
+下班后的问题先记下来。
+`,
+        },
+      ],
+    },
+  ];
+}
+
+function liveSnapshot(): SetSkill[] {
+  const imported = new Set(readImportedRecords().map((r) => r.id));
+  return allRunnableSkills().map((s) => ({
+    id: s.id,
+    name: skillLabel(s),
+    raw: s.manifest,
+    imported: imported.has(s.id),
+  }));
+}
+
+function cloneSkills(skills: SetSkill[]): SetSkill[] {
+  return skills.map((s) => ({ ...s }));
+}
+
+/** 示例版本如果和线上完全一样，就改写成有差别的那一份。用户自己的版本不动。 */
+function seedDistinctCatalogSets() {
+  if (typeof localStorage === "undefined" || seeding) return;
+  const base = liveSnapshot();
+  if (!base.length) return;
+  seeding = true;
+  try {
+    const store = readStore();
+    const samples = buildSampleSets(base);
+    let changed = false;
+    for (const sample of samples) {
+      const existing = store.sets.find((s) => s.id === sample.id);
+      if (!existing) {
+        store.sets.push(sample);
+        changed = true;
+        continue;
+      }
+      if (matchesLiveCatalog(existing)) {
+        existing.name = sample.name;
+        existing.note = sample.note;
+        existing.skills = sample.skills;
+        existing.status = "version";
+        changed = true;
+      }
+    }
+    if (changed) {
+      store.sets = store.sets.slice(0, MAX_SETS);
+      writeStore(store);
+    }
+  } finally {
+    seeding = false;
+  }
+}
+
+export function listCatalogSets(): CatalogSet[] {
+  seedDistinctCatalogSets();
+  return readStore().sets;
+}
+
+export function listVersions(): CatalogSet[] {
+  return listCatalogSets().filter((s) => s.status !== "draft");
+}
+
+export function listDrafts(): CatalogSet[] {
+  return listCatalogSets().filter((s) => s.status === "draft");
+}
+
+export function currentHearing(): CatalogSet | null {
+  const store = readStore();
+  if (!store.hearingId) return null;
+  return store.sets.find((s) => s.id === store.hearingId) ?? null;
+}
+
+export function noteLivePublished() {
+  if (restoreDepth > 0) return;
+  const store = readStore();
+  if (!store.hearingId) return;
+  store.hearingId = null;
+  writeStore(store);
+}
+
+export function unpublishedLabels(): string[] {
+  const live = new Map(allRunnableSkills().map((s) => [s.id, skillLabel(s)]));
+  return skillsWithPendingDrafts().map((id) => live.get(id) || newestDraftForSkill(id)?.name || id);
+}
+
+export function saveCatalogSet(name: string, note = "", status: "version" | "draft" = "version"): CatalogSet {
+  const set: CatalogSet = {
+    id: `set-${Date.now()}`,
+    name: name.trim() || suggestedSetName(),
+    note: note.trim(),
+    savedAt: new Date().toISOString(),
+    status,
+    skills: liveSnapshot(),
+  };
+  const store = readStore();
+  store.sets = [set, ...store.sets].slice(0, MAX_SETS);
+  writeStore(store);
+  return set;
+}
+
+export function updateCatalogSet(id: string, patch: { name?: string; note?: string; skills?: SetSkill[] }) {
+  const store = readStore();
+  const set = store.sets.find((s) => s.id === id);
+  if (!set) return;
+  if (typeof patch.name === "string") {
+    const name = patch.name.trim();
+    if (name) set.name = name;
+  }
+  if (typeof patch.note === "string") set.note = patch.note.trim();
+  if (patch.skills) set.skills = patch.skills;
+  writeStore(store);
+}
+
+export function deleteCatalogSet(id: string): boolean {
+  const store = readStore();
+  const next = store.sets.filter((s) => s.id !== id);
+  if (next.length === store.sets.length) return false;
+  store.sets = next;
+  if (store.hearingId === id) store.hearingId = null;
+  writeStore(store);
+  return true;
+}
+
+export function promoteDraft(id: string): CatalogSet | null {
+  const store = readStore();
+  const set = store.sets.find((s) => s.id === id);
+  if (!set || set.status !== "draft") return null;
+  set.status = "version";
+  set.savedAt = new Date().toISOString();
+  writeStore(store);
+  return set;
+}
+
+function sameRaw(a: string | undefined, b: string | undefined) {
+  return (a ?? "").trim() === (b ?? "").trim();
+}
+
+/** 这一版和线上正在用的技能一致（没发布的草稿不算）。 */
+export function matchesLiveCatalog(set: CatalogSet): boolean {
+  const live = allRunnableSkills().filter((s) => !isAnswerLayerSkill(s.id));
+  const past = set.skills.filter((s) => !isAnswerLayerSkill(s.id));
+  if (live.length !== past.length) return false;
+  const liveRaw = new Map(live.map((s) => [s.id, s.manifest]));
+  return past.every((s) => liveRaw.has(s.id) && sameRaw(s.raw, liveRaw.get(s.id)));
+}
+
+export function restoreCatalogSet(id: string): { ok: boolean; reason?: string } {
+  const store = readStore();
+  const set = store.sets.find((s) => s.id === id);
+  if (!set) return { ok: false, reason: "找不到这一版" };
+
+  const builtin = new Map(SKILL_CATALOG.map((s) => [s.id, s.manifest]));
+  const live = new Map(allRunnableSkills().map((s) => [s.id, s.manifest]));
+  const keepImported = new Set(set.skills.filter((s) => s.imported).map((s) => s.id));
+
+  restoreDepth += 1;
+  try {
+    for (const draftId of skillsWithPendingDrafts()) discardDraftsForSkill(draftId);
+    for (const rec of readImportedRecords()) {
+      if (!keepImported.has(rec.id)) removeImportedSkill(rec.id);
+    }
+    for (const skill of set.skills) {
+      if (skill.imported || !builtin.has(skill.id)) {
+        if (!sameRaw(readImportedRecords().find((r) => r.id === skill.id)?.raw, skill.raw)) {
+          const taken = new Set(readImportedRecords().map((r) => r.id).filter((x) => x !== skill.id));
+          installImportedMarkdown(skill.raw, taken, skill.id);
+        }
+        continue;
+      }
+      if (sameRaw(live.get(skill.id), skill.raw)) continue;
+      if (sameRaw(builtin.get(skill.id), skill.raw)) {
+        revertToBuiltin(skill.id, skill.name);
+        continue;
+      }
+      publishSkillVersion(skill.id, skill.name, skill.raw, `还原自「${set.name}」`, "rollback");
+    }
+  } finally {
+    restoreDepth -= 1;
+  }
+
+  if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(SKILL_PUBLISH_EVENT));
+  const next = readStore();
+  next.hearingId = id;
+  writeStore(next);
+  return { ok: true };
+}
+
+function who(kind: string, label: string): string {
+  return kind === "skill" ? label : "没人接";
+}
+
+function editDetail(pastRaw: string, liveRaw: string): string {
+  const past = new Set(parseSkillMarkdown(pastRaw).triggers);
+  const live = new Set(parseSkillMarkdown(liveRaw).triggers);
+  const added = [...live].filter((t) => !past.has(t));
+  const removed = [...past].filter((t) => !live.has(t));
+  if (added.length) return `多认了「${added.slice(0, 3).join("」「")}」`;
+  if (removed.length) return `不再认「${removed.slice(0, 3).join("」「")}」`;
+  return "里面的步骤或说明改过";
+}
+
+function clipText(text: string, n = 48): string {
+  const t = text.replace(/\s+/g, " ").trim();
+  if (!t) return "";
+  return t.length <= n ? t : `${t.slice(0, n)}…`;
+}
+
+function listDelta(label: string, past: string[], live: string[]): string | null {
+  const added = live.filter((t) => t && !past.includes(t));
+  const removed = past.filter((t) => t && !live.includes(t));
+  if (!added.length && !removed.length) return null;
+  const parts: string[] = [];
+  if (removed.length) parts.push(`少了${removed.slice(0, 5).map((t) => `「${t}」`).join("")}`);
+  if (added.length) parts.push(`多了${added.slice(0, 5).map((t) => `「${t}」`).join("")}`);
+  return `${label}${parts.join("，")}`;
+}
+
+export function skillChangeLines(pastRaw?: string, liveRaw?: string): string[] {
+  if (pastRaw && !liveRaw) return ["现在没有这个技能。切回去会把它带回来。"];
+  if (!pastRaw && liveRaw) return ["这一版里没有。切回去会把它拿掉。"];
+  if (!pastRaw || !liveRaw || sameRaw(pastRaw, liveRaw)) return [];
+  const past = parseSkillMarkdown(pastRaw);
+  const live = parseSkillMarkdown(liveRaw);
+  const lines: string[] = [];
+  const triggers = listDelta("认的说法", past.triggers, live.triggers);
+  if (triggers) lines.push(triggers);
+  if (past.description.trim() !== live.description.trim()) {
+    lines.push(`说明从「${clipText(past.description) || "空"}」改成「${clipText(live.description) || "空"}」`);
+  }
+  const stepText = (steps: { label: string; id: string }[]) => steps.map((s) => s.label || s.id).filter(Boolean).join(" → ");
+  const beforeSteps = stepText(past.steps);
+  const afterSteps = stepText(live.steps);
+  if (beforeSteps !== afterSteps) {
+    lines.push(`步骤从「${clipText(beforeSteps, 72) || "空"}」改成「${clipText(afterSteps, 72) || "空"}」`);
+  }
+  if (!lines.length) lines.push("正文改过，客户说法和步骤没变。");
+  return lines;
+}
+
+function sayLine(raw: string | undefined): string {
+  if (!raw) return "没有这个技能";
+  const triggers = parseSkillMarkdown(raw).triggers.map((t) => t.trim()).filter((t) => t.length >= 2);
+  const zh = triggers.filter((t) => /[\u4e00-\u9fff]/.test(t));
+  const picked = (zh.length ? zh : triggers).slice(0, 4);
+  if (!picked.length) return "不靠说法来认";
+  return picked.join("、");
+}
+
+function catalogFromRaws(rows: SetSkill[]): AgentSkill[] {
+  const cores = rows.map((s) => hydrateSkill(s.raw, { id: s.id, skillPath: `set://${s.id}` }));
+  return enrichSkillCatalog(cores, "browser").filter((s) => s.runnable) as AgentSkill[];
+}
+
+export function questionsForSets(past: CatalogSet, live: AgentSkill[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const push = (q: string) => {
+    const text = q.trim();
+    if (text.length < 2 || seen.has(text)) return;
+    seen.add(text);
+    out.push(text);
+  };
+  for (const skill of [...past.skills, ...live]) {
+    for (const row of listGateQuestionRows(skill.id)) push(row.query);
+  }
+  for (const entry of listQueryLog()) push(entry.q);
+  return out.slice(0, 40);
+}
+
+export function diffCatalogs(
+  past: readonly AgentSkill[],
+  live: readonly AgentSkill[],
+  pastRaw: ReadonlyMap<string, string>,
+  liveRaw: ReadonlyMap<string, string>,
+  queries: readonly string[],
+): SetDiff {
+  const moved: SentenceMove[] = [];
+  const editedById = new Map<string, SkillEdit>();
+  let same = 0;
+  for (const q of queries) {
+    const before = routeQuery(q, past as AgentSkill[]);
+    const after = routeQuery(q, live as AgentSkill[]);
+    const from = who(before.kind, before.label);
+    const to = who(after.kind, after.label);
+    if (routeKey(before) !== routeKey(after)) {
+      moved.push({ q, from, to });
+      continue;
+    }
+    const skillId = after.skillId;
+    if (skillId && !sameRaw(pastRaw.get(skillId), liveRaw.get(skillId))) {
+      if (!editedById.has(skillId)) {
+        editedById.set(skillId, { name: to, detail: editDetail(pastRaw.get(skillId) ?? "", liveRaw.get(skillId) ?? "") });
+      }
+      continue;
+    }
+    same += 1;
+  }
+  return { moved, edited: [...editedById.values()], same };
+}
+
+export function compareWithLive(set: CatalogSet): SetDiff {
+  const live = allRunnableSkills();
+  const past = catalogFromRaws(set.skills);
+  const pastRaw = new Map(set.skills.map((s) => [s.id, s.raw]));
+  const liveRaw = new Map(live.map((s) => [s.id, s.manifest]));
+  return diffCatalogs(past, live, pastRaw, liveRaw, questionsForSets(set, live));
+}
+
+export function faceSet(set: CatalogSet): SetCompareFace {
+  const liveAll = allRunnableSkills();
+  const live = liveAll.filter((s) => !isAnswerLayerSkill(s.id));
+  const past = set.skills.filter((s) => !isAnswerLayerSkill(s.id));
+  const liveById = new Map(live.map((s) => [s.id, s]));
+  const pastById = new Map(past.map((s) => [s.id, s]));
+  const ids = [...new Set([...past.map((s) => s.id), ...live.map((s) => s.id)])];
+  const skills: SetSkillRow[] = ids.map((id) => {
+    const then = pastById.get(id);
+    const now = liveById.get(id);
+    const name = (now ? skillLabel(now) : then?.name) || id;
+    if (then && !now) {
+      return { id, name, thenSay: sayLine(then.raw), nowSay: "没有这个技能", mark: "only-then", detail: "现在没有", lines: skillChangeLines(then.raw, undefined) };
+    }
+    if (!then && now) {
+      return { id, name, thenSay: "没有这个技能", nowSay: sayLine(now.manifest), mark: "only-now", detail: "当时没有", lines: skillChangeLines(undefined, now.manifest) };
+    }
+    const same = sameRaw(then?.raw, now?.manifest);
+    return {
+      id,
+      name,
+      thenSay: sayLine(then?.raw),
+      nowSay: sayLine(now?.manifest),
+      mark: same ? "same" : "changed",
+      detail: same ? "一样" : editDetail(then?.raw ?? "", now?.manifest ?? ""),
+      lines: same ? [] : skillChangeLines(then?.raw, now?.manifest),
+    };
+  });
+  const rank = { changed: 0, "only-then": 1, "only-now": 2, same: 3 } as const;
+  skills.sort((a, b) => rank[a.mark] - rank[b.mark] || a.name.localeCompare(b.name, "zh"));
+
+  const pastCatalog = catalogFromRaws(set.skills);
+  const asks: SentenceMove[] = [];
+  const held: HeldAsk[] = [];
+  let sameAsks = 0;
+  for (const q of questionsForSets(set, liveAll)) {
+    const before = routeQuery(q, pastCatalog);
+    const after = routeQuery(q, liveAll);
+    const to = who(after.kind, after.label);
+    if (routeKey(before) === routeKey(after)) {
+      sameAsks += 1;
+      if (held.length < 8) held.push({ q, who: to });
+      continue;
+    }
+    asks.push({ q, from: who(before.kind, before.label), to });
+  }
+  return { skills, asks, held, sameAsks };
+}
+
+export function formatSavedAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return `${d.getFullYear()}年${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+/** 对话里对照某一版：一句话说明路由/内容差在哪 */
+export function sentenceAgainstSet(query: string, set: CatalogSet): string {
+  const q = query.trim();
+  if (!q) return "";
+  const past = catalogFromRaws(set.skills);
+  const live = allRunnableSkills();
+  const before = routeQuery(q, past);
+  const after = routeQuery(q, live);
+  const from = who(before.kind, before.label);
+  const to = who(after.kind, after.label);
+  if (routeKey(before) !== routeKey(after)) {
+    return `现在会交给${to}答。「${set.name}」会交给${from}。`;
+  }
+  const skillId = after.skillId;
+  const pastRaw = set.skills.find((s) => s.id === skillId)?.raw;
+  const liveRaw = live.find((s) => s.id === skillId)?.manifest;
+  if (skillId && !sameRaw(pastRaw, liveRaw)) {
+    return `还是会交给${to}答，但「${set.name}」里认的内容不一样。`;
+  }
+  return `还是会交给${to}答`;
+}

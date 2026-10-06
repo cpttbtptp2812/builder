@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { AnswerInsight } from "../../../lib/answerInsight";
 import type { OwnChatMessage, OwnToolChip } from "../../../lib/ownagentSessions";
 import { ToolCallRail } from "./ToolCallRail";
@@ -20,6 +21,7 @@ export function MessageMetaBar({
   reserve = false,
   onOpenSources,
   onReplay,
+  trailing,
 }: {
   insight?: AnswerInsight;
   tools?: OwnToolChip[];
@@ -28,17 +30,18 @@ export function MessageMetaBar({
   reserve?: boolean;
   onOpenSources?: () => void;
   onReplay?: () => void;
+  trailing?: ReactNode;
 }) {
   const toolList = tools ?? [];
   const hasTools = toolList.length > 0;
   const hasInsight = Boolean(insight);
   const hasMetrics = Boolean(message?.ms || message?.mode || message?.runtime);
 
-  if (reserve && !hasTools && !hasInsight && !hasMetrics) {
+  if (reserve && !hasTools && !hasInsight && !hasMetrics && !trailing) {
     return <div className="ua-answer-meta ua-answer-meta--reserve" aria-hidden />;
   }
 
-  if (!hasTools && !hasInsight && !hasMetrics) return null;
+  if (!hasTools && !hasInsight && !hasMetrics && !trailing) return null;
 
   const pct = insight?.groundedness ?? 0;
   const showSources =
@@ -47,7 +50,7 @@ export function MessageMetaBar({
   return (
     <div className={`ua-answer-meta${live ? " live" : " done"}${reserve ? " reserve" : ""}`}>
       {hasTools && <ToolCallRail tools={tools!} live={live} />}
-      {(hasInsight || hasMetrics) && (
+      {(hasInsight || hasMetrics || trailing) && (
         <div className="ua-answer-meta-line">
           {hasInsight && (
             <>
@@ -71,6 +74,7 @@ export function MessageMetaBar({
               回放决策
             </button>
           )}
+          {trailing}
         </div>
       )}
     </div>

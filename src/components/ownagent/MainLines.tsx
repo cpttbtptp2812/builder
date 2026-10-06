@@ -9,13 +9,17 @@ import { McpToolsPanel } from "./McpToolsPanel";
 import { PromptTemplatePanel } from "./PromptTemplatePanel";
 import { RagPanel } from "./RagPanel";
 import { SkillComparePanel } from "./SkillComparePanel";
+import { DraftLibraryPage } from "./DraftLibraryPage";
+import { EditVersionPage } from "./EditVersionPage";
+import { SaveVersionPage } from "./SaveVersionPage";
+import { VersionsPage } from "./VersionsPage";
 import { SkillPlatformPanel } from "./SkillPlatformPanel";
 import { TracePanel } from "./TracePanel";
 
 type LineId = "talk" | "materials" | "skill" | "rules";
 
 const MATERIALS = new Set(["rag", "prompts", "feed"]);
-const SKILL = new Set(["compare", "cases", "fork", "mcp", "eval", "evalops", "trace", "skills"]);
+const SKILL = new Set(["compare", "versions", "savever", "drafts", "editset", "cases", "fork", "mcp", "eval", "evalops", "trace", "skills"]);
 const RULES = new Set(["guard", "connect"]);
 
 export function lineOf(view: string): "talk" | "materials" | "skill" | "rules" | null {
@@ -107,6 +111,34 @@ export function SkillLine({ view, onPick }: { view: string; onPick: (id: string)
     return (
       <div className="oa-skill-home">
         <SkillComparePanel />
+      </div>
+    );
+  }
+  if (view === "versions") {
+    return (
+      <div className="oa-skill-home">
+        <VersionsPage />
+      </div>
+    );
+  }
+  if (view === "savever") {
+    return (
+      <div className="oa-skill-home">
+        <SaveVersionPage />
+      </div>
+    );
+  }
+  if (view === "drafts") {
+    return (
+      <div className="oa-skill-home">
+        <DraftLibraryPage />
+      </div>
+    );
+  }
+  if (view === "editset") {
+    return (
+      <div className="oa-skill-home">
+        <EditVersionPage />
       </div>
     );
   }

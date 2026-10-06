@@ -39,6 +39,7 @@ import { draftFromMessages, type DemoDraft } from "../../lib/skillFromDemo";
 import { executePageTool } from "../../lib/pageTools";
 import { interpretPageUtterance } from "../../lib/pageUtterance";
 import { SkillFromDemoDialog } from "../ownagent/SkillFromDemo";
+import { ReplyVersionSwitch } from "./agent/ReplyVersionSwitch";
 import { runMultiAgentAsync } from "../../lib/backendBridge";
 import type { MultiAgentStep } from "../../lib/multiAgentRuntime";
 import { getRuntimeConfig } from "../../lib/runtimeConfig";
@@ -1564,6 +1565,17 @@ export function AgentProductDemo({
                             ? () => setReplayMsg(m)
                             : undefined
                         }
+                        trailing={
+                          <ReplyVersionSwitch
+                            disabled={running}
+                            canAskAgain={messages.slice(0, idx).some((x) => x.role === "user")}
+                            onAskAgain={() => {
+                              const q = messages.slice(0, idx).reverse().find((x) => x.role === "user")?.content;
+                              if (q) void send(q);
+                            }}
+                            onSwitched={() => composeRef.current?.focus()}
+                          />
+                        }
                       />
                     ) : m.role === "assistant" && m.answerInsight ? (
                       <AnswerInsightBar insight={m.answerInsight} compact={false} />
@@ -1859,7 +1871,7 @@ export function AgentProductDemo({
                   placeholder={voiceListening ? "🎤 正在聆听…" : hubMode ? "输入问题，Enter 发送，Shift+Enter 换行" : "输入问题，Enter 发送"}
                   disabled={running}
                 />
-                {hubMode && <PrecheckLine pre={precheck} />}
+                {hubMode ? <PrecheckLine pre={precheck} /> : null}
 
                 <div className="ua-compose-bar-pro">
                   {!hubMode && (

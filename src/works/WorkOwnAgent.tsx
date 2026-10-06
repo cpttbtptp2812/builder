@@ -10,7 +10,7 @@ import { PageToolHost } from "../components/ownagent/PageToolHost";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 
 type TabId = "product" | "theory";
-type ViewId = "chat" | "guide" | "feed" | "skills" | "compare" | "cases" | "fork" | "rag" | "guard" | "trace" | "eval" | "evalops" | "prompts" | "mcp" | "connect" | "jd";
+type ViewId = "chat" | "guide" | "feed" | "skills" | "compare" | "versions" | "savever" | "drafts" | "editset" | "cases" | "fork" | "rag" | "guard" | "trace" | "eval" | "evalops" | "prompts" | "mcp" | "connect" | "jd";
 
 type NavItem = {
   id: ViewId;
@@ -271,6 +271,10 @@ function resolveView(panel: string | null, view: string | null): ViewId {
   const raw = view || panel;
   if (raw === "check") return "evalops";
   if (raw === "skills" || raw === "codrive") return "skills";
+  if (raw === "versions") return "versions";
+  if (raw === "savever") return "savever";
+  if (raw === "drafts") return "drafts";
+  if (raw === "editset") return "editset";
   if (VIEWS.some((v) => v.id === raw)) return raw as ViewId;
   return "chat";
 }

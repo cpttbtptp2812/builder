@@ -87,6 +87,8 @@ import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { TraceFeedbackPanel } from "./TraceFeedbackPanel";
 import { SkillGovernancePanel } from "./SkillGovernancePanel";
 import { OaBtn, OaPage } from "./OaUi";
+import { noteLivePublished } from "../../lib/catalogSets";
+import { VersionEntry } from "./VersionEntry";
 import {
   addTriggerTo,
   ImpactPanel,
@@ -137,7 +139,10 @@ export function SkillComparePanel({ initialTab }: { initialTab?: Tab } = {}) {
   const [tick, setTick] = useState(0);
 
   useEffect(() => {
-    const refresh = () => setTick((n) => n + 1);
+    const refresh = () => {
+      noteLivePublished();
+      setTick((n) => n + 1);
+    };
     const open = () => {
       const id = takePendingSkillOpen();
       if (id) setSkillId(id);
@@ -172,6 +177,14 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
   const [envTags, setEnvTags] = useState<BaselineTags>({});
+
+  useEffect(() => {
+    const note = sessionStorage.getItem("oa-version-saved");
+    if (!note) return;
+    toast.show(note);
+    const timer = window.setTimeout(() => sessionStorage.removeItem("oa-version-saved"), 0);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   useEffect(() => {
     void loadBaselineTags().then(setEnvTags);
@@ -305,110 +318,65 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     }
   }
 
-  const runningCount = skills.filter((s) => !newestDraftForSkill(s.id)).length;
+  const lead = pendingCount ? `${pendingCount} 个改过，还没检查。` : undefined;
 
   return (
     <OaPage
       title="技能"
-      desc="改完先检查，通过后再发布。线上版本不会被草稿直接影响。"
+      desc={lead}
+      actions={<VersionEntry onToast={toast.show} />}
     >
       {toast.node}
-      <div className="oa-skill-dashboard">
-        <div className="oa-dash-card">
-          <strong>{skills.length}</strong>
-          <span>技能总数</span>
-        </div>
-        <div className={`oa-dash-card${pendingCount ? " oa-dash-card--warn" : ""}`}>
-          <strong>{pendingCount}</strong>
-          <span>待发布草稿</span>
-        </div>
-        <div className="oa-dash-card oa-dash-card--ok">
-          <strong>{runningCount}</strong>
-          <span>线上运行中</span>
-        </div>
-        <div className="oa-dash-card oa-dash-card--muted">
-          <strong>{importedIds.size}</strong>
-          <span>已导入</span>
-        </div>
-      </div>
-      <div className="own-skm-list-bar">
-        <input
-          className="own-skm-search"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="搜技能名称或用户说法，例如：上线、年假"
-        />
-        <div className="own-skm-batch-actions">
-          <button type="button" className="own-skm-batch-btn" onClick={toggleAll} disabled={!rows.length}>
+      <div className="oa-skill-toolbar">
+        <div className="oa-skill-tools">
+          <input
+            className="own-skm-search"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="搜索技能或说法"
+            aria-label="搜索技能"
+          />
+          <button type="button" className="oa-bar-btn" onClick={toggleAll} disabled={!rows.length}>
             {selectedRows.length === rows.length && rows.length ? "取消全选" : "全选"}
           </button>
-          <button type="button" className="own-skm-batch-btn" onClick={() => setCreating(true)}>
-            新建技能
+          <button type="button" className="oa-bar-btn" onClick={() => setImportOpen((v) => !v)}>
+            {importOpen ? "收起" : "导入"}
           </button>
-          <button type="button" className="own-skm-batch-btn" onClick={() => setImportOpen((v) => !v)}>
-            导入
+          <button type="button" className="oa-bar-btn" onClick={exportJson} disabled={!exportTargets.length}>
+            导出
           </button>
-          <button type="button" className="own-skm-batch-btn" onClick={exportJson} disabled={!exportTargets.length}>
-            导出 JSON{selectedRows.length ? ` (${selectedRows.length})` : ""}
+          <button type="button" className="oa-bar-btn" onClick={exportToRepo} disabled={!repoTargets.length}>
+            同步仓库
           </button>
-          <button type="button" className="own-skm-batch-btn" onClick={exportMarkdown} disabled={!exportTargets.length}>
-            导出 MD{selectedRows.length ? ` (${selectedRows.length})` : ""}
-          </button>
-          <button
-            type="button"
-            className="own-skm-batch-btn"
-            onClick={exportToRepo}
-            title="打包成 src/skills 目录结构，解压提交后对所有访客生效"
-          >
-            导出到仓库{repoTargets.length ? ` (${repoTargets.length})` : ""}
-          </button>
-          {selectedRows.some((s) => importedIds.has(s.id)) ? (
-            <button type="button" className="own-skm-batch-btn own-skm-batch-btn--danger" onClick={removeSelectedImported}>
-              删除导入项
-            </button>
-          ) : null}
           <BatchCheckBar skills={skills} onToast={toast.show} />
           <RouteConfidencePanel />
           <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
+          {selectedRows.some((s) => importedIds.has(s.id)) ? (
+            <button type="button" className="oa-bar-btn is-danger" onClick={removeSelectedImported}>
+              删除
+            </button>
+          ) : null}
         </div>
-        <span className="own-skm-list-count">
-          共 {skills.length} 个技能
-          {pendingCount ? ` · ${pendingCount} 个有未发布的修改` : ""}
-          {selectedRows.length ? ` · 已选 ${selectedRows.length}` : ""}
-        </span>
+        <button type="button" className="oa-skill-create" onClick={() => setCreating(true)}>
+          新建技能
+        </button>
       </div>
-
-      <TeamApprovalBar onToast={toast.show} />
-      <TraceFeedbackPanel onToast={toast.show} />
-      <SkillGovernancePanel />
-
-      {creating ? (
-        <SkillFromDemoDialog
-          initial={{ name: "", description: "", triggers: [], tools: ["knowledge_search"], queries: [], clashes: [] }}
-          onClose={() => setCreating(false)}
-          onSaved={(_, name) => toast.show(`已新建技能「${name}」`)}
-        />
-      ) : null}
-
       {importOpen ? (
         <div
-          className="own-skm-import-panel"
+          className="oa-m-import"
           onDragOver={(e) => e.preventDefault()}
           onDrop={(e) => {
             e.preventDefault();
             void onImportFiles(e.dataTransfer.files);
           }}
         >
-          <p><strong>导入 SKILL.md</strong> — 支持 JSON 技能包、多个 .md 文件，或拖入文件夹。</p>
-          <p className="own-skm-import-hint">
-            导入后请进入该技能 → <strong>发版检查</strong>，看这几句过不过，再发布。若 id 对应内置技能，改动写入草稿。
-          </p>
-          <div className="own-skm-import-actions">
-            <button type="button" className="own-skm-batch-btn" onClick={() => fileRef.current?.click()}>
-              选择文件
+          <p>拖入 SKILL.md、JSON 或文件夹</p>
+          <div className="oa-m-actions">
+            <button type="button" className="oa-bar-btn" onClick={exportMarkdown} disabled={!exportTargets.length}>
+              另存为 MD
             </button>
-            <button type="button" className="own-skm-batch-btn" onClick={() => setImportOpen(false)}>
-              收起
+            <button type="button" className="oa-skill-create" onClick={() => fileRef.current?.click()}>
+              选择文件
             </button>
           </div>
           <input
@@ -423,6 +391,14 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
             }}
           />
         </div>
+      ) : null}
+
+      {creating ? (
+        <SkillFromDemoDialog
+          initial={{ name: "", description: "", triggers: [], tools: ["knowledge_search"], queries: [], clashes: [] }}
+          onClose={() => setCreating(false)}
+          onSaved={(_, name) => toast.show(`已新建技能「${name}」`)}
+        />
       ) : null}
 
       {rows.length === 0 ? (
@@ -442,6 +418,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           ))}
         </ul>
       )}
+      <TeamApprovalBar onToast={toast.show} />
+      <TraceFeedbackPanel onToast={toast.show} />
+      <SkillGovernancePanel />
     </OaPage>
   );
 }
@@ -493,8 +472,8 @@ function SkillListCard({
             <strong>{skillDisplayTitle(skill)}</strong>
             <span className="own-skill-ver-tag">v{ver}</span>
             {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
-            {prod ? <span className="own-skill-ver-tag">prod {prod}</span> : null}
-            {staging ? <span className="own-skill-ver-tag">staging {staging}</span> : null}
+            {prod ? <span className="own-skill-ver-tag">线上 {prod}</span> : null}
+            {staging ? <span className="own-skill-ver-tag">预发 {staging}</span> : null}
           </header>
           <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
           <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps)}</p>
@@ -502,7 +481,7 @@ function SkillListCard({
           <footer>
             <span>{fmtUpdatedAt(applied?.appliedAt)}</span>
             {usage.handled ? <span>近 7 天接手 {usage.handled} 句</span> : null}
-            {draft ? <em className="own-skill-ver-pending">草稿 v{draft.version} 未发布</em> : <span className="own-skill-ver-ok">运行中</span>}
+            {draft ? <em className="own-skill-ver-pending">改过了，还没看能不能发</em> : <span className="own-skill-ver-ok">正在用</span>}
           </footer>
         </button>
       </div>
@@ -697,6 +676,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
       return;
     }
     let approvalId: string | undefined;
+    let approvalOffline = false;
     if (gateNow.gate === "WARN") {
       const approved = await findReleaseApproval(skillId, draftVersion, "approved");
       if (!approved) {
@@ -707,14 +687,14 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           gate: gateNow.gate,
           note: gateNow.reasons[0],
         });
-        if (!created) {
-          toast.show("审批没有提交到服务端。先确认本地服务已启动。");
+        if (created) {
+          toast.show(`v${draftVersion} 已进入服务端审批。在技能列表批准后再发布。`);
           return;
         }
-        toast.show(`v${draftVersion} 已进入服务端审批。在技能列表批准后再发布。`);
-        return;
+        approvalOffline = true;
+      } else {
+        approvalId = approved.id;
       }
-      approvalId = approved.id;
     }
     if (
       realLost.length &&
@@ -746,7 +726,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
       }),
     });
     setBaselineTick((n) => n + 1);
-    if (!published) toast.show("本地已发布，服务端 baseline 没有写上");
+    if (!published && !approvalOffline) toast.show("本地已发布，服务端 baseline 没有写上");
     try {
       const witness = await buildReleaseWitness({
         skillId,
@@ -770,7 +750,11 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
     setFuzzReport(null);
     setPageWalkReport(null);
     setDepProof(null);
-    toast.show(`已发布 v${applied.version}，见证包已下载，用户提问时立即生效`);
+    toast.show(
+      approvalOffline
+        ? `已发布 v${applied.version}，本机已生效。本地服务没开，这次没有送去审核。`
+        : `已发布 v${applied.version}，见证包已下载，用户提问时立即生效`,
+    );
     setHistoryOpen(false);
     setEditing(false);
   }
@@ -864,36 +848,36 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           <div className="sk-work-ver" data-baseline-revision={baselineTick}>
             <span className="sk-work-ver-live">
               <i className="sk-status-dot is-live" />
-              PROD v{liveVersion}
+              正在用 v{liveVersion}
             </span>
             {serverTags.staging ? (
               <span className="sk-work-ver-draft">
                 <i className="sk-status-dot is-draft" />
-                STAGING v{serverTags.staging}
+                预发 v{serverTags.staging}
               </span>
             ) : null}
             <span className="sk-work-ver-arrow">→</span>
             {hasChanges ? (
               <span className="sk-work-ver-draft">
                 <i className="sk-status-dot is-draft" />
-                DRAFT v{draftVersion}
-                <em>{saved === "saving" ? "● 同步中…" : "✓ 已同步"}</em>
+                还没发 v{draftVersion}
+                <em>{saved === "saving" ? "保存中…" : "已保存"}</em>
               </span>
             ) : (
-              <span className="sk-work-ver-synced">环境一致 (In Sync)</span>
+              <span className="sk-work-ver-synced">和正在用的一样</span>
             )}
             <span className="sk-work-telemetry">
-              {stats.added || stats.removed ? `Δ +${stats.added} -${stats.removed}` : "基线无漂移"}
+              {stats.added || stats.removed ? `改了 +${stats.added} −${stats.removed} 行` : "还没改内容"}
               {" · "}
-              {sentenceCount} 评测样本
+              {sentenceCount} 句用来检查
             </span>
           </div>
           <div className="sk-work-actions">
             <button type="button" className="own-compare-secondary-btn" onClick={() => void exportAudit()}>
-              导出审计
+              导出记录
             </button>
             <button type="button" className="own-compare-secondary-btn sk-history-btn" onClick={() => setHistoryOpen(true)}>
-              版本审计历史
+              以前发过的版本
             </button>
           </div>
         </div>
@@ -902,8 +886,8 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           <section className="sk-col">
             <header className="sk-col-h">
               <div className="sk-col-h-title">
-                <span className="sk-col-h-tag">SPEC & PIPELINE</span>
-                <h2>变更差异与流水线契约</h2>
+                <span className="sk-col-h-tag">和现在比</span>
+                <h2>和正在用的差别</h2>
               </div>
               <span className="sk-col-h-badge">{hasChanges ? `+${stats.added} −${stats.removed} 行变更` : "与线上基线一致"}</span>
             </header>
@@ -914,7 +898,7 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               draft={draftParsed}
             />
             <details className="sk-fold" open={editing} onToggle={(e) => setEditing(e.currentTarget.open)}>
-              <summary>草稿配置与流水线编排器 (Manifest Spec & Visual Editor)</summary>
+              <summary>改内容</summary>
               <Editor
                 skillId={skillId}
                 raw={draft}
@@ -932,13 +916,13 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
           <section className="sk-col sk-col--right">
             <header className="sk-col-h">
               <div className="sk-col-h-title">
-                <span className="sk-col-h-tag">QUALITY GATE</span>
-                <h2>发布质量门禁与风险评级</h2>
+                <span className="sk-col-h-tag">能不能发</span>
+                <h2>先看结论，再决定发不发</h2>
               </div>
               <span className="sk-col-h-badge">{hasChanges ? `目标 v${draftVersion}` : "等待草稿变更"}</span>
             </header>
             <details className="sk-fold" open={casesOpen} onToggle={(e) => setCasesOpen(e.currentTarget.open)}>
-              <summary>黄金回归评测集 ({sentenceCount} 条基准样本受管)</summary>
+              <summary>用来检查的 {sentenceCount} 句话</summary>
               <ScmCaseEditor
                 skillId={skillId}
                 draftRaw={hasChanges ? draft : online}
@@ -973,12 +957,12 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
               />
             ) : (
               <div className="sk-gate-empty-box">
-                <p className="sk-gate-empty">在左侧修改草稿配置后，质量门禁系统将自动调度 {sentenceCount} 条基准断言样本，进行语义一致性与意图漂移双跑校验。</p>
+                <p className="sk-gate-empty">还没改。改一句说法或一个步骤之后，用这 {sentenceCount} 句话看能不能发。</p>
               </div>
             )}
             <div className="sk-release-actions">
               <button type="button" className="own-compare-secondary-btn" onClick={discard} disabled={!hasChanges}>
-                放弃草稿
+                放弃这次修改
               </button>
               <button
                 type="button"
@@ -986,13 +970,13 @@ function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack:
                 onClick={() => void runCheck()}
                 disabled={Boolean(publishBlock) || checking}
               >
-                {checking ? "门禁扫描中…" : report && !reportStale ? "重新执行门禁" : "执行门禁校验"}
+                {checking ? "正在检查…" : report && !reportStale ? "再查一次" : "检查能不能发"}
               </button>
               <OaBtn
                 onClick={() => void publish()}
                 disabled={Boolean(publishBlock) || checking || decided?.gate === "BLOCK"}
               >
-                {checking ? "检查中…" : !report || reportStale ? `执行门禁并发布` : `发布上线 v${draftVersion}`}
+                {checking ? "检查中…" : !report || reportStale ? "检查后发布" : `发布 v${draftVersion}`}
               </OaBtn>
             </div>
             {decided?.gate === "BLOCK" ? (
@@ -1381,21 +1365,21 @@ function LiveSkillCompare({
     <div className="rv-compare">
       <div className="rv-pane">
         <div className="rv-pane-head">
-          <span className="rv-kicker">生产基线 (BASELINE)</span>
+          <span className="rv-kicker">正在用</span>
           <span className="rv-ver">v{liveVersion}</span>
         </div>
         <div className="rv-block">
-          <p className="rv-k">意图槽位与触发词元 (Triggers & Slot Tokens)</p>
+          <p className="rv-k">用户这样说</p>
           <div className="rv-triggers">
             {online.triggers.length
               ? online.triggers.map((t) => (
                   <span key={t} className={removedTriggers.includes(t) ? "rv-tag rv-tag--del" : "rv-tag"}>{t}</span>
                 ))
-              : <span className="rv-empty">未定义触发词</span>}
+              : <span className="rv-empty">还没有说法</span>}
           </div>
         </div>
         <div className="rv-block">
-          <p className="rv-k">执行流水线契约 (Pipeline & Tools)</p>
+          <p className="rv-k">按这些步骤做</p>
           {online.steps.length ? (
             <ol className="rv-pipeline">
               {online.steps.map((s, idx) => (
@@ -1409,28 +1393,28 @@ function LiveSkillCompare({
         </div>
         {online.description ? (
           <div className="rv-block">
-            <p className="rv-k">语义职责说明 (Scope Definition)</p>
+            <p className="rv-k">一句话说明</p>
             <p className="rv-desc">{online.description}</p>
           </div>
         ) : null}
       </div>
       <div className="rv-pane rv-pane--new">
         <div className="rv-pane-head">
-          <span className="rv-kicker rv-kicker--new">候选草稿 (CANDIDATE)</span>
+          <span className="rv-kicker rv-kicker--new">这次改的</span>
           <span className="rv-ver">v{draftVersion}</span>
         </div>
         <div className="rv-block">
-          <p className="rv-k">意图槽位与触发词元 (Triggers & Slot Tokens)</p>
+          <p className="rv-k">用户这样说</p>
           <div className="rv-triggers">
             {draft.triggers.length
               ? draft.triggers.map((t) => (
                   <span key={t} className={addedTriggers.includes(t) ? "rv-tag rv-tag--add" : "rv-tag"}>{t}</span>
                 ))
-              : <span className="rv-empty">未定义触发词</span>}
+              : <span className="rv-empty">还没有说法</span>}
           </div>
         </div>
         <div className="rv-block">
-          <p className="rv-k">执行流水线契约 (Pipeline & Tools)</p>
+          <p className="rv-k">按这些步骤做</p>
           {draft.steps.length ? (
             <ol className="rv-pipeline">
               {draft.steps.map((s, idx) => (
@@ -1444,7 +1428,7 @@ function LiveSkillCompare({
         </div>
         {draft.description ? (
           <div className="rv-block">
-            <p className="rv-k">语义职责说明 (Scope Definition)</p>
+            <p className="rv-k">一句话说明</p>
             <p className={descChanged ? "rv-desc rv-desc--changed" : "rv-desc"}>{draft.description}</p>
           </div>
         ) : null}
@@ -1586,7 +1570,7 @@ function CheckView({
           <div className="rv-gate-prompt-icon">🛡️</div>
           <div className="rv-gate-prompt-info">
             <strong>用 {gateCount} 句客户的话对比两版</strong>
-            <p>点击下方「检查」，先看结论，再决定是否发布。</p>
+            <p>点下面「检查能不能发」。先看结论，再决定发不发。</p>
           </div>
         </div>
       ) : null}
@@ -1596,43 +1580,37 @@ function CheckView({
           <div className="rv-verdict-top-bar">
             <span className={`rv-verdict-status-pill rv-verdict-status-pill--${gate}`}>
               <i className="rv-pulse-dot" />
-              {gate === "pass" ? "可以发" : gate === "warn" ? "先看一眼再发" : "先别发"}
+              {lead.title}
             </span>
-            <span className="rv-verdict-engine-tag">因果门禁</span>
           </div>
 
           <div className="rv-verdict-main">
             <span className="rv-verdict-icon">{gate === "pass" ? "✓" : gate === "warn" ? "⚠" : "✕"}</span>
             <div className="rv-verdict-body">
-              <strong className="rv-verdict-title">
-                {gate === "pass"
-                  ? "基准契约全部达成 · 准予发布上线"
-                  : gate === "warn"
-                    ? "检测到潜在意图冲突或轻微语义漂移"
-                    : "质量门禁拦截 · 存在回归倒退或破坏性变更"}
-              </strong>
+              <strong className="rv-verdict-title">{lead.title}</strong>
               <span className="rv-verdict-reason">{notes[0] ?? lead.note}</span>
             </div>
           </div>
 
-          <div className="rv-metrics-ribbon">
-            <div className="rv-metric-item">
-              <span className="rv-metric-k">评测基准样本</span>
-              <strong className="rv-metric-v">{effectRows.length} 条已断言</strong>
+          <details className="rv-metrics-more">
+            <summary>细看</summary>
+            <div className="rv-metrics-ribbon">
+              <div className="rv-metric-item">
+                <span className="rv-metric-k">用来检查的问法</span>
+                <strong className="rv-metric-v">{effectRows.length} 句</strong>
+              </div>
+              <div className="rv-metric-item">
+                <span className="rv-metric-k">和正在用的不一样</span>
+                <strong className={`rv-metric-v ${badCount ? "is-drift" : "is-safe"}`}>
+                  {badCount ? `${badCount} 句` : "没有"}
+                </strong>
+              </div>
+              <div className="rv-metric-item">
+                <span className="rv-metric-k">结论</span>
+                <strong className={`rv-metric-v is-${gate}`}>{lead.title}</strong>
+              </div>
             </div>
-            <div className="rv-metric-item">
-              <span className="rv-metric-k">行为漂移异常</span>
-              <strong className={`rv-metric-v ${badCount ? "is-drift" : "is-safe"}`}>
-                {badCount ? `${badCount} 条变异` : "0 漂移 · 完全对齐"}
-              </strong>
-            </div>
-            <div className="rv-metric-item">
-              <span className="rv-metric-k">发布风险评级</span>
-              <strong className={`rv-metric-v is-${gate}`}>
-                {gate === "pass" ? "LOW RISK (低风险)" : gate === "warn" ? "MEDIUM (需核验)" : "HIGH RISK (高阻断)"}
-              </strong>
-            </div>
-          </div>
+          </details>
         </div>
       ) : null}
 
