@@ -2,15 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CATALOG_SETS_EVENT,
-  currentHearing,
-  clearVersionScore,
+  activeVersionId,
   decisionFork,
   hearSet,
   listVersions,
-  matchesLiveCatalog,
-  pinVersionScore,
-  restoreCatalogSet,
-  takeVersionScore,
+  scoreVersion,
+  skillsForVersion,
   type CatalogSet,
   type DecisionFork,
   type ForkSide,
@@ -18,15 +15,15 @@ import {
 } from "../../../lib/catalogSets";
 import { SKILL_PUBLISH_EVENT } from "../../../lib/skillCompareStore";
 
-function ScoreList({ card }: { card: VersionScorecard }) {
+function ScoreList({ card, baseline }: { card: VersionScorecard; baseline: string }) {
   const changed = card.rows.filter((row) => row.moved || row.liveOk !== row.altOk);
-  if (!changed.length) return <p className="ua-score-empty">这 {card.total} 题和线上走得一样。</p>;
+  if (!changed.length) return <p className="ua-score-empty">这 {card.total} 题和{baseline}走得一样。</p>;
   return (
     <ol>
       {changed.map((row) => (
         <li key={row.q}>
           <b>{row.note || row.q}</b>
-          <span>线上交给{row.liveWho}{row.liveOk ? "，对了" : "，偏了"}。这一版交给{row.altWho}{row.altOk ? "，对了" : "，偏了"}。</span>
+          <span>{baseline}交给{row.liveWho}{row.liveOk ? "，对了" : "，偏了"}。这一版交给{row.altWho}{row.altOk ? "，对了" : "，偏了"}。</span>
         </li>
       ))}
     </ol>
@@ -63,59 +60,106 @@ function ForkLane({ side, split, said }: { side: ForkSide; split: boolean; said?
   );
 }
 
-const SWITCH_FROM_KEY = "oa-ver-from";
+export type ReplyVersionBinding = {
+  messageId: string;
+  versionId: string;
+  originId: string;
+  scorecard: VersionScorecard | null;
+  note: string | null;
+};
 
-function switchedFromOrigin(): boolean {
-  if (typeof sessionStorage === "undefined") return false;
-  const origin = sessionStorage.getItem(SWITCH_FROM_KEY);
-  const hearing = currentHearing()?.id ?? null;
-  return Boolean(origin && hearing && origin !== hearing);
+type PinnedReplyVersion = { versionId: string; originId: string };
+
+/** 每条回复第一次出现时的版本。之后全局切换不能改写它。 */
+const replyVersionLock = new Map<string, PinnedReplyVersion>();
+
+export function rememberReplyVersion(messageId: string, versionId: string, originId = versionId, force = false) {
+  if (!messageId || !versionId) return;
+  if (!force && replyVersionLock.has(messageId)) return;
+  replyVersionLock.set(messageId, { versionId, originId });
 }
 
-function currentVersionId(versions: CatalogSet[]): string | null {
-  const hearing = currentHearing();
-  if (hearing && versions.some((set) => set.id === hearing.id)) return hearing.id;
-  return versions.find((set) => matchesLiveCatalog(set))?.id ?? null;
+export function replyVersionFor(messageId: string): string | null {
+  return replyVersionLock.get(messageId)?.versionId ?? null;
 }
 
-/** 和「回放决策」同一行：点版本名展开列表，选中就切换。 */
+/** 和「回放决策」同一行：点版本名展开列表，选中就只切换这一条回复。 */
 export function ReplyVersionSwitch({
+  messageId,
   disabled,
   canAskAgain,
   query = "",
-  showReport = false,
+  versionId,
+  originId,
+  scorecard: _scorecard = null,
+  noteText: _noteText = null,
+  onBind,
   onAskAgain,
   onSwitched,
 }: {
+  messageId: string;
   disabled?: boolean;
   canAskAgain: boolean;
   query?: string;
-  /** 只在最后一条回答上显示成绩单，避免每条都重复。 */
-  showReport?: boolean;
-  onAskAgain: () => void;
+  versionId?: string;
+  originId?: string;
+  scorecard?: VersionScorecard | null;
+  noteText?: string | null;
+  onBind: (binding: ReplyVersionBinding) => void;
+  onAskAgain: (versionId: string) => void;
   onSwitched?: () => void;
 }) {
   const [versions, setVersions] = useState<CatalogSet[]>(() => listVersions());
-  const [currentId, setCurrentId] = useState<string | null>(() => currentVersionId(listVersions()));
   const [open, setOpen] = useState(false);
   const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null);
-  const [note, setNote] = useState<string | null>(null);
-  const [switched, setSwitched] = useState(() => switchedFromOrigin());
+  const [localNote, setLocalNote] = useState<string | null>(null);
   const [fork, setFork] = useState<{ id: string; top: number; left: number; data: DecisionFork } | null>(null);
-  const [card, setCard] = useState<VersionScorecard | null>(() => takeVersionScore());
   const [scoreOpen, setScoreOpen] = useState(false);
   const [scorePos, setScorePos] = useState<{ top: number; left: number } | null>(null);
   const forkRef = useRef<HTMLElement>(null);
   const scoreRef = useRef<HTMLElement>(null);
-  const baselineRef = useRef(currentVersionId(listVersions()));
   const rootRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLSpanElement>(null);
+  const onBindRef = useRef(onBind);
+  const seededRef = useRef(false);
+  const homeId = useRef<string | null>(originId ?? versionId ?? null);
+  const originRef = useRef<string | null>(originId ?? versionId ?? null);
+  const [pickedId, setPickedId] = useState<string | null>(null);
+  const [armedScore, setArmedScore] = useState<VersionScorecard | null>(null);
+  if (!homeId.current && (originId || versionId)) homeId.current = originId ?? versionId ?? null;
+  if (!originRef.current && (originId || versionId)) originRef.current = originId ?? versionId ?? null;
+  if (!homeId.current) {
+    const seen = activeVersionId();
+    if (seen) {
+      homeId.current = seen;
+      if (!originRef.current) originRef.current = seen;
+      rememberReplyVersion(messageId, seen, originRef.current);
+    }
+  }
+  onBindRef.current = onBind;
+  const labelId = originRef.current ?? homeId.current;
+  const currentId = pickedId ?? labelId;
+  const note = localNote;
+  const switched = Boolean(pickedId && labelId && pickedId !== labelId);
+  const activeCard = switched ? armedScore : null;
+
+  useEffect(() => {
+    if (versionId || seededRef.current) return;
+    const id = originRef.current ?? homeId.current;
+    if (!id) return;
+    seededRef.current = true;
+    rememberReplyVersion(messageId, id, id);
+    onBindRef.current({ messageId, versionId: id, originId: id, scorecard: null, note: null });
+  }, [versionId, messageId]);
+
+  useEffect(() => {
+    if (!originId || !versionId || originId === versionId) return;
+    onBindRef.current({ messageId, versionId: originId, originId, scorecard: null, note: null });
+  }, [originId, versionId, messageId]);
 
   useEffect(() => {
     const refresh = () => {
-      const next = listVersions();
-      setVersions(next);
-      setCurrentId(currentVersionId(next));
+      setVersions(listVersions());
       setOpen(false);
       setFork(null);
     };
@@ -150,12 +194,13 @@ export function ReplyVersionSwitch({
     const ids = new Set<string>();
     if (!open || !asked) return ids;
     for (const set of versions) {
-      if (set.id !== currentId && hearSet(asked, set)) ids.add(set.id);
+      if (set.id !== labelId && hearSet(asked, set, labelId)) ids.add(set.id);
     }
     return ids;
-  }, [open, asked, versions, currentId]);
+  }, [open, asked, versions, labelId]);
   if (!versions.length) return null;
-  const current = versions.find((set) => set.id === currentId) ?? null;
+  const current = versions.find((set) => set.id === labelId) ?? null;
+  const baselineName = versions.find((set) => set.id === originId)?.name ?? "原来这版";
   const ranked = open
     ? [...versions].sort((a, b) => {
         if (a.id === currentId) return -1;
@@ -170,35 +215,37 @@ export function ReplyVersionSwitch({
     if (id === currentId) return;
     const picked = versions.find((set) => set.id === id);
     const name = picked?.name ?? "";
-    const nextCard = picked ? pinVersionScore(picked) : null;
-    const result = restoreCatalogSet(id);
-    if (!result.ok) {
-      clearVersionScore();
-      setNote(result.reason ?? "没有切换");
+    const origin = originRef.current ?? originId ?? homeId.current ?? id;
+    originRef.current = origin;
+    if (id === origin) {
+      setPickedId(null);
+      setArmedScore(null);
+      setLocalNote(null);
+      setScoreOpen(false);
       return;
     }
-    setCurrentId(id);
-    if (!sessionStorage.getItem(SWITCH_FROM_KEY) && baselineRef.current) {
-      sessionStorage.setItem(SWITCH_FROM_KEY, baselineRef.current);
-    }
-    const origin = sessionStorage.getItem(SWITCH_FROM_KEY);
-    const moved = Boolean(origin && origin !== id);
-    if (!moved) {
-      sessionStorage.removeItem(SWITCH_FROM_KEY);
-      clearVersionScore();
-      setCard(null);
-    } else {
-      setCard(nextCard);
-    }
+    const nextCard = picked ? scoreVersion(picked, skillsForVersion(origin)) : null;
+    setPickedId(id);
+    setArmedScore(nextCard);
     setScoreOpen(false);
-    setSwitched(moved);
-    setNote(name ? `已换到「${name}」` : null);
+    setLocalNote(name ? `已换到「${name}」` : null);
     onSwitched?.();
   }
 
+  function askAgain() {
+    if (!pickedId) return;
+    const chosen = pickedId;
+    setPickedId(null);
+    setArmedScore(null);
+    setLocalNote(null);
+    setScoreOpen(false);
+    onAskAgain(chosen);
+  }
+
   function showFork(set: CatalogSet, anchor: HTMLElement) {
-    const data = decisionFork(asked, set);
-    if (!data) return;
+    const raw = decisionFork(asked, set, labelId);
+    if (!raw) return;
+    const data = current?.name ? { ...raw, live: { ...raw.live, label: current.name } } : raw;
     const rect = anchor.getBoundingClientRect();
     const width = Math.min(560, window.innerWidth - 24);
     const left = Math.max(12, Math.min(rect.left, window.innerWidth - width - 12));
@@ -223,7 +270,7 @@ export function ReplyVersionSwitch({
         }}
       >
         <em>版本:</em>
-        <span>{current?.name ?? versions[0]?.name ?? "未选择"}</span>
+        <span>{current?.name ?? (currentId ? "未选择" : versions[0]?.name ?? "未选择")}</span>
         <i aria-hidden />
       </button>
       {open && menuPos
@@ -298,11 +345,11 @@ export function ReplyVersionSwitch({
           )
         : null}
       {switched && canAskAgain ? (
-        <button type="button" className="ua-reply-again-side" disabled={disabled} onClick={onAskAgain}>
+        <button type="button" className="ua-reply-again-side" disabled={disabled} onClick={askAgain}>
           再问一次
         </button>
       ) : null}
-      {showReport && switched && card ? (
+      {switched && activeCard ? (
         <button
           type="button"
           className="ua-reply-score"
@@ -314,17 +361,17 @@ export function ReplyVersionSwitch({
             setScoreOpen((value) => !value);
           }}
         >
-          路由 {card.altOk}/{card.total}
+          路由 {activeCard.altOk}/{activeCard.total}
         </button>
       ) : null}
-      {showReport && scoreOpen && card && scorePos
+      {switched && scoreOpen && activeCard && scorePos
         ? createPortal(
             <article ref={scoreRef} className="ua-score" style={{ top: scorePos.top, left: scorePos.left }}>
               <header>
                 <strong>成绩单</strong>
-                <span>固定 {card.total} 题，这一版对 {card.altOk}，线上对 {card.liveOk}</span>
+                <span>固定 {activeCard.total} 题，这一版对 {activeCard.altOk}，{baselineName}对 {activeCard.liveOk}</span>
               </header>
-              <ScoreList card={card} />
+              <ScoreList card={activeCard} baseline={baselineName} />
             </article>,
             document.body,
           )

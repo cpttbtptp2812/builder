@@ -719,16 +719,33 @@ function forkSide(label: string, decision: ReturnType<typeof routeQuery>, said: 
   };
 }
 
-/** 同一句话在线上和某一版上的两条判定。不改线上。 */
-export function decisionFork(query: string, set: CatalogSet): DecisionFork | null {
+/** 正在生效的那一版。回复上的切换不会改这里。 */
+export function activeVersionId(): string | null {
+  const versions = listVersions();
+  const hearing = currentHearing();
+  if (hearing && versions.some((set) => set.id === hearing.id) && matchesLiveCatalog(hearing)) return hearing.id;
+  return versions.find((set) => matchesLiveCatalog(set))?.id ?? versions[0]?.id ?? null;
+}
+
+/** 用某一版自己的技能做对照。不传则用当前生效的技能。 */
+export function skillsForVersion(id: string | null | undefined): AgentSkill[] {
+  if (id) {
+    const set = listVersions().find((item) => item.id === id);
+    if (set?.skills.length) return catalogFromRaws(set.skills);
+  }
+  return cachedLiveSkills();
+}
+
+/** 同一句话在这条回复的版本和另一版上的两条判定。不改线上。 */
+export function decisionFork(query: string, set: CatalogSet, baselineId?: string | null): DecisionFork | null {
   const q = query.trim();
   if (!q) return null;
   const past = catalogFromRaws(set.skills);
-  const live = cachedLiveSkills();
+  const live = skillsForVersion(baselineId);
   const before = routeQuery(q, past);
   const after = routeQuery(q, live);
   const said = spokenLine(before.skillId ? set.skills.find((skill) => skill.id === before.skillId)?.raw : undefined);
-  const note = hearSet(q, set);
+  const note = hearSet(q, set, baselineId);
   if (!note) return null;
   return {
     query: q,
@@ -805,12 +822,12 @@ export function takeVersionScore(): VersionScorecard | null {
   return pinnedScore;
 }
 
-/** 这句在某一版里是否会换说法。一样时返回空。 */
-export function hearSet(query: string, set: CatalogSet): string {
+/** 这句相对这条回复的版本，在另一版里是否会换说法。一样时返回空。 */
+export function hearSet(query: string, set: CatalogSet, baselineId?: string | null): string {
   const q = query.trim();
   if (!q) return "";
   const past = catalogFromRaws(set.skills);
-  const live = cachedLiveSkills();
+  const live = skillsForVersion(baselineId);
   const before = routeQuery(q, past);
   const after = routeQuery(q, live);
   const said = spokenLine(before.skillId ? set.skills.find((s) => s.id === before.skillId)?.raw : undefined);

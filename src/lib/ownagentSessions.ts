@@ -7,6 +7,7 @@ import type { FlowJournalNode } from "./turnFlowJournal";
 import type { TicketDraft } from "./policyDesk";
 import type { FollowUpPrompt, InlineEvalView, PolicyTrustView, RouteScoreView } from "./chatFrontier";
 import type { AnswerInsight } from "./answerInsight";
+import type { VersionScorecard } from "./catalogSets";
 import type { ChatArtifact } from "./chatArtifacts";
 
 export type OwnToolChip = {
@@ -52,6 +53,12 @@ export type OwnChatMessage = {
   artifacts?: ChatArtifact[];
   plazaSource?: PlazaSourceView;
   releaseInspect?: import("./releaseInspect").ReleaseInspectReport;
+  /** 这条回复自己选中的版本，不跟别的回复一起变 */
+  catalogVersionId?: string;
+  /** 这条回复生成时的版本，用来判断有没有切走过 */
+  catalogVersionOriginId?: string;
+  catalogVersionScore?: VersionScorecard | null;
+  catalogVersionNote?: string | null;
 };
 
 export type OwnSession = {

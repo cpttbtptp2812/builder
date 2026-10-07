@@ -16,7 +16,7 @@ import { InlineEvalCard, runInlineEvalAsync } from "./agent/InlineEvalCard";
 import { ArtifactPanel } from "./agent/ArtifactPanel";
 import { ResultLocator } from "./agent/ResultLocator";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
-import { explainDiscovery } from "../../lib/agentSkills";
+import { explainDiscovery, type AgentSkill } from "../../lib/agentSkills";
 import { listFollowUpPrompts, listKnowledgePrompts, matchPresetQuery } from "../../lib/ownKnowledge";
 import { AGENT_QUICK_PROMPTS } from "../../lib/agentRuntime";
 import {
@@ -101,6 +101,7 @@ import {
   type OwnSession,
   type PlazaSourceView,
 } from "../../lib/ownagentSessions";
+import { activeVersionId, skillsForVersion } from "../../lib/catalogSets";
 import { activePromptLabel, getActiveSystemAddon } from "../../lib/agentPromptRuntime";
 import { evaluatePolicyGate } from "../../lib/policyGate";
 import {
@@ -414,7 +415,7 @@ export function AgentProductDemo({
   }, [onFlowActive]);
 
   const send = useCallback(
-    async (text: string) => {
+    async (text: string, forcedVersionId?: string, catalog?: AgentSkill[]) => {
       const parsed = parseSlash(text);
       if (!parsed.query.trim() || running || sendLockRef.current) return;
       const clarify = clarifyRef.current;
@@ -595,6 +596,7 @@ export function AgentProductDemo({
               ragRuntime: turnRagRuntimeLocal,
             });
         latestAnswerIdRef.current = assistantId;
+        const replyVersionId = forcedVersionId ?? activeVersionId() ?? undefined;
         setMessages((prev) => {
           if (prev.some((m) => m.id === assistantId)) return prev;
           return [
@@ -622,6 +624,8 @@ export function AgentProductDemo({
               artifacts: deduped.length ? deduped : undefined,
               plazaSource: plazaSourceLocal,
               releaseInspect: releaseInspectReport,
+              catalogVersionId: replyVersionId,
+              catalogVersionOriginId: replyVersionId,
             },
           ];
         });
@@ -1025,6 +1029,7 @@ export function AgentProductDemo({
             pinned: pinned || undefined,
             pinSkillId,
             promptAddon,
+            catalog,
           },
           onEv,
         );
@@ -1116,6 +1121,7 @@ export function AgentProductDemo({
         toolCount: 0,
       });
       setInput("");
+      const replyVersionId = activeVersionId() ?? undefined;
       setMessages((prev) => [
         ...prev,
         userMsg,
@@ -1131,6 +1137,8 @@ export function AgentProductDemo({
           plazaSource,
           answerInsight,
           reasoning: "广场优先 · 用户采用",
+          catalogVersionId: replyVersionId,
+          catalogVersionOriginId: replyVersionId,
         },
       ]);
       appendSessionTurn("user", q);
@@ -1567,13 +1575,31 @@ export function AgentProductDemo({
                         }
                         trailing={
                           <ReplyVersionSwitch
+                            messageId={m.id}
                             disabled={running}
                             canAskAgain={messages.slice(0, idx).some((x) => x.role === "user")}
                             query={messages.slice(0, idx).reverse().find((x) => x.role === "user")?.content ?? ""}
-                            showReport={!messages.slice(idx + 1).some((x) => x.role === "assistant")}
-                            onAskAgain={() => {
+                            versionId={m.catalogVersionId}
+                            originId={m.catalogVersionOriginId}
+                            scorecard={m.catalogVersionScore}
+                            noteText={m.catalogVersionNote}
+                            onBind={(binding) => {
+                              setMessages((prev) => prev.map((msg) => (
+                                msg.id === binding.messageId
+                                  ? {
+                                      ...msg,
+                                      catalogVersionId: binding.versionId,
+                                      catalogVersionOriginId: binding.originId,
+                                      catalogVersionScore: binding.scorecard,
+                                      catalogVersionNote: binding.note,
+                                    }
+                                  : msg
+                              )));
+                            }}
+                            onAskAgain={(chosen) => {
                               const q = messages.slice(0, idx).reverse().find((x) => x.role === "user")?.content;
-                              if (q) void send(q);
+                              if (!q || !chosen) return;
+                              void send(q, chosen, skillsForVersion(chosen));
                             }}
                             onSwitched={() => composeRef.current?.focus()}
                           />

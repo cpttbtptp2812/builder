@@ -36,6 +36,8 @@ export type GuestTurnCtx = {
   promptAddon?: string;
   /** 路由已确定的技能（共形路由有把握或用户在反问里选定），跳过关键词路由 */
   pinSkillId?: string;
+  /** 只这一轮按这个目录路由，不改线上版本 */
+  catalog?: AgentSkill[];
 };
 
 type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
@@ -107,13 +109,14 @@ function expandQuery(query: string, history?: AgentChatMessage[]): string {
   return `${lastUser.content}\n追问：${query}`;
 }
 
-function pickSkill(query: string, pinSkillId?: string): SkillPick {
-  const pinned = pinSkillId ? allRunnableSkills().find((s) => s.id === pinSkillId) : undefined;
+function pickSkill(query: string, pinSkillId?: string, catalog?: AgentSkill[]): SkillPick {
+  const skills = catalog?.length ? catalog : allRunnableSkills();
+  const pinned = pinSkillId ? skills.find((s) => s.id === pinSkillId) : undefined;
   if (pinned) {
     logRoutedQuery(query, { kind: "skill", skillId: pinned.id, score: 10 });
     return { kind: "skill", skill: pinned, hits: ["语义路由"], score: 10 };
   }
-  const d = routeQuery(query);
+  const d = routeQuery(query, skills);
   logRoutedQuery(query, d);
   if (d.kind === "skill" && d.skill) return { kind: "skill", skill: d.skill, hits: d.hits, score: d.score };
   if (d.kind === "about-site") return { kind: "about-site", reason: "问的是这个网站是什么" };
@@ -512,7 +515,8 @@ export async function runGuestAgentTurn(
     peekRuntimeConfig().features.preferServerGuest &&
     !ctx.force &&
     !ctx.pinned?.trim() &&
-    !ctx.pinSkillId
+    !ctx.pinSkillId &&
+    !ctx.catalog?.length
   ) {
     try {
       const remote = await runGuestAgentAsync(query, { snapshotRoot: ctx.snapshotRoot });
@@ -596,7 +600,7 @@ export async function runGuestAgentTurn(
     });
   }
 
-  const pick = pickSkill(working, ctx.pinSkillId);
+  const pick = pickSkill(working, ctx.pinSkillId, ctx.catalog);
   const expanded = expandQuery(working, ctx.history);
 
   if (pick.kind === "about-site" || pick.kind === "knowledge" || pick.kind === "open") {
