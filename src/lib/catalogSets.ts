@@ -93,6 +93,32 @@ export function suggestedSetName(now = new Date()): string {
 
 let seeding = false;
 
+function saySkill(id: string, title: string, triggers: string[], text: string): SetSkill {
+  const trig = triggers.map((t) => `  - ${t}`).join("\n");
+  return {
+    id,
+    name: title,
+    imported: true,
+    raw: `---
+name: ${id}
+description: ${title} — ${text}
+triggers:
+${trig}
+steps:
+  - id: say
+    label: 直接回答
+    tool: __say__
+    args:
+      text: "${text}"
+---
+
+# ${id}
+
+${text}
+`,
+  };
+}
+
 function buildSampleSets(base: SetSkill[]): CatalogSet[] {
   return [
     {
@@ -165,6 +191,60 @@ steps:
 `,
         },
       ],
+    },
+    {
+      id: "set-sample-leave5",
+      name: "年假只休5天",
+      note: "问年假时不走制度值班，改口成满一年 5 天",
+      savedAt: "2026-08-18T10:00:00.000Z",
+      status: "version",
+      skills: [...cloneSkills(base), saySkill("leave-five", "年假口径", ["年假有几天", "满一年年假", "年假几天"], "司龄满一年只休 5 天，不按现行 10 天。")],
+    },
+    {
+      id: "set-sample-setup",
+      name: "安装换一种答法",
+      note: "安装配置不再查现成答案",
+      savedAt: "2026-08-11T10:00:00.000Z",
+      status: "version",
+      skills: [
+        ...cloneSkills(base).filter((s) => s.id !== "product-faq"),
+        saySkill("setup-desk", "安装值班", ["安装或配置", "安装失败", "配置遇到问题"], "先别翻手册。装不上就换国内镜像，Node 升到 22.5，端口改成 5174。"),
+      ],
+    },
+    {
+      id: "set-sample-loop",
+      name: "Agent Loop 改口",
+      note: "问 Agent Loop 时只讲三步，不走知识库长文",
+      savedAt: "2026-08-04T10:00:00.000Z",
+      status: "version",
+      skills: [...cloneSkills(base), saySkill("loop-brief", "循环三步", ["Agent Loop", "agent loop"], "只讲三步：收问题、调工具、把引用写回去。不展开 SSE。")],
+    },
+    {
+      id: "set-sample-route",
+      name: "路由改口",
+      note: "问怎么路由时，改成分数不够就没人接",
+      savedAt: "2026-07-22T10:00:00.000Z",
+      status: "version",
+      skills: [...cloneSkills(base), saySkill("route-brief", "路由口径", ["怎么路由", "路由技能", "SkillForge"], "只看触发词。分数不到 2，这句就没有技能接。")],
+    },
+    {
+      id: "set-sample-hold",
+      name: "巡检先别发",
+      note: "发布前巡检先回绝，不跑检查",
+      savedAt: "2026-07-08T10:00:00.000Z",
+      status: "version",
+      skills: [
+        ...cloneSkills(base).filter((s) => s.id !== "release-inspector"),
+        saySkill("inspect-hold", "先别发", ["发布前巡检", "能否上线", "能不能发"], "先别发。等人工看过再巡检。"),
+      ],
+    },
+    {
+      id: "set-sample-invoice",
+      name: "报销可以后补",
+      note: "问报销时不再要求先附发票",
+      savedAt: "2026-06-16T10:00:00.000Z",
+      status: "version",
+      skills: [...cloneSkills(base), saySkill("报销", "报销口径", ["报销怎么办", "发票报销", "缺发票"], "发票可以后补，先记账，月底前补上就行。")],
     },
   ];
 }
@@ -303,7 +383,7 @@ function sameRaw(a: string | undefined, b: string | undefined) {
 
 /** 这一版和线上正在用的技能一致（没发布的草稿不算）。 */
 export function matchesLiveCatalog(set: CatalogSet): boolean {
-  const live = allRunnableSkills().filter((s) => !isAnswerLayerSkill(s.id));
+  const live = cachedLiveSkills().filter((s) => !isAnswerLayerSkill(s.id));
   const past = set.skills.filter((s) => !isAnswerLayerSkill(s.id));
   if (live.length !== past.length) return false;
   const liveRaw = new Map(live.map((s) => [s.id, s.manifest]));
@@ -412,9 +492,40 @@ function sayLine(raw: string | undefined): string {
   return picked.join("、");
 }
 
+function textHash(text: string): string {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i += 1) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return (h >>> 0).toString(36);
+}
+
+function liveStorageSig(): string {
+  if (typeof localStorage === "undefined") return "";
+  const applied = localStorage.getItem("ownagent:skill-applied") ?? "";
+  const imported = localStorage.getItem("ownagent:imported-skills") ?? "";
+  return `${textHash(applied)}:${textHash(imported)}`;
+}
+
+let liveCache: { sig: string; skills: AgentSkill[] } | null = null;
+
+function cachedLiveSkills(): AgentSkill[] {
+  const sig = liveStorageSig();
+  if (liveCache?.sig === sig) return liveCache.skills;
+  const skills = allRunnableSkills();
+  liveCache = { sig, skills };
+  return skills;
+}
+
+const rawCatalogCache = new Map<string, AgentSkill[]>();
+
 function catalogFromRaws(rows: SetSkill[]): AgentSkill[] {
+  const key = rows.map((s) => `${s.id}:${textHash(s.raw)}`).join("|");
+  const hit = rawCatalogCache.get(key);
+  if (hit) return hit;
   const cores = rows.map((s) => hydrateSkill(s.raw, { id: s.id, skillPath: `set://${s.id}` }));
-  return enrichSkillCatalog(cores, "browser").filter((s) => s.runnable) as AgentSkill[];
+  const catalog = enrichSkillCatalog(cores, "browser").filter((s) => s.runnable) as AgentSkill[];
+  rawCatalogCache.set(key, catalog);
+  if (rawCatalogCache.size > 24) rawCatalogCache.delete(rawCatalogCache.keys().next().value!);
+  return catalog;
 }
 
 export function questionsForSets(past: CatalogSet, live: AgentSkill[]): string[] {
@@ -547,4 +658,101 @@ export function sentenceAgainstSet(query: string, set: CatalogSet): string {
     return `还是会交给${to}答，但「${set.name}」里认的内容不一样。`;
   }
   return `还是会交给${to}答`;
+}
+
+function spokenLine(raw: string | undefined): string {
+  if (!raw) return "";
+  const matched = raw.match(/^\s*text:\s*"([^"]+)"/m);
+  return matched?.[1]?.trim() ?? "";
+}
+
+export type ForkSide = {
+  label: string;
+  who: string;
+  score: number;
+  margin: number;
+  hits: string[];
+  rule: string;
+  said: string;
+  board: { name: string; score: number; hits: string[] }[];
+};
+
+export type DecisionFork = {
+  query: string;
+  /** route：去向不同。words：去向相同，认的说法不同。 */
+  splitOn: "route" | "words";
+  note: string;
+  live: ForkSide;
+  alt: ForkSide;
+};
+
+function forkSide(label: string, decision: ReturnType<typeof routeQuery>, said: string): ForkSide {
+  return {
+    label,
+    who: decision.kind === "skill" ? decision.label : "没有技能接",
+    score: decision.score,
+    margin: decision.margin,
+    hits: decision.hits.slice(0, 4),
+    rule: decision.rule,
+    said,
+    board: decision.ranked
+      .filter((row) => row.score > 0)
+      .slice(0, 3)
+      .map((row) => ({ name: skillLabel(row.skill), score: row.score, hits: row.hits.slice(0, 3) })),
+  };
+}
+
+/** 同一句话在线上和某一版上的两条判定。不改线上。 */
+export function decisionFork(query: string, set: CatalogSet): DecisionFork | null {
+  const q = query.trim();
+  if (!q) return null;
+  const past = catalogFromRaws(set.skills);
+  const live = cachedLiveSkills();
+  const before = routeQuery(q, past);
+  const after = routeQuery(q, live);
+  const said = spokenLine(before.skillId ? set.skills.find((skill) => skill.id === before.skillId)?.raw : undefined);
+  const note = hearSet(q, set);
+  if (!note) return null;
+  return {
+    query: q,
+    splitOn: routeKey(before) !== routeKey(after) ? "route" : "words",
+    note,
+    live: forkSide("现在", after, ""),
+    alt: forkSide(set.name, before, said),
+  };
+}
+
+/** 这句在某一版里是否会换说法。一样时返回空。 */
+export function hearSet(query: string, set: CatalogSet): string {
+  const q = query.trim();
+  if (!q) return "";
+  const past = catalogFromRaws(set.skills);
+  const live = cachedLiveSkills();
+  const before = routeQuery(q, past);
+  const after = routeQuery(q, live);
+  const said = spokenLine(before.skillId ? set.skills.find((s) => s.id === before.skillId)?.raw : undefined);
+  if (routeKey(before) !== routeKey(after)) {
+    if (said) return clipText(said, 36);
+    const from = before.kind === "skill" ? before.label : "没有技能接";
+    const to = after.kind === "skill" ? after.label : "没有技能接";
+    return `交给${from}，现在是${to}`;
+  }
+  const skillId = after.skillId;
+  const pastRaw = set.skills.find((s) => s.id === skillId)?.raw;
+  const liveRaw = live.find((s) => s.id === skillId)?.manifest;
+  if (skillId && !sameRaw(pastRaw, liveRaw)) {
+    const pastDoc = parseSkillMarkdown(pastRaw ?? "");
+    const liveDoc = parseSkillMarkdown(liveRaw ?? "");
+    const dropped = liveDoc.triggers.filter((t) => t && !pastDoc.triggers.includes(t));
+    const added = pastDoc.triggers.filter((t) => t && !liveDoc.triggers.includes(t));
+    if (dropped.length || added.length) {
+      const parts: string[] = [];
+      if (dropped.length) parts.push(`不认${dropped.slice(0, 2).map((t) => `「${t}」`).join("")}`);
+      if (added.length) parts.push(`改认${added.slice(0, 2).map((t) => `「${t}」`).join("")}`);
+      return clipText(parts.join("，"), 36);
+    }
+    const line = skillChangeLines(pastRaw, liveRaw)[0];
+    return line ? clipText(line, 36) : "写法不同";
+  }
+  return "";
 }

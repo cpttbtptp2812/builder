@@ -320,6 +320,9 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
     case "__compose_steps__":
       return { content: { markdown: composeStepsMarkdown(args), meta: { skill: "compose-steps" } } };
 
+    case "__say__":
+      return { content: { markdown: String(args.text ?? ""), meta: { skill: "say" } } };
+
     case "__run_policy_desk__": {
       const desk = runPolicyDesk(String(args.query ?? ""));
       return {

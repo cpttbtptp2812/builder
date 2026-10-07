@@ -1569,6 +1569,7 @@ export function AgentProductDemo({
                           <ReplyVersionSwitch
                             disabled={running}
                             canAskAgain={messages.slice(0, idx).some((x) => x.role === "user")}
+                            query={messages.slice(0, idx).reverse().find((x) => x.role === "user")?.content ?? ""}
                             onAskAgain={() => {
                               const q = messages.slice(0, idx).reverse().find((x) => x.role === "user")?.content;
                               if (q) void send(q);
