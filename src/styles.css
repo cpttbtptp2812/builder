@@ -38816,6 +38816,40 @@ button.agent-tool-chip {
 }
 .ua-reply-again-side:hover { text-decoration: underline; }
 .ua-reply-again-side:disabled { opacity: 0.4; cursor: default; text-decoration: none; }
+.ua-reply-score {
+  margin-left: 8px;
+  padding: 0 6px;
+  height: 22px;
+  border: 1px solid #e4e4e7;
+  border-radius: 6px;
+  background: #fff;
+  color: #4338ca;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.ua-reply-score:hover { background: #fafafa; }
+.ua-score {
+  position: fixed;
+  z-index: 90;
+  width: min(360px, calc(100vw - 24px));
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e4e4e7;
+  border-radius: 12px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+  color: #0f172a;
+}
+.ua-score header { display: flex; flex-direction: column; gap: 4px; }
+.ua-score header strong { font-size: 13px; font-weight: 650; }
+.ua-score header span { color: #64748b; font-size: 12px; }
+.ua-score ol { margin: 10px 0 0; padding: 0; list-style: none; }
+.ua-score li { padding: 8px 0; border-top: 1px solid #f4f4f5; }
+.ua-score li b { display: block; font-size: 12px; font-weight: 650; }
+.ua-score li span { display: block; margin-top: 2px; color: #64748b; font-size: 12px; line-height: 1.45; }
+.ua-score-empty { margin: 10px 0 0; color: #64748b; font-size: 12px; }
 .ua-reply-note { margin-left: 8px; color: #b45309; font-size: 12px; }
 .ua-reply-note.is-ok { color: #4338ca; }
 

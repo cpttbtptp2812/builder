@@ -3,16 +3,35 @@ import { createPortal } from "react-dom";
 import {
   CATALOG_SETS_EVENT,
   currentHearing,
+  clearVersionScore,
   decisionFork,
   hearSet,
   listVersions,
   matchesLiveCatalog,
+  pinVersionScore,
   restoreCatalogSet,
+  takeVersionScore,
   type CatalogSet,
   type DecisionFork,
   type ForkSide,
+  type VersionScorecard,
 } from "../../../lib/catalogSets";
 import { SKILL_PUBLISH_EVENT } from "../../../lib/skillCompareStore";
+
+function ScoreList({ card }: { card: VersionScorecard }) {
+  const changed = card.rows.filter((row) => row.moved || row.liveOk !== row.altOk);
+  if (!changed.length) return <p className="ua-score-empty">这 {card.total} 题和线上走得一样。</p>;
+  return (
+    <ol>
+      {changed.map((row) => (
+        <li key={row.q}>
+          <b>{row.note || row.q}</b>
+          <span>线上交给{row.liveWho}{row.liveOk ? "，对了" : "，偏了"}。这一版交给{row.altWho}{row.altOk ? "，对了" : "，偏了"}。</span>
+        </li>
+      ))}
+    </ol>
+  );
+}
 
 function ForkLane({ side, split, said }: { side: ForkSide; split: boolean; said?: boolean }) {
   const max = Math.max(side.score, ...side.board.map((row) => row.score), 1);
@@ -64,12 +83,15 @@ export function ReplyVersionSwitch({
   disabled,
   canAskAgain,
   query = "",
+  showReport = false,
   onAskAgain,
   onSwitched,
 }: {
   disabled?: boolean;
   canAskAgain: boolean;
   query?: string;
+  /** 只在最后一条回答上显示成绩单，避免每条都重复。 */
+  showReport?: boolean;
   onAskAgain: () => void;
   onSwitched?: () => void;
 }) {
@@ -80,7 +102,11 @@ export function ReplyVersionSwitch({
   const [note, setNote] = useState<string | null>(null);
   const [switched, setSwitched] = useState(() => switchedFromOrigin());
   const [fork, setFork] = useState<{ id: string; top: number; left: number; data: DecisionFork } | null>(null);
+  const [card, setCard] = useState<VersionScorecard | null>(() => takeVersionScore());
+  const [scoreOpen, setScoreOpen] = useState(false);
+  const [scorePos, setScorePos] = useState<{ top: number; left: number } | null>(null);
   const forkRef = useRef<HTMLElement>(null);
+  const scoreRef = useRef<HTMLElement>(null);
   const baselineRef = useRef(currentVersionId(listVersions()));
   const rootRef = useRef<HTMLSpanElement>(null);
   const menuRef = useRef<HTMLSpanElement>(null);
@@ -102,12 +128,13 @@ export function ReplyVersionSwitch({
   }, []);
 
   useEffect(() => {
-    if (!open && !fork) return;
+    if (!open && !fork && !scoreOpen) return;
     const close = (event: MouseEvent) => {
       const target = event.target as Node;
-      if (rootRef.current?.contains(target) || menuRef.current?.contains(target) || forkRef.current?.contains(target)) return;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target) || forkRef.current?.contains(target) || scoreRef.current?.contains(target)) return;
       setOpen(false);
       setFork(null);
+      setScoreOpen(false);
     };
     const closeScroll = () => setOpen(false);
     document.addEventListener("mousedown", close);
@@ -116,7 +143,7 @@ export function ReplyVersionSwitch({
       document.removeEventListener("mousedown", close);
       window.removeEventListener("scroll", closeScroll, true);
     };
-  }, [open, fork]);
+  }, [open, fork, scoreOpen]);
 
   const asked = query.trim();
   const diffIds = useMemo(() => {
@@ -141,9 +168,12 @@ export function ReplyVersionSwitch({
     setOpen(false);
     setFork(null);
     if (id === currentId) return;
-    const name = versions.find((set) => set.id === id)?.name ?? "";
+    const picked = versions.find((set) => set.id === id);
+    const name = picked?.name ?? "";
+    const nextCard = picked ? pinVersionScore(picked) : null;
     const result = restoreCatalogSet(id);
     if (!result.ok) {
+      clearVersionScore();
       setNote(result.reason ?? "没有切换");
       return;
     }
@@ -153,7 +183,14 @@ export function ReplyVersionSwitch({
     }
     const origin = sessionStorage.getItem(SWITCH_FROM_KEY);
     const moved = Boolean(origin && origin !== id);
-    if (!moved) sessionStorage.removeItem(SWITCH_FROM_KEY);
+    if (!moved) {
+      sessionStorage.removeItem(SWITCH_FROM_KEY);
+      clearVersionScore();
+      setCard(null);
+    } else {
+      setCard(nextCard);
+    }
+    setScoreOpen(false);
     setSwitched(moved);
     setNote(name ? `已换到「${name}」` : null);
     onSwitched?.();
@@ -265,6 +302,33 @@ export function ReplyVersionSwitch({
           再问一次
         </button>
       ) : null}
+      {showReport && switched && card ? (
+        <button
+          type="button"
+          className="ua-reply-score"
+          aria-expanded={scoreOpen}
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            const width = 360;
+            setScorePos({ top: rect.bottom + 8, left: Math.max(12, Math.min(rect.left, window.innerWidth - width - 12)) });
+            setScoreOpen((value) => !value);
+          }}
+        >
+          路由 {card.altOk}/{card.total}
+        </button>
+      ) : null}
+      {showReport && scoreOpen && card && scorePos
+        ? createPortal(
+            <article ref={scoreRef} className="ua-score" style={{ top: scorePos.top, left: scorePos.left }}>
+              <header>
+                <strong>成绩单</strong>
+                <span>固定 {card.total} 题，这一版对 {card.altOk}，线上对 {card.liveOk}</span>
+              </header>
+              <ScoreList card={card} />
+            </article>,
+            document.body,
+          )
+        : null}
       {note ? <span className={note.startsWith("已换到") ? "ua-reply-note is-ok" : "ua-reply-note"}>{note}</span> : null}
     </span>
   );

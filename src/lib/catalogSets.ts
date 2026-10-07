@@ -1,7 +1,8 @@
 /** 一整套技能的版本：保存客户现在听到的，之后可以改名称、切换回去 */
 
 import { allRunnableSkills, isAnswerLayerSkill, SKILL_CATALOG, type AgentSkill } from "./agentSkills";
-import { routeKey, routeQuery, skillLabel } from "./skillRouter";
+import { routeKey, routeKeyLabel, routeQuery, skillLabel } from "./skillRouter";
+import { getRouterEvalCases } from "./evalHarness";
 import { enrichSkillCatalog, hydrateSkill, parseSkillMarkdown } from "./skillMarkdown";
 import { listGateQuestionRows } from "./skillGateQuestions";
 import { listQueryLog } from "./skillQueryLog";
@@ -83,7 +84,9 @@ function readStore(): Store {
 }
 
 function writeStore(store: Store) {
-  localStorage.setItem(KEY, JSON.stringify(store));
+  const next = JSON.stringify(store);
+  if (localStorage.getItem(KEY) === next) return;
+  localStorage.setItem(KEY, next);
   if (typeof window !== "undefined") window.dispatchEvent(new CustomEvent(CATALOG_SETS_EVENT));
 }
 
@@ -263,6 +266,14 @@ function cloneSkills(skills: SetSkill[]): SetSkill[] {
   return skills.map((s) => ({ ...s }));
 }
 
+function sameSkillList(a: SetSkill[], b: SetSkill[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((skill, index) => {
+    const other = b[index];
+    return other?.id === skill.id && other.raw === skill.raw && other.imported === skill.imported;
+  });
+}
+
 /** 示例版本如果和线上完全一样，就改写成有差别的那一份。用户自己的版本不动。 */
 function seedDistinctCatalogSets() {
   if (typeof localStorage === "undefined" || seeding) return;
@@ -281,6 +292,12 @@ function seedDistinctCatalogSets() {
         continue;
       }
       if (matchesLiveCatalog(existing)) {
+        if (
+          existing.name === sample.name
+          && existing.note === sample.note
+          && existing.status === "version"
+          && sameSkillList(existing.skills, sample.skills)
+        ) continue;
         existing.name = sample.name;
         existing.note = sample.note;
         existing.skills = sample.skills;
@@ -720,6 +737,72 @@ export function decisionFork(query: string, set: CatalogSet): DecisionFork | nul
     live: forkSide("现在", after, ""),
     alt: forkSide(set.name, before, said),
   };
+}
+
+export type ScoreRow = {
+  q: string;
+  note: string;
+  expect: string;
+  liveWho: string;
+  altWho: string;
+  liveOk: boolean;
+  altOk: boolean;
+  moved: boolean;
+};
+
+export type VersionScorecard = {
+  setId: string;
+  name: string;
+  total: number;
+  liveOk: number;
+  altOk: number;
+  rows: ScoreRow[];
+};
+
+let pinnedScore: VersionScorecard | null = null;
+
+function laneWho(decision: ReturnType<typeof routeQuery>): string {
+  return decision.kind === "skill" ? decision.label : "没有技能接";
+}
+
+/** 用固定路由题给某一版打分，对照切换前的线上。不改技能。 */
+export function scoreVersion(set: CatalogSet, live = cachedLiveSkills()): VersionScorecard {
+  const past = catalogFromRaws(set.skills);
+  const rows = getRouterEvalCases().map((item) => {
+    const alt = routeQuery(item.query, past);
+    const now = routeQuery(item.query, live);
+    return {
+      q: item.query,
+      note: item.note ?? "",
+      expect: routeKeyLabel(item.expectedSkillId, live),
+      liveWho: laneWho(now),
+      altWho: laneWho(alt),
+      liveOk: now.skillId === item.expectedSkillId,
+      altOk: alt.skillId === item.expectedSkillId,
+      moved: routeKey(now) !== routeKey(alt),
+    };
+  });
+  return {
+    setId: set.id,
+    name: set.name,
+    total: rows.length,
+    liveOk: rows.filter((row) => row.liveOk).length,
+    altOk: rows.filter((row) => row.altOk).length,
+    rows,
+  };
+}
+
+export function pinVersionScore(set: CatalogSet): VersionScorecard {
+  pinnedScore = scoreVersion(set);
+  return pinnedScore;
+}
+
+export function clearVersionScore() {
+  pinnedScore = null;
+}
+
+export function takeVersionScore(): VersionScorecard | null {
+  return pinnedScore;
 }
 
 /** 这句在某一版里是否会换说法。一样时返回空。 */
