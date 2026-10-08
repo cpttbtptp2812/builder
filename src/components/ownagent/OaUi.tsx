@@ -7,6 +7,7 @@ export function OaPage({
   toast,
   actions,
   chrome = true,
+  hideHead = false,
   children,
 }: {
   title: string;
@@ -15,6 +16,8 @@ export function OaPage({
   actions?: React.ReactNode;
   /** 嵌进上线前检查时不重复画标题 */
   chrome?: boolean;
+  /** 页签已经说明这是哪一页时，不再画一条标题 */
+  hideHead?: boolean;
   children: React.ReactNode;
 }) {
   if (!chrome) {
@@ -22,18 +25,20 @@ export function OaPage({
   }
   return (
     <div className="oa-ui oa-page">
-      <header className="oa-page-head">
-        <div className="oa-page-head-main">
-          <h1>{title}</h1>
-          {desc ? <p>{desc}</p> : null}
-        </div>
-        {(toast || actions) && (
-          <div className="oa-page-head-side">
-            {toast ? <span className="oa-toast">{toast}</span> : null}
-            {actions}
+      {hideHead ? null : (
+        <header className="oa-page-head">
+          <div className="oa-page-head-main">
+            <h1>{title}</h1>
+            {desc ? <p>{desc}</p> : null}
           </div>
-        )}
-      </header>
+          {(toast || actions) && (
+            <div className="oa-page-head-side">
+              {toast ? <span className="oa-toast">{toast}</span> : null}
+              {actions}
+            </div>
+          )}
+        </header>
+      )}
       {children}
     </div>
   );

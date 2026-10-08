@@ -4,7 +4,7 @@ export function openProductView(view: string, extra?: Record<string, string>) {
   const params = new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
   params.set("tab", "product");
   params.set("view", view);
-  if (view !== "versions" && view !== "editset") params.delete("set");
+  if (view !== "editset" && !(view === "versions" && extra?.set)) params.delete("set");
   if (extra) {
     for (const [key, value] of Object.entries(extra)) params.set(key, value);
   }

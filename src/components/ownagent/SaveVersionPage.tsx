@@ -22,7 +22,7 @@ export function SaveVersionPage() {
     event.preventDefault();
     const set = saveCatalogSet(name, note, "version");
     sessionStorage.setItem(SAVED_NOTE_KEY, `已保存「${set.name}」`);
-    openProductView("compare");
+    openProductView("versions");
   }
 
   function saveDraft() {
@@ -36,7 +36,7 @@ export function SaveVersionPage() {
       <form onSubmit={submit}>
         <header className="oa-vpage-head">
           <div>
-            <button type="button" className="oa-vpage-back" onClick={() => openProductView("compare")}>技能</button>
+            <button type="button" className="oa-vpage-back" onClick={() => openProductView("versions")}>版本</button>
             <h1>保存当前版本</h1>
             <p>记下现在线上的技能。没发布的修改不会写入。</p>
           </div>

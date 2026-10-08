@@ -175,7 +175,7 @@ export function VersionsPage() {
       {toast.node}
       <header className="oa-vpage-head">
         <div>
-          <button type="button" className="oa-vpage-back" onClick={() => openProductView("compare")}>技能</button>
+          <button type="button" className="oa-vpage-back" onClick={() => openProductView("versions")}>版本</button>
           <h1>{picked ? `${picked.name} 和现在` : "对比"}</h1>
           <p>
             {picked ? formatSavedAt(picked.savedAt) : "还没有保存过的版本"}

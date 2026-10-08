@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { KnowledgeFeed } from "../fx/agent/KnowledgeFeed";
 import { EvalLabPanel } from "../fx/EvalLabPanel";
 import { CaseManagementPanel } from "./CaseManagementPanel";
@@ -9,9 +10,9 @@ import { McpToolsPanel } from "./McpToolsPanel";
 import { PromptTemplatePanel } from "./PromptTemplatePanel";
 import { RagPanel } from "./RagPanel";
 import { SkillComparePanel } from "./SkillComparePanel";
-import { DraftLibraryPage } from "./DraftLibraryPage";
 import { EditVersionPage } from "./EditVersionPage";
 import { SaveVersionPage } from "./SaveVersionPage";
+import { VersionsHub } from "./VersionsHub";
 import { VersionsPage } from "./VersionsPage";
 import { SkillPlatformPanel } from "./SkillPlatformPanel";
 import { TracePanel } from "./TracePanel";
@@ -106,39 +107,31 @@ export function MaterialsLine({ view, onPick }: { view: string; onPick: (id: str
   );
 }
 
+const VERSION_VIEWS = new Set(["versions", "savever", "drafts", "editset"]);
+
+function SkillSectionTabs({ current, onPick }: { current: "skill" | "version"; onPick: (id: string) => void }) {
+  return (
+    <nav className="oa-tabs oa-skill-section-tabs" aria-label="技能和版本">
+      <button type="button" className={current === "skill" ? "on" : ""} onClick={() => onPick("compare")}>技能</button>
+      <button type="button" className={current === "version" ? "on" : ""} onClick={() => onPick("versions")}>版本</button>
+    </nav>
+  );
+}
+
 export function SkillLine({ view, onPick }: { view: string; onPick: (id: string) => void }) {
-  if (view === "compare") {
+  const [params] = useSearchParams();
+  if (view === "compare" || VERSION_VIEWS.has(view)) {
     return (
       <div className="oa-skill-home">
-        <SkillComparePanel />
-      </div>
-    );
-  }
-  if (view === "versions") {
-    return (
-      <div className="oa-skill-home">
-        <VersionsPage />
-      </div>
-    );
-  }
-  if (view === "savever") {
-    return (
-      <div className="oa-skill-home">
-        <SaveVersionPage />
-      </div>
-    );
-  }
-  if (view === "drafts") {
-    return (
-      <div className="oa-skill-home">
-        <DraftLibraryPage />
-      </div>
-    );
-  }
-  if (view === "editset") {
-    return (
-      <div className="oa-skill-home">
-        <EditVersionPage />
+        <div className="oa-skill-section">
+          <SkillSectionTabs current={view === "compare" ? "skill" : "version"} onPick={onPick} />
+        </div>
+        {view === "compare" ? <SkillComparePanel /> : null}
+        {view === "versions" && params.get("set") ? <VersionsPage /> : null}
+        {view === "versions" && !params.get("set") ? <VersionsHub /> : null}
+        {view === "drafts" ? <VersionsHub pane="drafts" /> : null}
+        {view === "savever" ? <SaveVersionPage /> : null}
+        {view === "editset" ? <EditVersionPage /> : null}
       </div>
     );
   }

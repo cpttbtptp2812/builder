@@ -78,7 +78,6 @@ import {
 import { buildZip, downloadBlob } from "../../lib/zipStore";
 import { apiFetch } from "../../lib/apiClient";
 import { SkillEvolutionPanel } from "./SkillEvolution";
-import { RouteConfidencePanel } from "./RouteConfidence";
 import { ScmCaseEditor } from "./ScmCaseEditor";
 import { SkillBreakPanel } from "./SkillBreak";
 import { PageToolWalk } from "./PageToolWalk";
@@ -88,7 +87,6 @@ import { TraceFeedbackPanel } from "./TraceFeedbackPanel";
 import { SkillGovernancePanel } from "./SkillGovernancePanel";
 import { OaBtn, OaPage } from "./OaUi";
 import { noteLivePublished } from "../../lib/catalogSets";
-import { VersionEntry } from "./VersionEntry";
 import {
   addTriggerTo,
   ImpactPanel,
@@ -321,12 +319,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   const lead = pendingCount ? `${pendingCount} 个改过，还没检查。` : undefined;
 
   return (
-    <OaPage
-      title="技能"
-      desc={lead}
-      actions={<VersionEntry onToast={toast.show} />}
-    >
+    <OaPage title="技能" hideHead>
       {toast.node}
+      {lead ? <p className="oa-skill-lead">{lead}</p> : null}
       <div className="oa-skill-toolbar">
         <div className="oa-skill-tools">
           <input
@@ -349,7 +344,6 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
             同步仓库
           </button>
           <BatchCheckBar skills={skills} onToast={toast.show} />
-          <RouteConfidencePanel />
           <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
           {selectedRows.some((s) => importedIds.has(s.id)) ? (
             <button type="button" className="oa-bar-btn is-danger" onClick={removeSelectedImported}>

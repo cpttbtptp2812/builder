@@ -26,7 +26,7 @@ const STATUS_TEXT: Record<RouteVerdict["status"], string> = {
   ood: "不像任何一类，走通用流程",
 };
 
-/** 路由把握度 — 共形预测给出「交给谁」的候选集，并实测它是否兑现了承诺的覆盖率 */
+/** 接得准 — 这句话会交给哪个技能，以及正确去向还在不在候选里 */
 export function RouteConfidencePanel() {
   const [open, setOpen] = useState(false);
   const [router, setRouter] = useState<ConformalRouter | null>(null);
@@ -101,15 +101,15 @@ export function RouteConfidencePanel() {
   return (
     <>
       <button type="button" className="own-skm-batch-btn own-skm-batch-btn--pop" onClick={() => setOpen(true)}>
-        路由把握度{stats ? ` ${pct(stats.coverage)}` : ""}
+        准确度{stats ? ` ${pct(stats.coverage)}` : ""}
       </button>
       {open
         ? createPortal(
-            <div className="oa-modal-backdrop" role="dialog" aria-modal="true" aria-label="路由把握度" onClick={() => setOpen(false)}>
+            <div className="oa-modal-backdrop" role="dialog" aria-modal="true" aria-label="准确度" onClick={() => setOpen(false)}>
               <div className="oa-modal oa-modal--wide own-rc" onClick={(event) => event.stopPropagation()}>
                 <header className="own-rc-head">
                   <div>
-                    <strong>路由把握度</strong>
+                    <strong>准确度</strong>
                     <p>每句话给出一组可能的去向。只剩一个就执行，剩几个就先问，不靠一个分数硬猜。</p>
                   </div>
                   <button type="button" className="own-rc-close" onClick={() => setOpen(false)}>

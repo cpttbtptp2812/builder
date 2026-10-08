@@ -40,7 +40,7 @@ export function EditVersionPage() {
   }, [id]);
 
   function back() {
-    openProductView(set?.status === "draft" ? "drafts" : "compare");
+    openProductView(set?.status === "draft" ? "drafts" : "versions");
   }
 
   function submit(event: FormEvent) {
@@ -49,7 +49,7 @@ export function EditVersionPage() {
     const hidden = set.skills.filter((s) => isAnswerLayerSkill(s.id));
     updateCatalogSet(set.id, { name, note, skills: [...skills, ...hidden] });
     sessionStorage.setItem(NOTE_KEY, `已修改「${name.trim() || set.name}」`);
-    openProductView(set.status === "draft" ? "drafts" : "compare");
+    openProductView(set.status === "draft" ? "drafts" : "versions");
   }
 
   function promote() {
@@ -59,14 +59,14 @@ export function EditVersionPage() {
     const saved = promoteDraft(set.id);
     if (!saved) return;
     sessionStorage.setItem(NOTE_KEY, `「${saved.name}」已存成版本`);
-    openProductView("compare");
+    openProductView("versions");
   }
 
   function remove() {
     if (!set) return;
     deleteCatalogSet(set.id);
     sessionStorage.setItem(NOTE_KEY, `已删除「${set.name}」`);
-    openProductView(set.status === "draft" ? "drafts" : "compare");
+    openProductView(set.status === "draft" ? "drafts" : "versions");
   }
 
   if (!set) {
@@ -74,7 +74,7 @@ export function EditVersionPage() {
       <div className="oa-ui oa-page oa-vpage">
         <header className="oa-vpage-head">
           <div>
-            <button type="button" className="oa-vpage-back" onClick={() => openProductView("compare")}>技能</button>
+            <button type="button" className="oa-vpage-back" onClick={() => openProductView("versions")}>版本</button>
             <h1>找不到这一版</h1>
           </div>
         </header>
@@ -89,7 +89,7 @@ export function EditVersionPage() {
       <form onSubmit={submit}>
         <header className="oa-vpage-head">
           <div>
-            <button type="button" className="oa-vpage-back" onClick={back}>{isDraft ? "草稿库" : "技能"}</button>
+            <button type="button" className="oa-vpage-back" onClick={back}>{isDraft ? "草稿库" : "版本"}</button>
             <h1>{isDraft ? "修改草稿" : "修改版本"}</h1>
             <p>只改这份记录。线上正在用的技能不会变。</p>
           </div>

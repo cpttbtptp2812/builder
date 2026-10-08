@@ -53,7 +53,7 @@ export function DraftLibraryPage() {
       {toast ? <div className="own-skm-toast" role="status">{toast}</div> : null}
       <header className="oa-vpage-head">
         <div>
-          <button type="button" className="oa-vpage-back" onClick={() => openProductView("compare")}>技能</button>
+          <button type="button" className="oa-vpage-back" onClick={() => openProductView("versions")}>版本</button>
           <h1>草稿库</h1>
           <p>先存下来，改完再决定要不要变成版本。草稿不会换掉线上正在用的技能。</p>
         </div>

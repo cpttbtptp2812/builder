@@ -783,7 +783,7 @@ export function AgentProductDemo({
               mode = "guest";
               route = {
                 skillId: "conformal-router",
-                skillName: "路由把握度不足 · 先确认",
+                skillName: "还没定交给谁 · 先确认",
                 score: Math.round(verdict.top.p * 10),
                 hits: verdict.set.map((c) => `${c.label} ${Math.round(c.p * 100)}%`),
                 path: "skill",
@@ -2101,9 +2101,9 @@ function routeVerdictChip(v: RouteVerdict): string {
   const target = `目标 ${Math.round((1 - v.alpha) * 100)}%`;
   const pct = (p: number) => `${Math.round(p * 100)}%`;
   if (v.status === "ood") return `路由：不像已知任何一类（p=${v.inScopeP.toFixed(2)}），走通用流程`;
-  if (v.status === "confident") return `路由把握度：${v.top.label} ${pct(v.top.p)}（${target}）`;
-  if (v.status === "ambiguous") return `路由有 ${v.set.length} 种可能：${v.set.map((c) => c.label).join(" / ")}`;
-  return `路由把握不足（${v.set.length} 个候选），走通用流程`;
+  if (v.status === "confident") return `准确度：${v.top.label} ${pct(v.top.p)}（${target}）`;
+  if (v.status === "ambiguous") return `有 ${v.set.length} 种可能：${v.set.map((c) => c.label).join(" / ")}`;
+  return `接得准还不够（${v.set.length} 个候选），走通用流程`;
 }
 
 function clarifyMarkdown(v: RouteVerdict): string {
