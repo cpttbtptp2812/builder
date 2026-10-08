@@ -63,12 +63,14 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
     if (!note) return;
     setToast(note);
     const clear = window.setTimeout(() => sessionStorage.removeItem(NOTE_KEY), 0);
-    const hide = window.setTimeout(() => setToast(null), 2800);
-    return () => {
-      window.clearTimeout(clear);
-      window.clearTimeout(hide);
-    };
+    return () => window.clearTimeout(clear);
   }, []);
+
+  useEffect(() => {
+    if (!toast) return;
+    const hide = window.setTimeout(() => setToast(null), 2800);
+    return () => window.clearTimeout(hide);
+  }, [toast]);
 
   const liveMatchId = sets.find((set) => matchesLiveCatalog(set))?.id ?? null;
   const hearingMatches = hearingId != null && sets.some((set) => set.id === hearingId && matchesLiveCatalog(set));
