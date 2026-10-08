@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { startTransition, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
@@ -413,15 +413,24 @@ export function WorkOwnAgent() {
   const [params, setParams] = useSearchParams();
   const tab = resolveTab(params.get("tab"), params.get("panel"));
   const view = resolveView(params.get("panel"), params.get("view"));
+  const [highlight, setHighlight] = useState<TabId | null>(null);
+  const shownTab = highlight ?? tab;
 
   function go(nextTab: TabId, nextView?: ViewId) {
+    setHighlight(nextTab);
     const next = new URLSearchParams();
     next.set("tab", nextTab);
     if (nextTab === "product") next.set("view", nextView ?? view);
     const trySkill = params.get("try") ?? params.get("skill");
     if (trySkill) next.set("try", trySkill);
-    setParams(next, { replace: true });
+    startTransition(() => {
+      setParams(next, { replace: true });
+    });
   }
+
+  useEffect(() => {
+    setHighlight(null);
+  }, [tab]);
 
   useEffect(() => {
     function onGo(ev: Event) {
@@ -452,14 +461,15 @@ export function WorkOwnAgent() {
           <span className="own-app-tagline">Skill 发版安全</span>
         </div>
         <nav className="own-app-tabs" aria-label="主视图">
+          <span className={shownTab === "theory" ? "own-app-tabs-thumb is-theory" : "own-app-tabs-thumb"} aria-hidden="true" />
           <button
             type="button"
-            className={tab === "product" ? "on" : ""}
+            className={shownTab === "product" ? "on" : ""}
             onClick={() => go("product", "chat")}
           >
             工作台
           </button>
-          <button type="button" className={tab === "theory" ? "on" : ""} onClick={() => go("theory")}>
+          <button type="button" className={shownTab === "theory" ? "on" : ""} onClick={() => go("theory")}>
             理论
           </button>
         </nav>

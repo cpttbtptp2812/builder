@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   getConformalRouter,
@@ -37,6 +37,7 @@ export function RouteConfidencePanel() {
   const [fork, setFork] = useState<ForkDeltaReport | null>(null);
 
   useEffect(() => {
+    if (!open) return;
     let alive = true;
     const sync = () => {
       setModel({ ...semanticStatus() });
@@ -50,9 +51,23 @@ export function RouteConfidencePanel() {
       window.removeEventListener(ROUTER_EVENT, sync);
       window.removeEventListener(SKILL_PUBLISH_EVENT, sync);
     };
-  }, []);
+  }, [open]);
 
-  const stats: RouterStats | null = useMemo(() => (router ? router.stats(alpha) : null), [router, alpha]);
+  const [stats, setStats] = useState<RouterStats | null>(null);
+  useEffect(() => {
+    if (!router) return;
+    let cancel = false;
+    const run = () => {
+      if (!cancel) setStats(router.stats(alpha));
+    };
+    const idle = window.requestIdleCallback?.(run, { timeout: 800 });
+    const timer = idle == null ? window.setTimeout(run, 0) : 0;
+    return () => {
+      cancel = true;
+      if (idle != null) window.cancelIdleCallback?.(idle);
+      if (timer) window.clearTimeout(timer);
+    };
+  }, [router, alpha]);
 
   useEffect(() => {
     if (!router || !probe.trim()) {

@@ -41211,13 +41211,19 @@ button.agent-tool-chip {
   background: #4f46e5;
   color: #fff;
   font-weight: 650;
-  box-shadow: 0 6px 16px -8px rgba(79, 70, 229, 0.8);
+  box-shadow: none;
 }
 .oa-version-hub .oa-vtile {
   border: 1px solid #e2e8f0 !important;
   border-radius: 16px !important;
   background: #fff !important;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 12px 28px -22px rgba(15, 23, 42, 0.35) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
+  transition: none !important;
+}
+.oa-version-hub .oa-vtile:hover,
+.oa-version-hub .oa-bar-btn,
+.oa-version-hub .oa-ver-more > button {
+  transition: none !important;
 }
 .oa-version-hub .oa-vtile::before {
   opacity: 1 !important;
@@ -41229,11 +41235,12 @@ button.agent-tool-chip {
   height: 3px !important;
   border-radius: 16px 16px 0 0 !important;
   background: #6366f1 !important;
+  transition: none !important;
 }
 .oa-version-hub .oa-vtile:hover {
-  transform: translateY(-3px) !important;
+  transform: none !important;
   border-color: #c7d2fe !important;
-  box-shadow: 0 16px 36px -18px rgba(79, 70, 229, 0.45) !important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04) !important;
 }
 .oa-version-hub .oa-skill-toolbar .own-skm-batch-btn,
 .oa-version-hub .oa-skill-toolbar .own-skm-batch-btn--pop {
@@ -41246,6 +41253,9 @@ button.agent-tool-chip {
 .oa-version-hub .own-skill-ver-card {
   padding: 1.15rem 1.15rem 1rem !important;
 }
+.oa-version-hub .own-skill-ver-card header {
+  padding-right: 36px !important;
+}
 .oa-version-hub .own-skill-ver-card header strong {
   letter-spacing: -0.03em !important;
 }
@@ -41253,24 +41263,17 @@ button.agent-tool-chip {
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.01em;
 }
-.oa-version-hub .own-skill-ver-item:hover .own-skill-ver-card header,
-.oa-version-hub .own-skill-ver-item:has(.oa-ver-more.is-open) .own-skill-ver-card header {
-  padding-right: 36px !important;
-}
 .oa-ver-more {
   position: absolute;
   top: 10px;
   right: 10px;
   z-index: 5;
   opacity: 0;
-  transform: translateY(-2px);
   pointer-events: none;
-  transition: opacity 0.16s ease, transform 0.16s ease;
 }
 .oa-version-hub .own-skill-ver-item:hover .oa-ver-more,
 .oa-ver-more.is-open {
   opacity: 1;
-  transform: none;
   pointer-events: auto;
 }
 .oa-ver-more > button {
@@ -41279,12 +41282,10 @@ button.agent-tool-chip {
   width: 30px;
   height: 30px;
   padding: 0;
-  border: 1px solid rgba(199, 210, 254, 0.95);
+  border: 1px solid #c7d2fe;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.9);
+  background: #fff;
   color: #4338ca;
-  box-shadow: 0 8px 18px -10px rgba(79, 70, 229, 0.7);
-  backdrop-filter: blur(10px);
   cursor: pointer;
 }
 .oa-ver-more.is-open > button,
@@ -41299,14 +41300,8 @@ button.agent-tool-chip {
   padding: 6px;
   border: 1px solid rgba(199, 210, 254, 0.85);
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.94);
-  box-shadow: 0 18px 40px -18px rgba(79, 70, 229, 0.45), 0 8px 16px -10px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(16px);
-  animation: oa-ver-pop-in 0.14s ease;
-}
-@keyframes oa-ver-pop-in {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: none; }
+  background: #fff;
+  box-shadow: 0 12px 28px -16px rgba(15, 23, 42, 0.28);
 }
 .oa-ver-pop > button {
   display: flex;
@@ -48502,9 +48497,10 @@ details summary {
   background: rgba(99, 102, 241, 0.65);
 }
 
-/* 平滑页面切换过渡容器 */
+/* 内容区是滚动容器，不能挂位移动画。动画结束后 transform 会留在这一层上，点按和滚动都会发黏。 */
 .own-app-stage {
-  animation: ownStageFadeIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: none;
+  transform: none;
 }
 
 @keyframes ownStageFadeIn {
@@ -49518,6 +49514,96 @@ details summary {
 .oa-stat-card span {
   font-size: 0.78rem !important;
   color: #64748b !important;
+}
+
+/* 版本页：关掉会拖着走的动画。卡片悬停、页签、侧栏都立刻换状态。 */
+.oa-skill-section-tabs button,
+.oa-version-hub,
+.oa-version-hub *,
+.oa-version-hub *::before,
+.oa-version-hub *::after,
+.own-app-side .own-nav-item,
+.own-app-side .own-nav-item:hover {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+.oa-version-hub .own-skill-ver-item,
+.oa-version-hub .own-skill-ver-item:hover,
+.oa-version-hub .oa-vtile,
+.oa-version-hub .oa-vtile:hover {
+  transform: none !important;
+}
+
+/* 页签选中块只移动位置。背景、阴影、字重都不参与动画，否则一帧一帧地重绘。 */
+.own-app-bar .own-cmd,
+.own-app-bar .own-exit,
+.own-app-bar .own-exit svg,
+.own-app-bar .own-cmd svg {
+  transition: none !important;
+  animation: none !important;
+  transform: none !important;
+}
+.own-app-tabs {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 1fr 1fr !important;
+}
+.own-app-tabs-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 3px;
+  width: calc(50% - 3px);
+  border-radius: 8px;
+  background: #fff;
+  transform: translate3d(0, 0, 0);
+  transition: transform 0.16s linear !important;
+  pointer-events: none;
+}
+.own-app-tabs-thumb.is-theory {
+  transform: translate3d(100%, 0, 0);
+}
+.own-app-bar .own-app-tabs button,
+.own-app-bar .own-app-tabs button.on {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+  transition: color 0.16s linear !important;
+}
+.oa-version-hub .oa-skill-tools {
+  position: relative;
+}
+.oa-version-hub .oa-seg-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--seg-w, 0px);
+  border-radius: 9px;
+  background: #4f46e5;
+  transform: translate3d(var(--seg-x, 0px), 0, 0) !important;
+  transition: none !important;
+  pointer-events: none;
+}
+.oa-version-hub .oa-skill-tools.is-ready .oa-seg-thumb {
+  transition: transform 0.16s linear !important;
+}
+.oa-version-hub .oa-bar-btn,
+.oa-version-hub .oa-bar-btn.is-on {
+  position: relative;
+  z-index: 1;
+  background: transparent !important;
+  box-shadow: none !important;
+  font-weight: 600 !important;
+  transition: color 0.16s linear !important;
+}
+.oa-version-hub .oa-bar-btn.is-on {
+  color: #fff;
 }
 
 

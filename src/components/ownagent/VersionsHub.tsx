@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
   CATALOG_SETS_EVENT,
@@ -6,8 +6,7 @@ import {
   deleteCatalogSet,
   faceSet,
   formatSavedAt,
-  listDrafts,
-  listVersions,
+  listCatalogSets,
   matchesLiveCatalog,
   promoteDraft,
   restoreCatalogSet,
@@ -20,6 +19,14 @@ import { RouteConfidencePanel } from "./RouteConfidence";
 
 const NOTE_KEY = "oa-version-saved";
 
+function readHubLists() {
+  const all = listCatalogSets();
+  return {
+    versions: all.filter((set) => set.status !== "draft"),
+    drafts: all.filter((set) => set.status === "draft"),
+  };
+}
+
 function MenuIcon({ d }: { d: string }) {
   return (
     <svg width="15" height="15" viewBox="0 0 15 15" fill="none" aria-hidden="true">
@@ -30,8 +37,9 @@ function MenuIcon({ d }: { d: string }) {
 
 /** 版本页签：已保存和草稿在同一页切换。不改对话里每条回复自己的版本。 */
 export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
-  const [sets, setSets] = useState<CatalogSet[]>(() => listVersions());
-  const [drafts, setDrafts] = useState<CatalogSet[]>(() => listDrafts());
+  const [boot] = useState(readHubLists);
+  const [sets, setSets] = useState<CatalogSet[]>(boot.versions);
+  const [drafts, setDrafts] = useState<CatalogSet[]>(boot.drafts);
   const [show, setShow] = useState<"saved" | "drafts">(pane);
   const [hearingId, setHearingId] = useState<string | null>(() => currentHearing()?.id ?? null);
   const [toast, setToast] = useState<string | null>(null);
@@ -39,6 +47,26 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [ask, setAsk] = useState<"switch" | "delete" | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const toolsRef = useRef<HTMLDivElement>(null);
+  const savedTabRef = useRef<HTMLButtonElement>(null);
+  const draftTabRef = useRef<HTMLButtonElement>(null);
+  const [thumbReady, setThumbReady] = useState(false);
+
+  function moveThumb(next: "saved" | "drafts") {
+    const host = toolsRef.current;
+    const btn = (next === "drafts" ? draftTabRef : savedTabRef).current;
+    if (!host || !btn) return;
+    host.style.setProperty("--seg-x", `${btn.offsetLeft}px`);
+    host.style.setProperty("--seg-w", `${btn.offsetWidth}px`);
+  }
+
+  useLayoutEffect(() => {
+    moveThumb(show);
+  }, [show, sets.length, drafts.length]);
+
+  useEffect(() => {
+    setThumbReady(true);
+  }, []);
 
   useEffect(() => {
     setShow(pane);
@@ -46,8 +74,9 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
 
   useEffect(() => {
     const refresh = () => {
-      setSets(listVersions());
-      setDrafts(listDrafts());
+      const next = readHubLists();
+      setSets(next.versions);
+      setDrafts(next.drafts);
       setHearingId(currentHearing()?.id ?? null);
     };
     window.addEventListener(CATALOG_SETS_EVENT, refresh);
@@ -72,9 +101,11 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
     return () => window.clearTimeout(hide);
   }, [toast]);
 
-  const liveMatchId = sets.find((set) => matchesLiveCatalog(set))?.id ?? null;
-  const hearingMatches = hearingId != null && sets.some((set) => set.id === hearingId && matchesLiveCatalog(set));
-  const currentId = hearingMatches ? hearingId : liveMatchId;
+  const currentId = useMemo(() => {
+    const liveMatchId = sets.find((set) => matchesLiveCatalog(set))?.id ?? null;
+    if (hearingId && sets.some((set) => set.id === hearingId && matchesLiveCatalog(set))) return hearingId;
+    return liveMatchId;
+  }, [sets, hearingId]);
   const rows = show === "drafts" ? drafts : sets;
   const menuSet = rows.find((set) => set.id === menuId) ?? null;
   const cover = ask === "switch" ? unpublishedLabels() : [];
@@ -188,11 +219,12 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
     <div className="oa-ui oa-page oa-version-hub">
       {toast ? <div className="own-skm-toast" role="status">{toast}</div> : null}
       <div className="oa-skill-toolbar">
-        <div className="oa-skill-tools" role="tablist" aria-label="版本和草稿">
-          <button type="button" role="tab" aria-selected={show === "saved"} className={show === "saved" ? "oa-bar-btn is-on" : "oa-bar-btn"} onClick={() => { closeMenu(); setShow("saved"); }}>
+        <div ref={toolsRef} className={thumbReady ? "oa-skill-tools is-ready" : "oa-skill-tools"} role="tablist" aria-label="版本和草稿">
+          <span className="oa-seg-thumb" aria-hidden="true" />
+          <button ref={savedTabRef} type="button" role="tab" aria-selected={show === "saved"} className={show === "saved" ? "oa-bar-btn is-on" : "oa-bar-btn"} onClick={() => { closeMenu(); moveThumb("saved"); setShow("saved"); }}>
             已保存 {sets.length}
           </button>
-          <button type="button" role="tab" aria-selected={show === "drafts"} className={show === "drafts" ? "oa-bar-btn is-on" : "oa-bar-btn"} onClick={() => { closeMenu(); setShow("drafts"); }}>
+          <button ref={draftTabRef} type="button" role="tab" aria-selected={show === "drafts"} className={show === "drafts" ? "oa-bar-btn is-on" : "oa-bar-btn"} onClick={() => { closeMenu(); moveThumb("drafts"); setShow("drafts"); }}>
             草稿 {drafts.length}
           </button>
         </div>
