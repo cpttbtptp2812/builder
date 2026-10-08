@@ -638,6 +638,38 @@ export async function runGuestAgentTurn(
     query,
     (step) => {
       seen.push(step);
+      if (step.tool === "__answer_faq__") {
+        const body = step.result as {
+          markdown?: string;
+          dashboard?: { faq?: { q?: string | null; score?: number; source?: string } };
+          meta?: { gap?: boolean };
+        } | undefined;
+        const faq = body?.dashboard?.faq;
+        if (faq?.q && !body?.meta?.gap) {
+          onEvent({
+            type: "tool-end",
+            tool: {
+              id: `guest-faq-${step.stepId}`,
+              name: "knowledge_search",
+              args: "{}",
+              iteration: 1,
+              ok: true,
+              ms: step.ms,
+              result: {
+                runtime: "local",
+                hits: [
+                  {
+                    title: faq.source || faq.q,
+                    excerpt: (body?.markdown ?? "").replace(/\s+/g, " ").trim().slice(0, 160),
+                    score: typeof faq.score === "number" ? faq.score : 1,
+                    chunkId: `faq-${faq.q}`,
+                  },
+                ],
+              },
+            },
+          });
+        }
+      }
       if (step.tool.startsWith("__")) return;
       onEvent({
         type: "tool-end",

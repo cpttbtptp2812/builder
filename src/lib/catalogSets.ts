@@ -1,6 +1,7 @@
 /** 一整套技能的版本：保存客户现在听到的，之后可以改名称、切换回去 */
 
 import { allRunnableSkills, isAnswerLayerSkill, SKILL_CATALOG, type AgentSkill } from "./agentSkills";
+import { matchFaq } from "../data/productFaq";
 import { routeKey, routeKeyLabel, routeQuery, skillLabel } from "./skillRouter";
 import { getRouterEvalCases } from "./evalHarness";
 import { enrichSkillCatalog, hydrateSkill, parseSkillMarkdown } from "./skillMarkdown";
@@ -822,6 +823,63 @@ export function takeVersionScore(): VersionScorecard | null {
   return pinnedScore;
 }
 
+const FAQ_STOPS = ["怎么办", "怎么", "如何", "什么", "哪些", "有没有", "是否", "可以", "一下"];
+
+function contentTokens(text: string): string[] {
+  const cleaned = text.replace(/[？?！!。，,\s]/g, "");
+  const parts = cleaned
+    .split(new RegExp(FAQ_STOPS.join("|"), "g"))
+    .map((part) => part.trim())
+    .filter((part) => part.length >= 2);
+  return parts.length ? parts : cleaned.length >= 2 ? [cleaned] : [];
+}
+
+function skillTitle(skill: Pick<AgentSkill, "name" | "description">): string {
+  const head = skill.description.split(/[—–\-]/)[0]?.trim();
+  return head && head.length >= 2 && head.length <= 24 ? head : skill.name;
+}
+
+/** 这句话会不会在「查现成答案」和别的技能之间二选一。只看和这句有关的技能。 */
+export function faqHeadKey(query: string, skills: AgentSkill[]): string {
+  const faq = matchFaq(query);
+  if (!faq || faq.score < 0.8) return "";
+  const tokens = contentTokens(faq.entry.q);
+  const heads: string[] = [];
+  for (const skill of skills) {
+    if (skill.id === "product-faq") continue;
+    const blob = `${skillTitle(skill)}\n${skill.description}\n${skill.triggers.join("\n")}`;
+    if (tokens.some((token) => blob.includes(token))) heads.push(`${skill.id}:${skillTitle(skill)}`);
+  }
+  if (skills.some((skill) => skill.id === "product-faq")) heads.push("@answer");
+  return heads.sort().join("|");
+}
+
+/** 这一版对这句话的分流，和当前线上是不是同一套。 */
+export function versionAgreesWithLive(query: string, skills: AgentSkill[]): boolean {
+  return faqHeadKey(query, skills) === faqHeadKey(query, allRunnableSkills());
+}
+
+function faqHeadNote(query: string, skills: AgentSkill[]): string {
+  const faq = matchFaq(query);
+  const tokens = faq ? contentTokens(faq.entry.q) : [];
+  const rivals = skills.filter((skill) => {
+    if (skill.id === "product-faq" || !tokens.length) return false;
+    const blob = `${skillTitle(skill)}\n${skill.description}\n${skill.triggers.join("\n")}`;
+    return tokens.some((token) => blob.includes(token));
+  });
+  if (rivals.length && skills.some((skill) => skill.id === "product-faq")) {
+    const labels = rivals.slice(0, 2).map((skill) => skillTitle(skill));
+    return clipText(`要先确认：${[...labels, "查现成答案"].join(" / ")}`, 36);
+  }
+  const said = spokenLine(skills.find((skill) => skill.id === routeQuery(query, skills).skillId)?.manifest);
+  if (said) return clipText(said, 36);
+  if (!skills.some((skill) => skill.id === "product-faq")) {
+    const decision = routeQuery(query, skills);
+    return decision.kind === "skill" ? `交给${decision.label}` : "没有技能接";
+  }
+  return clipText(faq?.entry.a.split("\n")[0] ?? "查现成答案", 36);
+}
+
 /** 这句相对这条回复的版本，在另一版里是否会换说法。一样时返回空。 */
 export function hearSet(query: string, set: CatalogSet, baselineId?: string | null): string {
   const q = query.trim();
@@ -837,22 +895,21 @@ export function hearSet(query: string, set: CatalogSet, baselineId?: string | nu
     const to = after.kind === "skill" ? after.label : "没有技能接";
     return `交给${from}，现在是${to}`;
   }
-  const skillId = after.skillId;
+  const skillId = before.skillId || after.skillId;
   const pastRaw = set.skills.find((s) => s.id === skillId)?.raw;
   const liveRaw = live.find((s) => s.id === skillId)?.manifest;
-  if (skillId && !sameRaw(pastRaw, liveRaw)) {
-    const pastDoc = parseSkillMarkdown(pastRaw ?? "");
-    const liveDoc = parseSkillMarkdown(liveRaw ?? "");
-    const dropped = liveDoc.triggers.filter((t) => t && !pastDoc.triggers.includes(t));
-    const added = pastDoc.triggers.filter((t) => t && !liveDoc.triggers.includes(t));
-    if (dropped.length || added.length) {
-      const parts: string[] = [];
-      if (dropped.length) parts.push(`不认${dropped.slice(0, 2).map((t) => `「${t}」`).join("")}`);
-      if (added.length) parts.push(`改认${added.slice(0, 2).map((t) => `「${t}」`).join("")}`);
-      return clipText(parts.join("，"), 36);
+  const saidPast = spokenLine(pastRaw);
+  const saidLive = spokenLine(liveRaw);
+  if ((saidPast || saidLive) && saidPast !== saidLive) return clipText(saidPast || saidLive, 36);
+  if (skillId && pastRaw && liveRaw) {
+    const pastDoc = parseSkillMarkdown(pastRaw);
+    const liveDoc = parseSkillMarkdown(liveRaw);
+    const stepsOf = (steps: { label: string; id: string }[]) => steps.map((s) => s.label || s.id).join(" → ");
+    if (stepsOf(pastDoc.steps) !== stepsOf(liveDoc.steps)) {
+      const line = skillChangeLines(pastRaw, liveRaw).find((item) => item.startsWith("步骤")) ?? "步骤不一样";
+      return clipText(line, 36);
     }
-    const line = skillChangeLines(pastRaw, liveRaw)[0];
-    return line ? clipText(line, 36) : "写法不同";
   }
+  if (faqHeadKey(q, past) !== faqHeadKey(q, live)) return faqHeadNote(q, past);
   return "";
 }

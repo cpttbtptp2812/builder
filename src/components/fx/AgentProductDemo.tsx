@@ -101,7 +101,7 @@ import {
   type OwnSession,
   type PlazaSourceView,
 } from "../../lib/ownagentSessions";
-import { activeVersionId, skillsForVersion } from "../../lib/catalogSets";
+import { activeVersionId, skillsForVersion, versionAgreesWithLive } from "../../lib/catalogSets";
 import { activePromptLabel, getActiveSystemAddon } from "../../lib/agentPromptRuntime";
 import { evaluatePolicyGate } from "../../lib/policyGate";
 import {
@@ -766,7 +766,7 @@ export function AgentProductDemo({
           }
         }
 
-        if (!parsed.force && !parsed.evalKind && !useLlm && orchMode !== "multi") {
+        if ((!catalog?.length || versionAgreesWithLive(q, catalog)) && !parsed.force && !parsed.evalKind && !useLlm && orchMode !== "multi") {
           const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
           if (semanticStatus().status === "idle" && !conn?.saveData) void upgradeToSemantic();
           if (picked) {
@@ -797,7 +797,7 @@ export function AgentProductDemo({
           }
         }
 
-        if (!parsed.force && !parsed.evalKind && !pinSkillId) {
+        if (!catalog?.length && !parsed.force && !parsed.evalKind && !pinSkillId) {
           const preset = matchPresetQuery(q);
           if (preset) {
             mode = "guest";
@@ -944,7 +944,7 @@ export function AgentProductDemo({
           bindStreamJournal(ev);
         };
 
-        if (orchMode === "multi" && !parsed.force) {
+        if (!catalog?.length && orchMode === "multi" && !parsed.force) {
           mode = "multi";
           route = { skillId: "multi-agent", skillName: "多代理编排", score: 4, hits: ["planner", "executor", "reviewer"], path: "multi" };
           jChip("route", "多代理：Planner → Executor → Reviewer");
@@ -983,7 +983,7 @@ export function AgentProductDemo({
           return;
         }
 
-        if (useLlm) {
+        if (!catalog?.length && useLlm) {
           try {
             mode = "llm";
             route = { skillId: "llm-loop", skillName: llmConfig.model, score: 4, hits: ["tool-call"], path: "llm" };
