@@ -124,6 +124,7 @@ import { flowUsesUnifiedHubDrawer, shouldBindHubCreditFlow } from "../../lib/cre
 import { creditFlowById, matchCreditFlowId } from "../../lib/creditFlowCatalog";
 import {
   displayCreditFlowAt,
+  isFlowExitQuery,
   isHubFlowButtonQuery,
   resumeCreditFlowFromShowcase,
   rewindCreditFlowToRawStep,
@@ -456,7 +457,7 @@ export function AgentProductDemo({
     if (hubMode) {
       if (creditFlow) {
         push("继续", "继续", "推进一步");
-        push("退出流程", "退出", "结束多轮");
+        push("退出流程", "退出流程", "结束多轮");
       }
       const asked = new Set(messages.map((m) => m.content.trim()));
       const left = SHOWCASE_PROMPTS.filter((p) => !asked.has(p.text));
@@ -597,6 +598,11 @@ export function AgentProductDemo({
         hubFlowAnchorRef.current = null;
       }
       const hubFlowBind = hubMode && shouldBindHubCreditFlow(q, flowState, { flowSilent });
+      const flowExitTurn = hubMode && Boolean(flowState?.flowId) && isFlowExitQuery(q);
+      if (flowExitTurn) {
+        setFlowOpDrawer(null);
+        setPaperDrawer(null);
+      }
 
       if (
         hubMode &&
@@ -815,7 +821,10 @@ export function AgentProductDemo({
         const replyVersionId = forcedVersionId ?? activeVersionId() ?? undefined;
         if (hubMode && showcaseFlowTurn) {
           const anchorIdForDrawer = hubFlowAnchorRef.current ?? assistantId;
-          if (
+          if (showcaseFlowTurn.stepId === "__exit__") {
+            setFlowOpDrawer(null);
+            setPaperDrawer(null);
+          } else if (
             flowUsesUnifiedHubDrawer(
               showcaseFlowTurn.flowId,
               showcaseFlowTurn.stepId,
@@ -1330,7 +1339,7 @@ export function AgentProductDemo({
           setCreditFlow(guest.creditFlow);
           hubFlowCheckpointRef.current = guest.creditFlow;
         }
-        if (guest.flowBlocked && hubMode && showcaseFlowTurn) {
+        if (guest.flowBlocked && hubMode && showcaseFlowTurn && !isFlowExitQuery(q)) {
           if (!flowSilent) {
             setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
           }

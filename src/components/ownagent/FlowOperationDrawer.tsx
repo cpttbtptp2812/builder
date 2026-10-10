@@ -61,10 +61,13 @@ export function FlowOperationDrawer({
 }) {
 
   const [validation, setValidation] = useState<FlowUiValidation>({ ready: true, hint: "" });
+  const [paperValidation, setPaperValidation] = useState<FlowUiValidation>({ ready: true, hint: "" });
 
   const validationRef = useRef(validation);
+  const paperValidationRef = useRef(paperValidation);
 
   validationRef.current = validation;
+  paperValidationRef.current = paperValidation;
 
 
 
@@ -83,6 +86,10 @@ export function FlowOperationDrawer({
     onValidationChange(initialFlowValidation(flow.ui ?? null));
 
   }, [open, flow?.flowId, flow?.stepId, flow?.ui, onValidationChange]);
+
+  useEffect(() => {
+    if (!open) setPaperValidation({ ready: true, hint: "" });
+  }, [open, flow?.flowId, flow?.stepId]);
 
 
 
@@ -109,16 +116,18 @@ export function FlowOperationDrawer({
 
 
   const needsGate = flowActionNeedsCompletion(flow.ui ?? null);
-
   const actions = filterDrawerActions(flow.actions, flow.ui ?? null);
-
-  const canAct = !needsGate || validation.ready;
-
   const withPaper = Boolean(paper);
-
   const paperInteractive = flow.stepId === "contract_risks";
+  const needsPaperGate = paperInteractive && paper?.kind === "contract";
 
-
+  const canAct = (!needsGate || validation.ready) && (!needsPaperGate || paperValidation.ready);
+  const gateHint =
+    needsGate && !validation.ready
+      ? validation.hint
+      : needsPaperGate && !paperValidation.ready
+        ? paperValidation.hint
+        : "";
 
   const headTitle = withPaper
 
@@ -172,7 +181,11 @@ export function FlowOperationDrawer({
 
             <section className="oa-flow-drawer-paper" aria-label="文书预览">
 
-              <WorkPaperView paper={paper} interactive={paperInteractive} />
+              <WorkPaperView
+                paper={paper}
+                interactive={paperInteractive}
+                onValidationChange={needsPaperGate ? setPaperValidation : undefined}
+              />
 
             </section>
 
@@ -205,6 +218,7 @@ export function FlowOperationDrawer({
                 onAutoAdvance={(sendAs) => {
 
                   if (needsGate && !validationRef.current.ready) return;
+                  if (needsPaperGate && !paperValidationRef.current.ready) return;
 
                   onSend(sendAs);
 
@@ -214,11 +228,11 @@ export function FlowOperationDrawer({
 
             ) : null}
 
-            {needsGate && !validation.ready && validation.hint ? (
+            {gateHint ? (
 
               <p className="oa-flow-drawer-hint" role="status">
 
-                {validation.hint}
+                {gateHint}
 
               </p>
 
@@ -233,6 +247,7 @@ export function FlowOperationDrawer({
                 disabled={busy || !canAct}
 
                 onPick={(sendAs) => {
+                  if (!canAct) return;
                   if (flow.ui?.kind === "submission_success" && sendAs === "继续") {
                     onClose();
                     return;

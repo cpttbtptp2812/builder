@@ -62,7 +62,12 @@ export type CreditFlowTurnResult = {
   blocked?: boolean;
 };
 
-const EXIT_RE = /^(退出|取消|结束流程|终止流程)\b/u;
+/** 结束多轮流程（含「退出流程」等整句，避免 `\b` 在中文里截断「退出」） */
+export function isFlowExitQuery(raw: string): boolean {
+  const q = flowTurnUserQuery(raw).trim();
+  if (!q) return false;
+  return /^(退出流程|退出|取消|结束流程|终止流程|结束)(?:$|[，。！\s])/u.test(q);
+}
 
 function allowedStepCompletes(flowId: string, stepId: string): string[] {
   const { ui, actions } = uiForFlowStep(flowId, stepId);
@@ -100,7 +105,7 @@ export function isCreditFlowAdvanceQuery(
   if (!flow) return false;
   const q = flowTurnUserQuery(query);
   if (!q) return false;
-  if (EXIT_RE.test(q)) return true;
+  if (isFlowExitQuery(q)) return true;
 
   const pendingIdx =
     state.stepIndex > 0 ? state.stepIndex - 1 : 0;
@@ -318,7 +323,7 @@ export function processCreditFlowTurn(
   opts?: CreditFlowTurnOpts,
 ): CreditFlowTurnResult {
   const q = flowTurnUserQuery(query);
-  if (EXIT_RE.test(q)) {
+  if (isFlowExitQuery(q)) {
     return {
       markdown: "已退出当前信贷流程。需要时再说出流程名称（如「贷前调查」「智能放款校验」）即可重新进入。",
       showcaseFlow: {

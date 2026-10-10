@@ -409,10 +409,18 @@ function ContractEditPanel({
   onValidationChange?: Props["onValidationChange"];
 }) {
   const [ack, setAck] = useState(false);
+  const [vals, setVals] = useState<Record<string, string>>(() =>
+    Object.fromEntries(ui.rows.map((r) => [r.id, r.after])),
+  );
   const report = useDebouncedValidation(onValidationChange);
+  const rowsOk = ui.rows.every((r) => (vals[r.id] ?? "").trim().length >= 2);
   useEffect(() => {
+    if (!rowsOk) {
+      report(false, "请填写全部修订条款（不可留空）");
+      return;
+    }
     report(ack, ack ? "" : "请勾选「已核对修订内容」");
-  }, [ack, report]);
+  }, [ack, rowsOk, report]);
 
   return (
     <div className="oa-flow-contract-edit">
@@ -421,7 +429,13 @@ function ContractEditPanel({
           <span>{row.label}</span>
           <del>{row.before}</del>
           <span className="oa-flow-contract-arrow">→</span>
-          <strong>{row.after}</strong>
+          <input
+            className="oa-flow-contract-revise-input"
+            value={vals[row.id] ?? ""}
+            disabled={disabled}
+            onChange={(e) => setVals((prev) => ({ ...prev, [row.id]: e.target.value }))}
+            aria-label={`修订 ${row.label}`}
+          />
         </div>
       ))}
       <label className="oa-flow-contract-ack">
