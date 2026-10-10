@@ -1,6 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { previewClause, renderSkillHost, type SkillClause } from "../../lib/skillHost";
-import { AGENT_SKILLS, getBuiltinSkill, getLiveCatalog, isAnswerLayerSkill, type AgentSkill } from "../../lib/agentSkills";
+import {
+  AGENT_SKILLS,
+  getBuiltinSkill,
+  getLiveCatalog,
+  getSkill,
+  isAnswerLayerSkill,
+  isCustomerSkill,
+  type AgentSkill,
+} from "../../lib/agentSkills";
+import { allCreditFlowDeskSkills, resolveCreditFlowDeskSkill } from "../../lib/creditFlowSkillsCatalog";
 import { extractUrlFromText } from "../../lib/releaseInspect";
 import {
   candidateVersion,
@@ -99,8 +108,25 @@ import { skillQueryStats } from "../../lib/skillQueryLog";
 
 type Tab = "overview" | "edit" | "cases" | "check" | "history";
 
+function baselineManifest(skillId: string): string {
+  return (
+    getBuiltinSkill(skillId)?.manifest ??
+    resolveCreditFlowDeskSkill(skillId)?.manifest ??
+    getSkill(skillId)?.manifest ??
+    ""
+  );
+}
+
+function resolveSkillRecord(skillId: string): AgentSkill | undefined {
+  return (
+    (getBuiltinSkill(skillId) as AgentSkill | undefined) ??
+    resolveCreditFlowDeskSkill(skillId) ??
+    (getSkill(skillId) as AgentSkill | undefined)
+  );
+}
+
 function onlineRaw(skillId: string): string {
-  return resolveBaselineRaw(skillId, getBuiltinSkill(skillId)?.manifest ?? "");
+  return resolveBaselineRaw(skillId, baselineManifest(skillId));
 }
 
 function useToast() {
@@ -193,9 +219,20 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
 
   const skills = useMemo(() => {
     const live = new Map(getLiveCatalog().map((s) => [s.id, s]));
-    const builtin = AGENT_SKILLS.filter((b) => !isAnswerLayerSkill(b.id)).map((b) => live.get(b.id) ?? b);
-    const extra = loadImportedSkills().filter((s) => !live.has(s.id));
-    return [...builtin, ...extra];
+    const seen = new Set<string>();
+    const out: AgentSkill[] = [];
+    for (const s of allCreditFlowDeskSkills()) {
+      seen.add(s.id);
+      out.push(live.get(s.id) ?? s);
+    }
+    for (const b of AGENT_SKILLS) {
+      if (isAnswerLayerSkill(b.id) || !isCustomerSkill(b.id) || seen.has(b.id)) continue;
+      if (b.id.endsWith("-flow-desk")) continue;
+      seen.add(b.id);
+      out.push(live.get(b.id) ?? b);
+    }
+    const extra = loadImportedSkills().filter((s) => !seen.has(s.id));
+    return [...out, ...extra];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
@@ -206,7 +243,12 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           [s.name, s.description, ...s.triggers].some((t) => t.toLowerCase().includes(k)),
         )
       : skills;
-    return [...hit].sort((a, b) => Number(Boolean(newestDraftForSkill(b.id))) - Number(Boolean(newestDraftForSkill(a.id))));
+    return [...hit].sort((a, b) => {
+      const flow = (id: string) => (id.endsWith("-flow-desk") ? 0 : 1);
+      const df = flow(a.id) - flow(b.id);
+      if (df !== 0) return df;
+      return Number(Boolean(newestDraftForSkill(b.id))) - Number(Boolean(newestDraftForSkill(a.id)));
+    });
   }, [skills, q]);
 
   const pendingCount = skills.filter((s) => newestDraftForSkill(s.id)).length;
@@ -465,6 +507,9 @@ function SkillListCard({
           <header>
             <strong>{skillDisplayTitle(skill)}</strong>
             <span className="own-skill-ver-tag">v{ver}</span>
+            {skill.id.endsWith("-flow-desk") ? (
+              <span className="own-skill-ver-tag own-skill-ver-tag--flow">多轮</span>
+            ) : null}
             {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
             {prod ? <span className="own-skill-ver-tag">线上 {prod}</span> : null}
             {staging ? <span className="own-skill-ver-tag">预发 {staging}</span> : null}
@@ -485,7 +530,7 @@ function SkillListCard({
 
 function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack: () => void; initialTab?: Tab }) {
   const toast = useToast();
-  const builtin = getBuiltinSkill(skillId);
+  const builtin = resolveSkillRecord(skillId);
 
   const [online, setOnline] = useState(() => onlineRaw(skillId));
   const [draft, setDraft] = useState(() => {
@@ -1838,7 +1883,7 @@ function BatchCheckBar({
     try {
       for (const s of pending) {
         const draft = newestDraftForSkill(s.id)!;
-        const online = resolveBaselineRaw(s.id, getBuiltinSkill(s.id)?.manifest ?? "");
+        const online = resolveBaselineRaw(s.id, baselineManifest(s.id));
         const report = await alignCanonicalGate(
           await runFullSkillCompare({
             skillId: s.id,

@@ -2,12 +2,14 @@
 
 import {
   allRunnableSkills,
+  getSkill,
   runSkill,
   SKILL_CATALOG,
   type AgentSkill,
   type SkillResult,
   type SkillTraceStep,
 } from "./agentSkills";
+import { matchCreditFlowSkillId } from "./creditFlowCatalog";
 import { mcpServer } from "./mcpServer";
 import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
@@ -21,6 +23,11 @@ import { peekRuntimeConfig } from "./runtimeConfig";
 import { rewriteRagQueries } from "./ragQueryRewrite";
 import { shouldUseRagRewrite } from "./agentPromptRuntime";
 import { extractUrlFromText } from "./releaseInspect";
+import { paperForSkill, showcaseStepName, type WorkPaper } from "./workPaper";
+import { isSheetContinuationQuery } from "./showcaseContinuation";
+import { processCreditFlowTurn, type CreditFlowState } from "./creditFlowEngine";
+import { creditFlowSkillId, flowIdFromSkillId, isCreditFlowSkillId } from "./creditFlowUi";
+import type { OwnChatMessage } from "./ownagentSessions";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -38,6 +45,12 @@ export type GuestTurnCtx = {
   pinSkillId?: string;
   /** 只这一轮按这个目录路由，不改线上版本 */
   catalog?: AgentSkill[];
+  /** 信贷多轮流程进度（会话级） */
+  creditFlow?: CreditFlowState | null;
+  /** Hub 产品对话：不走 SQLite 远端 Guest，只跑浏览器内多轮技能 */
+  hubProduct?: boolean;
+  /** Hub：本句绑定信贷流程引擎（否则保留会话进度但走普通路由） */
+  hubFlowBind?: boolean;
 };
 
 type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
@@ -87,7 +100,8 @@ export function toolPreviewFromResult(name: string, content: unknown): string {
 }
 
 const DOM_INTENT = /dom|元素|定位|snapshot|a11y|页面结构|可交互|有多少按钮|当前页/i;
-const POLICY_INTENT = /制度|年假|加班|vpn|工单|请假|报销|开通/i;
+const POLICY_INTENT = /制度|年假|加班|vpn|工单|请假|开通/i;
+const POLICY_REIMBURSE = /报销/i;
 
 type SkillPick =
   | { kind: "skill"; skill: AgentSkill; hits: string[]; score: number }
@@ -102,6 +116,17 @@ function toolAllowed(name: string, enabled?: string[]) {
 
 function expandQuery(query: string, history?: AgentChatMessage[]): string {
   const turns = (history ?? []).filter((m) => m.role === "user" || m.role === "assistant");
+  if (isSheetContinuationQuery(query) && turns.length >= 2) {
+    const prior = [...turns]
+      .reverse()
+      .find(
+        (m) =>
+          m.role === "user" &&
+          m.content.trim() !== query.trim() &&
+          /报销|表格|汇总|对账|发票/.test(m.content),
+      );
+    if (prior) return `${prior.content}\n补充：${query}`;
+  }
   const compact = query.replace(/\s/g, "");
   if (compact.length > 18 || turns.length < 2) return query;
   const lastUser = [...turns].reverse().find((m) => m.role === "user" && m.content.trim() !== query.trim());
@@ -109,14 +134,44 @@ function expandQuery(query: string, history?: AgentChatMessage[]): string {
   return `${lastUser.content}\n追问：${query}`;
 }
 
-function pickSkill(query: string, pinSkillId?: string, catalog?: AgentSkill[]): SkillPick {
-  const skills = catalog?.length ? catalog : allRunnableSkills();
+function resolveFlowDeskSkillId(ctx: GuestTurnCtx, rawQuery: string): string | null {
+  if (ctx.hubProduct && !ctx.hubFlowBind) return null;
+  if (ctx.pinSkillId?.endsWith("-flow-desk")) return ctx.pinSkillId;
+  const q = rawQuery.trim();
+  if (ctx.hubProduct && !ctx.creditFlow) return matchCreditFlowSkillId(q);
+  if (ctx.creditFlow?.flowId && ctx.hubFlowBind) return creditFlowSkillId(ctx.creditFlow.flowId);
+  if (ctx.hubProduct && ctx.hubFlowBind) return matchCreditFlowSkillId(q);
+  return null;
+}
+
+function loadFlowDeskAgent(skillId: string): AgentSkill | null {
+  const hit = getSkill(skillId) ?? SKILL_CATALOG.find((s) => s.id === skillId);
+  if (!hit || hit.steps.length === 0) return null;
+  return hit as AgentSkill;
+}
+
+function pickSkill(query: string, pinSkillId?: string, catalog?: AgentSkill[], creditFlow?: CreditFlowState | null): SkillPick {
+  if (pinSkillId?.endsWith("-flow-desk")) {
+    const flow = loadFlowDeskAgent(pinSkillId);
+    if (flow) {
+      logRoutedQuery(query, { kind: "skill", skillId: flow.id, score: 10 });
+      return { kind: "skill", skill: flow, hits: ["多轮流程"], score: 10 };
+    }
+  }
+  let skills = catalog?.length ? catalog : allRunnableSkills();
+  if (pinSkillId?.endsWith("-flow-desk")) {
+    const live = loadFlowDeskAgent(pinSkillId);
+    if (live && !skills.some((s) => s.id === live.id)) skills = [...skills, live];
+  }
   const pinned = pinSkillId ? skills.find((s) => s.id === pinSkillId) : undefined;
   if (pinned) {
     logRoutedQuery(query, { kind: "skill", skillId: pinned.id, score: 10 });
     return { kind: "skill", skill: pinned, hits: ["语义路由"], score: 10 };
   }
-  const d = routeQuery(query, skills);
+  const d = routeQuery(query, skills, {
+    creditFlowActive: Boolean(creditFlow),
+    activeFlowId: creditFlow?.flowId ?? null,
+  });
   logRoutedQuery(query, d);
   if (d.kind === "skill" && d.skill) return { kind: "skill", skill: d.skill, hits: d.hits, score: d.score };
   if (d.kind === "about-site") return { kind: "about-site", reason: "问的是这个网站是什么" };
@@ -153,7 +208,9 @@ function planOpenTools(query: string, enabled?: string[], force?: GuestForce): P
     calls.push({ name: "browser_snapshot", args: { compact: true } });
   }
 
-  if (POLICY_INTENT.test(query) && allow("policy_search")) {
+  const policyLike =
+    (POLICY_INTENT.test(query) || POLICY_REIMBURSE.test(query)) && !isSheetContinuationQuery(query);
+  if (policyLike && allow("policy_search")) {
     calls.push({ name: "policy_search", args: { query, topK: 4 } });
     // 制度问句只查手册，不误伤项目知识库导致「未命中」
     return calls;
@@ -491,6 +548,10 @@ export async function runGuestAgentTurn(
   hitl?: TicketDraft;
   policyTrust?: PolicyTrustView;
   route?: RouteScoreView;
+  paper?: WorkPaper | null;
+  showcaseFlow?: OwnChatMessage["showcaseFlow"];
+  creditFlow?: CreditFlowState | null;
+  flowBlocked?: boolean;
 }> {
   const t0 = performance.now();
   const turnId = `guest-${Date.now().toString(36)}`;
@@ -504,19 +565,33 @@ export async function runGuestAgentTurn(
     text: string,
     traces: AgentTurnTrace[],
     runtime: "server" | "local",
-    extra?: { hitl?: TicketDraft; policyTrust?: PolicyTrustView; route?: RouteScoreView },
+    extra?: {
+      hitl?: TicketDraft;
+      policyTrust?: PolicyTrustView;
+      route?: RouteScoreView;
+      paper?: WorkPaper | null;
+      showcaseFlow?: OwnChatMessage["showcaseFlow"];
+      creditFlow?: CreditFlowState | null;
+      flowBlocked?: boolean;
+    },
   ) => {
     onEvent({ type: "done", iterations: 1, toolCount: traces.reduce((n, t) => n + t.tools.length, 0) });
     persistGuestRun(query, text, traces, runtime, Math.round(performance.now() - t0));
     return { assistantText: text, traces, runtime, ...extra };
   };
 
+  const flowSkillPin =
+    Boolean(ctx.creditFlow) ||
+    Boolean(ctx.pinSkillId?.endsWith("-flow-desk")) ||
+    Boolean(ctx.hubProduct);
+
   if (
     peekRuntimeConfig().features.preferServerGuest &&
     !ctx.force &&
     !ctx.pinned?.trim() &&
     !ctx.pinSkillId &&
-    !ctx.catalog?.length
+    !ctx.catalog?.length &&
+    !flowSkillPin
   ) {
     try {
       const remote = await runGuestAgentAsync(query, { snapshotRoot: ctx.snapshotRoot });
@@ -600,8 +675,71 @@ export async function runGuestAgentTurn(
     });
   }
 
-  const pick = pickSkill(working, ctx.pinSkillId, ctx.catalog);
   const expanded = expandQuery(working, ctx.history);
+
+  const flowDeskId = resolveFlowDeskSkillId(ctx, query);
+  const flowDeskSkill = flowDeskId ? loadFlowDeskAgent(flowDeskId) : null;
+  if (flowDeskSkill) {
+    const forcedFlowId = flowIdFromSkillId(flowDeskSkill.id);
+    const reasoning = `信贷多轮 · ${flowDeskSkill.name}`;
+    await streamReasoning(reasoning, onEvent);
+    onEvent({ type: "iteration", n: 1 });
+    const tStep = performance.now();
+    const turn = processCreditFlowTurn(working, ctx.creditFlow ?? null, { forcedFlowId });
+    const ms = Math.round(performance.now() - tStep);
+    onEvent({
+      type: "tool-end",
+      tool: {
+        id: "guest-credit-flow-turn",
+        name: "信贷流程推进一步",
+        args: "{}",
+        iteration: 1,
+        ok: !turn.blocked,
+        ms,
+        result: { flowId: turn.flow?.id, step: turn.showcaseFlow.phase, done: turn.done, blocked: turn.blocked },
+      },
+    });
+    logSkillHandled(query, flowDeskSkill.id);
+    const finalTraces: AgentTurnTrace[] = [
+      {
+        iteration: 1,
+        label: reasoning,
+        reasoning,
+        text: "",
+        tools: [
+          {
+            id: "guest-credit-flow-turn",
+            name: "__credit_flow_turn__",
+            args: "{}",
+            iteration: 1,
+            ok: true,
+            ms,
+          },
+        ],
+      },
+    ];
+    onEvent({ type: "trace-sync", traces: finalTraces });
+    await streamText(turn.markdown, onEvent);
+    return wrap(turn.markdown, finalTraces, "local", {
+      paper: turn.paper,
+      showcaseFlow: turn.showcaseFlow,
+      creditFlow: turn.nextState,
+      flowBlocked: turn.blocked,
+      route: {
+        skillId: flowDeskSkill.id,
+        skillName: flowDeskSkill.name,
+        score: 10,
+        hits: ["多轮流程"],
+        path: "skill",
+      },
+    });
+  }
+
+  const routableCatalog =
+    ctx.hubProduct && !ctx.hubFlowBind
+      ? (ctx.catalog?.length ? ctx.catalog : allRunnableSkills()).filter((s) => !isCreditFlowSkillId(s.id))
+      : ctx.catalog;
+  const pick = pickSkill(working, ctx.pinSkillId, routableCatalog, ctx.creditFlow);
 
   if (pick.kind === "about-site" || pick.kind === "knowledge" || pick.kind === "open") {
     await streamReasoning(
@@ -628,6 +766,63 @@ export async function runGuestAgentTurn(
   }
 
   const { skill, hits, score } = pick;
+
+  if (isCreditFlowSkillId(skill.id) && !(ctx.hubProduct && !ctx.hubFlowBind)) {
+    const forcedFlowId = flowIdFromSkillId(skill.id);
+    const reasoning = `信贷多轮 · ${skill.name}（${hits.join("、") || score}）`;
+    await streamReasoning(reasoning, onEvent);
+    onEvent({ type: "iteration", n: 1 });
+    const tStep = performance.now();
+    const turn = processCreditFlowTurn(working, ctx.creditFlow ?? null, { forcedFlowId });
+    const ms = Math.round(performance.now() - tStep);
+    onEvent({
+      type: "tool-end",
+      tool: {
+        id: "guest-credit-flow-turn",
+        name: "信贷流程推进一步",
+        args: "{}",
+        iteration: 1,
+        ok: !turn.blocked,
+        ms,
+        result: { flowId: turn.flow?.id, step: turn.showcaseFlow.phase, done: turn.done, blocked: turn.blocked },
+      },
+    });
+    logSkillHandled(query, skill.id);
+    const finalTraces: AgentTurnTrace[] = [
+      {
+        iteration: 1,
+        label: reasoning,
+        reasoning,
+        text: "",
+        tools: [
+          {
+            id: "guest-credit-flow-turn",
+            name: "__credit_flow_turn__",
+            args: "{}",
+            iteration: 1,
+            ok: true,
+            ms,
+          },
+        ],
+      },
+    ];
+    onEvent({ type: "trace-sync", traces: finalTraces });
+    await streamText(turn.markdown, onEvent);
+    return wrap(turn.markdown, finalTraces, "local", {
+      paper: turn.paper,
+      showcaseFlow: turn.showcaseFlow,
+      creditFlow: turn.nextState,
+      flowBlocked: turn.blocked,
+      route: {
+        skillId: skill.id,
+        skillName: skill.name,
+        score,
+        hits,
+        path: "skill",
+      },
+    });
+  }
+
   const reasoning = `命中技能 ${skill.name}（${hits.join("、") || score}）→ ${skill.plan.join(" → ")}`;
   await streamReasoning(reasoning, onEvent);
   onEvent({ type: "iteration", n: 1 });
@@ -635,9 +830,49 @@ export async function runGuestAgentTurn(
   const seen: SkillTraceStep[] = [];
   const { trace, result } = await runSkill(
     skill,
-    query,
+    expanded,
     (step) => {
       seen.push(step);
+      const showcase = step.tool.startsWith("__sheet_") || step.tool.startsWith("__flow_") || step.tool.startsWith("__data_") || step.tool.startsWith("__contract_") || step.tool.startsWith("__image_");
+      if (showcase) {
+        const body = step.result as { detail?: string; summary?: string; markdown?: string } | undefined;
+        onEvent({
+          type: "tool-end",
+          tool: {
+            id: `guest-${step.stepId}`,
+            name: showcaseStepName(query, step.stepId, step.label),
+            args: "{}",
+            iteration: 1,
+            ok: step.ok,
+            ms: step.ms,
+            result: { runtime: "local", detail: body?.detail ?? "" },
+          },
+        });
+        if (step.tool.endsWith("_report__")) {
+          onEvent({
+            type: "tool-end",
+            tool: {
+              id: `guest-src-${step.stepId}`,
+              name: "knowledge_search",
+              args: "{}",
+              iteration: 1,
+              ok: true,
+              ms: step.ms,
+              result: {
+                runtime: "local",
+                hits: [
+                  {
+                    title: step.tool.startsWith("__contract_") ? "借款合同" : step.tool.startsWith("__image_") ? "借款凭证" : step.tool.startsWith("__data_") ? "额度测算" : step.tool.startsWith("__sheet_") ? "报销明细" : "报销流程",
+                    excerpt: (body?.summary ?? body?.markdown ?? "").slice(0, 160),
+                    score: 1,
+                    chunkId: step.tool.split("_")[2] ?? "showcase",
+                  },
+                ],
+              },
+            },
+          });
+        }
+      }
       if (step.tool === "__answer_faq__") {
         const body = step.result as {
           markdown?: string;
@@ -742,6 +977,7 @@ export async function runGuestAgentTurn(
   return wrap(text, finalTraces, "local", {
     hitl,
     policyTrust,
+    paper: paperForSkill(skill, expanded),
     route: {
       skillId: skill.id,
       skillName: skill.name,

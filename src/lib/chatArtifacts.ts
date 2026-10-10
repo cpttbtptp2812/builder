@@ -52,6 +52,7 @@ export function parseMarkdownTables(text: string): ArtifactTable[] {
     ) {
       const columns = splitRow(header);
       const rows: string[][] = [];
+      const headerAt = i;
       i += 2;
       while (i < lines.length && (lines[i] ?? "").includes("|")) {
         rows.push(splitRow(lines[i]!));
@@ -59,10 +60,17 @@ export function parseMarkdownTables(text: string): ArtifactTable[] {
       }
       if (columns.length && rows.length) {
         n += 1;
+        let title = `结构化表 ${n}`;
+        for (let k = headerAt - 1; k >= 0 && k >= headerAt - 4; k -= 1) {
+          const prev = (lines[k] ?? "").trim();
+          if (!prev || prev.includes("|")) continue;
+          title = prev.replace(/^#+\s*/, "");
+          break;
+        }
         out.push({
           id: `md-table-${n}`,
           kind: "table",
-          title: `结构化表 ${n}`,
+          title,
           columns,
           rows,
           insight: `自动识别 ${rows.length} 行 × ${columns.length} 列`,

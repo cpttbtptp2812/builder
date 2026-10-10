@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import {
   normalizeFlowJournal,
   type FlowJournalId,
@@ -13,15 +13,29 @@ const STEPS: { id: FlowJournalId; short: string }[] = [
 ];
 
 /** 输入区上方 · 四段思考进度（运行中） */
-export function NeuralTraceStrip({
+export const NeuralTraceStrip = memo(function NeuralTraceStrip({
   journal,
   running,
-  elapsedMs,
+  turnStartedAt,
 }: {
   journal: FlowJournalNode[];
   running?: boolean;
-  elapsedMs?: number;
+  /** 计时只在条带内更新，避免整页重渲染 */
+  turnStartedAt?: number | null;
 }) {
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    if (!running || turnStartedAt == null) {
+      setElapsedMs(0);
+      return;
+    }
+    const tick = () => setElapsedMs(Date.now() - turnStartedAt);
+    tick();
+    const id = window.setInterval(tick, 500);
+    return () => window.clearInterval(id);
+  }, [running, turnStartedAt]);
+
   const nodes = useMemo(() => normalizeFlowJournal(journal), [journal]);
   const active = nodes.find((n) => n.status === "active");
   const done = nodes.filter((n) => n.status === "done").length;
@@ -55,4 +69,4 @@ export function NeuralTraceStrip({
       </ol>
     </div>
   );
-}
+});

@@ -23,6 +23,12 @@ import {
 } from "../src/lib/skillMarkdown.ts";
 import { applyStepVarWrites } from "../src/lib/skillVarBindings.ts";
 import { composeStepsMarkdown } from "../src/lib/composeSteps.ts";
+import { runContractTool } from "../src/lib/contractEngine.ts";
+import { runDataTool } from "../src/lib/dataEngine.ts";
+import { runFlowTool } from "../src/lib/flowEngine.ts";
+import { runImageTool } from "../src/lib/imageEngine.ts";
+import { runSheetTool } from "../src/lib/sheetEngine.ts";
+import { processCreditFlowTurn, type CreditFlowState } from "../src/lib/creditFlowEngine.ts";
 import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "../src/lib/releaseInspect.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { buildProbeBodyFromHtml, readProbeHtml } from "../src/lib/htmlProbeMeta.ts";
@@ -54,6 +60,10 @@ const SKILL_ORDER = [
   "dom-probe",
   "workflow-orchestrator",
   "policy-desk",
+  "sheet-desk",
+  "flow-desk",
+  "preloan-flow-desk",
+  "disburse-flow-desk",
   "product-faq",
   "knowledge-lookup",
   "skill-router",
@@ -223,7 +233,7 @@ type ClientCtx = {
 async function callTool(
   name: string,
   args: Record<string, unknown>,
-  ctx: ClientCtx & { vars: Record<string, unknown> },
+  ctx: ClientCtx & { vars: Record<string, unknown>; query?: string },
 ) {
   switch (name) {
     case "http_probe":
@@ -354,6 +364,58 @@ async function callTool(
           dashboard: { releaseInspect: report },
           markdown: releaseReportMarkdown(report),
           meta: { skill: "release-inspector", ts: Date.now(), runtime: "server" },
+        },
+      };
+    }
+    case "__sheet_parse__":
+    case "__sheet_aggregate__":
+    case "__sheet_reconcile__":
+    case "__sheet_report__": {
+      const ran = runSheetTool(name, { ...args, query: args.query ?? ctx.query });
+      return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
+    }
+    case "__flow_intake__":
+    case "__flow_invoice__":
+    case "__flow_reconcile__":
+    case "__flow_route__":
+    case "__flow_report__": {
+      const ran = runFlowTool(name, { ...args, query: args.query ?? ctx.query });
+      return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
+    }
+    case "__data_load__":
+    case "__data_formula__":
+    case "__data_adjust__":
+    case "__data_report__": {
+      const ran = runDataTool(name, args);
+      return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
+    }
+    case "__contract_read__":
+    case "__contract_diff__":
+    case "__contract_risk__":
+    case "__contract_report__": {
+      const ran = runContractTool(name, args);
+      return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
+    }
+    case "__image_crop__":
+    case "__image_ocr__":
+    case "__image_accept__":
+    case "__image_report__": {
+      const ran = runImageTool(name, args);
+      return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
+    }
+    case "__credit_flow_turn__": {
+      const state = args.flowState as CreditFlowState | null | undefined;
+      const forcedFlowId = typeof args.flowId === "string" ? args.flowId : null;
+      const turn = processCreditFlowTurn(String(args.query ?? ""), state, { forcedFlowId });
+      return {
+        content: {
+          markdown: turn.markdown,
+          dashboard: {
+            creditFlow: turn.nextState,
+            showcaseFlow: turn.showcaseFlow,
+            paper: turn.paper,
+          },
+          meta: { skill: "credit-flow-desk", done: turn.done, flowId: turn.flow?.id ?? null },
         },
       };
     }

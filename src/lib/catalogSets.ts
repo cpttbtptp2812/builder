@@ -124,133 +124,91 @@ ${text}
 }
 
 function buildSampleSets(base: SetSkill[]): CatalogSet[] {
+  const withSkill = (id: string, tune: (raw: string) => string) =>
+    cloneSkills(base).map((s) => (s.id === id ? { ...s, raw: tune(s.raw) } : s));
   return [
     {
-      id: "set-sample-slim",
-      name: "只要值班和检索",
-      note: "没有工作流，也没有发布前巡检",
-      savedAt: "2026-09-28T09:00:00.000Z",
+      id: "set-sample-sheet-net",
+      name: "表格改成不含税",
+      note: "同一张报销表改成去税汇总，缺票先过",
+      savedAt: "2026-06-02T10:00:00.000Z",
       status: "version",
-      skills: cloneSkills(base).filter((s) => s.id !== "workflow-orchestrator" && s.id !== "release-inspector"),
+      skills: withSkill("sheet-desk", retuneSheet),
     },
     {
-      id: "set-sample-phrases",
-      name: "年假改口",
-      note: "制度值班不再认「年假」，改认「调休」",
-      savedAt: "2026-09-20T11:30:00.000Z",
+      id: "set-sample-data-tight",
+      name: "额度系数收紧",
+      note: "稳定系数 0.7 改 0.5，信用系数 1.15 改 1",
+      savedAt: "2026-05-28T10:00:00.000Z",
       status: "version",
-      skills: cloneSkills(base).map((s) =>
-        s.id === "policy-desk" ? { ...s, raw: s.raw.replace(/年假/g, "调休") } : s,
-      ),
+      skills: withSkill("data-desk", retuneData),
     },
     {
-      id: "set-sample-steps",
-      name: "检索改过说明",
-      note: "知识检索的说明和步骤都换了",
-      savedAt: "2026-09-12T15:00:00.000Z",
+      id: "set-sample-contract-strict",
+      name: "合同审查从严",
+      note: "评估超过 90 天就高风险，期限和还款也升到高",
+      savedAt: "2026-05-12T10:00:00.000Z",
       status: "version",
-      skills: cloneSkills(base).map((s) => {
-        if (s.id !== "knowledge-lookup") return s;
-        return {
-          ...s,
-          raw: s.raw
-            .replace(/项目知识检索 — [^\r\n]+/, "项目知识检索 — 先给摘要，再列出出处")
-            .replace(/label: [^\r\n]*分块召回/, "label: 先写三句摘要")
-            .replace(/label: [^\r\n]*引用面板/, "label: 再列出处"),
-        };
-      }),
+      skills: withSkill("contract-desk", retuneContract),
     },
     {
-      id: "set-sample-night",
-      name: "多了夜班答疑",
-      note: "这一版里多一个夜班技能，现在没有",
-      savedAt: "2026-09-02T18:00:00.000Z",
+      id: "set-sample-flow-loose",
+      name: "报销流程放宽",
+      note: "差额只警告，总监线抬到 20000",
+      savedAt: "2026-05-20T10:00:00.000Z",
       status: "version",
-      skills: [
-        ...cloneSkills(base),
-        {
-          id: "night-desk",
-          name: "夜班答疑",
-          imported: true,
-          raw: `---
-name: night-desk
-description: 夜班答疑 — 下班后的请假和报销先记下来
-triggers:
-  - 夜班
-  - 值班电话
-  - 凌晨报销
-tools:
-  - policy_search
-steps:
-  - id: note
-    label: 先记一笔，白天再处理
-    tool: policy_search
-    args:
-      query: "{{query}}"
----
-
-# night-desk
-
-下班后的问题先记下来。
-`,
-        },
-      ],
+      skills: withSkill("flow-desk", retuneFlow),
     },
     {
-      id: "set-sample-leave5",
-      name: "年假只休5天",
-      note: "问年假时不走制度值班，改口成满一年 5 天",
-      savedAt: "2026-08-18T10:00:00.000Z",
+      id: "set-sample-image-strict",
+      name: "影像置信度抬高",
+      note: "置信度线从 0.70 抬到 0.85，期限字段不再采用",
+      savedAt: "2026-05-02T10:00:00.000Z",
       status: "version",
-      skills: [...cloneSkills(base), saySkill("leave-five", "年假口径", ["年假有几天", "满一年年假", "年假几天"], "司龄满一年只休 5 天，不按现行 10 天。")],
-    },
-    {
-      id: "set-sample-setup",
-      name: "安装换一种答法",
-      note: "安装配置不再查现成答案",
-      savedAt: "2026-08-11T10:00:00.000Z",
-      status: "version",
-      skills: [
-        ...cloneSkills(base).filter((s) => s.id !== "product-faq"),
-        saySkill("setup-desk", "安装值班", ["安装或配置", "安装失败", "配置遇到问题"], "先别翻手册。装不上就换国内镜像，Node 升到 22.5，端口改成 5174。"),
-      ],
-    },
-    {
-      id: "set-sample-loop",
-      name: "Agent Loop 改口",
-      note: "问 Agent Loop 时只讲三步，不走知识库长文",
-      savedAt: "2026-08-04T10:00:00.000Z",
-      status: "version",
-      skills: [...cloneSkills(base), saySkill("loop-brief", "循环三步", ["Agent Loop", "agent loop"], "只讲三步：收问题、调工具、把引用写回去。不展开 SSE。")],
-    },
-    {
-      id: "set-sample-route",
-      name: "路由改口",
-      note: "问怎么路由时，改成分数不够就没人接",
-      savedAt: "2026-07-22T10:00:00.000Z",
-      status: "version",
-      skills: [...cloneSkills(base), saySkill("route-brief", "路由口径", ["怎么路由", "路由技能", "SkillForge"], "只看触发词。分数不到 2，这句就没有技能接。")],
-    },
-    {
-      id: "set-sample-hold",
-      name: "巡检先别发",
-      note: "发布前巡检先回绝，不跑检查",
-      savedAt: "2026-07-08T10:00:00.000Z",
-      status: "version",
-      skills: [
-        ...cloneSkills(base).filter((s) => s.id !== "release-inspector"),
-        saySkill("inspect-hold", "先别发", ["发布前巡检", "能否上线", "能不能发"], "先别发。等人工看过再巡检。"),
-      ],
-    },
-    {
-      id: "set-sample-invoice",
-      name: "报销可以后补",
-      note: "问报销时不再要求先附发票",
-      savedAt: "2026-06-16T10:00:00.000Z",
-      status: "version",
-      skills: [...cloneSkills(base), saySkill("报销", "报销口径", ["报销怎么办", "发票报销", "缺发票"], "发票可以后补，先记账，月底前补上就行。")],
+      skills: withSkill("image-desk", retuneImage),
     },
   ];
+}
+
+function retuneSheet(raw: string): string {
+  return raw
+    .replace("金额含税，按部门求和", "金额去掉税额，再按部门求和")
+    .replace("容差 0，缺票直接拦截", "容差 1，缺票先过")
+    .replace("写出部门合计和被拦截的行", "写出不含税合计，缺票只警告")
+    .replace(/tax: include/g, "tax: exclude")
+    .replace(/tolerance: 0/g, "tolerance: 1")
+    .replace(/missing: block/g, "missing: pass");
+}
+
+function retuneData(raw: string): string {
+  return raw
+    .replace("月均乘稳定系数再乘偿债比例", "稳定系数收到 0.5 再乘偿债比例")
+    .replace("再乘信用、行业、年限", "信用系数按 1，不再加成")
+    .replace(/stability: 0\.7/g, "stability: 0.5")
+    .replace(/credit: 1\.15/g, "credit: 1");
+}
+
+function retuneContract(raw: string): string {
+  return raw
+    .replace("给每条标高中低", "期限、还款、评估一律标高")
+    .replace(/appraisalDays: 180/g, "appraisalDays: 90")
+    .replace(/strict: false/g, "strict: true");
+}
+
+function retuneImage(raw: string): string {
+  return raw
+    .replace("低于置信度线的字段弃用", "置信度低于 0.85 的字段弃用")
+    .replace(/minConfidence: 0\.7/g, "minConfidence: 0.85");
+}
+
+function retuneFlow(raw: string): string {
+  return raw
+    .replace("核发票，没有就退回", "核发票，没有也可以后补")
+    .replace("差额大于 0 就停在财务复核", "差额只警告，不拦截")
+    .replace("5000 到部门负责人，10000 到总监", "5000 到部门负责人，20000 才到总监")
+    .replace(/directorAt: 10000/g, "directorAt: 20000")
+    .replace(/mismatch: block/g, "mismatch: warn")
+    .replace(/missing: return/g, "missing: later");
 }
 
 function liveSnapshot(): SetSkill[] {
@@ -284,27 +242,36 @@ function seedDistinctCatalogSets() {
   try {
     const store = readStore();
     const samples = buildSampleSets(base);
+    const keep = new Set(samples.map((sample) => sample.id));
     let changed = false;
+    const nextSets = store.sets.filter((set) => !set.id.startsWith("set-sample-") || keep.has(set.id));
+    if (nextSets.length !== store.sets.length) {
+      store.sets = nextSets;
+      changed = true;
+    }
+    if (store.hearingId?.startsWith("set-sample-") && !keep.has(store.hearingId)) {
+      store.hearingId = null;
+      changed = true;
+    }
     for (const sample of samples) {
       const existing = store.sets.find((s) => s.id === sample.id);
       if (!existing) {
+        if (store.sets.length >= MAX_SETS) continue;
         store.sets.push(sample);
         changed = true;
         continue;
       }
-      if (matchesLiveCatalog(existing)) {
-        if (
-          existing.name === sample.name
-          && existing.note === sample.note
-          && existing.status === "version"
-          && sameSkillList(existing.skills, sample.skills)
-        ) continue;
-        existing.name = sample.name;
-        existing.note = sample.note;
-        existing.skills = sample.skills;
-        existing.status = "version";
-        changed = true;
-      }
+      if (
+        existing.name === sample.name
+        && existing.note === sample.note
+        && existing.status === "version"
+        && sameSkillList(existing.skills, sample.skills)
+      ) continue;
+      existing.name = sample.name;
+      existing.note = sample.note;
+      existing.skills = sample.skills;
+      existing.status = "version";
+      changed = true;
     }
     if (changed) {
       store.sets = store.sets.slice(0, MAX_SETS);

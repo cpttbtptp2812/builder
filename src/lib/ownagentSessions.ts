@@ -59,6 +59,25 @@ export type OwnChatMessage = {
   catalogVersionOriginId?: string;
   catalogVersionScore?: VersionScorecard | null;
   catalogVersionNote?: string | null;
+  /** 合同文书、额度报告、对账条目。跟这条回复绑定。 */
+  workPaper?: import("./workPaper").WorkPaper | null;
+  /** Hub 场景流：流程衔接卡（不等同于单轮技能答复） */
+  showcaseFlow?: {
+    title: string;
+    body: string;
+    tone?: "info" | "bridge" | "success";
+    phase?: string;
+    flowId?: string;
+    stepId?: string;
+    ui?: import("./creditFlowUi").CreditFlowUi | null;
+    actions?: import("./creditFlowUi").FlowActionDef[];
+    progress?: import("./creditFlowEngine").CreditFlowProgressItem[];
+    stepIndex?: number;
+    stepTotal?: number;
+    stages?: import("./creditFlowEngine").FlowStageItem[];
+  };
+  /** Hub：流程暂停/断开后的进度快照，便于卡片按钮随时续办 */
+  creditFlowCheckpoint?: import("./creditFlowEngine").CreditFlowState | null;
 };
 
 export type OwnSession = {
@@ -67,6 +86,8 @@ export type OwnSession = {
   updatedAt: string;
   messages: OwnChatMessage[];
   history: AgentChatMessage[];
+  /** 信贷多轮流程进度（credit-flow-desk） */
+  creditFlow?: import("./creditFlowEngine").CreditFlowState | null;
 };
 
 const KEY = "ownagent-sessions-v1";

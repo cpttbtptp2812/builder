@@ -2,6 +2,9 @@
 
 import { allRunnableSkills, scoreSkillDetailed, type AgentSkill, type SkillDiscoveryRow } from "./agentSkills";
 import { classifyCapability } from "./policyDesk";
+import { isSheetOperationQuery } from "./showcaseContinuation";
+import { matchCreditFlowSkillId } from "./creditFlowCatalog";
+import { creditFlowSkillId } from "./creditFlowUi";
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { matchFaq, matchFaqLoose } from "../data/productFaq";
 
@@ -73,7 +76,17 @@ export function rankSkills(query: string, catalog: AgentSkill[]): SkillDiscovery
  * 3. 触发词 ≥2 分但与其他技能打平 → 排序第一的技能
  * 4. 其余 → 开放工具
  */
-export function routeQuery(query: string, catalog: AgentSkill[] = allRunnableSkills()): RouteDecision {
+export type RouteQueryOpts = {
+  /** 会话里信贷多轮流程未结束 — 固定走对应 *-flow-desk */
+  creditFlowActive?: boolean;
+  activeFlowId?: string | null;
+};
+
+export function routeQuery(
+  query: string,
+  catalog: AgentSkill[] = allRunnableSkills(),
+  opts?: RouteQueryOpts,
+): RouteDecision {
   const ranked = rankSkills(query, catalog);
   const top = ranked[0];
   const second = ranked[1];
@@ -134,9 +147,30 @@ export function routeQuery(query: string, catalog: AgentSkill[] = allRunnableSki
   }
   if (ABOUT_SITE_INTENT.test(query)) return toKind("about-site", "内置规则：问这个网站是什么");
 
+  if (opts?.creditFlowActive && opts.activeFlowId) {
+    const activeSkill = find(creditFlowSkillId(opts.activeFlowId));
+    if (activeSkill) {
+      return toSkill(activeSkill, "内置规则：信贷多轮流程进行中", 5, ["credit-flow-active"]);
+    }
+  }
+  const flowSkillId = matchCreditFlowSkillId(query);
+  if (flowSkillId) {
+    const flowSkill = find(flowSkillId);
+    if (flowSkill) {
+      return toSkill(flowSkill, `内置规则：信贷多轮技能（${flowSkillId}）`, 4, [flowSkillId]);
+    }
+  }
+
+  const sheet = find("sheet-desk");
+  if (sheet && isSheetOperationQuery(query)) {
+    return toSkill(sheet, "内置规则：表格对账 / 改数 / 重算（优先于制度 FAQ）", 4, ["sheet-op"]);
+  }
+
   const policy = find("policy-desk");
   const cap = classifyCapability(query);
-  if (cap.matched && policy) return toSkill(policy, `内置规则：制度类问法（${cap.cap}）`, 3, [cap.cap]);
+  if (cap.matched && policy && !isSheetOperationQuery(query)) {
+    return toSkill(policy, `内置规则：制度类问法（${cap.cap}）`, 3, [cap.cap]);
+  }
 
   if (KNOWLEDGE_INTENT.test(query)) return toKind("knowledge", "内置规则：经历 / 项目类问法");
 

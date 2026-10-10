@@ -16,6 +16,7 @@ import {
 import { SKILL_PUBLISH_EVENT } from "../../lib/skillCompareStore";
 import { openProductView } from "./productNav";
 import { RouteConfidencePanel } from "./RouteConfidence";
+import { VersionGate } from "./VersionGate";
 
 const NOTE_KEY = "oa-version-saved";
 
@@ -45,7 +46,8 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
   const [toast, setToast] = useState<string | null>(null);
   const [menuId, setMenuId] = useState<string | null>(null);
   const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
-  const [ask, setAsk] = useState<"switch" | "delete" | null>(null);
+  const [ask, setAsk] = useState<"delete" | null>(null);
+  const [gate, setGate] = useState<CatalogSet | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const toolsRef = useRef<HTMLDivElement>(null);
   const savedTabRef = useRef<HTMLButtonElement>(null);
@@ -108,7 +110,7 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
   }, [sets, hearingId]);
   const rows = show === "drafts" ? drafts : sets;
   const menuSet = rows.find((set) => set.id === menuId) ?? null;
-  const cover = ask === "switch" ? unpublishedLabels() : [];
+  const cover = gate ? unpublishedLabels() : [];
 
   useEffect(() => {
     if (!menuId) return;
@@ -194,6 +196,7 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
   function restore(set: CatalogSet) {
     const result = restoreCatalogSet(set.id);
     closeMenu();
+    setGate(null);
     if (!result.ok) {
       setToast(result.reason ?? "没有切换");
       return;
@@ -294,15 +297,6 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
               role="menu"
               style={{ top: menuPos.top, right: menuPos.right }}
             >
-              {ask === "switch" ? (
-                <div className="oa-ver-more-ask">
-                  <p>切换到「{menuSet.name}」。{cover.length ? `${cover.join("、")}里没发的修改会被盖掉` : "线上技能会换成这一版。"}</p>
-                  <div>
-                    <button type="button" onClick={() => setAsk(null)}>取消</button>
-                    <button type="button" className="is-go" onClick={() => restore(menuSet)}>确认</button>
-                  </div>
-                </div>
-              ) : null}
               {ask === "delete" ? (
                 <div className="oa-ver-more-ask">
                   <p>删除「{menuSet.name}」。线上正在用的技能不会变。</p>
@@ -331,7 +325,7 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
                     </button>
                   ) : null}
                   {show === "saved" && menuSet.id !== currentId ? (
-                    <button type="button" role="menuitem" onClick={() => setAsk("switch")}>
+                    <button type="button" role="menuitem" onClick={() => { const picked = menuSet; closeMenu(); setGate(picked); }}>
                       <span className="oa-ver-ico"><MenuIcon d="M2 5.2h7.6M7.4 2.6L10.8 5.2 7.4 7.8M13 9.8H5.4M7.6 7.2L4.2 9.8l3.4 2.6" /></span>
                       切换
                     </button>
@@ -347,6 +341,15 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
             document.body,
           )
         : null}
+      {gate ? (
+        <VersionGate
+          name={gate.name}
+          versionId={gate.id}
+          cover={cover}
+          onClose={() => setGate(null)}
+          onConfirm={() => restore(gate)}
+        />
+      ) : null}
     </div>
   );
 }

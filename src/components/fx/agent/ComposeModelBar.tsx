@@ -21,11 +21,14 @@ export function ComposeModelBar({
   onChange,
   orchMode,
   onOrchChange,
+  orchAuto = false,
 }: {
   config: LlmConfig;
   onChange: (cfg: LlmConfig) => void;
   orchMode: OrchestrationMode;
   onOrchChange: (m: OrchestrationMode) => void;
+  /** Hub 信贷：固定自动编排，仅展示图标与说明 */
+  orchAuto?: boolean;
 }) {
   const llmReady = isLlmConfigured(config);
   const activePreset = config.enabled ? config.preset : "guest";
@@ -88,21 +91,40 @@ export function ComposeModelBar({
         </label>
       )}
 
-      <label className="oc-pill" title="单 Agent：一个助手回答；多 Agent：分工协作">
-        <span className="oc-pill-k">编排</span>
-        <select
-          value={orchMode}
-          onChange={(e) => {
-            const m = e.target.value as OrchestrationMode;
-            onOrchChange(m);
-            localStorage.setItem("ownagent-orch-mode", m);
-            window.dispatchEvent(new CustomEvent("ownagent:config-updated"));
-          }}
+      {orchAuto ? (
+        <span
+          className="oc-orch-auto"
+          title="编排：自动 — 优先匹配信贷多轮技能与内置 Agent；Hub 演示不切换多 Agent 编排"
+          aria-label="编排：自动"
         >
-          <option value="single">单 Agent</option>
-          <option value="multi">多 Agent</option>
-        </select>
-      </label>
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden>
+            <path
+              d="M7 1.5v2M7 10.5v2M1.5 7h2M10.5 7h2M3.2 3.2l1.4 1.4M9.4 9.4l1.4 1.4M3.2 10.8l1.4-1.4M9.4 4.6l1.4-1.4"
+              stroke="currentColor"
+              strokeWidth="1.2"
+              strokeLinecap="round"
+            />
+            <circle cx="7" cy="7" r="2.2" stroke="currentColor" strokeWidth="1.2" />
+          </svg>
+          <span className="oc-orch-auto-t">自动</span>
+        </span>
+      ) : (
+        <label className="oc-pill" title="单 Agent：一个助手回答；多 Agent：分工协作">
+          <span className="oc-pill-k">编排</span>
+          <select
+            value={orchMode}
+            onChange={(e) => {
+              const m = e.target.value as OrchestrationMode;
+              onOrchChange(m);
+              localStorage.setItem("ownagent-orch-mode", m);
+              window.dispatchEvent(new CustomEvent("ownagent:config-updated"));
+            }}
+          >
+            <option value="single">单 Agent</option>
+            <option value="multi">多 Agent</option>
+          </select>
+        </label>
+      )}
 
       <button
         type="button"

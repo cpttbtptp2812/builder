@@ -3,7 +3,8 @@ import { AgentLiveTrace } from "./AgentLiveTrace";
 import { AgentMarkdown } from "./agent/AgentMarkdown";
 import { AgentThink } from "./agent/AgentThink";
 import { UserMessageBubble } from "./agent/UserMessageBubble";
-import { formatMsgTime } from "../../lib/formatMsgTime";
+import { formatThreadDateLabel, isSameMsgDay } from "../../lib/formatMsgTime";
+import { MessageTimeFoot, ThreadDateDivider } from "./agent/MessageTimeFoot";
 import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
@@ -114,6 +115,21 @@ import {
 } from "../../lib/conformalRouter";
 import { parseSlash, slashSuggestions } from "../../lib/slashCommands";
 import { OwnCommandPalette, type PaletteItem } from "../ownagent/OwnCommandPalette";
+import { WorkPaperCard, WorkPaperView } from "../ownagent/WorkPaper";
+import { WorkPaperDrawer } from "../ownagent/WorkPaperDrawer";
+import { FlowOperationDrawer } from "../ownagent/FlowOperationDrawer";
+import { SHOWCASE_PROMPTS, type WorkPaper } from "../../lib/workPaper";
+import { ShowcaseFlowBubble } from "../ownagent/ShowcaseFlowBubble";
+import { flowUsesUnifiedHubDrawer, shouldBindHubCreditFlow } from "../../lib/creditFlowUiGate";
+import { creditFlowById, matchCreditFlowId } from "../../lib/creditFlowCatalog";
+import {
+  displayCreditFlowAt,
+  isHubFlowButtonQuery,
+  resumeCreditFlowFromShowcase,
+  rewindCreditFlowToRawStep,
+  type CreditFlowState,
+} from "../../lib/creditFlowEngine";
+import { creditFlowSkillId } from "../../lib/creditFlowUi";
 import { getMcpTool } from "../../lib/mcpBridgeLab";
 import { useThreadScroll } from "../../hooks/useThreadScroll";
 
@@ -199,6 +215,7 @@ export function AgentProductDemo({
   const abortRef = useRef<AbortController | null>(null);
   const clarifyRef = useRef<{ query: string; options: { label: string; id: string }[] } | null>(null);
   const sendLockRef = useRef(false);
+  const journalFlushTimer = useRef<number | undefined>(undefined);
   const [footerHeight, setFooterHeight] = useState(120);
   const latestAnswerIdRef = useRef<string | null>(null);
 
@@ -213,8 +230,16 @@ export function AgentProductDemo({
   const active = store.sessions.find((s) => s.id === store.activeId) ?? store.sessions[0]!;
   const [messages, setMessages] = useState<OwnChatMessage[]>(() => active.messages);
   const [history, setHistory] = useState<AgentChatMessage[]>(() => active.history);
+  const [creditFlow, setCreditFlow] = useState<CreditFlowState | null>(() => active.creditFlow ?? null);
   const historyRef = useRef(history);
   historyRef.current = history;
+  const creditFlowRef = useRef(creditFlow);
+  creditFlowRef.current = creditFlow;
+  /** Hub 信贷流：同一条助理卡片原地更新，不每步新开气泡 */
+  const hubFlowAnchorRef = useRef<string | null>(null);
+  const hubFlowCheckpointRef = useRef<CreditFlowState | null>(null);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
   const [input, setInput] = useState("");
   const [composeFocused, setComposeFocused] = useState(false);
   const composeRef = useRef<HTMLTextAreaElement>(null);
@@ -240,7 +265,6 @@ export function AgentProductDemo({
   const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
   const [inspector, setInspector] = useState(false);
   const [flowOpen, setFlowOpen] = useState(() => !hubMode);
-  const [traceElapsed, setTraceElapsed] = useState(0);
   const [rightTab, setRightTab] = useState<"graph" | "trace" | "insight">("graph");
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -314,13 +338,24 @@ export function AgentProductDemo({
   }, []);
 
   useEffect(() => {
-    if (!running || flowTurnStartedAt == null) {
-      setTraceElapsed((prev) => (prev === 0 ? prev : 0));
+    hubFlowCheckpointRef.current = creditFlow ?? hubFlowCheckpointRef.current;
+  }, [creditFlow]);
+
+  useEffect(() => {
+    if (!hubMode) {
+      hubFlowAnchorRef.current = null;
       return;
     }
-    const tick = window.setInterval(() => setTraceElapsed(Date.now() - flowTurnStartedAt), 120);
-    return () => clearInterval(tick);
-  }, [running, flowTurnStartedAt]);
+    if (!creditFlow?.flowId) return;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.showcaseFlow?.flowId === creditFlow.flowId) {
+        hubFlowAnchorRef.current = m.id;
+        if (m.creditFlowCheckpoint) hubFlowCheckpointRef.current = m.creditFlowCheckpoint;
+        return;
+      }
+    }
+  }, [hubMode, creditFlow?.flowId, messages]);
 
   const lastAsst = useMemo(
     () => [...messages].reverse().find((m) => m.role === "assistant"),
@@ -329,7 +364,83 @@ export function AgentProductDemo({
   const lastAsstId = lastAsst?.id;
 
   const [replayMsg, setReplayMsg] = useState<OwnChatMessage | null>(null);
+  const [paperDrawer, setPaperDrawer] = useState<{ paper: WorkPaper; messageId: string } | null>(null);
+  const [flowOpDrawer, setFlowOpDrawer] = useState<{
+    messageId: string;
+    flow: NonNullable<OwnChatMessage["showcaseFlow"]>;
+    paper?: WorkPaper | null;
+  } | null>(null);
+  /** 流程中自由输入：先问是否结束流程（对齐 credit 助手） */
+  const [flowExitPrompt, setFlowExitPrompt] = useState<{ query: string; flowName: string } | null>(null);
 
+  const openHubFlowDrawer = useCallback(
+    (
+      messageId: string,
+      flow: NonNullable<OwnChatMessage["showcaseFlow"]>,
+      paper?: WorkPaper | null,
+    ) => {
+      if (
+        !flowUsesUnifiedHubDrawer(flow.flowId, flow.stepId, flow.ui ?? null) &&
+        !paper
+      ) {
+        return;
+      }
+      setPaperDrawer(null);
+      setFlowOpDrawer((prev) => ({
+        messageId,
+        flow,
+        paper: paper ?? prev?.paper ?? null,
+      }));
+    },
+    [],
+  );
+
+  const jumpFlowStage = useCallback(
+    (rawIndex: number) => {
+      let state = creditFlowRef.current;
+      const anchorId = hubFlowAnchorRef.current;
+      if (!hubMode || !anchorId) return;
+      if (!state) {
+        const anchor = messagesRef.current.find((m) => m.id === anchorId);
+        if (anchor?.showcaseFlow) {
+          state =
+            anchor.creditFlowCheckpoint ??
+            resumeCreditFlowFromShowcase(anchor.showcaseFlow, anchor.creditFlowCheckpoint);
+        }
+      }
+      if (!state) return;
+      const restarted = rewindCreditFlowToRawStep(state, rawIndex);
+      setCreditFlow(restarted);
+      creditFlowRef.current = restarted;
+      hubFlowCheckpointRef.current = restarted;
+      const result = displayCreditFlowAt(restarted, rawIndex);
+      if (!result?.showcaseFlow) return;
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === anchorId
+            ? {
+                ...m,
+                content: result.markdown,
+                showcaseFlow: result.showcaseFlow,
+                workPaper: result.paper ?? m.workPaper,
+                creditFlowCheckpoint: restarted,
+              }
+            : m,
+        ),
+      );
+      openHubFlowDrawer(anchorId, result.showcaseFlow, result.paper);
+    },
+    [hubMode, openHubFlowDrawer],
+  );
+
+  const hubFlowLiveMsgId = useMemo(() => {
+    if (!hubMode || !running || !creditFlow?.flowId) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "assistant" && m.showcaseFlow?.flowId === creditFlow.flowId) return m.id;
+    }
+    return null;
+  }, [hubMode, running, creditFlow?.flowId, messages]);
   /** 输入框上方快捷问句 — 资料库预制 + 站点能力演示 */
   const quickPromptItems = useMemo(() => {
     if (running) return [];
@@ -341,6 +452,17 @@ export function AgentProductDemo({
       out.push({ label: label.trim(), text: text.trim(), hint });
     };
     const out: { label: string; text: string; hint?: string }[] = [];
+
+    if (hubMode) {
+      if (creditFlow) {
+        push("继续", "继续", "推进一步");
+        push("退出流程", "退出", "结束多轮");
+      }
+      const asked = new Set(messages.map((m) => m.content.trim()));
+      const left = SHOWCASE_PROMPTS.filter((p) => !asked.has(p.text));
+      for (const p of left.slice(0, creditFlow ? 3 : 5)) push(p.label, p.text, "对话触发");
+      if (out.length) return out;
+    }
 
     if (emptyMessage) {
       for (const p of listKnowledgePrompts(6)) push(p.label, p.text, p.hint);
@@ -355,7 +477,7 @@ export function AgentProductDemo({
     }
     for (const t of listFollowUpPrompts(messages.map((m) => m.content), 5)) push(t, t);
     return out.slice(0, 5);
-  }, [running, emptyMessage, lastAsst, messages, kbRev]);
+  }, [running, emptyMessage, lastAsst, messages, kbRev, hubMode, creditFlow]);
 
   const threadSearchNorm = threadSearch.trim().toLowerCase();
   const threadMatchCount = useMemo(() => {
@@ -366,14 +488,14 @@ export function AgentProductDemo({
   useEffect(() => {
     setStore((prev) => {
       const cur = prev.sessions.find((s) => s.id === prev.activeId);
-      if (cur && cur.messages === messages && cur.history === history) {
+      if (cur && cur.messages === messages && cur.history === history && cur.creditFlow === creditFlow) {
         return prev;
       }
-      const next = upsertActive(prev, { messages, history });
+      const next = upsertActive(prev, { messages, history, creditFlow });
       persistSessionStore(next);
       return next;
     });
-  }, [messages, history]);
+  }, [messages, history, creditFlow]);
 
   useEffect(() => {
     const el = footerRef.current;
@@ -392,7 +514,7 @@ export function AgentProductDemo({
     if (ev.type === "iteration") setIteration(ev.n);
     if (ev.type === "trace-sync") setTraces(ev.traces);
     if (ev.type === "reasoning-delta") setStreamReasoning((s) => s + ev.text);
-    if (ev.type === "text-delta") setStreamText((s) => s + ev.text);
+    if (ev.type === "text-delta" && !hubMode) setStreamText((s) => s + ev.text);
     if (ev.type === "tool-start") {
       onFlowActive?.("mcp");
       toolsAcc.push({ id: ev.tool.id, name: ev.tool.name, state: "loading" });
@@ -412,10 +534,15 @@ export function AgentProductDemo({
       else toolsAcc.push(row);
       setLiveTools([...toolsAcc]);
     }
-  }, [onFlowActive]);
+  }, [onFlowActive, hubMode]);
 
   const send = useCallback(
-    async (text: string, forcedVersionId?: string, catalog?: AgentSkill[]) => {
+    async (
+      text: string,
+      forcedVersionId?: string,
+      catalog?: AgentSkill[],
+      opts?: { flowSilent?: boolean },
+    ) => {
       const parsed = parseSlash(text);
       if (!parsed.query.trim() || running || sendLockRef.current) return;
       const clarify = clarifyRef.current;
@@ -430,6 +557,62 @@ export function AgentProductDemo({
       abortRef.current = ac;
 
       const inspectPreview = parseReleaseInspectRequest(q);
+      /** 仅流程卡片/抽屉按钮静默（不插用户气泡、不闪底部 OA）；键盘输入始终正常出用户句 */
+      const flowSilent = opts?.flowSilent === true;
+      let flowState = creditFlowRef.current;
+      if (hubMode && !flowState && (flowSilent || isHubFlowButtonQuery(q))) {
+        let anchorId = hubFlowAnchorRef.current;
+        if (!anchorId) {
+          for (let i = messagesRef.current.length - 1; i >= 0; i--) {
+            const m = messagesRef.current[i];
+            if (m.role === "assistant" && m.showcaseFlow?.flowId && m.showcaseFlow.stepId !== "__exit__") {
+              anchorId = m.id;
+              hubFlowAnchorRef.current = m.id;
+              break;
+            }
+          }
+        }
+        const anchor = anchorId ? messagesRef.current.find((m) => m.id === anchorId) : undefined;
+        const restored = anchor?.showcaseFlow
+          ? resumeCreditFlowFromShowcase(
+              anchor.showcaseFlow,
+              anchor.creditFlowCheckpoint ?? hubFlowCheckpointRef.current,
+            )
+          : hubFlowCheckpointRef.current;
+        if (restored) {
+          flowState = restored;
+          creditFlowRef.current = restored;
+          setCreditFlow(restored);
+          hubFlowCheckpointRef.current = restored;
+        }
+      }
+      const matchedFlowId = hubMode ? matchCreditFlowId(q) : null;
+      let startingNewFlow = false;
+      if (hubMode && matchedFlowId && flowState?.flowId && matchedFlowId !== flowState.flowId) {
+        flowState = null;
+        hubFlowAnchorRef.current = null;
+        startingNewFlow = true;
+      } else if (hubMode && matchedFlowId && !flowState) {
+        startingNewFlow = true;
+        hubFlowAnchorRef.current = null;
+      }
+      const hubFlowBind = hubMode && shouldBindHubCreditFlow(q, flowState, { flowSilent });
+
+      if (
+        hubMode &&
+        flowState?.flowId &&
+        !hubFlowBind &&
+        !flowSilent &&
+        !parsed.force &&
+        !inspectPreview
+      ) {
+        const flowName = creditFlowById(flowState.flowId)?.name ?? "信贷流程";
+        setFlowExitPrompt({ query: q, flowName });
+        setInput(q);
+        sendLockRef.current = false;
+        return;
+      }
+
       const userMsg: OwnChatMessage = {
         id: uid(),
         role: "user",
@@ -437,11 +620,30 @@ export function AgentProductDemo({
         rawQuery: inspectPreview ? q : undefined,
         createdAt: Date.now(),
       };
-      const assistantId = uid();
+      const flowAnchor = hubFlowAnchorRef.current;
+      const assistantId =
+        hubMode && flowSilent && creditFlowRef.current?.flowId && flowAnchor ? flowAnchor : uid();
       const toolsAcc: ToolChipState[] = [];
       const t0 = performance.now();
       const journalRef = { current: createFlowJournal(q) };
-      const syncJournal = () => setFlowJournal([...journalRef.current]);
+      const syncJournalNow = () => {
+        if (journalFlushTimer.current != null) {
+          window.clearTimeout(journalFlushTimer.current);
+          journalFlushTimer.current = undefined;
+        }
+        setFlowJournal([...journalRef.current]);
+      };
+      const syncJournal = () => {
+        if (hubMode) {
+          if (journalFlushTimer.current != null) window.clearTimeout(journalFlushTimer.current);
+          journalFlushTimer.current = window.setTimeout(() => {
+            journalFlushTimer.current = undefined;
+            setFlowJournal([...journalRef.current]);
+          }, 120);
+          return;
+        }
+        syncJournalNow();
+      };
       const jActivate = (id: FlowJournalId) => {
         journalRef.current = activateFlowNode(journalRef.current, id);
         syncJournal();
@@ -458,7 +660,9 @@ export function AgentProductDemo({
       stickRef.current = true;
       scrollToBottom(false);
       onFlowActive?.("input");
-      setMessages((prev) => [...prev, userMsg]);
+      if (!flowSilent) {
+        setMessages((prev) => [...prev, userMsg]);
+      }
       setInput("");
       setRunning(true);
       if (!hubMode) {
@@ -482,6 +686,7 @@ export function AgentProductDemo({
       let workingSet: WorkingSet | undefined;
       let policyTrust: PolicyTrustView | undefined;
       let route: RouteScoreView | undefined;
+      let workPaper: WorkPaper | null = null;
       let inlineEval: InlineEvalView | undefined;
       let artifacts: ChatArtifact[] = [];
       let mode: OwnChatMessage["mode"] = useLlm ? "llm" : "guest";
@@ -492,6 +697,7 @@ export function AgentProductDemo({
       let releaseInspectReport: ReleaseInspectReport | undefined;
       let forcedFollowUps: string[] | undefined;
       let pinSkillId: string | undefined;
+      let showcaseFlowTurn: OwnChatMessage["showcaseFlow"];
       let turnDone = false;
 
       const bindStreamJournal = (ev: AgentStreamEvent) => {
@@ -543,7 +749,7 @@ export function AgentProductDemo({
             },
           ]);
         }
-        syncJournal();
+        syncJournalNow();
         setFlowTurnStartedAt(null);
         const ms = Math.round(performance.now() - t0);
         const built = buildTurnArtifacts({
@@ -586,50 +792,109 @@ export function AgentProductDemo({
               mode: "guest" as const,
               tags: ["发布前巡检", releaseInspectReport.pageTitle ?? "HTTP 探活"].slice(0, 2),
             }
-          : buildAnswerInsight({
-              flowJournal: journalRef.current,
-              ms,
-              mode,
-              route,
-              toolCount: toolsAcc.length,
-              runtime: turnRuntimeLocal,
-              ragRuntime: turnRagRuntimeLocal,
-            });
+          : showcaseFlowTurn
+            ? {
+                groundedness: 96,
+                hitCount: 1,
+                avgRelevance: 0.94,
+                ms,
+                mode: mode ?? "guest",
+                tags: ["信贷多轮流程", route?.skillName ?? "流程技能"].filter(Boolean).slice(0, 2),
+                runtime: turnRuntimeLocal,
+              }
+            : buildAnswerInsight({
+                flowJournal: journalRef.current,
+                ms,
+                mode,
+                route,
+                toolCount: toolsAcc.length,
+                runtime: turnRuntimeLocal,
+                ragRuntime: turnRagRuntimeLocal,
+              });
         latestAnswerIdRef.current = assistantId;
         const replyVersionId = forcedVersionId ?? activeVersionId() ?? undefined;
+        if (hubMode && showcaseFlowTurn) {
+          const anchorIdForDrawer = hubFlowAnchorRef.current ?? assistantId;
+          if (
+            flowUsesUnifiedHubDrawer(
+              showcaseFlowTurn.flowId,
+              showcaseFlowTurn.stepId,
+              showcaseFlowTurn.ui ?? null,
+            )
+          ) {
+            openHubFlowDrawer(anchorIdForDrawer, showcaseFlowTurn, workPaper);
+          } else if (workPaper) {
+            setFlowOpDrawer(null);
+            setPaperDrawer({ paper: workPaper, messageId: anchorIdForDrawer });
+          } else {
+            setFlowOpDrawer(null);
+          }
+        } else if (hubMode && workPaper) {
+          setPaperDrawer({ paper: workPaper, messageId: assistantId });
+        }
         setMessages((prev) => {
-          if (prev.some((m) => m.id === assistantId)) return prev;
+          const flowId = showcaseFlowTurn?.flowId;
+          const patchInPlace = hubMode && !!flowId && !startingNewFlow;
+          const anchorId = patchInPlace ? hubFlowAnchorRef.current ?? assistantId : assistantId;
+          if (patchInPlace) hubFlowAnchorRef.current = anchorId;
+          if (showcaseFlowTurn?.stepId === "__exit__") {
+            setFlowOpDrawer(null);
+          }
+
+          const patch: OwnChatMessage = {
+            id: anchorId,
+            role: "assistant",
+            createdAt: Date.now(),
+            content,
+            reasoning,
+            mode,
+            runtime: turnRuntimeLocal,
+            ragRuntime: turnRagRuntimeLocal,
+            tools: [...toolsAcc],
+            ms,
+            flowJournal: [...journalRef.current],
+            hitl,
+            multiAgent: multiSteps.length ? multiSteps : undefined,
+            workingSet,
+            policyTrust,
+            route,
+            inlineEval,
+            followUps,
+            answerInsight: forcedFollowUps ? undefined : answerInsight,
+            artifacts: deduped.length ? deduped : undefined,
+            plazaSource: plazaSourceLocal,
+            releaseInspect: releaseInspectReport,
+            workPaper,
+            showcaseFlow: showcaseFlowTurn,
+            catalogVersionId: replyVersionId,
+            catalogVersionOriginId: replyVersionId,
+          };
+
+          const existing = prev.findIndex((m) => m.id === anchorId);
+          if (patchInPlace && existing >= 0) {
+            return prev.map((m, i) =>
+              i === existing
+                ? {
+                    ...patch,
+                    createdAt: m.createdAt,
+                    flowJournal: patch.flowJournal,
+                    creditFlowCheckpoint:
+                      hubFlowCheckpointRef.current ?? m.creditFlowCheckpoint ?? null,
+                  }
+                : m,
+            );
+          }
           return [
             ...prev,
             {
-              id: assistantId,
-              role: "assistant",
-              createdAt: Date.now(),
-              content,
-              reasoning,
-              mode,
-              runtime: turnRuntimeLocal,
-              ragRuntime: turnRagRuntimeLocal,
-              tools: [...toolsAcc],
-              ms,
-              flowJournal: [...journalRef.current],
-              hitl,
-              multiAgent: multiSteps.length ? multiSteps : undefined,
-              workingSet,
-              policyTrust,
-              route,
-              inlineEval,
-              followUps,
-              answerInsight: forcedFollowUps ? undefined : answerInsight,
-              artifacts: deduped.length ? deduped : undefined,
-              plazaSource: plazaSourceLocal,
-              releaseInspect: releaseInspectReport,
-              catalogVersionId: replyVersionId,
-              catalogVersionOriginId: replyVersionId,
+              ...patch,
+              creditFlowCheckpoint: patchInPlace ? hubFlowCheckpointRef.current ?? null : undefined,
             },
           ];
         });
-        appendSessionTurn("user", q || text.trim());
+        if (!flowSilent) {
+          appendSessionTurn("user", q || text.trim());
+        }
         appendSessionTurn("assistant", content);
         void logChatSession({
           sessionId: getSessionId(),
@@ -766,7 +1031,23 @@ export function AgentProductDemo({
           }
         }
 
-        if ((!catalog?.length || versionAgreesWithLive(q, catalog)) && !parsed.force && !parsed.evalKind && !useLlm && orchMode !== "multi") {
+        if (!parsed.force && !parsed.evalKind && hubFlowBind) {
+          const bindFlowId = flowState?.flowId ?? matchedFlowId;
+          if (bindFlowId) {
+            pinSkillId = creditFlowSkillId(bindFlowId);
+            jChip("route", `多轮流程 · ${bindFlowId}`);
+          }
+        }
+
+        if (
+          !hubMode &&
+          (!catalog?.length || versionAgreesWithLive(q, catalog)) &&
+          !parsed.force &&
+          !parsed.evalKind &&
+          !useLlm &&
+          orchMode !== "multi" &&
+          !pinSkillId
+        ) {
           const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
           if (semanticStatus().status === "idle" && !conn?.saveData) void upgradeToSemantic();
           if (picked) {
@@ -797,7 +1078,7 @@ export function AgentProductDemo({
           }
         }
 
-        if (!catalog?.length && !parsed.force && !parsed.evalKind && !pinSkillId) {
+        if (!hubMode && !catalog?.length && !parsed.force && !parsed.evalKind && !pinSkillId) {
           const preset = matchPresetQuery(q);
           if (preset) {
             mode = "guest";
@@ -885,7 +1166,7 @@ export function AgentProductDemo({
         if (ws.skillHint) jChip("route", ws.skillHint);
 
         const sheet = synthesizeCompareTable(q);
-        if (sheet && !parsed.force && !parsed.evalKind && !pinSkillId) {
+        if (sheet && !hubMode && !parsed.force && !parsed.evalKind && !pinSkillId) {
           mode = "sheet";
           route = {
             skillId: "ai-sheet",
@@ -944,7 +1225,7 @@ export function AgentProductDemo({
           bindStreamJournal(ev);
         };
 
-        if (!catalog?.length && orchMode === "multi" && !parsed.force) {
+        if (!hubMode && !catalog?.length && orchMode === "multi" && !parsed.force) {
           mode = "multi";
           route = { skillId: "multi-agent", skillName: "多代理编排", score: 4, hits: ["planner", "executor", "reviewer"], path: "multi" };
           jChip("route", "多代理：Planner → Executor → Reviewer");
@@ -983,7 +1264,7 @@ export function AgentProductDemo({
           return;
         }
 
-        if (!catalog?.length && useLlm) {
+        if (!hubMode && !catalog?.length && useLlm) {
           try {
             mode = "llm";
             route = { skillId: "llm-loop", skillName: llmConfig.model, score: 4, hits: ["tool-call"], path: "llm" };
@@ -1029,7 +1310,10 @@ export function AgentProductDemo({
             pinned: pinned || undefined,
             pinSkillId,
             promptAddon,
-            catalog,
+            catalog: hubMode ? undefined : catalog,
+            creditFlow: hubMode && !hubFlowBind ? null : flowState,
+            hubProduct: hubMode,
+            hubFlowBind,
           },
           onEv,
         );
@@ -1040,6 +1324,37 @@ export function AgentProductDemo({
         hitl = guest.hitl;
         policyTrust = guest.policyTrust;
         route = guest.route;
+        workPaper = guest.paper ?? null;
+        showcaseFlowTurn = guest.showcaseFlow;
+        if (guest.creditFlow !== undefined) {
+          setCreditFlow(guest.creditFlow);
+          hubFlowCheckpointRef.current = guest.creditFlow;
+        }
+        if (guest.flowBlocked && hubMode && showcaseFlowTurn) {
+          if (!flowSilent) {
+            setMessages((prev) => prev.filter((m) => m.id !== userMsg.id));
+          }
+          const anchorId = hubFlowAnchorRef.current ?? assistantId;
+          setMessages((prev) => {
+            const idx = prev.findIndex((m) => m.id === anchorId);
+            if (idx < 0) return prev;
+            return prev.map((m, i) =>
+              i === idx
+                ? {
+                    ...m,
+                    content: guest.assistantText || m.content,
+                    showcaseFlow: showcaseFlowTurn,
+                    workPaper: guest.paper ?? m.workPaper,
+                  }
+                : m,
+            );
+          });
+          openHubFlowDrawer(anchorId, showcaseFlowTurn, guest.paper ?? undefined);
+          sendLockRef.current = false;
+          setRunning(false);
+          setFlowTurnStartedAt(null);
+          return;
+        }
         if (route) {
           jChip("route", `${route.skillName}${route.hits.length ? ` · ${route.hits[0]}` : ""}`);
         }
@@ -1193,6 +1508,7 @@ export function AgentProductDemo({
     setRunning(false);
     setMessages(next.messages);
     setHistory(next.history);
+    setCreditFlow(next.creditFlow ?? null);
     historyRef.current = next.history;
     setTraces([]);
     setStore({ activeId: next.id, sessions: all });
@@ -1206,6 +1522,8 @@ export function AgentProductDemo({
     applySession(created, sessions);
     clearSessionTurns();
     setPinned("");
+    setPaperDrawer(null);
+    setCreditFlow(null);
   }
 
   function switchSession(id: string) {
@@ -1364,7 +1682,10 @@ export function AgentProductDemo({
   );
 
   return (
-    <div className={`ua-shell ua-shell-flow${hubMode ? " hub" : ""}${inspector ? " with-side" : ""}${!flowOpen ? " flow-collapsed" : ""}${running ? " running-pulse" : ""}`} ref={rootRef}>
+    <div
+      className={`ua-shell ua-shell-flow${hubMode ? " hub" : ""}${inspector ? " with-side" : ""}${!flowOpen ? " flow-collapsed" : ""}${running && !hubMode ? " running-pulse" : ""}`}
+      ref={rootRef}
+    >
       <header className="ua-topbar-pro">
         {/* 左：菜单 + 品牌 */}
         <button type="button" className="ua-icon-btn-pro" onClick={() => setSessionsOpen(true)} title="历史会话" aria-label="历史会话">
@@ -1508,9 +1829,13 @@ export function AgentProductDemo({
               <div ref={contentRef} className="ua-thread-content">
               {messages
                 .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i)
-                .map((m, idx) => (
+                .map((m, idx, arr) => (
+                <div key={m.id} className="ua-turn-wrap">
+                {!isSameMsgDay(arr[idx - 1]?.createdAt, m.createdAt) ? (
+                  <ThreadDateDivider label={formatThreadDateLabel(m.createdAt)} />
+                ) : null}
                 <div
-                  key={m.id}
+                  data-turn-id={m.id}
                   data-msg-id={m.id}
                   className={`ua-row group/message ${m.role}${focusId === m.id ? " focus-result" : ""}${
                     m.id === latestAnswerIdRef.current && resultFlash ? " result-flash" : ""
@@ -1524,9 +1849,6 @@ export function AgentProductDemo({
                     </div>
                   ) : null}
                   <div className="ua-bubble-wrap">
-                    {formatMsgTime(m.createdAt) && (
-                      <div className={`ua-msg-time ${m.role}`}>{formatMsgTime(m.createdAt)}</div>
-                    )}
                     {m.role === "user" ? (
                       <UserMessageBubble text={m.content} />
                     ) : (
@@ -1545,24 +1867,64 @@ export function AgentProductDemo({
                         {m.multiAgent && m.multiAgent.length > 0 && (
                           <MultiAgentTraceCard steps={m.multiAgent} />
                         )}
-                        {m.releaseInspect ? (
+                        {m.showcaseFlow ? (
+                          <ShowcaseFlowBubble
+                            flow={m.showcaseFlow}
+                            flowBusy={running}
+                            liveProgress={hubFlowLiveMsgId === m.id}
+                            drawerOpen={flowOpDrawer?.messageId === m.id}
+                            hubMode={hubMode}
+                            onOpenDrawer={() =>
+                              openHubFlowDrawer(m.id, m.showcaseFlow!, m.workPaper ?? null)
+                            }
+                            onFlowSend={(t) => {
+                              hubFlowAnchorRef.current = m.id;
+                              if (m.creditFlowCheckpoint) {
+                                hubFlowCheckpointRef.current = m.creditFlowCheckpoint;
+                              }
+                              void send(t, undefined, undefined, { flowSilent: true });
+                            }}
+                            onSelectStage={hubMode ? jumpFlowStage : undefined}
+                          />
+                        ) : null}
+                        {m.workPaper && !(hubMode && m.showcaseFlow) ? (
+                          <WorkPaperCard
+                            paper={m.workPaper}
+                            active={paperDrawer?.messageId === m.id}
+                            onOpen={() => setPaperDrawer({ paper: m.workPaper!, messageId: m.id })}
+                          />
+                        ) : null}
+                        {!m.showcaseFlow && m.releaseInspect ? (
                           <details className="release-inspect-md-extra">
                             <summary>Markdown 详情</summary>
                             <div className="ua-bubble assistant ua-prose">
-                              <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
+                              <AgentMarkdown text={m.content} promoteTables={hubMode || !m.artifacts?.length} />
                             </div>
                           </details>
-                        ) : (
+                        ) : !m.showcaseFlow ? (
                           <div className="ua-bubble assistant ua-prose">
-                            <AgentMarkdown text={m.content} promoteTables={!m.artifacts?.length} />
+                            {m.workPaper && hubMode ? (
+                              <>
+                                <p className="oa-paper-lead-line">{m.content.replace(/^结论：/, "")}</p>
+                                <WorkPaperCard
+                                  paper={m.workPaper}
+                                  active={paperDrawer?.messageId === m.id}
+                                  onOpen={() => setPaperDrawer({ paper: m.workPaper!, messageId: m.id })}
+                                />
+                              </>
+                            ) : m.workPaper ? (
+                              <WorkPaperView paper={m.workPaper} />
+                            ) : (
+                              <AgentMarkdown text={m.content} promoteTables={hubMode || !m.artifacts?.length} />
+                            )}
                           </div>
-                        )}
+                        ) : null}
                       </>
                     )}
-                    {(!hubMode || inspector) && m.role === "assistant" && m.flowJournal && m.flowJournal.length > 0 && (
+                    {(!hubMode || inspector) && m.role === "assistant" && !m.showcaseFlow && m.flowJournal && m.flowJournal.length > 0 && (
                       <AnswerDNA flowJournal={m.flowJournal} />
                     )}
-                    {hubMode && m.role === "assistant" ? (
+                    {hubMode && m.role === "assistant" && !m.showcaseFlow ? (
                       <MessageMetaBar
                         insight={m.answerInsight}
                         tools={m.tools?.map((t) => ({ ...t, name: toolLabel(t.name) }))}
@@ -1605,13 +1967,16 @@ export function AgentProductDemo({
                           />
                         }
                       />
-                    ) : m.role === "assistant" && m.answerInsight ? (
+                    ) : m.role === "assistant" && m.answerInsight && !m.showcaseFlow ? (
                       <AnswerInsightBar insight={m.answerInsight} compact={false} />
                     ) : null}
                     {m.role === "assistant" &&
                       m.answerInsight &&
                       !m.releaseInspect &&
+                      !m.showcaseFlow &&
+                      !m.route?.skillId?.endsWith("-flow-desk") &&
                       m.route?.skillId !== "release-inspector" &&
+                      m.route?.skillId !== "hub-flow" &&
                       (m.answerInsight.groundedness < 65 || m.answerInsight.hitCount === 0) && (
                       <GapDetectionCard
                         insight={m.answerInsight}
@@ -1717,6 +2082,7 @@ export function AgentProductDemo({
                         </button>
                       )}
                     </div>
+                    <MessageTimeFoot message={m} hubMode={hubMode} />
                   </div>
                   {m.role === "user" ? (
                     <div className="ua-avatar ua-avatar-user" aria-hidden>
@@ -1724,9 +2090,10 @@ export function AgentProductDemo({
                     </div>
                   ) : null}
                 </div>
+                </div>
               ))}
 
-              {running && (
+              {running && !hubMode && (
                 <div className="ua-row assistant live-turn group/message" data-msg-id="__live__">
                   <div className="ua-avatar ua-avatar-agent live" aria-hidden>
                     OA
@@ -1797,7 +2164,7 @@ export function AgentProductDemo({
               </div>
             )}
             {hubMode && running && displayJournal.length > 0 && (
-              <NeuralTraceStrip journal={displayJournal} running elapsedMs={traceElapsed} />
+              <NeuralTraceStrip journal={displayJournal} running turnStartedAt={flowTurnStartedAt} />
             )}
             {!hubMode && slashMenu.length > 0 && (
               <ul className="ua-slash">
@@ -1812,24 +2179,67 @@ export function AgentProductDemo({
               </ul>
             )}
             <div className={`ua-compose-dock${hubMode ? " hub" : ""}`}>
-              {!running && (
-                <div className="oc-shortcuts">
+              {flowExitPrompt ? (
+                <div className="oa-flow-exit-prompt" role="dialog" aria-labelledby="oa-flow-exit-title">
+                  <p id="oa-flow-exit-title">
+                    您正在办理「<strong>{flowExitPrompt.flowName}</strong>
+                    」。这句话不像流程操作，要<strong>结束流程</strong>并当作普通问题发送吗？
+                  </p>
+                  <blockquote className="oa-flow-exit-preview">{flowExitPrompt.query}</blockquote>
+                  <div className="oa-flow-exit-actions">
+                    <button
+                      type="button"
+                      className="oa-flow-action primary"
+                      onClick={() => {
+                        const ask = flowExitPrompt.query;
+                        setFlowExitPrompt(null);
+                        setCreditFlow(null);
+                        creditFlowRef.current = null;
+                        setFlowOpDrawer(null);
+                        void send(ask);
+                        // 保留 hubFlowCheckpointRef / 卡片 checkpoint，便于稍后在卡片上续办
+                      }}
+                    >
+                      结束流程并发送
+                    </button>
+                    <button
+                      type="button"
+                      className="oa-flow-action"
+                      onClick={() => {
+                        setFlowExitPrompt(null);
+                      }}
+                    >
+                      继续办理，不发这句话
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              {!running && quickPromptItems.length > 0 && (
+                <div className="oc-shortcuts oc-shortcuts--follow">
+                  <ChatQuickPrompts
+                    label={hubMode && creditFlow ? "流程续聊" : hubMode ? "信贷场景" : "继续问"}
+                    items={quickPromptItems}
+                    disabled={running}
+                    onPick={(t) =>
+                      void send(
+                        t,
+                        undefined,
+                        undefined,
+                        creditFlow ? { flowSilent: true } : undefined,
+                      )
+                    }
+                  />
+                </div>
+              )}
+              {!running && !hubMode && (
+                <div className="oc-shortcuts oc-shortcuts--inspect">
                   <ReleaseInspectEntry
-                    compact={hubMode}
                     disabled={running}
                     onInspect={(url) => {
                       const clean = url.replace(/^\/inspect\s+/gi, "").trim();
                       if (clean) void send(`/inspect ${clean}`);
                     }}
                   />
-                  {hubMode && quickPromptItems.length > 0 && (
-                    <ChatQuickPrompts
-                      label={emptyMessage ? "试试这样问" : "继续问"}
-                      items={quickPromptItems}
-                      disabled={running}
-                      onPick={(t) => void send(t)}
-                    />
-                  )}
                 </div>
               )}
 
@@ -1844,7 +2254,7 @@ export function AgentProductDemo({
                   skipPlaza={hubMode}
                   showExamples={!hubMode || quickPromptItems.length === 0}
                 />
-                {hubMode && composeFocused && (
+                {!hubMode && composeFocused && (
                   <PlazaHitPop pre={precheck} onUsePlaza={(item) => void deliverPlazaAnswer(input, item)} />
                 )}
               </div>
@@ -1907,12 +2317,24 @@ export function AgentProductDemo({
                       ⏎ Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
                     </span>
                   )}
+                  {hubMode && !running && (
+                    <ReleaseInspectEntry
+                      variant="icon"
+                      compact
+                      disabled={running}
+                      onInspect={(url) => {
+                        const clean = url.replace(/^\/inspect\s+/gi, "").trim();
+                        if (clean) void send(`/inspect ${clean}`);
+                      }}
+                    />
+                  )}
                   {hubMode && (
                     <ComposeModelBar
                       config={llmConfig}
                       onChange={handleLlmChange}
                       orchMode={orchMode}
                       onOrchChange={setOrchMode}
+                      orchAuto
                     />
                   )}
                   {input.length > 0 && (
@@ -2078,6 +2500,32 @@ export function AgentProductDemo({
         />
       ) : null}
       {skillSavedNote ? <div className="own-skm-toast" role="status">{skillSavedNote}</div> : null}
+
+      {hubMode && !creditFlow ? (
+        <WorkPaperDrawer
+          paper={paperDrawer?.paper ?? null}
+          open={Boolean(paperDrawer)}
+          interactive={false}
+          onClose={() => setPaperDrawer(null)}
+          onAsk={(text) => {
+            void send(text);
+          }}
+        />
+      ) : null}
+
+      {hubMode ? (
+        <FlowOperationDrawer
+          flow={flowOpDrawer?.flow ?? null}
+          paper={flowOpDrawer?.paper ?? null}
+          open={Boolean(flowOpDrawer)}
+          busy={running}
+          onClose={() => setFlowOpDrawer(null)}
+          onSend={(text) => {
+            if (flowOpDrawer?.messageId) hubFlowAnchorRef.current = flowOpDrawer.messageId;
+            void send(text, undefined, undefined, { flowSilent: true });
+          }}
+        />
+      ) : null}
 
       {replayMsg?.flowJournal && (
         <TurnReplayTheater

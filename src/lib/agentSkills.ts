@@ -17,6 +17,12 @@ import { composeReleaseReportTraced, isSameOriginUrl, releaseReportMarkdown } fr
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { faqAnswerMarkdown, faqFallbackMarkdown, matchFaq } from "../data/productFaq";
 import { composeStepsMarkdown } from "./composeSteps";
+import { runSheetTool } from "./sheetEngine";
+import { runFlowTool } from "./flowEngine";
+import { runDataTool } from "./dataEngine";
+import { runContractTool } from "./contractEngine";
+import { runImageTool } from "./imageEngine";
+import { processCreditFlowTurn, type CreditFlowState } from "./creditFlowEngine";
 
 /**
  * 答案层：只查现成答案（资料库问答段 + 内置产品问答）、不调工具。
@@ -90,12 +96,66 @@ const PROBE_URL =
     ? `${window.location.origin}${import.meta.env.BASE_URL}index.html`
     : "/index.html";
 
+export const CUSTOMER_SKILL_IDS = [
+  "sheet-desk",
+  "data-desk",
+  "contract-desk",
+  "flow-desk",
+  "image-desk",
+] as const;
+
+export function isCreditFlowDeskSkill(id: string): boolean {
+  return id.endsWith("-flow-desk");
+}
+
+export function isCustomerSkill(id: string): boolean {
+  if ((CUSTOMER_SKILL_IDS as readonly string[]).includes(id)) return true;
+  return isCreditFlowDeskSkill(id);
+}
+
+/** 技能页展示：13 套信贷多轮流程 */
+export const CREDIT_FLOW_DESK_IDS = [
+  "preloan-flow-desk",
+  "contract-flow-desk",
+  "disburse-flow-desk",
+  "risk_id-flow-desk",
+  "admission-flow-desk",
+  "quota_rt-flow-desk",
+  "credit_calc-flow-desk",
+  "postloan-flow-desk",
+  "collateral-flow-desk",
+  "collect-flow-desk",
+  "perf-flow-desk",
+  "industry-flow-desk",
+  "expense_flow-flow-desk",
+] as const;
+
 const SKILL_ORDER = [
+  "sheet-desk",
+  "data-desk",
+  "contract-desk",
+  "flow-desk",
+  "image-desk",
+  "preloan-flow-desk",
+  "contract-flow-desk",
+  "disburse-flow-desk",
+  "risk_id-flow-desk",
+  "admission-flow-desk",
+  "quota_rt-flow-desk",
+  "credit_calc-flow-desk",
+  "postloan-flow-desk",
+  "collateral-flow-desk",
+  "collect-flow-desk",
+  "perf-flow-desk",
+  "industry-flow-desk",
+  "expense_flow-flow-desk",
   "release-inspector",
   "site-analyzer",
   "dom-probe",
   "workflow-orchestrator",
   "policy-desk",
+  "sheet-desk",
+  "flow-desk",
   "product-faq",
   "knowledge-lookup",
   "skill-router",
@@ -147,24 +207,23 @@ export function getLiveRunnableSkills(): AgentSkill[] {
 /** 内置技能 + 访客导入的可运行技能（运行时走现用版） */
 export function allRunnableSkills(): AgentSkill[] {
   try {
-    const live = getLiveRunnableSkills();
+    const live = getLiveRunnableSkills().filter((s) => isCustomerSkill(s.id));
     const extra = loadImportedSkills().filter((s) => s.runnable && s.steps.length > 0) as AgentSkill[];
     const seen = new Set(live.map((s) => s.id));
     return [...live, ...extra.filter((s) => !seen.has(s.id))];
   } catch {
-    return getLiveRunnableSkills();
+    return getLiveRunnableSkills().filter((s) => isCustomerSkill(s.id));
   }
 }
 
 export const SKILL_ROUTER_DOC = SKILL_CATALOG.find((s) => s.id === "skill-router")?.manifest ?? "";
 
 export const ROUTER_EXAMPLES = [
-  { label: "发布前巡检", query: "帮我巡检 https://example.com 能否上线" },
-  { label: "站点性能审计", query: "分析本站性能和探活 metrics" },
-  { label: "DOM 定位探针", query: "dom snapshot 元素定位 a11y" },
-  { label: "自动化 workflow", query: "执行 workflow 自动化回放流程" },
-  { label: "制度值班", query: "满一年年假几天" },
-  { label: "知识检索", query: "检索 iMean 定位语料 chunkId" },
+  { label: "表格对账", query: "按部门汇总报销表，标出和发票对不上的" },
+  { label: "额度测算", query: "测算这笔授信额度" },
+  { label: "合同审查", query: "审查这份借款合同" },
+  { label: "流程推进", query: "市场部9600报销单现在走到哪" },
+  { label: "影像识表", query: "识别这份借款凭证影像" },
 ] as const;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -322,6 +381,65 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
 
     case "__say__":
       return { content: { markdown: String(args.text ?? ""), meta: { skill: "say" } } };
+
+    case "__sheet_parse__":
+    case "__sheet_aggregate__":
+    case "__sheet_reconcile__":
+    case "__sheet_report__": {
+      const ran = runSheetTool(name, args);
+      return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
+    }
+
+    case "__flow_intake__":
+    case "__flow_invoice__":
+    case "__flow_reconcile__":
+    case "__flow_route__":
+    case "__flow_report__": {
+      const ran = runFlowTool(name, args);
+      return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
+    }
+
+    case "__data_load__":
+    case "__data_formula__":
+    case "__data_adjust__":
+    case "__data_report__": {
+      const ran = runDataTool(name, args);
+      return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
+    }
+
+    case "__contract_read__":
+    case "__contract_diff__":
+    case "__contract_risk__":
+    case "__contract_report__": {
+      const ran = runContractTool(name, args);
+      return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
+    }
+
+    case "__image_crop__":
+    case "__image_ocr__":
+    case "__image_accept__":
+    case "__image_report__": {
+      const ran = runImageTool(name, args);
+      return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
+    }
+
+    case "__credit_flow_turn__": {
+      const state = args.flowState as CreditFlowState | null | undefined;
+      const forcedFlowId = typeof args.flowId === "string" ? args.flowId : null;
+      const turn = processCreditFlowTurn(String(args.query ?? ""), state, { forcedFlowId });
+      const skillId = forcedFlowId ? `${forcedFlowId}-flow-desk` : "credit-flow-desk";
+      return {
+        content: {
+          markdown: turn.markdown,
+          dashboard: {
+            creditFlow: turn.nextState,
+            showcaseFlow: turn.showcaseFlow,
+            paper: turn.paper,
+          },
+          meta: { skill: skillId, done: turn.done, flowId: turn.flow?.id ?? null },
+        },
+      };
+    }
 
     case "__run_policy_desk__": {
       const desk = runPolicyDesk(String(args.query ?? ""));
