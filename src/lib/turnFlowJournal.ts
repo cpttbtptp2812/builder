@@ -100,6 +100,81 @@ export function finishFlowJournal(journal: FlowJournalNode[]): FlowJournalNode[]
   return journal.map((n) => ({ ...n, status: "done" as const }));
 }
 
+/** 办事 product-run 门闩：取材料=导入槽；写答复未完成（避免 Trace 4/4 撒谎） */
+export function applyProductRunGateJournal(
+  journal: FlowJournalNode[],
+  imports: { label: string; ready: boolean; materialTitle?: string; rowCount?: number; slot: string }[],
+): FlowJournalNode[] {
+  const fetchEvidence: FlowEvidence[] =
+    imports.length > 0
+      ? imports.map((p, i) => ({
+          id: `import-${p.slot}-${i}`,
+          kind: "tool" as const,
+          title: p.label,
+          excerpt: p.ready
+            ? `${p.materialTitle?.trim() || "已导入"} · ${p.rowCount ?? "—"} 行`
+            : "请在对话下方导入 CSV",
+          meta: p.ready ? "材料已就绪，待确认执行" : "待导入",
+        }))
+      : [{ id: "gate", kind: "tool", title: "待导入材料", meta: "门闩" }];
+
+  return journal.map((n) => {
+    if (n.id === "read" || n.id === "route") return { ...n, status: "done" as const };
+    if (n.id === "fetch") return { ...patchNode(n, fetchEvidence), status: "done" as const };
+    if (n.id === "write") return { ...n, status: "pending" as const, evidence: [], chips: [] };
+    return n;
+  });
+}
+
+export function isProductGateJournal(journal: FlowJournalNode[]): boolean {
+  const write = normalizeFlowJournal(journal).find((n) => n.id === "write");
+  return write?.status === "pending";
+}
+
+/** 办事 process 步骤进 Trace「取材料」，不在对话正文堆明细 */
+export function applyProductRunProcessJournal(
+  journal: FlowJournalNode[],
+  steps: { label: string; detail: string; ok?: boolean }[],
+  answerPreview?: string,
+  phase: "running" | "finish" = "running",
+): FlowJournalNode[] {
+  const fetchEvidence: FlowEvidence[] = steps.slice(-12).map((s, i) => ({
+    id: `proc-${i}-${s.label.slice(0, 24)}`,
+    kind: "tool" as const,
+    title: s.label,
+    excerpt: s.detail.replace(/\s+/g, " ").trim().slice(0, 160),
+    meta: s.ok === false ? "未通过" : "已执行",
+  }));
+
+  return journal.map((n) => {
+    if (n.id === "read" || n.id === "route") return { ...n, status: "done" as const };
+    if (n.id === "fetch") {
+      return { ...patchNode(n, fetchEvidence.length ? fetchEvidence : n.evidence), status: "done" as const };
+    }
+    if (n.id === "write") {
+      if (phase === "finish" && answerPreview?.trim()) {
+        const preview = answerPreview.replace(/\s+/g, " ").trim();
+        return {
+          ...patchNode(n, [
+            {
+              id: "answer",
+              kind: "stream",
+              title: preview.length > 140 ? `${preview.slice(0, 138)}…` : preview,
+              meta: "答复",
+            },
+          ]),
+          status: "done" as const,
+        };
+      }
+      return {
+        ...patchNode(n, [{ id: "writing", kind: "stream", title: "正在生成答复…" }]),
+        status: "active" as const,
+      };
+    }
+    return n;
+  });
+}
+
 /** 兼容旧会话数据 — 补全 evidence、去重 id */
 const VALID_IDS = new Set<FlowJournalId>(["read", "route", "fetch", "write"]);
 

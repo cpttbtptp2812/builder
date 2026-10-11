@@ -279,6 +279,26 @@ export async function runGuestAgentOnServer(
   }
 
   const skill = getSkill(picked.skillId)!;
+  const { mustRunServerProcessSkill } = await import("../src/lib/customerSkillKernel.ts");
+  if (mustRunServerProcessSkill(skill.id)) {
+    const body =
+      "此业务须走 **办事 product-run**（导入材料 → 继续执行 → 逐步 process），不能在本接口直接跑内置表。请在产品对话中办理。";
+    appendSessionTurn(sessionId, "user", query);
+    appendSessionTurn(sessionId, "assistant", body.slice(0, 500));
+    return {
+      assistantText: body,
+      traces: [
+        {
+          iteration: 1,
+          label: "办事 product-run",
+          reasoning: "五 desk 技能禁止 guest 直跑",
+          text: "",
+          tools: [],
+        },
+      ],
+      runtime: "server" as const,
+    };
+  }
   const { trace, result } = await runSkillOnServer(skill.id, query, sessionId, clientCtx);
 
   const tools = trace

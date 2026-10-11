@@ -1,6 +1,7 @@
 /** 额度测算：月均流水 × 稳定系数 × 偿债比例，再乘信用、行业、年限，最后卡政策上限。 */
 
-import { datasetToSheetTable, getProductDataset, ProductDataMissingError } from "./productDataStore";
+import { ProductDataMissingError } from "./productDataStore";
+import { workbenchSheetTable } from "./workbenchDataset";
 import { tableFromEmbedded, type WorkGrid } from "./sheetEngine";
 
 export type DataRecipe = {
@@ -77,12 +78,11 @@ export function monthlyFromCashflowQuery(query: string): number | null {
   return Math.round(avg * 100) / 100;
 }
 
-export function monthlyFromCashflowImport(): number {
-  const ds = getProductDataset("cashflow-monthly");
-  if (!ds?.rows.length) {
+export function monthlyFromCashflowImport(sessionId?: string): number {
+  const table = workbenchSheetTable(sessionId, "cashflow-monthly");
+  if (!table?.rows.length) {
     throw new ProductDataMissingError("cashflow-monthly", "请先导入按月经营流水后再做额度测算。");
   }
-  const table = datasetToSheetTable(ds);
   const inflowCol =
     table.columns.find((c) => /流入|inflow|金额|流水/i.test(c.name)) ??
     table.columns.find((c) => c.type === "number");
@@ -126,44 +126,4 @@ export function executeData(recipe: DataRecipe = DEFAULT_RECIPE): DataExecution 
   return { recipe, phases, summary, markdown, grid, finalAmount };
 }
 
-const PHASE_INDEX: Record<string, number> = {
-  __data_load__: 0,
-  __data_formula__: 1,
-  __data_adjust__: 2,
-  __data_report__: 3,
-};
-
-export function runDataTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
-  const index = PHASE_INDEX[name];
-  if (index == null) return null;
-  const productWorkbench = args.__productWorkbench === true;
-  try {
-    let recipe = dataRecipeFromArgs(args);
-    const q = String(args.query ?? "");
-    const fromQuery = monthlyFromCashflowQuery(q);
-    if (fromQuery != null) recipe = { ...recipe, monthly: fromQuery };
-    else if (productWorkbench) {
-      recipe = { ...recipe, monthly: monthlyFromCashflowImport() };
-    }
-    const ran = executeData(recipe);
-    const phase = ran.phases[index]!;
-    return {
-      content: {
-        markdown: name === "__data_report__" ? ran.markdown : phase.detail,
-        detail: phase.detail,
-        summary: ran.summary,
-        dashboard: { data: { phase: phase.id, finalAmount: ran.finalAmount, summary: ran.summary } },
-        meta: { skill: "data-desk" },
-        grid: ran.grid,
-      },
-    };
-  } catch (err) {
-    if (err instanceof ProductDataMissingError) {
-      return { content: { error: err.message, code: "PRODUCT_DATA_MISSING", slot: err.slot }, isError: true };
-    }
-    if (err instanceof Error) {
-      return { content: { error: err.message }, isError: true };
-    }
-    throw err;
-  }
-}
+export { runDataTool } from "./dataDeskProgram";

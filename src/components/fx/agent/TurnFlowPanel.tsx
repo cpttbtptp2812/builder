@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   flowJournalStats,
+  isProductGateJournal,
   normalizeFlowJournal,
   type FlowEvidence,
   type FlowJournalId,
@@ -38,6 +39,7 @@ export function TurnFlowPanel({
   const nodes = useMemo(() => normalizeFlowJournal(journal), [journal]);
   const active = nodes.find((n) => n.status === "active");
   const stats = useMemo(() => flowJournalStats(nodes), [nodes]);
+  const productGate = !running && isProductGateJournal(nodes);
 
   useEffect(() => {
     if (running && active?.id) setSelectedId(active.id);
@@ -115,8 +117,16 @@ export function TurnFlowPanel({
       <header className="ua-flow-live-head">
         <div>
           <span className="ua-flow-live-kicker">Neural Trace</span>
-          <strong>{running ? "实时推理中" : "推理已完成"}</strong>
-          <p>{running ? "证据逐条落入时间线，点击可核对来源" : "可回放步骤或点击证据定位左侧答复"}</p>
+          <strong>
+            {running ? "实时推理中" : productGate ? "待确认材料" : "推理已完成"}
+          </strong>
+          <p>
+            {running
+              ? "证据逐条落入时间线，点击可核对来源"
+              : productGate
+                ? "材料在左侧门闩区导入或确认，点继续执行后再跑办事步骤"
+                : "可回放步骤或点击证据定位左侧答复"}
+          </p>
           {(runtime || ragRuntime) && (
             <div className="ua-flow-runtime-badges">
               {runtime && <span className={`ua-flow-runtime ua-flow-runtime--${runtime}`}>Agent · {runtime === "server" ? "SQLite API" : "浏览器"}</span>}

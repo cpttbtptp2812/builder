@@ -16,14 +16,21 @@ export function Issues({
   issues,
   interactive,
   onFix,
+  fixKind = "default",
 }: {
   issues: PaperIssue[];
   interactive?: boolean;
-  onFix?: () => void;
+  onFix?: () => void | Promise<void>;
+  fixKind?: "ledger" | "contract" | "default";
 }) {
   const [fixed, setFixed] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const [hidden, setHidden] = useState(false);
-  if (hidden) return null;
+  useEffect(() => {
+    setFixed(false);
+    setHidden(false);
+  }, [issues]);
+  if (hidden || issues.length === 0) return null;
   const open = fixed ? issues.filter((issue) => issue.level === "bad") : issues;
   const done = fixed ? issues.filter((issue) => issue.level !== "bad") : [];
   return (
@@ -54,12 +61,94 @@ export function Issues({
       {interactive && issues.length > 0 && (
         <div className="oa-paper-issue-actions">
           {!fixed && (
-            <button type="button" onClick={() => { setFixed(true); onFix?.(); }}>一键修正</button>
+            <button
+              type="button"
+              disabled={fixing}
+              onClick={() => {
+                void (async () => {
+                  if (onFix) {
+                    setFixing(true);
+                    try {
+                      await onFix();
+                      setFixed(true);
+                    } catch {
+                      /* 由调用方提示 */
+                    } finally {
+                      setFixing(false);
+                    }
+                  } else {
+                    setFixed(true);
+                  }
+                })();
+              }}
+            >
+              {fixing ? "重新办理中…" : "一键修正"}
+            </button>
           )}
           <button type="button" className="is-ghost" onClick={() => setHidden(true)}>忽略问题</button>
         </div>
       )}
-      {fixed && <p className="oa-paper-hint">请核对合同里仍标红的字段，金额需要人工确认。</p>}
+      {fixed && fixKind === "contract" ? (
+        <p className="oa-paper-hint">请核对合同里仍标红的字段，金额需要人工确认。</p>
+      ) : null}
+      {fixed && fixKind === "ledger" ? (
+        <p className="oa-paper-hint">数据已写回并重新办理。请在下方的「② 人工复核」确认表格后点办结归档。</p>
+      ) : null}
+    </section>
+  );
+}
+
+function PaperProcessFooter({
+  openBad,
+  sealed,
+  onSeal,
+}: {
+  openBad: boolean;
+  sealed?: boolean;
+  onSeal?: () => void | Promise<void>;
+}) {
+  const [sealing, setSealing] = useState(false);
+  const step2 = openBad ? "now" : "done";
+  const step3 = sealed ? "done" : openBad ? "wait" : "now";
+
+  return (
+    <section className="oa-paper-flow-foot" aria-label="办理流程">
+      <ol className="oa-paper-flow-steps">
+        <li className="done">① 系统对账</li>
+        <li className={step2}>② 人工复核</li>
+        <li className={step3}>③ 办结归档</li>
+      </ol>
+      {sealed ? (
+        <p className="oa-paper-flow-done">
+          已办结。归档明细请点抽屉右上角 <strong>下载对账表 CSV</strong>，对话里已写入办结结论。
+        </p>
+      ) : openBad ? (
+        <p className="oa-paper-flow-note">仍有拦截项：先点上方「一键修正」或改表后重新办理，再进入人工复核。</p>
+      ) : (
+        <>
+          <p className="oa-paper-flow-note">
+            请核对上方表格的「判定」列与部门合计；确认无误后办结，系统会在对话中写入归档结论。
+          </p>
+          <button
+            type="button"
+            className="oa-paper-flow-seal"
+            disabled={sealing || !onSeal}
+            onClick={() => {
+              void (async () => {
+                if (!onSeal) return;
+                setSealing(true);
+                try {
+                  await onSeal();
+                } finally {
+                  setSealing(false);
+                }
+              })();
+            }}
+          >
+            {sealing ? "归档中…" : "确认无误，办结归档"}
+          </button>
+        </>
+      )}
     </section>
   );
 }
@@ -251,6 +340,7 @@ function ContractView({
       <Issues
         issues={paper.issues}
         interactive={interactive}
+        fixKind="contract"
         onFix={() => {
           setFixed(true);
           if (interactive) {
@@ -304,15 +394,25 @@ function LedgerView({
   paper,
   interactive,
   onAsk,
+  onApplyFix,
+  onSealDeliverable,
+  deliverySealed,
 }: {
   paper: Extract<WorkPaper, { kind: "ledger" }>;
   interactive?: boolean;
   onAsk?: (text: string) => void;
+  onApplyFix?: () => void | Promise<void>;
+  onSealDeliverable?: () => void | Promise<void>;
+  deliverySealed?: boolean;
 }) {
+  const openBad = paper.issues.some((i) => i.level === "bad");
   return (
     <>
       <LedgerTableDesk paper={paper} interactive={interactive} onAsk={onAsk} />
-      <Issues issues={paper.issues} interactive={interactive} />
+      <Issues issues={paper.issues} interactive={interactive} onFix={onApplyFix} fixKind="ledger" />
+      {interactive ? (
+        <PaperProcessFooter openBad={openBad} sealed={deliverySealed} onSeal={onSealDeliverable} />
+      ) : null}
     </>
   );
 }
@@ -520,11 +620,18 @@ export function WorkPaperView({
   interactive = true,
   onAsk,
   onValidationChange,
+  onApplyFix,
+  onSealDeliverable,
+  deliverySealed,
 }: {
   paper: WorkPaper;
   interactive?: boolean;
   onAsk?: (text: string) => void;
   onValidationChange?: (v: FlowUiValidation) => void;
+  /** 产品模式：修正后写回数据并 rerun process */
+  onApplyFix?: () => void | Promise<void>;
+  onSealDeliverable?: () => void | Promise<void>;
+  deliverySealed?: boolean;
 }) {
   if (paper.kind === "contract") {
     return (
@@ -532,7 +639,18 @@ export function WorkPaperView({
     );
   }
   if (paper.kind === "credit") return <CreditView paper={paper} />;
-  if (paper.kind === "ledger") return <LedgerView paper={paper} interactive={interactive} onAsk={onAsk} />;
+  if (paper.kind === "ledger") {
+    return (
+      <LedgerView
+        paper={paper}
+        interactive={interactive}
+        onAsk={onAsk}
+        onApplyFix={onApplyFix}
+        onSealDeliverable={onSealDeliverable}
+        deliverySealed={deliverySealed}
+      />
+    );
+  }
   if (paper.kind === "flow") return <FlowView paper={paper} />;
   if (paper.kind === "checklist") return <ChecklistView paper={paper} />;
   if (paper.kind === "occupancy") return <OccupancyView paper={paper} />;

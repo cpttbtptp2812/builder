@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { previewClause, renderSkillHost, type SkillClause } from "../../lib/skillHost";
 import {
   AGENT_SKILLS,
+  CUSTOMER_SKILL_IDS,
   getBuiltinSkill,
   getLiveCatalog,
   getSkill,
@@ -9,7 +10,7 @@ import {
   isCustomerSkill,
   type AgentSkill,
 } from "../../lib/agentSkills";
-import { allCreditFlowDeskSkills, resolveCreditFlowDeskSkill } from "../../lib/creditFlowSkillsCatalog";
+import { resolveCreditFlowDeskSkill } from "../../lib/creditFlowSkillsCatalog";
 import { extractUrlFromText } from "../../lib/releaseInspect";
 import {
   candidateVersion,
@@ -72,6 +73,7 @@ import {
   sampleTriggers,
   skillDisplayTitle,
   skillSubtitle,
+  deskRuleSummaryForSkill,
   stepPipelineText,
   stepShortLabel,
 } from "./skillVerUi";
@@ -91,10 +93,8 @@ import { ScmCaseEditor } from "./ScmCaseEditor";
 import { SkillBreakPanel } from "./SkillBreak";
 import { PageToolWalk } from "./PageToolWalk";
 import { SkillClauseNote, useSkillClauses } from "./SkillClauseNote";
-import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { TraceFeedbackPanel } from "./TraceFeedbackPanel";
 import { BaselineEnvBoard } from "./BaselineEnvBoard";
-import { isCreditSamplePackSkill, isFeaturedMultiTurnSkill } from "../../lib/platformCatalog";
 import { SkillGovernancePanel } from "./SkillGovernancePanel";
 import { OaBtn, OaPage } from "./OaUi";
 import { noteLivePublished } from "../../lib/catalogSets";
@@ -198,11 +198,8 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [importOpen, setImportOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
-  const [envTags, setEnvTags] = useState<BaselineTags>({});
-
   useEffect(() => {
     const note = sessionStorage.getItem("oa-version-saved");
     if (!note) return;
@@ -211,10 +208,6 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     return () => window.clearTimeout(timer);
   }, [toast]);
 
-  useEffect(() => {
-    void loadBaselineTags().then(setEnvTags);
-  }, [tick]);
-
   const builtinIds = useMemo(() => new Set(AGENT_SKILLS.map((s) => s.id)), []);
   const importedIds = useMemo(() => new Set(loadImportedSkills().map((s) => s.id)), [tick]);
 
@@ -222,40 +215,31 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     const live = new Map(getLiveCatalog().map((s) => [s.id, s]));
     const seen = new Set<string>();
     const out: AgentSkill[] = [];
-    for (const s of allCreditFlowDeskSkills()) {
-      seen.add(s.id);
-      out.push(live.get(s.id) ?? s);
+    for (const id of CUSTOMER_SKILL_IDS) {
+      const s = live.get(id) ?? AGENT_SKILLS.find((b) => b.id === id);
+      if (!s || seen.has(id)) continue;
+      seen.add(id);
+      out.push(s);
     }
-    for (const b of AGENT_SKILLS) {
-      if (isAnswerLayerSkill(b.id) || !isCustomerSkill(b.id) || seen.has(b.id)) continue;
-      if (b.id.endsWith("-flow-desk")) continue;
-      seen.add(b.id);
-      out.push(live.get(b.id) ?? b);
-    }
-    const extra = loadImportedSkills().filter((s) => !seen.has(s.id));
+    const extra = loadImportedSkills().filter((s) => !seen.has(s.id) && s.steps.length > 0);
     return [...out, ...extra];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  const { primaryRows, sampleRows } = useMemo(() => {
+  const rows = useMemo(() => {
     const k = q.trim().toLowerCase();
     const hit = k
       ? skills.filter((s) =>
           [s.name, s.description, ...s.triggers].some((t) => t.toLowerCase().includes(k)),
         )
       : skills;
-    const sorted = [...hit].sort((a, b) => {
+    return [...hit].sort((a, b) => {
       const flow = (id: string) => (id.endsWith("-flow-desk") ? 0 : 1);
       const df = flow(a.id) - flow(b.id);
       if (df !== 0) return df;
       return Number(Boolean(newestDraftForSkill(b.id))) - Number(Boolean(newestDraftForSkill(a.id)));
     });
-    const primary = sorted.filter((s) => !isCreditSamplePackSkill(s.id));
-    const sample = sorted.filter((s) => isCreditSamplePackSkill(s.id));
-    return { primaryRows: primary, sampleRows: sample };
   }, [skills, q]);
-
-  const rows = q.trim() ? [...primaryRows, ...sampleRows] : primaryRows;
 
   const pendingCount = skills.filter((s) => newestDraftForSkill(s.id)).length;
   const selectedRows = rows.filter((s) => selected.has(s.id));
@@ -369,10 +353,9 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   return (
     <OaPage title="技能" hideHead>
       {toast.node}
-      <section className="oa-skill-baseline-strip">
-        <strong>环境 Baseline（服务端）</strong>
-        <BaselineEnvBoard limit={8} />
-      </section>
+      <p className="oa-skill-product-lead">
+        在这里维护对账、审合同、流程等事项的<strong>办理规则</strong>：客户怎么说会接上、接到后按哪几步处理。改完先做发版检查，再到对话里用您自己的表格或材料试一遍。
+      </p>
       {lead ? <p className="oa-skill-lead">{lead}</p> : null}
       <div className="oa-skill-toolbar">
         <div className="oa-skill-tools">
@@ -403,8 +386,8 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
             </button>
           ) : null}
         </div>
-        <button type="button" className="oa-skill-create" onClick={() => setCreating(true)}>
-          新建技能
+        <button type="button" className="oa-skill-create" onClick={() => setImportOpen(true)}>
+          导入 SKILL
         </button>
       </div>
       {importOpen ? (
@@ -439,14 +422,6 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
         </div>
       ) : null}
 
-      {creating ? (
-        <SkillFromDemoDialog
-          initial={{ name: "", description: "", triggers: [], tools: ["knowledge_search"], queries: [], clashes: [] }}
-          onClose={() => setCreating(false)}
-          onSaved={(_, name) => toast.show(`已新建技能「${name}」`)}
-        />
-      ) : null}
-
       {rows.length === 0 ? (
         <p className="own-ver-hint">没有匹配「{q}」的技能。</p>
       ) : (
@@ -460,31 +435,13 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
                 imported={importedIds.has(s.id)}
                 onToggle={() => toggle(s.id)}
                 onOpen={() => onOpen(s.id)}
-                envTag={envTags[s.id]}
               />
             ))}
           </ul>
-          {!q.trim() && sampleRows.length ? (
-            <details className="oa-sample-pack-details">
-              <summary>行业样板包 · 信贷 Flow Desk（{sampleRows.length}，可选）</summary>
-              <p className="oa-platform-muted">
-                正式示范多轮 Skill 仅 <code>contract-flow-desk</code>；其余为预装 demo，可按项目裁剪。
-              </p>
-              <ul className="own-skill-ver-grid">
-                {sampleRows.map((s) => (
-                  <SkillListCard
-                    key={s.id}
-                    skill={s}
-                    checked={selected.has(s.id)}
-                    imported={importedIds.has(s.id)}
-                    onToggle={() => toggle(s.id)}
-                    onOpen={() => onOpen(s.id)}
-                    envTag={envTags[s.id]}
-                  />
-                ))}
-              </ul>
-            </details>
-          ) : null}
+          <details className="oa-skill-advanced-env">
+            <summary>发版环境标记（管理员，非办事员视图）</summary>
+            <BaselineEnvBoard limit={8} customerFacing />
+          </details>
         </>
       )}
       <TeamApprovalBar onToast={toast.show} />
@@ -500,18 +457,14 @@ function SkillListCard({
   imported,
   onToggle,
   onOpen,
-  envTag,
 }: {
   skill: AgentSkill;
   checked: boolean;
   imported: boolean;
   onToggle: () => void;
   onOpen: () => void;
-  envTag?: { staging?: string; prod?: string };
 }) {
   const ver = getPublishedVersion(skill.id);
-  const prod = envTag?.prod ?? null;
-  const staging = envTag?.staging ?? null;
   const draft = newestDraftForSkill(skill.id);
   const applied = getAppliedSkill(skill.id);
   const samples = sampleTriggers(skill.triggers);
@@ -522,14 +475,14 @@ function SkillListCard({
       <div className="own-skill-ver-card-inner">
         <label
           className="own-skill-ver-check"
-          title={`选择 ${skill.name}`}
+          title={`选择 ${skillDisplayTitle(skill)}`}
           onClick={(e) => e.stopPropagation()}
         >
           <input
             type="checkbox"
             checked={checked}
             onChange={onToggle}
-            aria-label={`选择 ${skill.name}`}
+            aria-label={`选择 ${skillDisplayTitle(skill)}`}
           />
         </label>
         <button
@@ -543,19 +496,16 @@ function SkillListCard({
             {skill.id.endsWith("-flow-desk") ? (
               <span className="own-skill-ver-tag own-skill-ver-tag--flow">多轮</span>
             ) : null}
-            {isFeaturedMultiTurnSkill(skill.id) ? (
-              <span className="own-skill-ver-tag own-skill-ver-tag--featured">示范</span>
-            ) : null}
-            {isCreditSamplePackSkill(skill.id) ? (
-              <span className="own-skill-ver-tag own-skill-ver-tag--sample">样板</span>
-            ) : null}
             {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
-            {prod ? <span className="own-skill-ver-tag">线上 {prod}</span> : null}
-            {staging ? <span className="own-skill-ver-tag">预发 {staging}</span> : null}
           </header>
           <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
-          <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps)}</p>
-          {samples.length ? <p className="own-skill-ver-samples">用户常说：{samples.join("、")}</p> : null}
+          {deskRuleSummaryForSkill(skill) ? (
+            <p className="own-skill-ver-pipe-line">规则：{deskRuleSummaryForSkill(skill)}</p>
+          ) : null}
+          <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps, skill.id)}</p>
+          {samples.length ? (
+            <p className="own-skill-ver-samples own-skill-ver-samples--muted">识别用说法：{samples.join("、")}</p>
+          ) : null}
           <footer>
             <span>{fmtUpdatedAt(applied?.appliedAt)}</span>
             {usage.handled ? <span>近 7 天接手 {usage.handled} 句</span> : null}
@@ -978,6 +928,7 @@ function SkillDetail({
               <span className="sk-col-h-badge">{hasChanges ? `+${stats.added} −${stats.removed} 行变更` : "与线上基线一致"}</span>
             </header>
             <LiveSkillCompare
+              skillId={skillId}
               liveVersion={liveVersion}
               draftVersion={draftVersion}
               online={onlineParsed}
@@ -1313,8 +1264,8 @@ function FormEditor({
       </div>
 
       <div className="own-skm-field">
-        <span>回答步骤</span>
-        <small>AI 会按从上到下的顺序执行。可以改名字、调顺序、删掉不需要的步骤。</small>
+        <span>办理步骤</span>
+        <small>顺序即程序。改业务规则请改步骤参数（容差、汇总维等），不要写「六列」这类 demo 句。</small>
         <ol className="own-skm-step-edit">
           {parsed.steps.map((s, i) => (
             <StepRow
@@ -1323,13 +1274,15 @@ function FormEditor({
               total={parsed.steps.length}
               label={s.label}
               tool={s.tool}
+              step={s}
+              skillId={skillId}
               clause={clauses.find((clause) => clause.stepId === s.id)}
               onPreview={() => previewClause(skillId, s.id)}
               isNew={!base.steps.some((b) => b.id === s.id)}
               onRename={(label) => onChange(renameStep(raw, i, label))}
               onMove={(d) => onChange(moveStep(raw, i, d))}
               onRemove={() => {
-                if (window.confirm(`删掉步骤「${stepShortLabel(s)}」？删了之后回答里就没有这部分内容了。`)) onChange(removeStep(raw, i));
+                if (window.confirm(`删掉步骤「${stepShortLabel(s, skillId)}」？`)) onChange(removeStep(raw, i));
               }}
             />
           ))}
@@ -1364,6 +1317,8 @@ function StepRow({
   total,
   label,
   tool,
+  step,
+  skillId,
   clause,
   onPreview,
   isNew,
@@ -1375,6 +1330,8 @@ function StepRow({
   total: number;
   label: string;
   tool: string;
+  step: { id: string; label: string; tool: string; args?: Record<string, unknown> };
+  skillId: string;
   clause?: SkillClause;
   onPreview: () => void;
   isNew: boolean;
@@ -1407,7 +1364,11 @@ function StepRow({
           }}
           aria-label={`第 ${index + 1} 步名称`}
         />
-        <small>使用工具：{tool.startsWith("__") ? "汇总生成回答" : tool}</small>
+        <small>
+          {tool.startsWith("__")
+            ? `办事：${stepShortLabel(step, skillId)}（客户见运行结果，不在步骤名写列数/行数）`
+            : `工具：${tool}`}
+        </small>
         {clause ? <SkillClauseNote clause={clause} onPreview={onPreview} /> : null}
       </div>
       <div className="own-skm-step-ops">
@@ -1422,11 +1383,13 @@ function StepRow({
 }
 
 function LiveSkillCompare({
+  skillId,
   liveVersion,
   draftVersion,
   online,
   draft,
 }: {
+  skillId: string;
   liveVersion: string;
   draftVersion: string;
   online: ParsedSkillDoc;
@@ -1437,7 +1400,7 @@ function LiveSkillCompare({
   const onlineById = new Map(online.steps.map((s) => [s.id, s]));
   const draftById = new Map(draft.steps.map((s) => [s.id, s]));
   const descChanged = online.description !== draft.description;
-  const stepsChanged = stepPipelineText(online.steps) !== stepPipelineText(draft.steps);
+  const stepsChanged = stepPipelineText(online.steps, skillId) !== stepPipelineText(draft.steps, skillId);
   const bodyChanged = online.body.trim() !== draft.body.trim();
   const notes: string[] = [];
   if (addedTriggers.length) notes.push(`新增说法 ${addedTriggers.length} 个`);
@@ -1454,8 +1417,21 @@ function LiveSkillCompare({
           <span className="rv-kicker">正在用</span>
           <span className="rv-ver">v{liveVersion}</span>
         </div>
-        <div className="rv-block">
-          <p className="rv-k">用户这样说</p>
+        <div className="rv-block rv-block--primary">
+          <p className="rv-k">办理步骤（业务程序）</p>
+          {online.steps.length ? (
+            <ol className="rv-pipeline">
+              {online.steps.map((s, idx) => (
+                <li key={s.id} className={draftById.has(s.id) ? undefined : "is-gone"}>
+                  <span className="rv-pipeline-step-idx">{idx + 1}</span>
+                  {stepShortLabel(s, skillId)}
+                </li>
+              ))}
+            </ol>
+          ) : <span className="rv-empty">无执行步骤</span>}
+        </div>
+        <div className="rv-block rv-block--secondary">
+          <p className="rv-k">常见说法（辅助识别，不代替办理）</p>
           <div className="rv-triggers">
             {online.triggers.length
               ? online.triggers.map((t) => (
@@ -1463,19 +1439,6 @@ function LiveSkillCompare({
                 ))
               : <span className="rv-empty">还没有说法</span>}
           </div>
-        </div>
-        <div className="rv-block">
-          <p className="rv-k">按这些步骤做</p>
-          {online.steps.length ? (
-            <ol className="rv-pipeline">
-              {online.steps.map((s, idx) => (
-                <li key={s.id} className={draftById.has(s.id) ? undefined : "is-gone"}>
-                  <span className="rv-pipeline-step-idx">{idx + 1}</span>
-                  {stepShortLabel(s)}
-                </li>
-              ))}
-            </ol>
-          ) : <span className="rv-empty">无执行步骤</span>}
         </div>
         {online.description ? (
           <div className="rv-block">
@@ -1489,8 +1452,21 @@ function LiveSkillCompare({
           <span className="rv-kicker rv-kicker--new">这次改的</span>
           <span className="rv-ver">v{draftVersion}</span>
         </div>
-        <div className="rv-block">
-          <p className="rv-k">用户这样说</p>
+        <div className="rv-block rv-block--primary">
+          <p className="rv-k">办理步骤（业务程序）</p>
+          {draft.steps.length ? (
+            <ol className="rv-pipeline">
+              {draft.steps.map((s, idx) => (
+                <li key={s.id} className={onlineById.has(s.id) ? undefined : "is-new"}>
+                  <span className="rv-pipeline-step-idx">{idx + 1}</span>
+                  {stepShortLabel(s, skillId)}
+                </li>
+              ))}
+            </ol>
+          ) : <span className="rv-empty">无执行步骤</span>}
+        </div>
+        <div className="rv-block rv-block--secondary">
+          <p className="rv-k">常见说法（辅助识别，不代替办理）</p>
           <div className="rv-triggers">
             {draft.triggers.length
               ? draft.triggers.map((t) => (
@@ -1498,19 +1474,6 @@ function LiveSkillCompare({
                 ))
               : <span className="rv-empty">还没有说法</span>}
           </div>
-        </div>
-        <div className="rv-block">
-          <p className="rv-k">按这些步骤做</p>
-          {draft.steps.length ? (
-            <ol className="rv-pipeline">
-              {draft.steps.map((s, idx) => (
-                <li key={s.id} className={onlineById.has(s.id) ? undefined : "is-new"}>
-                  <span className="rv-pipeline-step-idx">{idx + 1}</span>
-                  {stepShortLabel(s)}
-                </li>
-              ))}
-            </ol>
-          ) : <span className="rv-empty">无执行步骤</span>}
         </div>
         {draft.description ? (
           <div className="rv-block">

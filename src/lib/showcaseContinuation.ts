@@ -22,6 +22,7 @@ export function isContinuationForSkill(query: string, skillId: string): boolean 
   const q = query.trim();
   if (!q) return false;
   switch (skillId) {
+    case "ledger-desk":
     case "sheet-desk":
       return isSheetContinuationQuery(q);
     case "contract-desk":
@@ -41,7 +42,7 @@ type MsgLike = { role: string; route?: { skillId?: string } | null; workPaper?: 
 
 /** 从线程推断本轮应钉住的展示技能 */
 export function resolveShowcasePin(messages: MsgLike[], query: string): string | undefined {
-  if (isSheetOperationQuery(query)) return "sheet-desk";
+  if (isSheetOperationQuery(query)) return "ledger-desk";
 
   const last = [...messages]
     .reverse()
@@ -55,7 +56,7 @@ export function resolveShowcasePin(messages: MsgLike[], query: string): string |
   if (last?.route?.skillId) return last.route.skillId;
 
   const lastPaper = [...messages].reverse().find((m) => m.role === "assistant" && m.workPaper?.kind);
-  if (lastPaper?.workPaper?.kind === "ledger" && isSheetContinuationQuery(query)) return "sheet-desk";
+  if (lastPaper?.workPaper?.kind === "ledger" && isSheetContinuationQuery(query)) return "ledger-desk";
   if (lastPaper?.workPaper?.kind === "contract" && isContinuationForSkill(query, "contract-desk")) return "contract-desk";
   if (lastPaper?.workPaper?.kind === "credit" && isContinuationForSkill(query, "data-desk")) return "data-desk";
   if (lastPaper?.workPaper?.kind === "flow" && isContinuationForSkill(query, "flow-desk")) return "flow-desk";

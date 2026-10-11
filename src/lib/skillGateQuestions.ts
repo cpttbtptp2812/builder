@@ -43,9 +43,6 @@ export function listGateQueriesForCheck(skillId: string, skill: AgentSkill, max 
     out.push(t);
   };
   for (const row of listGateQuestionRows(skillId)) push(row.query);
-  for (const t of skill.triggers.slice(0, 4)) {
-    if (t.length >= 2) push(`用户说：${t}，请处理`);
-  }
   return out.slice(0, max);
 }
 

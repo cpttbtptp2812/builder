@@ -1,6 +1,8 @@
 /** 一句话同时是说法、考题和发版实验 */
 
 import { runSkill, type AgentSkill, type SkillTraceStep } from "./agentSkills";
+import { mustRunServerProcessSkill } from "./customerSkillKernel";
+import { fetchInlineSkillTrace } from "./liveGateRunner";
 import { exactDoIntervention } from "./deterministicScm";
 import { hydrateFromRaw } from "./skillCompareEngine";
 import { parseSkillMarkdown } from "./skillMarkdown";
@@ -86,10 +88,17 @@ async function graspOne(skill: AgentSkill, query: string, here: boolean): Promis
   if (!skill.runnable || !skill.steps.length) {
     return { id: skill.id, label, ok: 0, total: 0, pass: false, here };
   }
-  const { trace } = await runSkill(skill, query, undefined, {
-    mockProfile: MOCK_PROFILES[skill.id],
-    probeUrl: urlIn(query),
-  });
+  let trace: SkillTraceStep[];
+  if (mustRunServerProcessSkill(skill.id)) {
+    const data = await fetchInlineSkillTrace(skill, query);
+    trace = data?.trace ?? [];
+  } else {
+    const ran = await runSkill(skill, query, undefined, {
+      mockProfile: MOCK_PROFILES[skill.id],
+      probeUrl: urlIn(query),
+    });
+    trace = ran.trace;
+  }
   const ok = trace.filter((t) => t.ok).length;
   return { id: skill.id, label, ok, total: trace.length, pass: trace.length > 0 && ok === trace.length, here };
 }

@@ -43,6 +43,8 @@ export function flowIdFromSkillId(skillId: string): string | null {
 }
 
 export function isCreditFlowSkillId(skillId: string): boolean {
+  /** 单轮「流程推进」办事技能，不是信贷多轮包 */
+  if (skillId === "flow-desk") return false;
   return skillId.endsWith("-flow-desk") && skillId !== "credit-flow-desk";
 }
 

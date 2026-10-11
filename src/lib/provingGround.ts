@@ -162,6 +162,72 @@ export const SKILL_TRACE_CASES: SkillTraceCase[] = [
       ],
     },
   },
+  {
+    id: "sheet-t1",
+    skillId: "ledger-desk",
+    query: "表格对账，按部门汇总报销",
+    expect: {
+      steps: [
+        { stepId: "parse", tool: "__sheet_parse__" },
+        { stepId: "price", tool: "__sheet_aggregate__" },
+        { stepId: "check", tool: "__sheet_reconcile__" },
+        { stepId: "report", tool: "__sheet_report__" },
+      ],
+    },
+  },
+  {
+    id: "contract-t1",
+    skillId: "contract-desk",
+    query: "审查借款合同条款对照",
+    expect: {
+      steps: [
+        { stepId: "read", tool: "__contract_read__" },
+        { stepId: "diff", tool: "__contract_diff__" },
+        { stepId: "risk", tool: "__contract_risk__" },
+        { stepId: "report", tool: "__contract_report__" },
+      ],
+    },
+  },
+  {
+    id: "data-t1",
+    skillId: "data-desk",
+    query: "测算授信额度",
+    expect: {
+      steps: [
+        { stepId: "load", tool: "__data_load__" },
+        { stepId: "formula", tool: "__data_formula__" },
+        { stepId: "adjust", tool: "__data_adjust__" },
+        { stepId: "report", tool: "__data_report__" },
+      ],
+    },
+  },
+  {
+    id: "flow-t1",
+    skillId: "flow-desk",
+    query: "报销单现在走到哪",
+    expect: {
+      steps: [
+        { stepId: "intake", tool: "__flow_intake__" },
+        { stepId: "invoice", tool: "__flow_invoice__" },
+        { stepId: "reconcile", tool: "__flow_reconcile__" },
+        { stepId: "route", tool: "__flow_route__" },
+        { stepId: "report", tool: "__flow_report__" },
+      ],
+    },
+  },
+  {
+    id: "image-t1",
+    skillId: "image-desk",
+    query: "借款凭证影像识别",
+    expect: {
+      steps: [
+        { stepId: "crop", tool: "__image_crop__" },
+        { stepId: "ocr", tool: "__image_ocr__" },
+        { stepId: "accept", tool: "__image_accept__" },
+        { stepId: "report", tool: "__image_report__" },
+      ],
+    },
+  },
 ];
 
 export function matchTrace(actual: SkillTraceStep[], expect: TraceExpectation[]): { pass: boolean; detail: string } {

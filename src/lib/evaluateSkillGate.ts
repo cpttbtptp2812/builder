@@ -1,7 +1,8 @@
 /** One Skill Gate decision for the browser, CLI, and API. */
 
 import { applyGatePolicy, resolveGatePolicy, type GatePolicy } from "./gatePolicy";
-import { runMockGateComparison } from "./mockGateRunner";
+import { runGateComparison } from "./gateComparisonRunner";
+import type { MockGateResult } from "./mockGateRunner";
 import type { OwnAgentCheckResultV2 } from "./ownagentProtocol";
 import type { SkillTraceCase } from "./provingGround";
 import type { SkillManifest } from "./skillMarkdown";
@@ -36,18 +37,22 @@ export function mergeSkillGateCases(
   return [...rows, ...builtin.filter((row) => row.skillId === skillId && !ids.has(row.id))];
 }
 
-export async function evaluateSkillGate(input: {
-  baseline: SkillManifest;
-  candidate: SkillManifest;
-  cases: readonly SkillTraceCase[];
-  policy: GatePolicy;
-  environment: string;
-  baselineVersion?: string;
-  candidateVersion?: string;
-}): Promise<SkillGateEvaluation> {
+export async function evaluateSkillGate(
+  input: {
+    baseline: SkillManifest;
+    candidate: SkillManifest;
+    cases: readonly SkillTraceCase[];
+    policy: GatePolicy;
+    environment: string;
+    baselineVersion?: string;
+    candidateVersion?: string;
+  },
+  options?: { runComparison?: (b: SkillManifest, c: SkillManifest, cases: SkillTraceCase[]) => Promise<MockGateResult> },
+): Promise<SkillGateEvaluation> {
   const skillId = input.candidate.id;
   const errors = (input.candidate.diagnostics ?? []).filter((item) => item.level === "error");
-  const comparison = await runMockGateComparison(input.baseline, input.candidate, [...input.cases]);
+  const compare = options?.runComparison ?? runGateComparison;
+  const comparison = await compare(input.baseline, input.candidate, [...input.cases]);
   const rule = resolveGatePolicy(input.policy, skillId, input.environment);
   const decision = applyGatePolicy({
     compileOk: errors.length === 0,

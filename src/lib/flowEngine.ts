@@ -2,6 +2,7 @@
 
 import { tableFromQuery, type SheetRow, type WorkGrid } from "./sheetEngine";
 import { ProductDataMissingError } from "./productDataStore";
+import { runFlowProgramTool } from "./flowDeskProgram";
 
 export type FlowPolicy = {
   directorAt: number;
@@ -136,32 +137,35 @@ export function executeFlow(
   return { policy, phases, summary, markdown, halt, grid };
 }
 
-const PHASE_INDEX: Record<string, number> = {
-  __flow_intake__: 0,
-  __flow_invoice__: 1,
-  __flow_reconcile__: 2,
-  __flow_route__: 3,
-  __flow_report__: 4,
-};
-
 export function runFlowTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
-  const index = PHASE_INDEX[name];
-  if (index == null) return null;
+  const ran = runFlowProgramTool(name, args);
+  if (ran) return ran;
   const productWorkbench = args.__productWorkbench === true;
   try {
-    const ran = executeFlow(String(args.query ?? ""), flowPolicyFromArgs(args), {
+    const legacy = executeFlow(String(args.query ?? ""), flowPolicyFromArgs(args), {
       productWorkbench,
+      sessionId: typeof args.__sessionId === "string" ? args.__sessionId : undefined,
       dataSlot: "expense-ledger",
+      allowLabSample: args.__allowLabSample === true,
     });
-    const phase = ran.phases[index]!;
+    const map: Record<string, number> = {
+      __flow_intake__: 0,
+      __flow_invoice__: 1,
+      __flow_reconcile__: 2,
+      __flow_route__: 3,
+      __flow_report__: 4,
+    };
+    const index = map[name];
+    if (index == null) return null;
+    const phase = legacy.phases[index] ?? legacy.phases[legacy.phases.length - 1]!;
     return {
       content: {
-        markdown: name === "__flow_report__" ? ran.markdown : phase.detail,
+        markdown: name === "__flow_report__" ? legacy.markdown : phase.detail,
         detail: phase.detail,
-        summary: ran.summary,
-        dashboard: { flow: { phase: phase.id, halt: ran.halt, summary: ran.summary } },
+        summary: legacy.summary,
+        dashboard: { flow: { phase: phase.id, halt: legacy.halt, summary: legacy.summary } },
         meta: { skill: "flow-desk" },
-        grid: ran.grid,
+        grid: legacy.grid,
       },
     };
   } catch (err) {

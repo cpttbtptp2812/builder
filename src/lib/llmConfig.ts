@@ -118,6 +118,23 @@ export function saveLlmConfig(config: LlmConfig) {
   }
 }
 
+/** 传给 product-run / 服务端 LLM 步（不含 enabled 以外的敏感扩展） */
+export function toProductLlmConfig(config: LlmConfig): {
+  enabled: boolean;
+  baseUrl: string;
+  model: string;
+  apiKey: string;
+  preset: LlmPresetId;
+} {
+  return {
+    enabled: config.enabled,
+    baseUrl: config.baseUrl,
+    model: config.model,
+    apiKey: config.apiKey,
+    preset: config.preset,
+  };
+}
+
 export function isLlmConfigured(config: LlmConfig): boolean {
   if (!config.enabled) return false;
   if (!config.baseUrl.trim() || !config.model.trim()) return false;

@@ -42401,6 +42401,33 @@ button.agent-tool-chip {
   font-size: 13px;
   color: #b45309;
 }
+.oa-skill-product-lead {
+  margin: 0 0 0.85rem;
+  padding: 0.65rem 0.75rem;
+  border-radius: 10px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #334155;
+}
+.oa-skill-product-lead strong {
+  color: #0f172a;
+}
+.oa-skill-advanced-env {
+  margin-top: 1.25rem;
+  font-size: 13px;
+  color: #475569;
+}
+.oa-skill-advanced-env summary {
+  cursor: pointer;
+  color: #64748b;
+  font-weight: 600;
+}
+.oa-skill-advanced-env[open] summary {
+  margin-bottom: 0.5rem;
+  color: #334155;
+}
 .oa-version-hub { padding-top: 1rem; }
 .oa-version-hub .oa-skill-toolbar { align-items: center; }
 .oa-version-hub .oa-skill-tools {
@@ -51393,6 +51420,14 @@ details summary {
   margin-bottom: 12px;
   font-size: 15px;
 }
+.oa-paper-issues header strong {
+  color: #0f172a;
+  font-weight: 700;
+}
+.oa-paper-issue span {
+  color: #334155;
+  font-weight: 500;
+}
 .oa-paper-issues header i {
   width: 4px;
   height: 18px;
@@ -51450,7 +51485,79 @@ details summary {
   padding: 8px 10px;
   border-radius: 8px;
   background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.oa-paper-flow-foot {
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.oa-paper-flow-steps {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.oa-paper-flow-steps li {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #e2e8f0;
+  color: #475569;
+}
+.oa-paper-flow-steps li.done {
+  background: #dcfce7;
+  color: #166534;
+}
+.oa-paper-flow-steps li.now {
+  background: #dbeafe;
   color: #1d4ed8;
+}
+.oa-paper-flow-steps li.wait {
+  background: #f1f5f9;
+  color: #94a3b8;
+}
+.oa-paper-flow-note {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #334155;
+}
+.oa-paper-flow-done {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #166534;
+  font-weight: 600;
+}
+.oa-paper-flow-done strong {
+  color: #15803d;
+}
+.oa-paper-flow-seal {
+  display: block;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  background: #059669;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.oa-paper-flow-seal:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+.oa-paper-flow-seal:hover:not(:disabled) {
+  background: #047857;
 }
 .oa-paper-title {
   background: #fff;
@@ -51730,7 +51837,7 @@ details summary {
   color: #64748b;
   font-size: 12px;
 }
-.oa-work-drawer-head button {
+.oa-work-drawer-head button.oa-work-drawer-close {
   flex: 0 0 auto;
   width: 32px;
   height: 32px;
@@ -51742,7 +51849,28 @@ details summary {
   line-height: 1;
   cursor: pointer;
 }
-.oa-work-drawer-head button:hover { background: #e2e8f0; }
+.oa-work-drawer-head button.oa-work-drawer-close:hover { background: #e2e8f0; }
+.oa-work-drawer-head button.oa-work-drawer-dl {
+  flex: 0 0 auto;
+  width: auto;
+  height: auto;
+  min-height: 32px;
+  padding: 6px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.oa-work-drawer-head button.oa-work-drawer-dl:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
+  color: #1d4ed8;
+}
 .oa-work-drawer-body {
   flex: 1 1 auto;
   overflow: auto;

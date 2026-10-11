@@ -127,6 +127,13 @@
   padding: 0.35rem 0;
 }
 
+.oa-product-data-gate-lead {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--oa-muted, #64748b);
+}
+
 .oa-product-data-gate-min {
   margin-top: 0.55rem;
   padding: 0.5rem 0.6rem;
@@ -160,6 +167,30 @@
   font-weight: 500;
   color: #059669;
   font-size: 0.72rem;
+}
+.oa-product-data-gate-label em.is-bad {
+  display: block;
+  margin-top: 0.25rem;
+  font-style: normal;
+  font-weight: 500;
+  color: #b91c1c;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.oa-product-data-gate-label em.is-muted {
+  display: block;
+  margin-top: 0.2rem;
+  font-style: normal;
+  font-weight: 400;
+  color: #64748b;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.oa-product-data-gate-block {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  color: #b45309;
+  line-height: 1.4;
 }
 .oa-product-data-gate-actions {
   display: flex;
@@ -201,13 +232,21 @@
   align-items: center;
   gap: 0.5rem;
 }
-.oa-work-drawer-dl {
-  font-size: 0.72rem;
-  padding: 0.25rem 0.55rem;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  background: #fff;
-  cursor: pointer;
+.oa-work-drawer .oa-paper-issues header strong,
+.oa-work-drawer .oa-paper-flow-foot,
+.oa-work-drawer .oa-ledger-meta span,
+.oa-work-drawer .oa-ledger-totals em,
+.oa-work-drawer .oa-ledger-totals b {
+  color: inherit;
+}
+.oa-work-drawer .oa-paper-issues header strong {
+  color: #0f172a !important;
+}
+.oa-work-drawer .oa-ledger-totals b {
+  color: #0f172a !important;
+}
+.oa-work-drawer .oa-ledger-totals em {
+  color: #64748b !important;
 }
 .aw-product-skill-id {
   font-family: ui-monospace, monospace;

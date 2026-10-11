@@ -1,6 +1,8 @@
-/** 影像识别：把借款凭证扫描件切成区块，按置信度决定字段采不采用。 */
+/** 影像识别：按用户导入的 OCR 区块表，按置信度决定字段采不采用。 */
 
-import type { WorkGrid } from "./sheetEngine";
+import { ProductDataMissingError, type ProductDataSlot } from "./productDataStore";
+import { workbenchSheetTable } from "./workbenchDataset";
+import { tableFromEmbedded, type WorkGrid } from "./sheetEngine";
 
 export type ImagePolicy = { minConfidence: number };
 
@@ -16,14 +18,52 @@ export type ImageExecution = {
 
 const DEFAULT_POLICY: ImagePolicy = { minConfidence: 0.7 };
 
-const REGIONS: { block: string; box: string; text: string; confidence: number; field: string }[] = [
-  { block: "标题", box: "12,8,420,46", text: "借款凭证", confidence: 0.98, field: "文种" },
-  { block: "借款人", box: "40,70,280,98", text: "星图智造", confidence: 0.93, field: "借款人" },
-  { block: "金额", box: "40,110,260,142", text: "300,000", confidence: 0.91, field: "本次借款金额" },
-  { block: "期限", box: "280,110,420,142", text: "24个月", confidence: 0.74, field: "借款期限" },
-  { block: "账号", box: "40,160,360,196", text: "6222 **** **** 1234", confidence: 0.88, field: "放款账户" },
-  { block: "印章", box: "300,210,460,340", text: "印文模糊", confidence: 0.42, field: "甲方盖章" },
-];
+type RegionRow = { block: string; box: string; text: string; confidence: number; field: string };
+
+function parseConfidence(raw: unknown): number {
+  const n = Number(String(raw ?? "").replace(/%/g, ""));
+  if (!Number.isFinite(n)) return 0;
+  return n > 1 ? n / 100 : n;
+}
+
+function regionsFromTable(table: import("./sheetEngine").SheetTable): RegionRow[] {
+  const col = (names: string[]) => table.columns.find((c) => names.some((n) => c.name.includes(n)))?.name;
+  const blockK = col(["区块", "block"]) ?? table.columns[0]?.name ?? "区块";
+  const boxK = col(["坐标", "box"]) ?? "坐标";
+  const textK = col(["识别", "文字", "text", "ocr"]) ?? "识别文字";
+  const confK = col(["置信", "confidence"]) ?? "置信度";
+  const fieldK = col(["字段", "field"]) ?? "字段";
+  return table.rows.map((row, i) => ({
+    block: String(row[blockK] ?? `区块${i + 1}`),
+    box: String(row[boxK] ?? ""),
+    text: String(row[textK] ?? ""),
+    confidence: parseConfidence(row[confK]),
+    field: String(row[fieldK] ?? ""),
+  }));
+}
+
+function regionsFromEmbeddedQuery(query: string): RegionRow[] | null {
+  const table = tableFromEmbedded(query);
+  if (!table?.rows.length) return null;
+  return regionsFromTable(table);
+}
+
+function resolveRegions(productWorkbench: boolean, query?: string, sessionId?: string): RegionRow[] {
+  const slot: ProductDataSlot = "voucher-ocr-blocks";
+  if (productWorkbench) {
+    const fromSlot = workbenchSheetTable(sessionId, slot);
+    if (fromSlot?.rows.length) return regionsFromTable(fromSlot);
+    const embedded = query ? regionsFromEmbeddedQuery(query) : null;
+    if (embedded?.length) return embedded;
+    throw new ProductDataMissingError(slot, "请先导入凭证识别区块表后再执行影像识表。");
+  }
+  const embedded = query ? regionsFromEmbeddedQuery(query) : null;
+  if (embedded?.length) return embedded;
+  throw new ProductDataMissingError(
+    "voucher-ocr-blocks",
+    "请先导入凭证识别区块表，或在问句中用 ```csv 附上区块表后再执行。",
+  );
+}
 
 export function imagePolicyFromArgs(args: Record<string, unknown> | undefined): ImagePolicy {
   const minConfidence = Number(args?.minConfidence ?? DEFAULT_POLICY.minConfidence);
@@ -36,8 +76,12 @@ export function imagePolicyFromSteps(steps: { tool: string; args?: Record<string
   return mine.reduce((policy, step) => ({ ...policy, ...imagePolicyFromArgs(step.args) }), { ...DEFAULT_POLICY });
 }
 
-export function executeImage(policy: ImagePolicy = DEFAULT_POLICY): ImageExecution {
-  const rows = REGIONS.map((region) => {
+export function executeImage(
+  policy: ImagePolicy = DEFAULT_POLICY,
+  opts?: { productWorkbench?: boolean; query?: string; sessionId?: string },
+): ImageExecution {
+  const regions = resolveRegions(Boolean(opts?.productWorkbench), opts?.query, opts?.sessionId);
+  const rows = regions.map((region) => {
     const accept = region.confidence >= policy.minConfidence;
     return { ...region, accept };
   });
@@ -53,12 +97,21 @@ export function executeImage(policy: ImagePolicy = DEFAULT_POLICY): ImageExecuti
       row.accept ? "采用" : "弃用",
     ]),
   };
+  const n = rows.length;
   const summary = dropped.length
-    ? `6 个区块里 ${rows.length - dropped.length} 个采用。弃用 ${dropped.map((row) => `${row.block} ${row.confidence.toFixed(2)}`).join("、")}，低于 ${policy.minConfidence.toFixed(2)}。`
-    : `6 个区块全部采用，置信度线 ${policy.minConfidence.toFixed(2)}。`;
+    ? `${n} 个区块里 ${rows.length - dropped.length} 个采用。弃用 ${dropped.map((row) => `${row.block} ${row.confidence.toFixed(2)}`).join("、")}，低于 ${policy.minConfidence.toFixed(2)}。`
+    : `${n} 个区块全部采用，置信度线 ${policy.minConfidence.toFixed(2)}。`;
   const phases: ImagePhase[] = [
-    { id: "crop", label: "切块", detail: "凭证扫成 6 块：标题、借款人、金额、期限、账号、印章。" },
-    { id: "ocr", label: "识别", detail: rows.map((row) => `${row.block} ${row.text} ${row.confidence.toFixed(2)}`).join("；") + "。" },
+    {
+      id: "crop",
+      label: "切块",
+      detail: `凭证共 ${n} 个区块：${rows.map((r) => r.block).join("、")}。`,
+    },
+    {
+      id: "ocr",
+      label: "识别",
+      detail: rows.map((row) => `${row.block} ${row.text} ${row.confidence.toFixed(2)}`).join("；") + "。",
+    },
     { id: "accept", label: "取舍", detail: `置信度低于 ${policy.minConfidence.toFixed(2)} 的不写入字段。` },
     { id: "report", label: "字段表", detail: summary },
   ];
@@ -66,25 +119,4 @@ export function executeImage(policy: ImagePolicy = DEFAULT_POLICY): ImageExecuti
   return { policy, phases, summary, markdown, grid };
 }
 
-const PHASE_INDEX: Record<string, number> = {
-  __image_crop__: 0,
-  __image_ocr__: 1,
-  __image_accept__: 2,
-  __image_report__: 3,
-};
-
-export function runImageTool(name: string, args: Record<string, unknown>): { content: unknown } | null {
-  const index = PHASE_INDEX[name];
-  if (index == null) return null;
-  const ran = executeImage(imagePolicyFromArgs(args));
-  const phase = ran.phases[index]!;
-  return {
-    content: {
-      markdown: name === "__image_report__" ? ran.markdown : phase.detail,
-      detail: phase.detail,
-      summary: ran.summary,
-      dashboard: { image: { phase: phase.id, summary: ran.summary } },
-      meta: { skill: "image-desk" },
-    },
-  };
-}
+export { runImageTool } from "./imageDeskProgram";

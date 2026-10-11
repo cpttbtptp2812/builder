@@ -10,58 +10,100 @@ export type SkillDataRequirement = {
   filename: string;
 };
 
-const EXPENSE_TEMPLATE = `部门,申请人,金额,税额,发票额,状态
-研发,张三,12800,1664,12800,待审
-市场,李四,4200,546,,缺票`;
+function tpl(lines: string[]): string {
+  return lines.join("\n");
+}
 
-const CASHFLOW_TEMPLATE = `月份,流入万元
-2025-05,72
-2025-06,81
-2025-07,88
-2025-08,90
-2025-09,86
-2025-10,94`;
+/** 下载后可原样导入过门闩；数字请改成贵司真实值后再跑业务 */
+/** 8 行示例 + 一行发票不一致，便于改数字试跑；表头与列名勿删改 */
+const EXPENSE_TEMPLATE = tpl([
+  "部门,申请人,金额,税额,发票额,状态,费用类型",
+  "研发,经办A,1500,195,1500,待审,差旅",
+  "研发,经办B,880,114,880,待审,办公用品",
+  "市场,经办C,2400,312,2400,待审,活动物料",
+  "市场,经办D,800,104,750,待审,投放费",
+  "财务,经办E,320,42,320,已审,培训",
+  "行政,经办F,560,73,560,待审,物业",
+  "研发,经办G,1200,156,1200,待审,外包",
+  "市场,经办H,430,56,430,待审,设计",
+]);
 
-const CONTRACT_TEMPLATE = `条款号,名称,合同原文,审批模板,类型
-1.2,借款金额,30万,审批50万,amount
-2.1,年化利率,8.5%,审批6.2%,rate
-附,评估报告,出具已210天,须在有效期内,appraisal`;
+const CASHFLOW_TEMPLATE = tpl([
+  "月份,流入万元",
+  "2025-01,10",
+  "2025-02,11",
+  "2025-03,12",
+  "2025-04,11",
+  "2025-05,12",
+  "2025-06,13",
+]);
+
+const CONTRACT_TEMPLATE = tpl([
+  "条款号,名称,合同原文,审批模板,类型",
+  "1.1,借款金额,100万,审批上限80万,amount",
+  "2.1,年化利率,7.5%,审批上限6.5%,rate",
+]);
+
+const VOUCHER_OCR_TEMPLATE = tpl([
+  "区块,坐标,识别文字,置信度,字段",
+  "标题,0,业务凭证,0.98,文种",
+  "借款人,0,借款人姓名,0.95,借款人",
+  "金额,0,100000,0.92,本次借款金额",
+]);
 
 export const SKILL_DATA_REQUIREMENTS: Record<string, SkillDataRequirement[]> = {
+  "ledger-desk": [
+    {
+      slot: "expense-ledger",
+      label: "报销明细表",
+      hint: "下载模板可直接导入试跑；也可导入公司报销导出表，列名支持别名。",
+      templateCsv: EXPENSE_TEMPLATE,
+      filename: "报销明细-导入模板.csv",
+    },
+  ],
   "sheet-desk": [
     {
       slot: "expense-ledger",
       label: "报销明细表",
-      hint: "对账技能会按配方逐行汇总、对发票容差。",
+      hint: "下载模板可直接导入试跑；也可导入公司报销导出表，列名支持别名。",
       templateCsv: EXPENSE_TEMPLATE,
-      filename: "expense-ledger-template.csv",
+      filename: "报销明细-导入模板.csv",
     },
   ],
   "flow-desk": [
     {
       slot: "expense-ledger",
       label: "报销明细表",
-      hint: "流程技能会从表中定位本单（可带金额/部门/姓名），再跑关卡。",
+      hint: "下载模板可直接导入；或导入公司 CSV 后点继续查流程进度。",
       templateCsv: EXPENSE_TEMPLATE,
-      filename: "expense-ledger-template.csv",
+      filename: "报销明细-导入模板.csv",
     },
   ],
   "data-desk": [
     {
       slot: "cashflow-monthly",
-      label: "经营流水（按月）",
-      hint: "额度技能用近月流入算月均，再乘系数核定。",
+      label: "按月经营流水",
+      hint: "下载模板可直接导入；月份与流入请改成真实流水后再测算。",
       templateCsv: CASHFLOW_TEMPLATE,
-      filename: "cashflow-monthly-template.csv",
+      filename: "经营流水-导入模板.csv",
     },
   ],
   "contract-desk": [
     {
       slot: "contract-clauses",
       label: "合同条款对照表",
-      hint: "每行一条条款：合同原文 vs 审批/模板，技能会标风险。",
+      hint: "下载模板可直接导入；每行一条条款，改合同原文与审批口径后审查。",
       templateCsv: CONTRACT_TEMPLATE,
-      filename: "contract-clauses-template.csv",
+      filename: "合同条款-导入模板.csv",
+    },
+  ],
+  "image-desk": [
+    {
+      slot: "voucher-ocr-blocks",
+      label: "凭证识别区块表",
+      hint: "下载模板可直接导入；按 OCR 区块填写识别文字与字段映射。",
+      templateCsv: VOUCHER_OCR_TEMPLATE,
+      filename: "凭证区块-导入模板.csv",
     },
   ],
 };
@@ -70,10 +112,27 @@ export function requirementsForSkill(skillId: string): SkillDataRequirement[] {
   return SKILL_DATA_REQUIREMENTS[skillId] ?? [];
 }
 
+export function requirementForSlot(skillId: string, slot: ProductDataSlot): SkillDataRequirement | undefined {
+  return requirementsForSkill(skillId).find((r) => r.slot === slot);
+}
+
 export function missingDataForSkill(skillId: string): SkillDataRequirement[] {
   return requirementsForSkill(skillId).filter((req) => datasetRowCount(req.slot) < 1);
 }
 
 export function productSkillUsesUserData(skillId: string): boolean {
   return requirementsForSkill(skillId).length > 0;
+}
+
+export function gateQueryWithSampleData(skillId: string, query: string): string {
+  let q = query.trim();
+  for (const req of requirementsForSkill(skillId)) {
+    q += `\n\n\`\`\`csv\n${req.templateCsv}\n\`\`\``;
+  }
+  return q;
+}
+
+export function allDeskTemplateRequirements(): { skillId: string; req: SkillDataRequirement }[] {
+  const deskIds = ["ledger-desk"] as const;
+  return deskIds.flatMap((skillId) => requirementsForSkill(skillId).map((req) => ({ skillId, req })));
 }

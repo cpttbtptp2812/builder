@@ -20,8 +20,10 @@ import {
   runRouterEval,
   runSkillBenchmark,
   runSkillOnServer,
+  runSkillManifestOnServer,
   SKILL_CATALOG,
 } from "./skills.ts";
+import { enrichSkillCatalog, hydrateSkill } from "../src/lib/skillMarkdown.ts";
 import { compileParsedOnly, parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
 import { compileSkill } from "../src/lib/skillSemcompiler.ts";
 import { runPolicyEval } from "../src/lib/policyDesk.ts";
@@ -131,6 +133,31 @@ app.post("/api/skills/run", async (c) => {
     clientSnapshot: body.clientSnapshot as { nodes?: { role: string }[] },
     clientPerf: body.clientPerf as Record<string, unknown>,
     probeUrl: body.probeUrl,
+  });
+  return c.json(result);
+});
+
+/** 发版对比 / 治理试跑：指定 SKILL 原文 + 办事模式（与 product-run 同引擎） */
+app.post("/api/skills/run-inline", async (c) => {
+  const body = await c.req.json<{
+    skillId: string;
+    raw: string;
+    query: string;
+    productWorkbench?: boolean;
+    sessionId?: string;
+  }>();
+  if (!body.skillId?.trim() || !body.raw?.trim()) {
+    return c.json({ error: "skillId and raw required" }, 400);
+  }
+  const skill = enrichSkillCatalog(
+    [hydrateSkill(body.raw, { id: body.skillId, skillPath: `inline://${body.skillId}` })],
+    "server",
+  )[0];
+  if (!skill) return c.json({ error: "skill compile failed" }, 400);
+  const compileErr = (skill.diagnostics ?? []).find((d) => d.level === "error");
+  if (compileErr) return c.json({ error: compileErr.message }, 400);
+  const result = await runSkillManifestOnServer(skill, body.query ?? "", body.sessionId ?? "gate-inline", {
+    productWorkbench: body.productWorkbench !== false,
   });
   return c.json(result);
 });

@@ -9,6 +9,8 @@ import { dbAll, dbRun } from "./db.ts";
 import { parseSkillMarkdown, hydrateSkill, enrichSkillCatalog } from "../src/lib/skillMarkdown.ts";
 import { SKILL_TRACE_CASES, type SkillTraceCase } from "../src/lib/provingGround.ts";
 import { evaluateSkillGate, mergeSkillGateCases } from "../src/lib/evaluateSkillGate.ts";
+import { mustRunServerProcessSkill } from "../src/lib/customerSkillKernel.ts";
+import { runLiveGateComparisonOnServer } from "./liveGateRunner.ts";
 import { DEFAULT_GATE_POLICY, parseGatePolicy } from "../src/lib/gatePolicy.ts";
 import { OWNAGENT_CHECK_SCHEMA } from "../src/lib/ownagentProtocol.ts";
 import {
@@ -210,17 +212,23 @@ export function registerSkillGate(app: Hono) {
     const policy = fs.existsSync(POLICY_FILE)
       ? parseGatePolicy(fs.readFileSync(POLICY_FILE, "utf8"))
       : DEFAULT_GATE_POLICY;
-    const decision = await evaluateSkillGate({
-      baseline: baselineSkill,
-      candidate: skill,
-      cases: loadGateCases(body.skillId),
-      policy,
-      environment,
-      baselineVersion: fs.existsSync(baselineFile)
-        ? String((JSON.parse(fs.readFileSync(baselineFile, "utf8")) as { version?: string }).version ?? "baseline")
-        : "candidate",
-      candidateVersion: body.candidateVersion ?? "candidate",
-    });
+    const gateCases = loadGateCases(body.skillId);
+    const decision = await evaluateSkillGate(
+      {
+        baseline: baselineSkill,
+        candidate: skill,
+        cases: gateCases,
+        policy,
+        environment,
+        baselineVersion: fs.existsSync(baselineFile)
+          ? String((JSON.parse(fs.readFileSync(baselineFile, "utf8")) as { version?: string }).version ?? "baseline")
+          : "candidate",
+        candidateVersion: body.candidateVersion ?? "candidate",
+      },
+      mustRunServerProcessSkill(body.skillId)
+        ? { runComparison: runLiveGateComparisonOnServer }
+        : undefined,
+    );
     const result = {
       schema: OWNAGENT_CHECK_SCHEMA,
       ...decision,

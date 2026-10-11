@@ -97,39 +97,6 @@ type ProbeResult = {
   via?: "server" | "browser" | "demo";
 };
 
-/** 预制演示 URL — 静态部署无 API 时仍能让「巡检 example.com」走通 */
-const DEMO_PROBE_HOSTS = new Set(["example.com", "www.example.com", "staging.example.com"]);
-
-function demoProbeFallback(url: string, method: "GET" | "HEAD"): ProbeResult | null {
-  try {
-    const u = new URL(url);
-    const bare = u.hostname.replace(/^www\./, "");
-    if (!DEMO_PROBE_HOSTS.has(u.hostname) && !DEMO_PROBE_HOSTS.has(bare)) return null;
-  } catch {
-    return null;
-  }
-  const preview =
-    "<!doctype html><html><head><title>Example Domain</title></head>" +
-    "<body><h1>Example Domain</h1><p>This domain is for use in documentation examples.</p></body></html>";
-  return {
-    url,
-    method,
-    ok: true,
-    status: 200,
-    latencyMs: 42,
-    contentType: "text/html",
-    via: "demo",
-    body: {
-      preview,
-      bytes: preview.length,
-      pageTitle: "Example Domain",
-      pageDescription: "This domain is for use in documentation examples without needing permission.",
-      statusOk: false,
-      hasSearchInput: false,
-    },
-  };
-}
-
 function isCrossOriginUrl(url: string): boolean {
   if (typeof window === "undefined") return false;
   try {
@@ -217,18 +184,14 @@ async function probeHttp(url: string, method: "GET" | "HEAD" = "GET"): Promise<P
     const remote = await probeHttpViaServer(url, method);
     if (remote) result = remote;
     else {
-      const demo = demoProbeFallback(url, method);
-      if (demo) result = demo;
-      else {
-        result = {
-          url,
-          method,
-          ok: false,
-          latencyMs: 0,
-          error: "服务端探活未就绪（本地请 npm run dev:full）；浏览器无法直连此外链",
-          via: "server",
-        };
-      }
+      result = {
+        url,
+        method,
+        ok: false,
+        latencyMs: 0,
+        error: "服务端探活未就绪（本地请 npm run dev:full）；浏览器无法直连此外链",
+        via: "server",
+      };
     }
   } else {
     result = await probeHttpDirect(url, method);

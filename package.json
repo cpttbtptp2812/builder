@@ -14,7 +14,7 @@
     "preview": "vite preview",
     "start:server": "tsx server/index.ts",
     "prove": "tsx scripts/prove.ts",
-    "test:ownagent": "tsx scripts/test-ownagent-consistency.ts && tsx scripts/test-skill-governance.ts",
+    "test:ownagent": "tsx scripts/test-product-route.ts && tsx scripts/test-product-run-e2e.ts && tsx scripts/test-desk-templates.ts && tsx scripts/test-desk-template-roundtrip.ts && tsx scripts/test-material-normalize.ts && tsx scripts/test-step1-import.ts && tsx scripts/test-data-desk-paper-sync.ts && tsx scripts/test-desk-browser-block.ts && tsx scripts/test-trace-gate-journal.ts && tsx scripts/test-skills-smoke.ts && tsx scripts/test-ownagent-consistency.ts && tsx scripts/test-skill-governance.ts",
     "benchmark:ownagent": "tsx scripts/ownagent-benchmark.ts",
     "check:skills": "tsx scripts/ownagent-check.ts --all --ci",
     "check:skill": "tsx scripts/ownagent-check.ts"

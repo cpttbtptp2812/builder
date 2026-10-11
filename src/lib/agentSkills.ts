@@ -13,15 +13,16 @@ import {
   type SkillManifest,
 } from "./skillMarkdown";
 import { applyStepVarWrites } from "./skillVarBindings";
+import { traceStepDisplayLabel } from "./deskStepLabels";
 import { composeReleaseReportTraced, isSameOriginUrl, releaseReportMarkdown } from "./releaseInspect";
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { faqAnswerMarkdown, faqFallbackMarkdown, matchFaq } from "../data/productFaq";
 import { composeStepsMarkdown } from "./composeSteps";
-import { runSheetTool } from "./sheetEngine";
+import { runSheetTool } from "./sheetDeskProgram";
 import { runFlowTool } from "./flowEngine";
-import { runDataTool } from "./dataEngine";
-import { runContractTool } from "./contractEngine";
-import { runImageTool } from "./imageEngine";
+import { runDataTool } from "./dataDeskProgram";
+import { runContractTool } from "./contractDeskProgram";
+import { runImageTool } from "./imageDeskProgram";
 import { processCreditFlowTurn, type CreditFlowState } from "./creditFlowEngine";
 
 /**
@@ -96,13 +97,7 @@ const PROBE_URL =
     ? `${window.location.origin}${import.meta.env.BASE_URL}index.html`
     : "/index.html";
 
-export const CUSTOMER_SKILL_IDS = [
-  "sheet-desk",
-  "data-desk",
-  "contract-desk",
-  "flow-desk",
-  "image-desk",
-] as const;
+export const CUSTOMER_SKILL_IDS = ["ledger-desk"] as const;
 
 export function isCreditFlowDeskSkill(id: string): boolean {
   return id.endsWith("-flow-desk");
@@ -131,6 +126,7 @@ export const CREDIT_FLOW_DESK_IDS = [
 ] as const;
 
 const SKILL_ORDER = [
+  "ledger-desk",
   "sheet-desk",
   "data-desk",
   "contract-desk",
@@ -382,6 +378,19 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
     case "__say__":
       return { content: { markdown: String(args.text ?? ""), meta: { skill: "say" } } };
 
+    case "__sheet_intake__":
+    case "__sheet_validate_schema__":
+    case "__sheet_validate_rows__":
+    case "__sheet_normalize__":
+    case "__sheet_duplicate_scan__":
+    case "__sheet_missing_guard__":
+    case "__sheet_escalation__":
+    case "__sheet_exception_queue__":
+    case "__sheet_dept_rollup__":
+    case "__sheet_cross_foot__":
+    case "__sheet_deliver_detail__":
+    case "__sheet_deliver_dept__":
+    case "__sheet_deliver_escalation__":
     case "__sheet_parse__":
     case "__sheet_aggregate__":
     case "__sheet_reconcile__":
@@ -390,6 +399,10 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
       return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
     }
 
+    case "__flow_batch_scan__":
+    case "__flow_sheet_sync__":
+    case "__flow_dept_cap__":
+    case "__flow_dual_sign__":
     case "__flow_intake__":
     case "__flow_invoice__":
     case "__flow_reconcile__":
@@ -399,25 +412,57 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
       return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
     }
 
+    case "__data_intake__":
+    case "__data_validate_schema__":
+    case "__data_validate_months__":
     case "__data_load__":
+    case "__data_weighted__":
+    case "__data_volatility__":
+    case "__data_trend__":
     case "__data_formula__":
     case "__data_adjust__":
+    case "__data_cap_compare__":
+    case "__data_committee__":
+    case "__data_min_guard__":
+    case "__data_deliver_trend__":
+    case "__data_deliver_formula__":
+    case "__data_deliver_decision__":
     case "__data_report__": {
       const ran = runDataTool(name, args);
       return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
     }
 
+    case "__contract_intake__":
+    case "__contract_validate_schema__":
+    case "__contract_validate_kinds__":
     case "__contract_read__":
+    case "__contract_normalize__":
     case "__contract_diff__":
+    case "__contract_rate_pass__":
+    case "__contract_appraisal_pass__":
     case "__contract_risk__":
+    case "__contract_block_sign__":
+    case "__contract_deliver_clauses__":
+    case "__contract_deliver_risk__":
+    case "__contract_deliver_remediation__":
+    case "__contract_deliver_signoff__":
     case "__contract_report__": {
       const ran = runContractTool(name, args);
       return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
     }
 
+    case "__image_intake__":
+    case "__image_validate_schema__":
+    case "__image_validate_blocks__":
     case "__image_crop__":
     case "__image_ocr__":
+    case "__image_histogram__":
     case "__image_accept__":
+    case "__image_required_guard__":
+    case "__image_deliver_fields__":
+    case "__image_deliver_accepted__":
+    case "__image_deliver_rejected__":
+    case "__image_deliver_qa__":
     case "__image_report__": {
       const ran = runImageTool(name, args);
       return ran ?? { content: { error: `unknown: ${name}` }, isError: true };
@@ -548,6 +593,8 @@ export async function runSkillFromIndex(
     mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
     /** 产品工作台：引擎读用户导入数据，不用 Hub 内置样例 */
     productWorkbench?: boolean;
+    /** Agent 步骤实验室：允许 sheet 内置样例（不进办事主链） */
+    allowLabSample?: boolean;
     /** 步骤优先调用当前页面注册的工具；页面上没有的外部工具直接失败 */
     preferPageTools?: boolean;
     /** do(action): 跳过这些 step 索引，不执行也不写入 trace */
@@ -558,6 +605,13 @@ export async function runSkillFromIndex(
     injectAt?: Record<number, unknown>;
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
+  const isProductDesk = (CUSTOMER_SKILL_IDS as readonly string[]).includes(skill.id);
+  if (isProductDesk && !opts?.allowLabSample) {
+    throw new Error(
+      `${skill.id} 须走服务端 product-run（导入 → 继续执行），禁止浏览器 runSkill 内置/本地样例路径。`,
+    );
+  }
+
   const trace: SkillTraceStep[] = [];
   let lastResult: unknown = null;
   const snapRoot = opts?.snapshotRoot ?? null;
@@ -575,6 +629,7 @@ export async function runSkillFromIndex(
     const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
     const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
     if (opts?.productWorkbench) args.__productWorkbench = true;
+    if (opts?.allowLabSample) args.__allowLabSample = true;
 
     const mockFn = opts?.mockProfile?.[tool];
     const pageTool = opts?.preferPageTools ? getPageTool(tool) : undefined;
@@ -599,7 +654,7 @@ export async function runSkillFromIndex(
 
     const row: SkillTraceStep = {
       stepId: step.id,
-      label: step.label,
+      label: traceStepDisplayLabel({ id: step.id, label: step.label, tool, args }, out.content),
       tool,
       ms,
       ok: !out.isError,
@@ -624,6 +679,7 @@ export async function runSkill(
     probeUrl?: string;
     mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
     productWorkbench?: boolean;
+    allowLabSample?: boolean;
     preferPageTools?: boolean;
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {

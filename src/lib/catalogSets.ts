@@ -133,7 +133,7 @@ function buildSampleSets(base: SetSkill[]): CatalogSet[] {
       note: "同一张报销表改成去税汇总，缺票先过",
       savedAt: "2026-06-02T10:00:00.000Z",
       status: "version",
-      skills: withSkill("sheet-desk", retuneSheet),
+      skills: withSkill("ledger-desk", retuneSheet),
     },
     {
       id: "set-sample-data-tight",

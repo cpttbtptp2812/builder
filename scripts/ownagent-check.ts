@@ -9,6 +9,8 @@ import {
   type SkillTraceCase,
 } from "../src/lib/provingGround.ts";
 import { evaluateSkillGate } from "../src/lib/evaluateSkillGate.ts";
+import { mustRunServerProcessSkill } from "../src/lib/customerSkillKernel.ts";
+import { runLiveGateComparisonOnServer } from "../server/liveGateRunner.ts";
 import { DEFAULT_GATE_POLICY, parseGatePolicy } from "../src/lib/gatePolicy.ts";
 import { OWNAGENT_CHECK_SCHEMA } from "../src/lib/ownagentProtocol.ts";
 import {
@@ -109,15 +111,18 @@ async function checkSkill(skillId: string, candidateRaw: string, cases: SkillTra
   const policy = fs.existsSync(POLICY_FILE)
     ? parseGatePolicy(fs.readFileSync(POLICY_FILE, "utf8"))
     : DEFAULT_GATE_POLICY;
-  const decision = await evaluateSkillGate({
-    baseline: baselineSkill,
-    candidate,
-    cases: skillCases,
-    policy,
-    environment,
-    baselineVersion: baseline.version,
-    candidateVersion: "candidate",
-  });
+  const decision = await evaluateSkillGate(
+    {
+      baseline: baselineSkill,
+      candidate,
+      cases: skillCases,
+      policy,
+      environment,
+      baselineVersion: baseline.version,
+      candidateVersion: "candidate",
+    },
+    mustRunServerProcessSkill(skillId) ? { runComparison: runLiveGateComparisonOnServer } : undefined,
+  );
   return {
     skillId,
     environment,

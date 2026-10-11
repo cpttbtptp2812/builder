@@ -13,6 +13,7 @@ import { extractUrlFromText } from "./releaseInspect";
 import { listGateQueriesForCheck } from "./skillGateQuestions";
 import { usesLiveProbeInCompare } from "./skillCompareEngine";
 import { computeSkillCoverage, type ScmCoverageReport } from "./scmCoverage";
+import { mustRunServerProcessSkill } from "./customerSkillKernel";
 import { MOCK_PROFILES, SKILL_TRACE_CASES, type SkillTraceCase } from "./provingGround";
 import { evaluateSkillGate, type SkillGateEvaluation } from "./evaluateSkillGate";
 import { listAllCasesForSkill } from "./skillTraceCaseStore";
@@ -401,17 +402,20 @@ export async function runFullSkillCompare(opts: {
     });
   }
 
-  const scm = await scmSummaryForCompare(opts.skillId, compareRuns, {
-    baselineSkill: baseline,
-    candidateSkill: candidate,
-    mockProfile: MOCK_PROFILES[opts.skillId],
-  });
+  const serverKernel = mustRunServerProcessSkill(opts.skillId);
+  const scm = serverKernel
+    ? null
+    : await scmSummaryForCompare(opts.skillId, compareRuns, {
+        baselineSkill: baseline,
+        candidateSkill: candidate,
+        mockProfile: MOCK_PROFILES[opts.skillId],
+      });
   const coverage = computeSkillCoverage(candidate, {
     observedTrace: compareRuns[0]?.candidateTrace,
-    liveTrace: Boolean(compareRuns[0]?.candidateTrace.length),
+    liveTrace: serverKernel || Boolean(compareRuns[0]?.candidateTrace.length),
   });
   const risks = buildRisks(structural, compile, queryResults, scm);
-  if (coverage.exactPct < 80) {
+  if (!serverKernel && coverage.exactPct < 80) {
     for (const risk of risks) {
       if (risk.level === "high" && risk.title.startsWith("因果后果")) risk.level = "medium";
     }

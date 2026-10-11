@@ -1,6 +1,7 @@
 /** 借款合同审查：逐条对照审批模板，标出金额、期限、利率、还款、违约金和评估时效。 */
 
 import { datasetToSheetTable, getProductDataset, ProductDataMissingError } from "./productDataStore";
+import { workbenchSheetTable } from "./workbenchDataset";
 import { tableFromEmbedded, type WorkGrid } from "./sheetEngine";
 
 export type ContractPolicy = {
@@ -22,15 +23,6 @@ export type ContractExecution = {
 const DEFAULT_POLICY: ContractPolicy = { rateTolerance: 0.5, appraisalDays: 180, strict: false };
 
 type ClauseRow = { id: string; name: string; contract: string; template: string; kind: string };
-
-const DEMO_CLAUSES: ClauseRow[] = [
-  { id: "1.2", name: "借款金额", contract: "30万", template: "审批 50万", kind: "amount" },
-  { id: "1.3", name: "借款期限", contract: "24个月", template: "模板 36个月", kind: "term" },
-  { id: "2.1", name: "年化利率", contract: "8.5%", template: "审批 6.2%", kind: "rate" },
-  { id: "3.1", name: "还款方式", contract: "按月付息到期还本", template: "等额本息", kind: "repay" },
-  { id: "8", name: "提前还款违约金", contract: "未写计算基数", template: "剩余本金的 1%", kind: "penalty" },
-  { id: "附", name: "评估报告", contract: "出具已 210 天", template: "须在有效期内", kind: "appraisal" },
-];
 
 function clausesFromProductImport(): ClauseRow[] {
   const ds = getProductDataset("contract-clauses");
@@ -71,11 +63,33 @@ function clausesFromEmbeddedQuery(query: string): ClauseRow[] | null {
   }));
 }
 
-function resolveClauses(productWorkbench: boolean, query?: string): ClauseRow[] {
+function resolveClauses(productWorkbench: boolean, query?: string, sessionId?: string): ClauseRow[] {
+  if (productWorkbench) {
+    const fromSlot = workbenchSheetTable(sessionId, "contract-clauses");
+    if (fromSlot?.rows.length) {
+      return fromSlot.rows.map((row, i) => {
+        const col = (names: string[]) => fromSlot.columns.find((c) => names.some((n) => c.name.includes(n)))?.name;
+        const idK = col(["条款号", "条款", "id"]) ?? fromSlot.columns[0]?.name ?? "条款号";
+        const nameK = col(["名称", "name"]) ?? "名称";
+        const contractK = col(["合同原文", "合同"]) ?? "合同原文";
+        const templateK = col(["审批", "模板"]) ?? "审批模板";
+        const kindK = col(["类型", "kind"]) ?? "类型";
+        return {
+          id: String(row[idK] ?? i + 1),
+          name: String(row[nameK] ?? `条款${i + 1}`),
+          contract: String(row[contractK] ?? ""),
+          template: String(row[templateK] ?? ""),
+          kind: String(row[kindK] ?? "other"),
+        };
+      });
+    }
+    const embedded = query ? clausesFromEmbeddedQuery(query) : null;
+    if (embedded?.length) return embedded;
+    throw new ProductDataMissingError("contract-clauses", "请先导入合同条款对照表后再执行审查。");
+  }
   const embedded = query ? clausesFromEmbeddedQuery(query) : null;
   if (embedded?.length) return embedded;
-  if (productWorkbench) return clausesFromProductImport();
-  return DEMO_CLAUSES;
+  throw new ProductDataMissingError("contract-clauses", "请先导入合同条款对照表，或在问句中用 ```csv 附上条款表后再执行。");
 }
 
 export function contractPolicyFromArgs(args: Record<string, unknown> | undefined): ContractPolicy {
@@ -144,9 +158,9 @@ function advice(kind: string, level: string): string {
 
 export function executeContract(
   policy: ContractPolicy = DEFAULT_POLICY,
-  opts?: { productWorkbench?: boolean; query?: string },
+  opts?: { productWorkbench?: boolean; query?: string; sessionId?: string },
 ): ContractExecution {
-  const clauses = resolveClauses(Boolean(opts?.productWorkbench), opts?.query);
+  const clauses = resolveClauses(Boolean(opts?.productWorkbench), opts?.query, opts?.sessionId);
   const judged = clauses.map((clause) => {
     const level = levelOf(clause, policy);
     return { ...clause, level, advice: advice(clause.kind, level) };
@@ -172,37 +186,4 @@ export function executeContract(
   return { policy, phases, summary, markdown, grid };
 }
 
-const PHASE_INDEX: Record<string, number> = {
-  __contract_read__: 0,
-  __contract_diff__: 1,
-  __contract_risk__: 2,
-  __contract_report__: 3,
-};
-
-export function runContractTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
-  const index = PHASE_INDEX[name];
-  if (index == null) return null;
-  const productWorkbench = args.__productWorkbench === true;
-  try {
-    const ran = executeContract(contractPolicyFromArgs(args), {
-      productWorkbench,
-      query: String(args.query ?? ""),
-    });
-    const phase = ran.phases[index]!;
-    return {
-      content: {
-        markdown: name === "__contract_report__" ? ran.markdown : phase.detail,
-        detail: phase.detail,
-        summary: ran.summary,
-        dashboard: { contract: { phase: phase.id, summary: ran.summary } },
-        meta: { skill: "contract-desk" },
-        grid: ran.grid,
-      },
-    };
-  } catch (err) {
-    if (err instanceof ProductDataMissingError) {
-      return { content: { error: err.message, code: "PRODUCT_DATA_MISSING", slot: err.slot }, isError: true };
-    }
-    throw err;
-  }
-}
+export { runContractTool } from "./contractDeskProgram";

@@ -9,7 +9,10 @@ import { executeContract, contractPolicyFromSteps } from "./contractEngine";
 import { executeData, dataRecipeFromSteps } from "./dataEngine";
 import { executeFlow, flowPolicyFromSteps } from "./flowEngine";
 import { executeImage, imagePolicyFromSteps } from "./imageEngine";
-import { executeSheet, sheetRecipeFromQuery, sheetRecipeFromSteps, type WorkGrid } from "./sheetEngine";
+import { gateQueryWithSampleData } from "./productSkillInputs";
+import { monthlyFromCashflowQuery } from "./dataEngine";
+import { buildSheetProgramState, sheetProgramRecipeFromArgs } from "./sheetDeskProgram";
+import { sheetRecipeFromQuery, sheetRecipeFromSteps, type WorkGrid } from "./sheetEngine";
 import { paperForSkill, type WorkPaper } from "./workPaper";
 import { routeKey, routeQuery, skillLabel, type RouteDecision } from "./skillRouter";
 
@@ -136,30 +139,35 @@ function traceOf(decision: RouteDecision): Pick<GateSide, "key" | "score" | "mar
 }
 
 function computedBundle(query: string, skill: AgentSkill): { text: string; grid: WorkGrid | null; paper: WorkPaper | null } | null {
-  const paper = paperForSkill(skill, query);
+  const q = gateQueryWithSampleData(skill.id, query);
+  const paper = paperForSkill(skill, q);
+  const tableOpts = { allowLabSample: true as const, dataSlot: "expense-ledger" as const };
   const sheet = sheetRecipeFromSteps(skill.steps);
   if (sheet) {
-    const ran = executeSheet(query, sheetRecipeFromQuery(query, sheet));
-    return { text: ran.summary, grid: null, paper };
+    const recipe = sheetProgramRecipeFromArgs({ ...sheet, ...sheetRecipeFromQuery(q, sheet) });
+    const ran = buildSheetProgramState(q, recipe, tableOpts);
+    return { text: ran.summary, grid: ran.detailGrid, paper };
   }
   const data = dataRecipeFromSteps(skill.steps);
   if (data) {
-    const ran = executeData(data);
+    const monthly = monthlyFromCashflowQuery(q);
+    const recipe = monthly != null ? { ...data, monthly } : data;
+    const ran = executeData(recipe);
     return { text: ran.summary, grid: null, paper };
   }
   const contract = contractPolicyFromSteps(skill.steps);
   if (contract) {
-    const ran = executeContract(contract);
+    const ran = executeContract(contract, { query: q });
     return { text: ran.summary, grid: null, paper };
   }
   const flow = flowPolicyFromSteps(skill.steps);
   if (flow) {
-    const ran = executeFlow(query, flow);
+    const ran = executeFlow(q, flow, tableOpts);
     return { text: ran.summary, grid: null, paper };
   }
   const image = imagePolicyFromSteps(skill.steps);
   if (image) {
-    const ran = executeImage(image);
+    const ran = executeImage(image, { query: q });
     return { text: ran.summary, grid: null, paper };
   }
   return null;

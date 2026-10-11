@@ -23,15 +23,24 @@ import {
 } from "../src/lib/skillMarkdown.ts";
 import { applyStepVarWrites } from "../src/lib/skillVarBindings.ts";
 import { composeStepsMarkdown } from "../src/lib/composeSteps.ts";
-import { runContractTool } from "../src/lib/contractEngine.ts";
-import { runDataTool } from "../src/lib/dataEngine.ts";
+import { runContractTool } from "../src/lib/contractDeskProgram.ts";
+import { runDataTool } from "../src/lib/dataDeskProgram.ts";
 import { runFlowTool } from "../src/lib/flowEngine.ts";
-import { runImageTool } from "../src/lib/imageEngine.ts";
-import { runSheetTool } from "../src/lib/sheetEngine.ts";
+import { runImageTool } from "../src/lib/imageDeskProgram.ts";
+import { runSheetTool } from "../src/lib/sheetDeskProgram.ts";
 import { processCreditFlowTurn, type CreditFlowState } from "../src/lib/creditFlowEngine.ts";
 import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "../src/lib/releaseInspect.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { buildProbeBodyFromHtml, readProbeHtml } from "../src/lib/htmlProbeMeta.ts";
+import { traceStepDisplayLabel } from "../src/lib/deskStepLabels.ts";
+import { registerWorkbenchDatasetResolver } from "../src/lib/workbenchDataset.ts";
+import { getServerDataset } from "./productDataStore.ts";
+import { executeLlmProductBriefTool, type ProductLlmConfig } from "../src/lib/llmProductBrief.ts";
+
+registerWorkbenchDatasetResolver((sessionId, slot) => {
+  const ds = getServerDataset(sessionId, slot);
+  return ds ? { slot: ds.slot, title: ds.title, columns: ds.columns, rows: ds.rows, updatedAt: ds.updatedAt } : null;
+});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "src", "skills");
@@ -60,6 +69,7 @@ const SKILL_ORDER = [
   "dom-probe",
   "workflow-orchestrator",
   "policy-desk",
+  "ledger-desk",
   "sheet-desk",
   "flow-desk",
   "preloan-flow-desk",
@@ -229,6 +239,7 @@ export type ClientCtx = {
   clientPerf?: Record<string, unknown>;
   probeUrl?: string;
   productWorkbench?: boolean;
+  llmConfig?: ProductLlmConfig;
   onStep?: (step: SkillTraceStep) => void | Promise<void>;
 };
 
@@ -369,6 +380,19 @@ async function callTool(
         },
       };
     }
+    case "__sheet_intake__":
+    case "__sheet_validate_schema__":
+    case "__sheet_validate_rows__":
+    case "__sheet_normalize__":
+    case "__sheet_duplicate_scan__":
+    case "__sheet_missing_guard__":
+    case "__sheet_escalation__":
+    case "__sheet_exception_queue__":
+    case "__sheet_dept_rollup__":
+    case "__sheet_cross_foot__":
+    case "__sheet_deliver_detail__":
+    case "__sheet_deliver_dept__":
+    case "__sheet_deliver_escalation__":
     case "__sheet_parse__":
     case "__sheet_aggregate__":
     case "__sheet_reconcile__":
@@ -376,6 +400,10 @@ async function callTool(
       const ran = runSheetTool(name, { ...args, query: args.query ?? ctx.query });
       return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
     }
+    case "__flow_batch_scan__":
+    case "__flow_sheet_sync__":
+    case "__flow_dept_cap__":
+    case "__flow_dual_sign__":
     case "__flow_intake__":
     case "__flow_invoice__":
     case "__flow_reconcile__":
@@ -384,25 +412,57 @@ async function callTool(
       const ran = runFlowTool(name, { ...args, query: args.query ?? ctx.query });
       return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
     }
+    case "__data_intake__":
+    case "__data_validate_schema__":
+    case "__data_validate_months__":
     case "__data_load__":
+    case "__data_weighted__":
+    case "__data_volatility__":
+    case "__data_trend__":
     case "__data_formula__":
     case "__data_adjust__":
+    case "__data_cap_compare__":
+    case "__data_committee__":
+    case "__data_min_guard__":
+    case "__data_deliver_trend__":
+    case "__data_deliver_formula__":
+    case "__data_deliver_decision__":
     case "__data_report__": {
-      const ran = runDataTool(name, args);
+      const ran = runDataTool(name, { ...args, query: args.query ?? ctx.query });
       return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
     }
+    case "__contract_intake__":
+    case "__contract_validate_schema__":
+    case "__contract_validate_kinds__":
     case "__contract_read__":
+    case "__contract_normalize__":
     case "__contract_diff__":
+    case "__contract_rate_pass__":
+    case "__contract_appraisal_pass__":
     case "__contract_risk__":
+    case "__contract_block_sign__":
+    case "__contract_deliver_clauses__":
+    case "__contract_deliver_risk__":
+    case "__contract_deliver_remediation__":
+    case "__contract_deliver_signoff__":
     case "__contract_report__": {
-      const ran = runContractTool(name, args);
+      const ran = runContractTool(name, { ...args, query: args.query ?? ctx.query });
       return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
     }
+    case "__image_intake__":
+    case "__image_validate_schema__":
+    case "__image_validate_blocks__":
     case "__image_crop__":
     case "__image_ocr__":
+    case "__image_histogram__":
     case "__image_accept__":
+    case "__image_required_guard__":
+    case "__image_deliver_fields__":
+    case "__image_deliver_accepted__":
+    case "__image_deliver_rejected__":
+    case "__image_deliver_qa__":
     case "__image_report__": {
-      const ran = runImageTool(name, args);
+      const ran = runImageTool(name, { ...args, query: args.query ?? ctx.query });
       return ran ?? { content: { error: `unknown tool: ${name}` }, isError: true as const };
     }
     case "__credit_flow_turn__": {
@@ -421,6 +481,24 @@ async function callTool(
         },
       };
     }
+    case "__llm_product_brief__": {
+      const sessionId = String(args.__sessionId ?? "");
+      const ds = sessionId ? getServerDataset(sessionId, "expense-ledger") : null;
+      const body = await executeLlmProductBriefTool({
+        query: String(args.query ?? ctx.query ?? ""),
+        reportVar: ctx.vars.report,
+        llm: ctx.llmConfig,
+        material: ds
+          ? {
+              title: ds.title,
+              rowCount: ds.rows.length,
+              columns: ds.columns,
+              rows: ds.rows,
+            }
+          : undefined,
+      });
+      return { content: body };
+    }
     default:
       return { content: { error: `unknown tool: ${name}` }, isError: true as const };
   }
@@ -433,15 +511,12 @@ function resolveArgs(
   return resolveStepArgs(step.args, { query: ctx.query, probeUrl: ctx.probeUrl, vars: ctx.vars });
 }
 
-export async function runSkillOnServer(
-  skillId: string,
+export async function runSkillManifestOnServer(
+  skill: AgentSkill,
   query: string,
   sessionId: string,
   clientCtx: ClientCtx = {},
 ) {
-  const skill = getSkill(skillId);
-  if (!skill) throw new Error(`Unknown skill: ${skillId}`);
-
   const ctx = {
     ...clientCtx,
     vars: { query } as Record<string, unknown>,
@@ -455,14 +530,17 @@ export async function runSkillOnServer(
   for (const step of skill.steps) {
     const stepT0 = performance.now();
     const args = resolveArgs(step, ctx);
-    if (clientCtx.productWorkbench) args.__productWorkbench = true;
+    if (clientCtx.productWorkbench) {
+      args.__productWorkbench = true;
+      args.__sessionId = sessionId;
+    }
     const out = await callTool(step.tool, args, ctx);
 
     applyStepVarWrites(ctx.vars, step.id, step.tool, out.content);
 
     const row: SkillTraceStep = {
       stepId: step.id,
-      label: step.label,
+      label: traceStepDisplayLabel(step, out.content),
       tool: step.tool,
       ms: Math.max(1, Math.round(performance.now() - stepT0)),
       ok: !("isError" in out && out.isError),
@@ -479,7 +557,7 @@ export async function runSkillOnServer(
 
   dbRun(
     `INSERT INTO skill_runs (session_id, skill_id, query, trace_json, ok, total_ms, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-    [sessionId, skillId, query, JSON.stringify(trace), ok ? 1 : 0, totalMs, nowIso()],
+    [sessionId, skill.id, query, JSON.stringify(trace), ok ? 1 : 0, totalMs, nowIso()],
   );
 
   return {
@@ -489,6 +567,17 @@ export async function runSkillOnServer(
     totalMs,
     runtime: "server" as const,
   };
+}
+
+export async function runSkillOnServer(
+  skillId: string,
+  query: string,
+  sessionId: string,
+  clientCtx: ClientCtx = {},
+) {
+  const skill = getSkill(skillId);
+  if (!skill) throw new Error(`Unknown skill: ${skillId}`);
+  return runSkillManifestOnServer(skill, query, sessionId, clientCtx);
 }
 
 export const ROUTER_EVAL_CASES = [

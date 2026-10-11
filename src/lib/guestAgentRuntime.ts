@@ -2,6 +2,7 @@
 
 import {
   allRunnableSkills,
+  CUSTOMER_SKILL_IDS,
   getSkill,
   isCustomerSkill,
   runSkill,
@@ -16,7 +17,7 @@ import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
 import { ingestProductionTrace } from "./skillGateClient";
 import { getTicket, type TicketDraft } from "./policyDesk";
-import { ABOUT_SITE_INTENT, HEALTH_INTENT, routeQuery, URL_RE } from "./skillRouter";
+import { ABOUT_SITE_INTENT, HEALTH_INTENT, routeQuery, skillLabel, URL_RE } from "./skillRouter";
 import { logRoutedQuery, logSkillHandled } from "./skillQueryLog";
 import { parseReleaseInspectRequest, releaseReportMarkdown, runReleaseInspect } from "./releaseInspect";
 import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
@@ -62,6 +63,8 @@ export type GuestTurnCtx = {
   hubFlowBind?: boolean;
   /** 产品 run：SQLite 会话 id，服务端存数据集与 process */
   sessionId?: string;
+  /** 产品办事 LLM 步（引擎锁数 + 模型写说明） */
+  llmConfig?: import("./llmProductBrief").ProductLlmConfig;
 };
 
 type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
@@ -769,7 +772,7 @@ export async function runGuestAgentTurn(
       flowBlocked: turn.blocked,
       route: {
         skillId: skill.id,
-        skillName: skill.name,
+        skillName: skillLabel(skill),
         score,
         hits,
         path: "skill",
@@ -777,9 +780,9 @@ export async function runGuestAgentTurn(
     });
   }
 
-  if (ctx.productWorkbench && isCustomerSkill(skill.id) && !isCreditFlowSkillId(skill.id)) {
+  if (isCustomerSkill(skill.id) && !isCreditFlowSkillId(skill.id)) {
     const sessionId = ctx.sessionId?.trim() || "anon";
-    await streamReasoning(`办事 run · ${skill.name}（processId · SQLite）`, onEvent);
+    await streamReasoning(`正在办理 · ${skill.name}`, onEvent);
     onEvent({ type: "iteration", n: 1 });
     let liveRun: ProductRunView | null = null;
     const syncRun = (patch: Partial<ProductRunView> & { processId: string; skillId: string; query: string }) => {
@@ -798,6 +801,7 @@ export async function runGuestAgentTurn(
         skillId: skill.id,
         query: expanded,
         signal: ctx.signal,
+        llmConfig: ctx.llmConfig,
         handlers: {
           onRunning: ({ processId, skillId, query: q0 }) => {
             liveRun = viewFromStreamStart(processId, skillId, q0, "running");
@@ -819,19 +823,8 @@ export async function runGuestAgentTurn(
               status: "running",
               parts: [...liveRun.parts.filter((p) => p.kind !== "finish"), part],
             });
-            const body = part.detail;
-            onEvent({
-              type: "tool-end",
-              tool: {
-                id: `run-${part.label}`,
-                name: part.label,
-                args: "{}",
-                iteration: 1,
-                ok: part.ok,
-                ms: 0,
-                result: { runtime: "server", detail: body },
-              },
-            });
+            const line = `${part.label}：${part.detail}`.replace(/\s+/g, " ").trim();
+            onEvent({ type: "reasoning-delta", text: `${line}\n` });
           },
           onFinish: (fin) => {
             syncRun({
@@ -848,10 +841,15 @@ export async function runGuestAgentTurn(
         const err = `办事 run 失败：${api.error}`;
         await streamText(err, onEvent);
         return wrap(err, [], "local", {
-          route: { skillId: skill.id, skillName: skill.name, score, hits, path: "skill" },
+          route: { skillId: skill.id, skillName: skillLabel(skill), score, hits, path: "skill" },
         });
       }
-      await streamText(api.message, onEvent);
+      const finishLine =
+        api.status === "finish"
+          ? api.parts.find((p) => p.kind === "finish")?.summary || api.message
+          : api.message;
+      await streamText(finishLine, onEvent);
+      const displayText = finishLine;
       const productRun: ProductRunView = liveRun ?? {
         processId: api.processId,
         status: api.status,
@@ -867,19 +865,29 @@ export async function runGuestAgentTurn(
                 iteration: 1,
                 label: skill.name,
                 reasoning: `process ${api.processId}`,
-                text: api.message,
+                text: displayText,
                 tools: [],
               },
             ]
-          : [];
+          : api.status === "waiting_import"
+            ? [
+                {
+                  iteration: 1,
+                  label: skill.name,
+                  reasoning: "待导入材料（未执行 process）",
+                  text: displayText,
+                  tools: [],
+                },
+              ]
+            : [];
       onEvent({ type: "trace-sync", traces });
       logSkillHandled(query, skill.id);
-      return wrap(api.message, traces, "server", {
+      return wrap(displayText, traces, "server", {
         paper,
         productRun,
         route: {
           skillId: skill.id,
-          skillName: skill.name,
+          skillName: skillLabel(skill),
           score,
           hits: api.status === "waiting_import" ? ["待导入数据"] : hits,
           path: "skill",
@@ -890,7 +898,7 @@ export async function runGuestAgentTurn(
       const msg = `无法连接办事服务（请运行 npm run dev:full，API :8787）：${err instanceof Error ? err.message : "未知错误"}`;
       await streamText(msg, onEvent);
       return wrap(msg, [], "local", {
-        route: { skillId: skill.id, skillName: skill.name, score, hits, path: "skill" },
+        route: { skillId: skill.id, skillName: skillLabel(skill), score, hits, path: "skill" },
       });
     }
   }
@@ -1050,10 +1058,13 @@ export async function runGuestAgentTurn(
   return wrap(text, finalTraces, "local", {
     hitl,
     policyTrust,
-    paper: paperForSkill(skill, expanded, { productWorkbench: ctx.productWorkbench }),
+    paper: paperForSkill(skill, expanded, {
+      productWorkbench: ctx.productWorkbench,
+      sessionId: ctx.sessionId,
+    }),
     route: {
       skillId: skill.id,
-      skillName: skill.name,
+      skillName: skillLabel(skill),
       score,
       hits,
       path: "skill",
@@ -1076,7 +1087,8 @@ function inferHandledSkillFromTraces(traces: AgentTurnTrace[]): string | null {
 }
 
 function skillLabelFromId(id: string): string {
-  return allRunnableSkills().find((s) => s.id === id)?.name ?? id;
+  const s = allRunnableSkills().find((sk) => sk.id === id);
+  return s ? skillLabel(s) : id;
 }
 
 export function isAuthError(err: unknown): boolean {

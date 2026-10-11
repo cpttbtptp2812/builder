@@ -1,6 +1,8 @@
 /** 技能对比引擎 — 现用版 vs 新版，输出运维可读结论 */
 
 import { AGENT_SKILLS, allRunnableSkills, runSkill, type AgentSkill } from "./agentSkills";
+import { mustRunServerProcessSkill } from "./customerSkillKernel";
+import { fetchInlineSkillTrace } from "./liveGateRunner";
 import { routeQuery } from "./skillRouter";
 import { attachCompileToManifest, hydrateSkill } from "./skillMarkdown";
 import { diffTrace, MOCK_PROFILES, type TraceDiff } from "./provingGround";
@@ -117,12 +119,17 @@ function buildVerdict(
     bullets.push(`工具链顺序或工具有变化：${traceDiff.summary}。`);
     if (level === "approve") level = "warn";
   }
-  if (triggers.removed.length) {
-    bullets.push(`新版删掉了 ${triggers.removed.length} 个触发词，可能导致用户说不触发。`);
-    if (level === "approve") level = "warn";
-  }
-  if (triggers.added.length) {
-    bullets.push(`新版新增触发词：${triggers.added.slice(0, 5).join("、")}${triggers.added.length > 5 ? "…" : ""}。`);
+  if (!mustRunServerProcessSkill(skillId)) {
+    if (triggers.removed.length) {
+      bullets.push(`新版删掉了 ${triggers.removed.length} 个触发词，可能导致用户说不触发。`);
+      if (level === "approve") level = "warn";
+    }
+    if (triggers.added.length) {
+      bullets.push(`新版新增触发词：${triggers.added.slice(0, 5).join("、")}${triggers.added.length > 5 ? "…" : ""}。`);
+    }
+  } else if (triggers.removed.length && level === "approve") {
+    bullets.push(`说法有删减（${triggers.removed.length} 条），请确认仍能接上办理步骤。`);
+    level = "warn";
   }
   if (!candidate.traceOk) {
     level = "reject";
@@ -146,12 +153,27 @@ async function runSide(
   catalog: AgentSkill[],
   probeUrl?: string,
 ): Promise<CompareSide> {
-  const mockProfile = mockProfileForCompare(skill, query, probeUrl);
   const route = routeQuery(query, catalog);
-  const { trace, output } = await runSkill(skill, query, undefined, {
-    probeUrl,
-    mockProfile,
-  });
+  let trace: SkillTraceStep[];
+  let output: unknown;
+  if (mustRunServerProcessSkill(skill.id)) {
+    const data = await fetchInlineSkillTrace(skill, query);
+    if (!data?.trace) {
+      trace = [];
+      output = { error: "办事 API 未启动，无法对比真实办理步骤（npm run dev:full）" };
+    } else {
+      trace = data.trace;
+      output = data.output;
+    }
+  } else {
+    const mockProfile = mockProfileForCompare(skill, query, probeUrl);
+    const ran = await runSkill(skill, query, undefined, {
+      probeUrl,
+      mockProfile,
+    });
+    trace = ran.trace;
+    output = ran.output;
+  }
   return {
     versionLabel,
     skillName: skill.name,

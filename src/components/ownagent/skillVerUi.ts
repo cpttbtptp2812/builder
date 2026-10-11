@@ -1,12 +1,14 @@
 /** 版本更新页 — 给人看的文案，不是给编译器看的 */
 
 import type { AgentSkill } from "../../lib/agentSkills";
+import { deskSkillRuleSummary, deskStepCaption, isDeskProcessTool } from "../../lib/deskStepLabels";
+import { mustRunServerProcessSkill } from "../../lib/customerSkillKernel";
 import type { QueryCompareRow, SkillFullCompareReport } from "../../lib/skillCompareReport";
+import { skillLabel } from "../../lib/skillRouter";
 
+/** 客户可见标题（中文业务名，禁止裸 skill id） */
 export function skillDisplayTitle(skill: Pick<AgentSkill, "name" | "description">): string {
-  const head = skill.description.split(/[—–\-]/)[0]?.trim();
-  if (head && head.length >= 2 && head.length <= 24) return head;
-  return skill.name;
+  return skillLabel(skill);
 }
 
 export function skillSubtitle(skill: Pick<AgentSkill, "description">): string {
@@ -18,15 +20,26 @@ export function sampleTriggers(triggers: string[], max = 4): string[] {
   return triggers.filter((t) => t.length >= 2).slice(0, max);
 }
 
-export function stepShortLabel(step: { id: string; label: string }): string {
+export function stepShortLabel(step: { id: string; label: string; tool?: string; args?: Record<string, unknown> }, skillId?: string): string {
+  if (step.tool && isDeskProcessTool(step.tool)) {
+    return deskStepCaption(step as { id: string; tool: string; args?: Record<string, unknown>; label?: string });
+  }
+  if (skillId && mustRunServerProcessSkill(skillId) && step.tool) {
+    return deskStepCaption(step as { id: string; tool: string; args?: Record<string, unknown>; label?: string });
+  }
   const [head = "", ...rest] = step.label.split(" · ").map((s) => s.trim());
   const tail = rest.join(" · ");
   const name = /^[a-z_]+$/i.test(head) && tail ? tail : head;
   return name && name.length <= 20 ? name : step.id;
 }
 
-export function stepPipelineText(steps: { id: string; label: string }[]): string {
-  return steps.map(stepShortLabel).join(" → ") || "（无步骤）";
+export function stepPipelineText(steps: { id: string; label: string; tool?: string; args?: Record<string, unknown> }[], skillId?: string): string {
+  return steps.map((s) => stepShortLabel(s, skillId)).join(" → ") || "（无步骤）";
+}
+
+export function deskRuleSummaryForSkill(skill: Pick<AgentSkill, "id" | "steps">): string {
+  if (!mustRunServerProcessSkill(skill.id)) return "";
+  return deskSkillRuleSummary(skill.id, skill.steps);
 }
 
 export const SKILL_SAMPLE_QUERIES: Record<string, string> = {

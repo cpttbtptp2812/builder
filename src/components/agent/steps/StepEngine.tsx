@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AGENT_SKILLS, getSkill, runSkill } from "../../../lib/agentSkills";
+import { gateQueryWithSampleData } from "../../../lib/productSkillInputs";
 import { StepShell } from "./StepShell";
 
 export function StepEngine() {
@@ -18,11 +19,12 @@ export function StepEngine() {
   async function stepOnce() {
     if (!op || running) return;
     setRunning(true);
+    const query = gateQueryWithSampleData(skill.id, "步骤试跑");
     const { trace } = await runSkill(
       { ...skill, steps: [op] },
-      skill.description,
+      query,
       undefined,
-      { snapshotRoot: document.body },
+      { snapshotRoot: document.body, allowLabSample: true },
     );
     const row = trace[0];
     setLog((prev) => [...prev, `pc=${pc} ${row?.ok ? "ok" : "fail"} ${op.tool} ${row?.ms ?? 0}ms`]);

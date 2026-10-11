@@ -1,5 +1,15 @@
 import { dbAll, dbGet, dbRun, nowIso } from "./db.ts";
-import type { ProductDataSlot } from "../src/lib/productDataStore.ts";
+import { normalizeMaterialDataset } from "../src/lib/materialNormalize.ts";
+import type { ProductDataSlot, ProductDataset } from "../src/lib/productDataStore.ts";
+
+export class ProductDatasetNormalizeError extends Error {
+  issues: string[];
+  constructor(issues: string[]) {
+    super(issues.join("；"));
+    this.name = "ProductDatasetNormalizeError";
+    this.issues = issues;
+  }
+}
 
 export type ServerDataset = {
   slot: ProductDataSlot;
@@ -11,6 +21,15 @@ export type ServerDataset = {
 
 export function saveServerDataset(sessionId: string, dataset: Omit<ServerDataset, "updatedAt"> & { updatedAt?: string }) {
   const updatedAt = dataset.updatedAt ?? nowIso();
+  const normalized = normalizeMaterialDataset({
+    slot: dataset.slot,
+    title: dataset.title,
+    columns: dataset.columns,
+    rows: dataset.rows,
+    updatedAt,
+  } satisfies ProductDataset);
+  if (!normalized.ok) throw new ProductDatasetNormalizeError(normalized.issues);
+  const toSave = normalized.dataset;
   dbRun(
     `INSERT INTO product_datasets (session_id, slot, title, columns_json, rows_json, updated_at)
      VALUES (?, ?, ?, ?, ?, ?)
@@ -21,10 +40,10 @@ export function saveServerDataset(sessionId: string, dataset: Omit<ServerDataset
        updated_at = excluded.updated_at`,
     [
       sessionId,
-      dataset.slot,
-      dataset.title,
-      JSON.stringify(dataset.columns),
-      JSON.stringify(dataset.rows),
+      toSave.slot,
+      toSave.title,
+      JSON.stringify(toSave.columns),
+      JSON.stringify(toSave.rows),
       updatedAt,
     ],
   );
@@ -55,4 +74,8 @@ export function getServerDataset(sessionId: string, slot: ProductDataSlot): Serv
 
 export function serverDatasetRowCount(sessionId: string, slot: ProductDataSlot): number {
   return getServerDataset(sessionId, slot)?.rows.length ?? 0;
+}
+
+export function deleteServerDataset(sessionId: string, slot: ProductDataSlot) {
+  dbRun(`DELETE FROM product_datasets WHERE session_id = ? AND slot = ?`, [sessionId, slot]);
 }

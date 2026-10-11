@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { downloadText } from "../../../lib/importedSkills";
 import {
   datasetRowCount,
+  decodeUploadCsvText,
   parseCsvText,
   saveProductDataset,
   type ProductDataSlot,
@@ -35,7 +36,7 @@ export function ProductDataGateInline({
   }, []);
 
   const onFile = useCallback(async (req: SkillDataRequirement, file: File) => {
-    const text = await file.text();
+    const text = decodeUploadCsvText(await file.arrayBuffer());
     const parsed = parseCsvText(text, file.name.replace(/\.[^.]+$/, ""), req.slot);
     if ("error" in parsed) {
       window.alert(parsed.error);
@@ -68,7 +69,9 @@ export function ProductDataGateInline({
                       type="button"
                       className="oa-product-data-gate-btn"
                       disabled={disabled}
-                      onClick={() => downloadText(req.filename, req.templateCsv, "text/csv;charset=utf-8")}
+                      onClick={() =>
+                        downloadText(req.filename, `\uFEFF${req.templateCsv}`, "text/csv;charset=utf-8")
+                      }
                     >
                       下载模板
                     </button>

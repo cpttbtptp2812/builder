@@ -1,5 +1,22 @@
 import type { AgentSkill, SkillResult } from "./agentSkills";
 
+const CUSTOMER_DESK_FINISH_IDS = new Set(["ledger-desk"]);
+
+/** 对话 product-run 办结：一句结论，不把整份 markdown 当正文 */
+export function synthesizeProductFinishMessage(skillId: string, result: unknown): string {
+  if (!CUSTOMER_DESK_FINISH_IDS.has(skillId)) {
+    return "办理完成，请查看下方步骤与文书。";
+  }
+  const r = result as { summary?: string; detail?: string; markdown?: string };
+  if (typeof r.summary === "string" && r.summary.trim()) return r.summary.trim();
+  if (typeof r.detail === "string" && r.detail.trim()) {
+    const first = r.detail.trim().split(/\n/)[0] ?? "";
+    if (first.length <= 320) return first;
+    return `${first.slice(0, 300)}…`;
+  }
+  return "办理完成，请查看下方步骤与文书。";
+}
+
 function synthesizeSiteAudit(result: SkillResult, query: string): string {
   const d = result.dashboard as {
     http?: { status?: number; latencyMs?: number; ok?: boolean; url?: string };

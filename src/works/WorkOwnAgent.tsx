@@ -3,13 +3,11 @@ import { startTransition, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
-import { AgentHubOverview } from "../components/agent/AgentHubOverview";
 import { AgentWorkbenchPanel } from "../components/ownagent/AgentWorkbenchPanel";
 import { MaterialsLine, RulesLine, SkillLine, lineOf } from "../components/ownagent/MainLines";
 import { PageToolHost } from "../components/ownagent/PageToolHost";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 
-type TabId = "product" | "theory";
 type ViewId =
   | "chat"
   | "guide"
@@ -288,11 +286,6 @@ const LINE_NAV: {
   { line: "rules", home: "guard", label: "规则", desc: "能答什么，模型怎么接", iconFrom: "guard" },
 ];
 
-function resolveTab(tab: string | null, panel: string | null): TabId {
-  if (tab === "workbench" || tab === "theory" || panel === "arch") return "theory";
-  return "product";
-}
-
 function resolveView(panel: string | null, view: string | null): ViewId {
   const raw = view || panel;
   if (raw === "check") return "evalops";
@@ -437,16 +430,12 @@ function NavButton({
 
 export function WorkOwnAgent() {
   const [params, setParams] = useSearchParams();
-  const tab = resolveTab(params.get("tab"), params.get("panel"));
   const view = resolveView(params.get("panel"), params.get("view"));
-  const [highlight, setHighlight] = useState<TabId | null>(null);
-  const shownTab = highlight ?? tab;
 
-  function go(nextTab: TabId, nextView?: ViewId) {
-    setHighlight(nextTab);
+  function go(nextView?: ViewId) {
     const next = new URLSearchParams();
-    next.set("tab", nextTab);
-    if (nextTab === "product") next.set("view", nextView ?? view);
+    next.set("tab", "product");
+    next.set("view", nextView ?? view);
     const trySkill = params.get("try") ?? params.get("skill");
     if (trySkill) next.set("try", trySkill);
     startTransition(() => {
@@ -455,21 +444,25 @@ export function WorkOwnAgent() {
   }
 
   useEffect(() => {
-    setHighlight(null);
-  }, [tab]);
-
-  useEffect(() => {
     function onGo(ev: Event) {
-      const detail = (ev as CustomEvent<{ view?: ViewId; tab?: TabId }>).detail ?? {};
-      if (detail.tab === "workbench" || detail.tab === "theory") go("theory");
-      else if (detail.view) go("product", detail.view);
+      const detail = (ev as CustomEvent<{ view?: ViewId; tab?: string }>).detail ?? {};
+      if (detail.tab === "workbench" || detail.tab === "theory") go("chat");
+      else if (detail.view) go(detail.view);
     }
     window.addEventListener("ownagent:go", onGo);
     return () => window.removeEventListener("ownagent:go", onGo);
   }, [view]);
 
   useEffect(() => {
-    if (tab !== "product") return;
+    const rawTab = params.get("tab");
+    const panel = params.get("panel");
+    if (rawTab === "workbench" || rawTab === "theory" || panel === "arch") {
+      const next = new URLSearchParams(params);
+      next.set("tab", "product");
+      next.set("view", "chat");
+      setParams(next, { replace: true });
+      return;
+    }
     const hasView = params.get("view") || params.get("panel");
     if (!hasView) {
       const next = new URLSearchParams(params);
@@ -477,28 +470,15 @@ export function WorkOwnAgent() {
       next.set("view", "chat");
       setParams(next, { replace: true });
     }
-  }, [tab, params, setParams]);
+  }, [params, setParams]);
 
   return (
-    <div className={`own-app own-app--product ${tab}${view === "chat" && tab === "product" ? " chat-focus" : ""}`}>
+    <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}`}>
       <header className="own-app-bar">
         <div className="own-app-brand">
           <strong>OwnAgent</strong>
           <span className="own-app-tagline">办事 · 技能治理 · 回归门禁</span>
         </div>
-        <nav className="own-app-tabs" aria-label="主视图">
-          <span className={shownTab === "theory" ? "own-app-tabs-thumb is-theory" : "own-app-tabs-thumb"} aria-hidden="true" />
-          <button
-            type="button"
-            className={shownTab === "product" ? "on" : ""}
-            onClick={() => go("product", "chat")}
-          >
-            工作台
-          </button>
-          <button type="button" className={shownTab === "theory" ? "on" : ""} onClick={() => go("theory")}>
-            理论
-          </button>
-        </nav>
         <div className="own-app-actions">
           <BackendStatusBar compact quiet />
           <button type="button" className="own-cmd" onClick={() => window.dispatchEvent(new Event("ownagent:palette"))}>
@@ -519,18 +499,7 @@ export function WorkOwnAgent() {
         </div>
       </header>
 
-      {tab === "theory" ? (
-        <div className="own-theory">
-          <div className="own-theory-bar">
-            <p className="own-theory-lead">
-              <strong>Parse·2 架构</strong>
-              <span>Agent 全链路可编排 · 点节点看实现 · 与发版门禁同源运行时</span>
-            </p>
-          </div>
-          <AgentHubOverview />
-        </div>
-      ) : (
-        <>
+      <>
           <aside className="own-app-side">
             <div className="own-nav-section">
               {LINE_NAV.map((item) => (
@@ -543,7 +512,7 @@ export function WorkOwnAgent() {
                     icon: VIEWS.find((v) => v.id === item.iconFrom)?.icon,
                   }}
                   active={lineOf(view) === item.line}
-                  onClick={() => go("product", item.home)}
+                  onClick={() => go(item.home)}
                 />
               ))}
             </div>
@@ -553,24 +522,23 @@ export function WorkOwnAgent() {
                 ...MORE_VIEWS.filter((v) => v.id === "guide"),
                 ...ADVANCED_VIEWS.filter((v) => v.id === "jd"),
               ].map((v) => (
-                <NavButton key={v.id} item={v} active={view === v.id} onClick={() => go("product", v.id)} />
+                <NavButton key={v.id} item={v} active={view === v.id} onClick={() => go(v.id)} />
               ))}
             </div>
           </aside>
 
           <div className={`own-app-stage${view === "chat" ? " is-chat" : " is-page"}`}>
             {view === "chat" ? <AgentProductDemo /> : null}
-            {lineOf(view) === "skill" ? <SkillLine view={view} onPick={(id) => go("product", id as ViewId)} /> : null}
-            {lineOf(view) === "materials" ? <MaterialsLine view={view} onPick={(id) => go("product", id as ViewId)} /> : null}
-            {lineOf(view) === "rules" ? <RulesLine view={view} onPick={(id) => go("product", id as ViewId)} /> : null}
-            {view === "guide" ? <QuickStartGuide onGo={(v) => go("product", v)} /> : null}
+            {lineOf(view) === "skill" ? <SkillLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
+            {lineOf(view) === "materials" ? <MaterialsLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
+            {lineOf(view) === "rules" ? <RulesLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
+            {view === "guide" ? <QuickStartGuide onGo={(v) => go(v)} /> : null}
             {view === "jd" ? (
-              <AgentWorkbenchPanel onGo={(v) => go("product", v)} onGoProduct={() => go("product", "compare")} />
+              <AgentWorkbenchPanel onGo={(v) => go(v)} onGoProduct={() => go("compare")} />
             ) : null}
           </div>
-        </>
-      )}
-      {tab === "product" ? <PageToolHost /> : null}
+      </>
+      <PageToolHost />
     </div>
   );
 }

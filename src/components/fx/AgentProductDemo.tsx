@@ -2,10 +2,10 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { AgentLiveTrace } from "./AgentLiveTrace";
 import { AgentMarkdown } from "./agent/AgentMarkdown";
 import { AgentThink } from "./agent/AgentThink";
+import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { UserMessageBubble } from "./agent/UserMessageBubble";
 import { formatThreadDateLabel, isSameMsgDay } from "../../lib/formatMsgTime";
 import { MessageTimeFoot, ThreadDateDivider } from "./agent/MessageTimeFoot";
-import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
 import { ProductSkillHome } from "./agent/ProductSkillHome";
@@ -38,7 +38,13 @@ import {
 } from "../../lib/agentRuntime";
 import { isAuthError, runGuestAgentTurn, toolPreviewFromResult } from "../../lib/guestAgentRuntime";
 import { appendSessionTurn, clearSessionTurns } from "../../lib/agentMemory";
-import { isLlmConfigured, loadLlmConfig, saveLlmConfig, type LlmConfig } from "../../lib/llmConfig";
+import {
+  isLlmConfigured,
+  loadLlmConfig,
+  saveLlmConfig,
+  toProductLlmConfig,
+  type LlmConfig,
+} from "../../lib/llmConfig";
 import { downloadText } from "../../lib/importedSkills";
 import { draftFromMessages, type DemoDraft } from "../../lib/skillFromDemo";
 import { executePageTool } from "../../lib/pageTools";
@@ -53,6 +59,8 @@ import {
   activateFlowNode,
   addFlowChip,
   addFlowEvidence,
+  applyProductRunGateJournal,
+  applyProductRunProcessJournal,
   createFlowJournal,
   evidenceFromKnowledgeResult,
   evidenceFromTool,
@@ -124,6 +132,27 @@ import { WorkPaperDrawer } from "../ownagent/WorkPaperDrawer";
 import { FlowOperationDrawer } from "../ownagent/FlowOperationDrawer";
 import { HUB_CHAT_PROMPTS } from "../../lib/platformCatalog";
 import type { WorkPaper } from "../../lib/workPaper";
+import { csvPatchForPaperRerun } from "../../lib/productPaperPatch";
+import { apiRerunProductRun, apiUploadProductDataset, viewFromStreamStart } from "../../lib/productRun/client";
+import type { ProductRunView } from "../../lib/productRun/types";
+
+type PaperDrawerCtx = {
+  paper: WorkPaper;
+  messageId: string;
+  processId?: string;
+  skillId?: string;
+  query?: string;
+};
+
+function paperDrawerFromMessage(m: OwnChatMessage, paper: WorkPaper): PaperDrawerCtx {
+  return {
+    paper,
+    messageId: m.id,
+    processId: m.productRun?.processId,
+    skillId: m.productRun?.skillId ?? m.route?.skillId,
+    query: m.productRun?.query,
+  };
+}
 import { ShowcaseFlowBubble } from "../ownagent/ShowcaseFlowBubble";
 import { flowUsesUnifiedHubDrawer, shouldBindHubCreditFlow } from "../../lib/creditFlowUiGate";
 import { creditFlowById, matchCreditFlowId } from "../../lib/creditFlowCatalog";
@@ -281,6 +310,7 @@ export function AgentProductDemo({
   const [threadSearch, setThreadSearch] = useState("");
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [resultFlash, setResultFlash] = useState(false);
+  const liveProductRunRef = useRef<import("../../lib/productRun/types").ProductRunView | null>(null);
   const [liveProductRun, setLiveProductRun] = useState<import("../../lib/productRun/types").ProductRunView | null>(
     null,
   );
@@ -375,7 +405,8 @@ export function AgentProductDemo({
   const lastAsstId = lastAsst?.id;
 
   const [replayMsg, setReplayMsg] = useState<OwnChatMessage | null>(null);
-  const [paperDrawer, setPaperDrawer] = useState<{ paper: WorkPaper; messageId: string } | null>(null);
+  const [paperDrawer, setPaperDrawer] = useState<PaperDrawerCtx | null>(null);
+  const [sealedPaperMessages, setSealedPaperMessages] = useState<Set<string>>(() => new Set());
   const [flowOpDrawer, setFlowOpDrawer] = useState<{
     messageId: string;
     flow: NonNullable<OwnChatMessage["showcaseFlow"]>;
@@ -387,6 +418,131 @@ export function AgentProductDemo({
     flowName: string;
     intent: "exit" | "freeText";
   } | null>(null);
+
+  const applyPaperRerun = useCallback(async () => {
+    const ctx = paperDrawer;
+    if (!ctx?.processId || !ctx.skillId) {
+      window.alert("请在本轮办理完成后使用一键修正；若流程已过期，请用同一问法重新发起。");
+      throw new Error("missing process");
+    }
+    const patch = csvPatchForPaperRerun(ctx.paper, ctx.skillId);
+    if (!patch) {
+      window.alert("当前文书暂不支持自动写回，请在左侧说明要改的内容。");
+      throw new Error("no patch");
+    }
+    const sessionId = getSessionId();
+    const up = await apiUploadProductDataset({
+      sessionId,
+      slot: patch.slot,
+      csv: patch.csv,
+    });
+    if (!up.ok) {
+      window.alert(up.error ?? "写回业务数据失败");
+      throw new Error(up.error ?? "upload");
+    }
+
+    const messageId = ctx.messageId;
+    setSealedPaperMessages((prev) => {
+      const next = new Set(prev);
+      next.delete(messageId);
+      return next;
+    });
+    let live: ProductRunView = viewFromStreamStart(ctx.processId, ctx.skillId, ctx.query ?? "", "running");
+    setLiveProductRun(live);
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              productRun: live,
+              content: "正在按修正后的数据重新办理…",
+            }
+          : msg,
+      ),
+    );
+
+    const res = await apiRerunProductRun(ctx.processId, sessionId, {
+      onStep: (part) => {
+        live = {
+          ...live,
+          status: "running",
+          parts: [...live.parts.filter((p) => p.kind !== "finish"), part],
+        };
+        setLiveProductRun(live);
+        setMessages((prev) =>
+          prev.map((msg) => (msg.id === messageId ? { ...msg, productRun: live } : msg)),
+        );
+      },
+      onFinish: (fin) => {
+        live = {
+          processId: fin.processId,
+          skillId: fin.skillId,
+          query: fin.query,
+          status: "finish",
+          parts: fin.parts,
+        };
+      },
+    });
+
+    if (!res.ok) {
+      window.alert(res.error);
+      throw new Error(res.error);
+    }
+
+    const nextPaper = res.status === "finish" ? res.paper ?? null : null;
+    const nextRun =
+      live.status === "finish"
+        ? live
+        : {
+            processId: res.processId,
+            status: res.status,
+            skillId: res.skillId,
+            query: res.query,
+            parts: res.parts,
+          };
+
+    setLiveProductRun(nextRun.status === "finish" ? nextRun : null);
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === messageId
+          ? {
+              ...msg,
+              content: res.ok && res.status === "finish" ? res.message : msg.content,
+              workPaper: nextPaper ?? msg.workPaper,
+              productRun: nextRun,
+              runtime: "server",
+            }
+          : msg,
+      ),
+    );
+    if (nextPaper) {
+      setPaperDrawer({
+        paper: nextPaper,
+        messageId,
+        processId: nextRun.processId,
+        skillId: nextRun.skillId,
+        query: nextRun.query,
+      });
+    }
+  }, [paperDrawer]);
+
+  const sealPaperDeliverable = useCallback(async () => {
+    const ctx = paperDrawer;
+    if (!ctx?.messageId) return;
+    const sealLine =
+      "\n\n**办结**：人工复核通过，报销对账结果已归档；明细可在文书抽屉右上角「下载对账表 CSV」。";
+    setSealedPaperMessages((prev) => new Set(prev).add(ctx.messageId));
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === ctx.messageId
+          ? {
+              ...msg,
+              content: msg.content.includes("**办结**") ? msg.content : `${msg.content.trim()}${sealLine}`,
+            }
+          : msg,
+      ),
+    );
+  }, [paperDrawer]);
 
   const openHubFlowDrawer = useCallback(
     (
@@ -477,6 +633,18 @@ export function AgentProductDemo({
       if (out.length) return out;
     }
 
+    if (!hubMode) {
+      const productScenes = [
+        { label: "表格对账", text: "按部门汇总报销表，标出和发票对不上的", hint: "办事" },
+        { label: "额度测算", text: "测算这笔授信额度", hint: "办事" },
+        { label: "合同审查", text: "审查这份借款合同", hint: "办事" },
+        { label: "流程查询", text: "市场部9600报销单现在走到哪", hint: "办事" },
+        { label: "单据识读", text: "识别这份借款凭证影像", hint: "办事" },
+      ];
+      for (const p of productScenes) push(p.label, p.text, p.hint);
+      if (!emptyMessage) return out.slice(0, 5);
+    }
+
     if (emptyMessage) {
       for (const p of listKnowledgePrompts(6)) push(p.label, p.text, p.hint);
       for (const p of AGENT_QUICK_PROMPTS) push(p.label, p.text, "内置能力");
@@ -528,7 +696,10 @@ export function AgentProductDemo({
     if (ev.type === "trace-sync") setTraces(ev.traces);
     if (ev.type === "reasoning-delta") setStreamReasoning((s) => s + ev.text);
     if (ev.type === "text-delta" && !hubMode) setStreamText((s) => s + ev.text);
-    if (ev.type === "product-run" && !hubMode) setLiveProductRun(ev.run);
+    if (ev.type === "product-run" && !hubMode) {
+      liveProductRunRef.current = ev.run;
+      setLiveProductRun(ev.run);
+    }
     if (ev.type === "tool-start") {
       onFlowActive?.("mcp");
       toolsAcc.push({ id: ev.tool.id, name: ev.tool.name, state: "loading" });
@@ -778,17 +949,40 @@ export function AgentProductDemo({
       const finish = (content: string, reasoning?: string) => {
         if (turnDone) return;
         turnDone = true;
-        journalRef.current = finishFlowJournal(journalRef.current);
-        if (content.trim()) {
-          journalRef.current = setFlowEvidence(journalRef.current, "write", [
-            {
-              id: "answer",
-              kind: "stream",
-              title: "答复已生成",
-              excerpt: content.replace(/\s+/g, " ").trim().slice(0, 140),
-              meta: `${content.length} 字`,
-            },
-          ]);
+        const gateRun = productRun?.status === "waiting_import" ? productRun : liveProductRunRef.current?.status === "waiting_import" ? liveProductRunRef.current : null;
+        if (gateRun) {
+          const imports = gateRun.parts.filter((p) => p.kind === "import").map((p) => ({
+            label: p.label,
+            ready: p.ready,
+            materialTitle: p.materialTitle,
+            rowCount: p.rowCount,
+            slot: p.slot,
+          }));
+          journalRef.current = applyProductRunGateJournal(journalRef.current, imports);
+        } else if (productRun?.status === "finish") {
+          const steps = productRun.parts
+            .filter((p) => p.kind === "process")
+            .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+          journalRef.current = applyProductRunProcessJournal(
+            journalRef.current,
+            steps,
+            content,
+            "finish",
+          );
+          journalRef.current = finishFlowJournal(journalRef.current);
+        } else {
+          journalRef.current = finishFlowJournal(journalRef.current);
+          if (content.trim()) {
+            journalRef.current = setFlowEvidence(journalRef.current, "write", [
+              {
+                id: "answer",
+                kind: "stream",
+                title: "答复已生成",
+                excerpt: content.replace(/\s+/g, " ").trim().slice(0, 140),
+                meta: `${content.length} 字`,
+              },
+            ]);
+          }
         }
         syncJournalNow();
         setFlowTurnStartedAt(null);
@@ -1312,6 +1506,25 @@ export function AgentProductDemo({
         const onEv = (ev: AgentStreamEvent) => {
           handleEvent(ev, toolsAcc);
           if (ev.type === "reasoning-delta") fullReasoning += ev.text;
+          if (ev.type === "product-run" && !hubMode) {
+            productRun = ev.run;
+            const steps = ev.run.parts
+              .filter((p) => p.kind === "process")
+              .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+            if (steps.length) {
+              jActivate("fetch");
+              journalRef.current = applyProductRunProcessJournal(
+                journalRef.current,
+                steps,
+                undefined,
+                ev.run.status === "finish" ? "finish" : "running",
+              );
+              syncJournal();
+            }
+            if (ev.run.status === "waiting_import") {
+              jActivate("fetch");
+            }
+          }
           if (ev.type === "text-delta") {
             fullText += ev.text;
             jActivate("write");
@@ -1381,18 +1594,22 @@ export function AgentProductDemo({
             hubFlowBind,
             productWorkbench: !hubMode,
             sessionId: getSessionId(),
+            llmConfig:
+              !hubMode && isLlmConfigured(llmConfig) ? toProductLlmConfig(llmConfig) : undefined,
           },
           onEv,
         );
         turnRuntimeLocal = guest.runtime;
         setTurnRuntime(guest.runtime);
-        if (guest.runtime) jChip("route", `自研 Agent · ${guest.runtime === "server" ? "SQLite API" : "浏览器 Loop"}`);
+        if (guest.runtime && hubMode) {
+          jChip("route", `自研 Agent · ${guest.runtime === "server" ? "SQLite API" : "浏览器 Loop"}`);
+        }
         setTraces(guest.traces);
         hitl = guest.hitl;
         policyTrust = guest.policyTrust;
         route = guest.route;
         workPaper = guest.paper ?? null;
-        productRun = guest.productRun;
+        productRun = guest.productRun ?? liveProductRunRef.current ?? undefined;
         showcaseFlowTurn = guest.showcaseFlow;
         if (guest.creditFlow !== undefined) {
           setCreditFlow(guest.creditFlow);
@@ -1947,11 +2164,52 @@ export function AgentProductDemo({
                             onSelectStage={hubMode ? jumpFlowStage : undefined}
                           />
                         ) : null}
+                        {!m.showcaseFlow && m.productRun && m.content?.trim() ? (
+                          <div className="oa-product-gate-copy ua-bubble assistant ua-prose">
+                            <AgentMarkdown text={m.content} promoteTables={hubMode || !m.artifacts?.length} />
+                          </div>
+                        ) : null}
                         {m.productRun ? (
                           <ProductRunParts
                             run={m.productRun}
-                            disabled={running}
+                            disabled={running && m.productRun.status === "running"}
                             onRunUpdated={(next) => {
+                              if (next.run.status === "running") {
+                                setRunning(true);
+                                setFlowOpen(true);
+                                liveProductRunRef.current = next.run;
+                                setLiveProductRun(next.run);
+                                if (!liveProductRunRef.current?.parts.some((p) => p.kind === "process")) {
+                                  setStreamReasoning("");
+                                }
+                                setFlowTurnStartedAt((t) => t ?? Date.now());
+                                const steps = next.run.parts
+                                  .filter((p) => p.kind === "process")
+                                  .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+                                if (steps.length) {
+                                  setStreamReasoning(
+                                    steps.map((s) => `${s.label}：${s.detail}`.replace(/\s+/g, " ").trim()).join("\n"),
+                                  );
+                                  setFlowJournal((prev) =>
+                                    applyProductRunProcessJournal(prev, steps, undefined, "running"),
+                                  );
+                                }
+                              }
+                              if (next.run.status === "finish") {
+                                setRunning(false);
+                                setLiveProductRun(null);
+                                liveProductRunRef.current = null;
+                                setStreamReasoning("");
+                                setFlowTurnStartedAt(null);
+                                const steps = next.run.parts
+                                  .filter((p) => p.kind === "process")
+                                  .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+                                setFlowJournal((prev) =>
+                                  finishFlowJournal(
+                                    applyProductRunProcessJournal(prev, steps, next.content, "finish"),
+                                  ),
+                                );
+                              }
                               setMessages((prev) =>
                                 prev.map((msg) =>
                                   msg.id === m.id
@@ -1961,11 +2219,30 @@ export function AgentProductDemo({
                                         productRun: next.run,
                                         workPaper: next.paper ?? msg.workPaper,
                                         runtime: next.runtime,
+                                        flowJournal:
+                                          next.run.status === "finish"
+                                            ? finishFlowJournal(
+                                                applyProductRunProcessJournal(
+                                                  msg.flowJournal ?? flowJournal,
+                                                  next.run.parts
+                                                    .filter((p) => p.kind === "process")
+                                                    .map((p) => ({
+                                                      label: p.label,
+                                                      detail: p.detail,
+                                                      ok: p.ok,
+                                                    })),
+                                                  next.content,
+                                                  "finish",
+                                                ),
+                                              )
+                                            : msg.flowJournal,
                                       }
                                     : msg,
                                 ),
                               );
-                              if (next.paper) setPaperDrawer({ paper: next.paper, messageId: m.id });
+                              if (next.paper) {
+                                setPaperDrawer(paperDrawerFromMessage({ ...m, productRun: next.run }, next.paper));
+                              }
                             }}
                           />
                         ) : null}
@@ -1973,7 +2250,7 @@ export function AgentProductDemo({
                           <WorkPaperCard
                             paper={m.workPaper}
                             active={paperDrawer?.messageId === m.id}
-                            onOpen={() => setPaperDrawer({ paper: m.workPaper!, messageId: m.id })}
+                            onOpen={() => setPaperDrawer(paperDrawerFromMessage(m, m.workPaper!))}
                           />
                         ) : null}
                         {!m.showcaseFlow && m.releaseInspect ? (
@@ -1983,7 +2260,7 @@ export function AgentProductDemo({
                               <AgentMarkdown text={m.content} promoteTables={hubMode || !m.artifacts?.length} />
                             </div>
                           </details>
-                        ) : !m.showcaseFlow ? (
+                        ) : !m.showcaseFlow && !m.productRun ? (
                           <div className="ua-bubble assistant ua-prose">
                             {m.workPaper && hubMode ? (
                               <>
@@ -1991,7 +2268,7 @@ export function AgentProductDemo({
                                 <WorkPaperCard
                                   paper={m.workPaper}
                                   active={paperDrawer?.messageId === m.id}
-                                  onOpen={() => setPaperDrawer({ paper: m.workPaper!, messageId: m.id })}
+                                  onOpen={() => setPaperDrawer(paperDrawerFromMessage(m, m.workPaper!))}
                                 />
                               </>
                             ) : (
@@ -2166,26 +2443,21 @@ export function AgentProductDemo({
                         ))}
                       </div>
                     )}
-                    {liveProductRun && liveProductRun.parts.some((p) => p.kind === "process") ? (
-                      <ul className="oa-product-run-steps ua-live-run-steps">
-                        {liveProductRun.parts
-                          .filter((p) => p.kind === "process")
-                          .map((s, i) => (
-                            <li key={`${s.label}-${i}`} className={s.ok ? "ok" : "bad"}>
-                              <strong>{s.label}</strong>
-                              <span>{s.detail}</span>
-                            </li>
-                          ))}
-                      </ul>
+                    {streamReasoning ? (
+                      <AgentReasoningBlock
+                        text={streamReasoning.trim()}
+                        thinking={!streamText}
+                        defaultOpen={!streamText}
+                      />
                     ) : null}
                     {streamText ? (
                       <div className="ua-bubble assistant streaming ink">
                         <AgentMarkdown text={streamText} />
                         <span className="ua-caret" />
                       </div>
-                    ) : (
+                    ) : !streamReasoning ? (
                       <AgentThink />
-                    )}
+                    ) : null}
                   </div>
                 </div>
               )}
@@ -2232,7 +2504,7 @@ export function AgentProductDemo({
                 </button>
               </div>
             )}
-            {hubMode && running && displayJournal.length > 0 && (
+            {running && displayJournal.length > 0 && (
               <NeuralTraceStrip journal={displayJournal} running turnStartedAt={flowTurnStartedAt} />
             )}
             {!hubMode && slashMenu.length > 0 && (
@@ -2295,10 +2567,10 @@ export function AgentProductDemo({
                   </div>
                 </div>
               ) : null}
-              {hubMode && !running && quickPromptItems.length > 0 && (
+              {!running && quickPromptItems.length > 0 && (
                 <div className="oc-shortcuts oc-shortcuts--follow">
                   <ChatQuickPrompts
-                    label="信贷场景"
+                    label={hubMode ? "信贷场景" : "试试这些"}
                     items={quickPromptItems}
                     disabled={running}
                     onPick={(t) =>
@@ -2572,6 +2844,9 @@ export function AgentProductDemo({
           open={Boolean(paperDrawer)}
           interactive={!hubMode}
           onClose={() => setPaperDrawer(null)}
+          onApplyFix={!hubMode && paperDrawer?.processId ? applyPaperRerun : undefined}
+          onSealDeliverable={!hubMode && paperDrawer?.paper?.kind === "ledger" ? sealPaperDeliverable : undefined}
+          deliverySealed={paperDrawer ? sealedPaperMessages.has(paperDrawer.messageId) : false}
           onAsk={(text) => {
             void send(text);
           }}

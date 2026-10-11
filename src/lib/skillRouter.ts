@@ -64,9 +64,15 @@ export function routeKeyLabel(key: string, catalog?: AgentSkill[]): string {
   return s ? skillLabel(s) : key;
 }
 
+const ID_LIKE = /^[a-z][a-z0-9_-]*$/i;
+
+/** 客户可见技能名（中文业务名，禁止裸 id 如 contract-desk） */
 export function skillLabel(s: Pick<AgentSkill, "name" | "description">): string {
   const head = s.description.split(/[—–\-]/)[0]?.trim();
-  return head && head.length >= 2 && head.length <= 24 ? head : s.name;
+  if (head && head.length >= 2 && head.length <= 32) return head;
+  if (!ID_LIKE.test(s.name)) return s.name;
+  const plain = s.description.replace(/^#+\s*/, "").trim();
+  return plain.slice(0, 32) || s.name;
 }
 
 export function rankSkills(query: string, catalog: AgentSkill[]): SkillDiscoveryRow[] {
@@ -161,7 +167,7 @@ export function routeQuery(
     }
   }
 
-  const INSTANT_DESK_IDS = ["data-desk", "sheet-desk", "contract-desk"] as const;
+  const INSTANT_DESK_IDS = ["ledger-desk"] as const;
   const qNorm = query.trim().toLowerCase();
   for (const deskId of INSTANT_DESK_IDS) {
     const deskSkill = find(deskId);
@@ -184,9 +190,9 @@ export function routeQuery(
     }
   }
 
-  const sheet = find("sheet-desk");
-  if (sheet && isSheetOperationQuery(query)) {
-    return toSkill(sheet, "内置规则：表格对账 / 改数 / 重算（优先于制度 FAQ）", 4, ["sheet-op"]);
+  const ledger = find("ledger-desk");
+  if (ledger && isSheetOperationQuery(query)) {
+    return toSkill(ledger, "内置规则：智能报销对账 / 改数 / 重算（优先于制度 FAQ）", 4, ["sheet-op"]);
   }
 
   const policy = find("policy-desk");

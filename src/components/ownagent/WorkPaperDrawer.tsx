@@ -11,12 +11,19 @@ export function WorkPaperDrawer({
   open,
   onClose,
   onAsk,
+  onApplyFix,
+  onSealDeliverable,
+  deliverySealed,
   interactive = true,
 }: {
   paper: WorkPaper | null;
   open: boolean;
   onClose: () => void;
   onAsk?: (text: string) => void;
+  onApplyFix?: () => void | Promise<void>;
+  /** 人工复核通过后办结归档 */
+  onSealDeliverable?: () => void | Promise<void>;
+  deliverySealed?: boolean;
   interactive?: boolean;
 }) {
   useEffect(() => {
@@ -58,17 +65,24 @@ export function WorkPaperDrawer({
                     )
                   }
                 >
-                  下载 CSV
+                  下载对账表 CSV
                 </button>
               );
             })()}
-            <button type="button" onClick={onClose} aria-label="关闭">
+            <button type="button" className="oa-work-drawer-close" onClick={onClose} aria-label="关闭">
               ×
             </button>
           </div>
         </header>
         <div className="oa-work-drawer-body">
-          <WorkPaperView paper={paper} interactive={interactive} onAsk={onAsk} />
+          <WorkPaperView
+            paper={paper}
+            interactive={interactive}
+            onAsk={onAsk}
+            onApplyFix={onApplyFix}
+            onSealDeliverable={onSealDeliverable}
+            deliverySealed={deliverySealed}
+          />
         </div>
       </aside>
     </div>,

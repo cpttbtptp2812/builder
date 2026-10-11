@@ -22,6 +22,7 @@ export function MessageMetaBar({
   onOpenSources,
   onReplay,
   trailing,
+  productSurface,
 }: {
   insight?: AnswerInsight;
   tools?: OwnToolChip[];
@@ -31,11 +32,15 @@ export function MessageMetaBar({
   onOpenSources?: () => void;
   onReplay?: () => void;
   trailing?: ReactNode;
+  /** 办事对话：不展示 Guest/LLM/耗时（页脚已有技能名与秒数） */
+  productSurface?: boolean;
 }) {
   const toolList = tools ?? [];
   const hasTools = toolList.length > 0;
   const hasInsight = Boolean(insight);
-  const hasMetrics = Boolean(message?.ms || message?.mode || message?.runtime);
+  const hasMetrics = Boolean(
+    !productSurface && (message?.ms || message?.mode || message?.runtime),
+  );
 
   if (reserve && !hasTools && !hasInsight && !hasMetrics && !trailing) {
     return <div className="ua-answer-meta ua-answer-meta--reserve" aria-hidden />;

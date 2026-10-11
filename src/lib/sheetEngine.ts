@@ -1,11 +1,7 @@
 /** 表格技能：认列、类型、分组聚合、发票对账。同一份表，配方不同结果就不同。 */
 
-import {
-  datasetToSheetTable,
-  getProductDataset,
-  ProductDataMissingError,
-  type ProductDataSlot,
-} from "./productDataStore";
+import { ProductDataMissingError, type ProductDataSlot } from "./productDataStore";
+import { resolveWorkbenchSheetTable, type WorkbenchTableOpts } from "./workbenchDataset";
 
 export type ColumnType = "text" | "number" | "empty";
 
@@ -175,9 +171,13 @@ export function applySheetPatches(table: SheetTable, patches: SheetRowPatch[]): 
 }
 
 export type TableFromQueryOpts = {
-  /** 产品工作台：只认问句内嵌表或已导入数据，不用内置样例 */
+  /** 产品工作台：只认导入槽或问句内嵌 CSV（gate），不用内置样例 */
   productWorkbench?: boolean;
+  /** 服务端 product-run 会话，优先读 SQLite 导入 */
+  sessionId?: string;
   dataSlot?: ProductDataSlot;
+  /** 仅 Agent 实验室 / 步骤教学：允许内置报销样例 */
+  allowLabSample?: boolean;
 };
 
 export function tableFromEmbedded(query: string): SheetTable | null {
@@ -198,18 +198,20 @@ export function tableFromEmbedded(query: string): SheetTable | null {
   return null;
 }
 
-/** 问句里夹着表格就用那张表；产品模式否则读导入槽；Hub 演示才用内置样例。 */
+/** 产品模式：导入槽优先；Hub 实验室才用内置样例。 */
 export function tableFromQuery(query: string, opts?: TableFromQueryOpts): SheetTable {
+  if (opts?.productWorkbench) {
+    return resolveWorkbenchSheetTable(query, opts as WorkbenchTableOpts);
+  }
+
   const embedded = tableFromEmbedded(query);
   if (embedded) return embedded;
 
-  if (opts?.productWorkbench) {
-    const slot = opts.dataSlot ?? "expense-ledger";
-    const ds = getProductDataset(slot);
-    if (!ds?.rows.length) {
-      throw new ProductDataMissingError(slot, `请先导入 ${slot} 数据后再执行技能。`);
-    }
-    return datasetToSheetTable(ds);
+  if (!opts?.allowLabSample) {
+    throw new ProductDataMissingError(
+      opts?.dataSlot ?? "expense-ledger",
+      "请导入报销明细，或在问句中用 ```csv 代码块附上表格后再执行。",
+    );
   }
 
   const columns: SheetColumn[] = [
@@ -323,37 +325,3 @@ export function executeSheet(
   return { table, recipe, phases, summary, markdown, grid };
 }
 
-const PHASE_INDEX: Record<string, number> = {
-  __sheet_parse__: 0,
-  __sheet_aggregate__: 1,
-  __sheet_reconcile__: 2,
-  __sheet_report__: 3,
-};
-
-export function runSheetTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
-  const index = PHASE_INDEX[name];
-  if (index == null) return null;
-  const productWorkbench = args.__productWorkbench === true;
-  try {
-    const ran = executeSheet(String(args.query ?? ""), sheetRecipeFromArgs(args), {
-      productWorkbench,
-      dataSlot: "expense-ledger",
-    });
-    const phase = ran.phases[index]!;
-    return {
-      content: {
-        markdown: name === "__sheet_report__" ? ran.markdown : phase.detail,
-        detail: phase.detail,
-        summary: ran.summary,
-        dashboard: { sheet: { phase: phase.id, rows: ran.table.rows.length, summary: ran.summary } },
-        meta: { skill: "sheet-desk" },
-        grid: ran.grid,
-      },
-    };
-  } catch (err) {
-    if (err instanceof ProductDataMissingError) {
-      return { content: { error: err.message, code: "PRODUCT_DATA_MISSING", slot: err.slot }, isError: true };
-    }
-    throw err;
-  }
-}

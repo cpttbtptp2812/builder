@@ -1,4 +1,5 @@
 import { apiUrl } from "../apiClient";
+import type { ProductLlmConfig } from "../llmProductBrief";
 import type { ProductDataSlot } from "../productDataStore";
 import type {
   ProductRunApiResult,
@@ -79,8 +80,9 @@ async function parseSseBody(
 
 export async function streamProductRun(
   body:
-    | { action: "start"; sessionId: string; skillId: string; query: string }
-    | { action: "continue"; processId: string; sessionId: string },
+    | { action: "start"; sessionId: string; skillId: string; query: string; llmConfig?: ProductLlmConfig }
+    | { action: "continue"; processId: string; sessionId: string; llmConfig?: ProductLlmConfig }
+    | { action: "rerun"; processId: string; sessionId: string; llmConfig?: ProductLlmConfig },
   handlers: ProductRunStreamHandlers,
   signal?: AbortSignal,
 ): Promise<ProductRunApiResult> {
@@ -112,10 +114,17 @@ export async function apiStartProductRun(opts: {
   query: string;
   signal?: AbortSignal;
   handlers?: ProductRunStreamHandlers;
+  llmConfig?: ProductLlmConfig;
 }): Promise<ProductRunApiResult> {
   if (opts.handlers) {
     return streamProductRun(
-      { action: "start", sessionId: opts.sessionId, skillId: opts.skillId, query: opts.query },
+      {
+        action: "start",
+        sessionId: opts.sessionId,
+        skillId: opts.skillId,
+        query: opts.query,
+        llmConfig: opts.llmConfig,
+      },
       opts.handlers,
       opts.signal,
     );
@@ -134,9 +143,10 @@ export async function apiContinueProductRun(
   sessionId: string,
   handlers?: ProductRunStreamHandlers,
   signal?: AbortSignal,
+  llmConfig?: ProductLlmConfig,
 ): Promise<ProductRunApiResult> {
   if (handlers) {
-    return streamProductRun({ action: "continue", processId, sessionId }, handlers, signal);
+    return streamProductRun({ action: "continue", processId, sessionId, llmConfig }, handlers, signal);
   }
   const res = await fetch(apiUrl("/product-run/continue"), {
     method: "POST",
@@ -147,16 +157,57 @@ export async function apiContinueProductRun(
   return (await res.json()) as ProductRunApiResult;
 }
 
+export async function apiRerunProductRun(
+  processId: string,
+  sessionId: string,
+  handlers?: ProductRunStreamHandlers,
+  signal?: AbortSignal,
+  llmConfig?: ProductLlmConfig,
+): Promise<ProductRunApiResult> {
+  if (handlers) {
+    return streamProductRun({ action: "rerun", processId, sessionId, llmConfig }, handlers, signal);
+  }
+  const res = await fetch(apiUrl("/product-run/continue"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ processId, sessionId }),
+    signal,
+  });
+  return (await res.json()) as ProductRunApiResult;
+}
+
+export async function apiFetchDeskTemplate(
+  skillId: string,
+  slot: ProductDataSlot,
+): Promise<{ ok: boolean; error?: string; filename?: string; csv?: string }> {
+  const q = new URLSearchParams({ skillId, slot });
+  const res = await fetch(apiUrl(`/product-run/template?${q}`));
+  return (await res.json()) as { ok: boolean; error?: string; filename?: string; csv?: string };
+}
+
 export async function apiUploadProductDataset(opts: {
   sessionId: string;
   slot: ProductDataSlot;
   csv: string;
   title?: string;
-}): Promise<{ ok: boolean; error?: string; rows?: number }> {
+}): Promise<{
+  ok: boolean;
+  error?: string;
+  title?: string;
+  rows?: number;
+  schemaOk?: boolean;
+  schemaIssues?: string[];
+}> {
   const res = await fetch(apiUrl("/product-run/dataset"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(opts),
   });
-  return (await res.json()) as { ok: boolean; error?: string; rows?: number };
+  return (await res.json()) as {
+    ok: boolean;
+    error?: string;
+    rows?: number;
+    schemaOk?: boolean;
+    schemaIssues?: string[];
+  };
 }

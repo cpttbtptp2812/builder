@@ -2,11 +2,12 @@
 
 import type { AgentSkill } from "./agentSkills";
 import { executeContract, contractPolicyFromSteps } from "./contractEngine";
-import { executeData, dataRecipeFromSteps, monthlyFromCashflowImport } from "./dataEngine";
+import { executeData, dataRecipeFromSteps } from "./dataEngine";
+import { buildDataProgramState, dataProgramRecipeFromSteps, type DataProgramState } from "./dataDeskProgram";
 import { executeFlow, flowPolicyFromSteps } from "./flowEngine";
 import { executeImage, imagePolicyFromSteps } from "./imageEngine";
+import { buildSheetProgramState, sheetProgramRecipeFromArgs } from "./sheetDeskProgram";
 import {
-  executeSheet,
   sheetRecipeFromQuery,
   sheetRecipeFromSteps,
   type SheetRecipe,
@@ -343,25 +344,78 @@ export function showcaseStepName(query: string, stepId: string, fallback: string
   return (key && table[key]?.[stepId]) || fallback;
 }
 
+function wanNum(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
+}
+
+function creditPaperFromDataProgram(state: DataProgramState): Extract<WorkPaper, { kind: "credit" }> {
+  const r = state.recipe;
+  const cashExpr = `${wanNum(state.weightedMonthly)} × ${r.stability} × ${r.debtRatio}`;
+  const adjExpr = `${wanNum(state.cash)} × ${r.credit} × ${r.industry} × ${r.years}`;
+  return {
+    kind: "credit",
+    title: "单户授信额度测算报告",
+    no: "本单导入材料",
+    verdict: state.summary.split("。")[0] ?? state.summary,
+    note: state.summary,
+    metrics: [
+      { label: "授信额度", value: `${wanNum(state.finalAmount)} 万元` },
+      { label: "现金流", value: `${wanNum(state.cash)} 万元` },
+      { label: "风险调整", value: `${wanNum(state.adjusted)} 万元` },
+      { label: "政策上限", value: `${wanNum(r.policyCap)} 万元` },
+    ],
+    formulas: [
+      {
+        name: "1. 现金流测算法",
+        formula: "加权月均 × 稳定系数 × 偿债比例",
+        expr: `${cashExpr} = ${wanNum(state.cash)}万`,
+      },
+      {
+        name: "2. 风险调整",
+        formula: "现金流 × 信用系数 × 行业系数 × 年限系数",
+        expr: `${adjExpr} = ${wanNum(state.adjusted)}万`,
+      },
+    ],
+    rows: [
+      { label: "加权月均", value: `${wanNum(state.weightedMonthly)} 万元`, ok: true },
+      { label: "有效月数", value: `${state.months.length} 月`, ok: state.monthsOk },
+      { label: "稳定系数", value: String(r.stability) },
+      { label: "偿债比例", value: String(r.debtRatio) },
+      { label: "信用系数", value: String(r.credit), ok: r.credit >= 1 },
+      { label: "行业系数", value: String(r.industry) },
+      { label: "年限系数", value: String(r.years) },
+      {
+        label: "是否触及上限",
+        value: state.capped ? "卡住" : "未触及",
+        ok: !state.capped,
+      },
+    ],
+  };
+}
+
 export function paperForSkill(
   skill: Pick<AgentSkill, "id" | "steps">,
   query: string,
-  opts?: { productWorkbench?: boolean },
+  opts?: { productWorkbench?: boolean; sessionId?: string },
 ): WorkPaper | null {
   const tableOpts = opts?.productWorkbench
-    ? { productWorkbench: true as const, dataSlot: "expense-ledger" as const }
-    : undefined;
+    ? {
+        productWorkbench: true as const,
+        sessionId: opts.sessionId,
+        dataSlot: "expense-ledger" as const,
+      }
+    : { allowLabSample: true as const, dataSlot: "expense-ledger" as const };
   const sheet = sheetRecipeFromSteps(skill.steps);
   if (sheet) {
     if (/押品/.test(query)) return opts?.productWorkbench ? null : collateralPaper();
-    const recipe = sheetRecipeFromQuery(query, sheet);
-    const ran = executeSheet(query, recipe, tableOpts);
+    const recipe = sheetProgramRecipeFromArgs({ ...sheet, ...sheetRecipeFromQuery(query, sheet) });
+    const ran = buildSheetProgramState(query, recipe, tableOpts);
+    if (opts?.productWorkbench && !ran.schemaOk) return null;
     const issues: PaperIssue[] = [];
-    const deptMap = new Map<string, number>();
-    for (const row of ran.grid.rows) {
-      const [dept, person, amount, , booked, invoice, gap, judge] = row;
+    for (const row of ran.detailGrid.rows) {
+      const [dept, person, amount, , , invoice, gap, judge] = row;
       const tone = judge?.startsWith("拦截") ? "bad" as const : judge?.startsWith("警告") ? "warn" as const : "ok" as const;
-      deptMap.set(dept!, (deptMap.get(dept!) ?? 0) + (Number.parseFloat(booked!) || 0));
       if (tone !== "ok") {
         issues.push({
           level: tone,
@@ -374,28 +428,34 @@ export function paperForSkill(
     return {
       kind: "ledger",
       title: ran.summary,
-      grid: ran.grid,
+      grid: ran.detailGrid,
       recipe: ran.recipe,
-      deptTotals: [...deptMap.entries()].map(([dept, sum]) => ({
-        dept,
-        amount: Number.isInteger(sum) ? String(sum) : sum.toFixed(2),
+      deptTotals: ran.deptTotals.map((d) => ({
+        dept: d.dept,
+        amount: Number.isInteger(d.sum) ? String(d.sum) : d.sum.toFixed(2),
       })),
       issues,
     };
   }
 
-  const data = dataRecipeFromSteps(skill.steps);
-  if (data) {
-    if (/额度占用/.test(query)) return opts?.productWorkbench ? null : occupancyPaper(data);
-    let recipe = data;
+  const dataProgram = dataProgramRecipeFromSteps(skill.steps);
+  if (dataProgram) {
+    if (/额度占用/.test(query)) return opts?.productWorkbench ? null : occupancyPaper(dataRecipeFromSteps(skill.steps)!);
     if (opts?.productWorkbench) {
       try {
-        recipe = { ...data, monthly: monthlyFromCashflowImport() };
+        const state = buildDataProgramState(query, dataProgram, {
+          productWorkbench: true,
+          sessionId: opts.sessionId,
+        });
+        if (!state.schemaOk || !state.monthsOk) return null;
+        return creditPaperFromDataProgram(state);
       } catch {
         return null;
       }
     }
-    const ran = executeData(recipe);
+    const legacy = dataRecipeFromSteps(skill.steps);
+    if (!legacy) return null;
+    const ran = executeData(legacy);
     const cell = (name: string) => ran.grid.rows.find((row) => row[0] === name);
     const cash = cell("现金流测算");
     const adjusted = cell("风险调整");
@@ -410,20 +470,20 @@ export function paperForSkill(
         { label: "授信额度", value: `${finalRow?.[3] ?? ""} 万元` },
         { label: "现金流", value: `${cash?.[3] ?? ""} 万元` },
         { label: "风险调整", value: `${adjusted?.[3] ?? ""} 万元` },
-        { label: "政策上限", value: `${data.policyCap} 万元` },
+        { label: "政策上限", value: `${legacy.policyCap} 万元` },
       ],
       formulas: [
         { name: "1. 现金流测算法", formula: "月均流水 × 稳定系数 × 偿债比例", expr: cash?.[2] ? `${cash[2]} = ${cash[3]}万` : "" },
         { name: "2. 风险调整", formula: "现金流 × 信用系数 × 行业系数 × 年限系数", expr: adjusted?.[2] ? `${adjusted[2]} = ${adjusted[3]}万` : "" },
       ],
       rows: [
-        { label: "月均流水", value: `${data.monthly} 万元`, ok: true },
-        { label: "稳定系数", value: String(data.stability) },
-        { label: "偿债比例", value: String(data.debtRatio) },
-        { label: "信用系数", value: String(data.credit), ok: data.credit >= 1 },
-        { label: "行业系数", value: String(data.industry) },
-        { label: "年限系数", value: String(data.years) },
-        { label: "是否触及上限", value: (adjusted && Number(adjusted[3]) > data.policyCap) ? "卡住" : "未触及", ok: true },
+        { label: "月均流水", value: `${legacy.monthly} 万元`, ok: true },
+        { label: "稳定系数", value: String(legacy.stability) },
+        { label: "偿债比例", value: String(legacy.debtRatio) },
+        { label: "信用系数", value: String(legacy.credit), ok: legacy.credit >= 1 },
+        { label: "行业系数", value: String(legacy.industry) },
+        { label: "年限系数", value: String(legacy.years) },
+        { label: "是否触及上限", value: (adjusted && Number(adjusted[3]) > legacy.policyCap) ? "卡住" : "未触及", ok: true },
       ],
     };
   }
@@ -431,7 +491,11 @@ export function paperForSkill(
   const contract = contractPolicyFromSteps(skill.steps);
   if (contract) {
     if (/放款材料/.test(query)) return opts?.productWorkbench ? null : checklistPaper(contract);
-    const ran = executeContract(contract, { productWorkbench: opts?.productWorkbench });
+    const ran = executeContract(contract, {
+      productWorkbench: opts?.productWorkbench,
+      query,
+      sessionId: opts?.sessionId,
+    });
     const row = (name: string) => ran.grid.rows.find((item) => item[0]?.includes(name));
     const amount = row("借款金额");
     const term = row("借款期限");
@@ -484,7 +548,9 @@ export function paperForSkill(
     const ran = executeFlow(
       query,
       flow,
-      opts?.productWorkbench ? { productWorkbench: true, dataSlot: "expense-ledger" } : undefined,
+      opts?.productWorkbench
+        ? { productWorkbench: true, dataSlot: "expense-ledger", sessionId: opts?.sessionId }
+        : { allowLabSample: true, dataSlot: "expense-ledger" },
     );
     let stopped = false;
     const steps = ran.phases.slice(0, 4).map((phase) => {
@@ -501,7 +567,11 @@ export function paperForSkill(
 
   const image = imagePolicyFromSteps(skill.steps);
   if (image) {
-    const ran = executeImage(image);
+    const ran = executeImage(image, {
+      productWorkbench: opts?.productWorkbench,
+      query,
+      sessionId: opts?.sessionId,
+    });
     const fields = ran.grid.rows.map((row) => {
       const accept = row[5] === "采用";
       const confidence = Number(row[3]);
@@ -516,11 +586,12 @@ export function paperForSkill(
         current: `${row[2]}（${row[3]}）`,
         expected: `置信度达到 ${image.minConfidence.toFixed(2)} 才写入`,
       }));
+    const borrowerField = ran.grid.rows.find((row) => String(row[4]).includes("借款人"));
     return {
       kind: "voucher",
       title: "借款凭证",
-      no: "PZ-2026-00123",
-      borrower: "星图智造",
+      no: opts?.productWorkbench ? "导入影像" : "PZ-2026-00123",
+      borrower: opts?.productWorkbench ? String(borrowerField?.[2] ?? "（导入数据）") : "星图智造",
       fields,
       issues,
     };
