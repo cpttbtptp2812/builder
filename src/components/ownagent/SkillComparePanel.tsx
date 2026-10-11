@@ -93,6 +93,8 @@ import { PageToolWalk } from "./PageToolWalk";
 import { SkillClauseNote, useSkillClauses } from "./SkillClauseNote";
 import { SkillFromDemoDialog } from "./SkillFromDemo";
 import { TraceFeedbackPanel } from "./TraceFeedbackPanel";
+import { BaselineEnvBoard } from "./BaselineEnvBoard";
+import { isCreditSamplePackSkill, isFeaturedMultiTurnSkill } from "../../lib/platformCatalog";
 import { SkillGovernancePanel } from "./SkillGovernancePanel";
 import { OaBtn, OaPage } from "./OaUi";
 import { noteLivePublished } from "../../lib/catalogSets";
@@ -161,7 +163,6 @@ async function alignCanonicalGate(report: SkillFullCompareReport, raw: string, v
 export function SkillComparePanel({ initialTab }: { initialTab?: Tab } = {}) {
   const [skillId, setSkillId] = useState<string | null>(takePendingSkillOpen);
   const [tick, setTick] = useState(0);
-
   useEffect(() => {
     const refresh = () => {
       noteLivePublished();
@@ -236,20 +237,25 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  const rows = useMemo(() => {
+  const { primaryRows, sampleRows } = useMemo(() => {
     const k = q.trim().toLowerCase();
     const hit = k
       ? skills.filter((s) =>
           [s.name, s.description, ...s.triggers].some((t) => t.toLowerCase().includes(k)),
         )
       : skills;
-    return [...hit].sort((a, b) => {
+    const sorted = [...hit].sort((a, b) => {
       const flow = (id: string) => (id.endsWith("-flow-desk") ? 0 : 1);
       const df = flow(a.id) - flow(b.id);
       if (df !== 0) return df;
       return Number(Boolean(newestDraftForSkill(b.id))) - Number(Boolean(newestDraftForSkill(a.id)));
     });
+    const primary = sorted.filter((s) => !isCreditSamplePackSkill(s.id));
+    const sample = sorted.filter((s) => isCreditSamplePackSkill(s.id));
+    return { primaryRows: primary, sampleRows: sample };
   }, [skills, q]);
+
+  const rows = q.trim() ? [...primaryRows, ...sampleRows] : primaryRows;
 
   const pendingCount = skills.filter((s) => newestDraftForSkill(s.id)).length;
   const selectedRows = rows.filter((s) => selected.has(s.id));
@@ -363,6 +369,10 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   return (
     <OaPage title="技能" hideHead>
       {toast.node}
+      <section className="oa-skill-baseline-strip">
+        <strong>环境 Baseline（服务端）</strong>
+        <BaselineEnvBoard limit={8} />
+      </section>
       {lead ? <p className="oa-skill-lead">{lead}</p> : null}
       <div className="oa-skill-toolbar">
         <div className="oa-skill-tools">
@@ -440,19 +450,42 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
       {rows.length === 0 ? (
         <p className="own-ver-hint">没有匹配「{q}」的技能。</p>
       ) : (
-        <ul className="own-skill-ver-grid">
-          {rows.map((s) => (
-            <SkillListCard
-              key={s.id}
-              skill={s}
-              checked={selected.has(s.id)}
-              imported={importedIds.has(s.id)}
-              onToggle={() => toggle(s.id)}
-              onOpen={() => onOpen(s.id)}
-              envTag={envTags[s.id]}
-            />
-          ))}
-        </ul>
+        <>
+          <ul className="own-skill-ver-grid">
+            {rows.map((s) => (
+              <SkillListCard
+                key={s.id}
+                skill={s}
+                checked={selected.has(s.id)}
+                imported={importedIds.has(s.id)}
+                onToggle={() => toggle(s.id)}
+                onOpen={() => onOpen(s.id)}
+                envTag={envTags[s.id]}
+              />
+            ))}
+          </ul>
+          {!q.trim() && sampleRows.length ? (
+            <details className="oa-sample-pack-details">
+              <summary>行业样板包 · 信贷 Flow Desk（{sampleRows.length}，可选）</summary>
+              <p className="oa-platform-muted">
+                正式示范多轮 Skill 仅 <code>contract-flow-desk</code>；其余为预装 demo，可按项目裁剪。
+              </p>
+              <ul className="own-skill-ver-grid">
+                {sampleRows.map((s) => (
+                  <SkillListCard
+                    key={s.id}
+                    skill={s}
+                    checked={selected.has(s.id)}
+                    imported={importedIds.has(s.id)}
+                    onToggle={() => toggle(s.id)}
+                    onOpen={() => onOpen(s.id)}
+                    envTag={envTags[s.id]}
+                  />
+                ))}
+              </ul>
+            </details>
+          ) : null}
+        </>
       )}
       <TeamApprovalBar onToast={toast.show} />
       <TraceFeedbackPanel onToast={toast.show} />
@@ -510,6 +543,12 @@ function SkillListCard({
             {skill.id.endsWith("-flow-desk") ? (
               <span className="own-skill-ver-tag own-skill-ver-tag--flow">多轮</span>
             ) : null}
+            {isFeaturedMultiTurnSkill(skill.id) ? (
+              <span className="own-skill-ver-tag own-skill-ver-tag--featured">示范</span>
+            ) : null}
+            {isCreditSamplePackSkill(skill.id) ? (
+              <span className="own-skill-ver-tag own-skill-ver-tag--sample">样板</span>
+            ) : null}
             {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
             {prod ? <span className="own-skill-ver-tag">线上 {prod}</span> : null}
             {staging ? <span className="own-skill-ver-tag">预发 {staging}</span> : null}
@@ -528,7 +567,15 @@ function SkillListCard({
   );
 }
 
-function SkillDetail({ skillId, onBack, initialTab }: { skillId: string; onBack: () => void; initialTab?: Tab }) {
+function SkillDetail({
+  skillId,
+  onBack,
+  initialTab,
+}: {
+  skillId: string;
+  onBack: () => void;
+  initialTab?: Tab;
+}) {
   const toast = useToast();
   const builtin = resolveSkillRecord(skillId);
 

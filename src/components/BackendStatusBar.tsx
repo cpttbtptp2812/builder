@@ -37,9 +37,9 @@ export function BackendStatusBar({ compact = false, quiet = false }: Props) {
             {loading ? (
               <span>正在检测运行环境…</span>
             ) : online ? (
-              <span>服务端已连接，数据可持久化到 SQLite。</span>
+              <span>办事服务已连接，记录与材料可保存。</span>
             ) : (
-              <span>演示模式：对话、知识库、广场均在本机运行；发布/广场数据存浏览器。完整管理后台需 docker compose 或 npm run dev:full</span>
+              <span>办事 API 未连接（需 :8787）。请在本仓库运行 npm run dev:full，process 与用户数据才会写入 SQLite。</span>
             )}
           </div>
         )}

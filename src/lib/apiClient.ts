@@ -7,6 +7,7 @@ export type BackendHealth = {
   ragChunks: number;
   skillRuns: number;
   workflowRuns: number;
+  productProcesses?: number;
   llm: boolean;
 };
 

@@ -3,6 +3,7 @@
 import {
   allRunnableSkills,
   getSkill,
+  isCustomerSkill,
   runSkill,
   SKILL_CATALOG,
   type AgentSkill,
@@ -13,6 +14,7 @@ import { matchCreditFlowSkillId } from "./creditFlowCatalog";
 import { mcpServer } from "./mcpServer";
 import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace } from "./agentRuntime";
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
+import { ingestProductionTrace } from "./skillGateClient";
 import { getTicket, type TicketDraft } from "./policyDesk";
 import { ABOUT_SITE_INTENT, HEALTH_INTENT, routeQuery, URL_RE } from "./skillRouter";
 import { logRoutedQuery, logSkillHandled } from "./skillQueryLog";
@@ -28,6 +30,11 @@ import { isSheetContinuationQuery } from "./showcaseContinuation";
 import { processCreditFlowTurn, type CreditFlowState } from "./creditFlowEngine";
 import { creditFlowSkillId, flowIdFromSkillId, isCreditFlowSkillId } from "./creditFlowUi";
 import type { OwnChatMessage } from "./ownagentSessions";
+import { apiStartProductRun, viewFromStreamStart } from "./productRun/client";
+import type { ProductRunView } from "./productRun/types";
+import { synthesizeResponse } from "./skillResponseSynth";
+
+export { synthesizeResponse } from "./skillResponseSynth";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -49,8 +56,12 @@ export type GuestTurnCtx = {
   creditFlow?: CreditFlowState | null;
   /** Hub 产品对话：不走 SQLite 远端 Guest，只跑浏览器内多轮技能 */
   hubProduct?: boolean;
+  /** 工作台产品对话：只跑办事技能，禁止默认知识库检索兜底 */
+  productWorkbench?: boolean;
   /** Hub：本句绑定信贷流程引擎（否则保留会话进度但走普通路由） */
   hubFlowBind?: boolean;
+  /** 产品 run：SQLite 会话 id，服务端存数据集与 process */
+  sessionId?: string;
 };
 
 type KnowledgeHit = { title?: string; score?: number; excerpt?: string };
@@ -350,101 +361,6 @@ function synthesizeOpenAnswer(query: string, packs: ToolPack[]): string {
   ].join("\n\n");
 }
 
-function synthesizeSiteAudit(result: SkillResult, query: string): string {
-  const d = result.dashboard as {
-    http?: { status?: number; latencyMs?: number; ok?: boolean; url?: string };
-    dom?: { a11yNodes?: number };
-    perf?: { ttfbMs?: number | null; loadMs?: number | null; resourceCount?: number };
-  } | undefined;
-  const http = d?.http;
-  const perf = d?.perf;
-
-  const problems: string[] = [];
-  if (http && !http.ok) problems.push(`HTTP 探活失败（status ${http.status ?? "—"}）`);
-  if (perf?.ttfbMs != null && perf.ttfbMs > 200) problems.push(`TTFB ${perf.ttfbMs}ms 偏高`);
-  if (perf?.loadMs != null && perf.loadMs > 3000) problems.push(`Load ${perf.loadMs}ms 偏慢`);
-  if (perf?.resourceCount != null && perf.resourceCount > 200) problems.push(`资源数 ${perf.resourceCount} 偏多`);
-
-  const ok = problems.length === 0 && (http?.ok ?? true);
-  const askedOk = /正不正常|正常吗|能不能打开|打得开|可用吗|检查/.test(query);
-  const askedPerf = /性能|ttfb|加载|慢|latency|metrics/.test(query);
-
-  const verdict = askedOk
-    ? ok
-      ? `**能打开，站点正常。** HTTP ${http?.status ?? "—"}，探活 ${http?.latencyMs ?? "—"}ms。`
-      : `**能访问，但有问题：** ${problems.join("；")}。`
-    : askedPerf
-      ? `**性能快照：** TTFB ${perf?.ttfbMs ?? "—"}ms · Load ${perf?.loadMs ?? "—"}ms · 资源 ${perf?.resourceCount ?? "—"}。`
-      : ok
-        ? "**探活通过，指标正常。**"
-        : `**探活通过，但有 ${problems.length} 项需要注意：** ${problems.join("；")}。`;
-
-  const lines = [verdict, ""];
-  if (http) {
-    lines.push(`- HTTP 探活：${http.ok ? "通过" : "失败"} · status ${http.status ?? "—"} · ${http.latencyMs ?? "—"}ms`);
-    lines.push(`- 目标：${http.url ?? "本站"}`);
-  }
-  if (perf) {
-    lines.push(`- TTFB：${perf.ttfbMs ?? "—"}ms · Load：${perf.loadMs ?? "—"}ms · Resources：${perf.resourceCount ?? "—"}`);
-  }
-  if (d?.dom) lines.push(`- DOM a11y 节点：${d.dom.a11yNodes ?? "—"}`);
-  return lines.join("\n");
-}
-
-function synthesizeDomProbe(result: SkillResult): string {
-  const p = (result.dashboard as { domProbe?: { totalNodes?: number; interactive?: number; density?: number; byRole?: Record<string, number> } })?.domProbe;
-  if (!p) return "当前页 DOM 已抓取，细节在右侧 Trace。";
-  const topRoles = Object.entries(p.byRole ?? {})
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([r, n]) => `${r}(${n})`)
-    .join("、");
-  return [
-    `当前页 ${p.totalNodes ?? "—"} 个节点，可交互 ${p.interactive ?? "—"}（密度 ${p.density ?? "—"}%）。`,
-    topRoles ? `Role：${topRoles}` : "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
-
-function synthesizeWorkflow(result: SkillResult): string {
-  const wf = (result.dashboard as { workflow?: { runId?: string; workflowId?: string; status?: string; replaySteps?: number } })?.workflow;
-  return [
-    `已在本机 MCP 入队 workflow \`${wf?.workflowId ?? "—"}\`（runId ${wf?.runId ?? "—"}，${wf?.replaySteps ?? "—"} 步）。`,
-    "这是本站的入队接口，不会去操控外部网站。要看真实浏览器自动化，打开 iMean 产品页。",
-  ].join("\n");
-}
-
-function synthesizeGeneric(result: SkillResult): string {
-  if (result.markdown) return result.markdown;
-  if (result.dashboard) {
-    return "```json\n" + JSON.stringify(result.dashboard, null, 2).slice(0, 2500) + "\n```";
-  }
-  if (result.meta?.raw != null) {
-    return "```json\n" + JSON.stringify(result.meta.raw, null, 2).slice(0, 2500) + "\n```";
-  }
-  return "这轮工具已跑完，右侧 Trace 是原始返回。";
-}
-
-function synthesizeResponse(skill: AgentSkill, result: SkillResult, query: string): string {
-  switch (skill.id) {
-    case "release-inspector":
-      return result.markdown ?? synthesizeGeneric(result);
-    case "site-analyzer":
-      return synthesizeSiteAudit(result, query);
-    case "dom-probe":
-      return synthesizeDomProbe(result);
-    case "workflow-orchestrator":
-      return synthesizeWorkflow(result);
-    case "policy-desk":
-      return result.markdown ?? "制度值班已完成。";
-    case "knowledge-lookup":
-      return result.markdown ?? synthesizeGeneric(result);
-    default:
-      return synthesizeGeneric(result);
-  }
-}
-
 async function runKnowledgePath(
   query: string,
   ctx: GuestTurnCtx,
@@ -525,6 +441,7 @@ function persistGuestRun(
   traces: AgentTurnTrace[],
   runtime: string | undefined,
   totalMs: number,
+  skillId?: string | null,
 ) {
   saveTraceSession({
     query,
@@ -534,6 +451,9 @@ function persistGuestRun(
     totalMs,
     spans: buildSpansFromAgentRun(query, traces, assistantText, totalMs),
   });
+  if (skillId) {
+    void ingestProductionTrace({ skillId, query, traces });
+  }
 }
 
 /** 免 API Key：对当前输入选工具并作答（带会话上下文） */
@@ -552,6 +472,7 @@ export async function runGuestAgentTurn(
   showcaseFlow?: OwnChatMessage["showcaseFlow"];
   creditFlow?: CreditFlowState | null;
   flowBlocked?: boolean;
+  productRun?: ProductRunView;
 }> {
   const t0 = performance.now();
   const turnId = `guest-${Date.now().toString(36)}`;
@@ -573,10 +494,18 @@ export async function runGuestAgentTurn(
       showcaseFlow?: OwnChatMessage["showcaseFlow"];
       creditFlow?: CreditFlowState | null;
       flowBlocked?: boolean;
+      productRun?: ProductRunView;
     },
   ) => {
     onEvent({ type: "done", iterations: 1, toolCount: traces.reduce((n, t) => n + t.tools.length, 0) });
-    persistGuestRun(query, text, traces, runtime, Math.round(performance.now() - t0));
+    persistGuestRun(
+      query,
+      text,
+      traces,
+      runtime,
+      Math.round(performance.now() - t0),
+      extra?.route?.skillId,
+    );
     return { assistantText: text, traces, runtime, ...extra };
   };
 
@@ -591,7 +520,8 @@ export async function runGuestAgentTurn(
     !ctx.pinned?.trim() &&
     !ctx.pinSkillId &&
     !ctx.catalog?.length &&
-    !flowSkillPin
+    !flowSkillPin &&
+    !ctx.productWorkbench
   ) {
     try {
       const remote = await runGuestAgentAsync(query, { snapshotRoot: ctx.snapshotRoot });
@@ -678,7 +608,7 @@ export async function runGuestAgentTurn(
   const expanded = expandQuery(working, ctx.history);
 
   const flowDeskId = resolveFlowDeskSkillId(ctx, query);
-  const flowDeskSkill = flowDeskId ? loadFlowDeskAgent(flowDeskId) : null;
+  const flowDeskSkill = flowDeskId && !ctx.productWorkbench ? loadFlowDeskAgent(flowDeskId) : null;
   if (flowDeskSkill) {
     const forcedFlowId = flowIdFromSkillId(flowDeskSkill.id);
     const reasoning = `信贷多轮 · ${flowDeskSkill.name}`;
@@ -742,6 +672,30 @@ export async function runGuestAgentTurn(
   const pick = pickSkill(working, ctx.pinSkillId, routableCatalog, ctx.creditFlow);
 
   if (pick.kind === "about-site" || pick.kind === "knowledge" || pick.kind === "open") {
+    if (ctx.productWorkbench && !ctx.force) {
+      const hints = allRunnableSkills()
+        .filter((s) => isCustomerSkill(s.id) && s.steps.length > 0)
+        .slice(0, 6)
+        .flatMap((s) => s.triggers.slice(0, 2))
+        .slice(0, 5);
+      const md = [
+        "未命中可执行的办事技能（额度测算 / 表格对账 / 合同审查 / 流程推进等）。",
+        hints.length ? `可试：${hints.map((h) => `「${h}」`).join("、")}` : "",
+        "带链接的发布巡检请用：/inspect https://…",
+      ]
+        .filter(Boolean)
+        .join("\n\n");
+      await streamText(md, onEvent);
+      return wrap(md, [], "local", {
+        route: {
+          skillId: "no-skill",
+          skillName: "未命中办事技能",
+          score: 0,
+          hits: [],
+          path: "skill",
+        },
+      });
+    }
     await streamReasoning(
       pick.kind === "open" ? "按问题选工具：检索 / 探活 / 当前页 / 制度" : pick.reason,
       onEvent,
@@ -767,7 +721,7 @@ export async function runGuestAgentTurn(
 
   const { skill, hits, score } = pick;
 
-  if (isCreditFlowSkillId(skill.id) && !(ctx.hubProduct && !ctx.hubFlowBind)) {
+  if (isCreditFlowSkillId(skill.id) && !ctx.productWorkbench && !(ctx.hubProduct && !ctx.hubFlowBind)) {
     const forcedFlowId = flowIdFromSkillId(skill.id);
     const reasoning = `信贷多轮 · ${skill.name}（${hits.join("、") || score}）`;
     await streamReasoning(reasoning, onEvent);
@@ -823,6 +777,124 @@ export async function runGuestAgentTurn(
     });
   }
 
+  if (ctx.productWorkbench && isCustomerSkill(skill.id) && !isCreditFlowSkillId(skill.id)) {
+    const sessionId = ctx.sessionId?.trim() || "anon";
+    await streamReasoning(`办事 run · ${skill.name}（processId · SQLite）`, onEvent);
+    onEvent({ type: "iteration", n: 1 });
+    let liveRun: ProductRunView | null = null;
+    const syncRun = (patch: Partial<ProductRunView> & { processId: string; skillId: string; query: string }) => {
+      liveRun = {
+        processId: patch.processId,
+        skillId: patch.skillId,
+        query: patch.query,
+        status: patch.status ?? liveRun?.status ?? "running",
+        parts: patch.parts ?? liveRun?.parts ?? [],
+      };
+      onEvent({ type: "product-run", run: liveRun });
+    };
+    try {
+      const api = await apiStartProductRun({
+        sessionId,
+        skillId: skill.id,
+        query: expanded,
+        signal: ctx.signal,
+        handlers: {
+          onRunning: ({ processId, skillId, query: q0 }) => {
+            liveRun = viewFromStreamStart(processId, skillId, q0, "running");
+            onEvent({ type: "product-run", run: liveRun });
+          },
+          onGate: (gate) => {
+            syncRun({
+              processId: gate.processId,
+              skillId: gate.skillId,
+              query: gate.query,
+              status: "waiting_import",
+              parts: gate.parts,
+            });
+          },
+          onStep: (part) => {
+            if (!liveRun) return;
+            syncRun({
+              ...liveRun,
+              status: "running",
+              parts: [...liveRun.parts.filter((p) => p.kind !== "finish"), part],
+            });
+            const body = part.detail;
+            onEvent({
+              type: "tool-end",
+              tool: {
+                id: `run-${part.label}`,
+                name: part.label,
+                args: "{}",
+                iteration: 1,
+                ok: part.ok,
+                ms: 0,
+                result: { runtime: "server", detail: body },
+              },
+            });
+          },
+          onFinish: (fin) => {
+            syncRun({
+              processId: fin.processId,
+              skillId: fin.skillId,
+              query: fin.query,
+              status: "finish",
+              parts: fin.parts,
+            });
+          },
+        },
+      });
+      if (!api.ok) {
+        const err = `办事 run 失败：${api.error}`;
+        await streamText(err, onEvent);
+        return wrap(err, [], "local", {
+          route: { skillId: skill.id, skillName: skill.name, score, hits, path: "skill" },
+        });
+      }
+      await streamText(api.message, onEvent);
+      const productRun: ProductRunView = liveRun ?? {
+        processId: api.processId,
+        status: api.status,
+        skillId: api.skillId,
+        query: api.query,
+        parts: api.parts,
+      };
+      const paper = api.status === "finish" ? (api.paper as WorkPaper | null) : null;
+      const traces: AgentTurnTrace[] =
+        api.status === "finish"
+          ? [
+              {
+                iteration: 1,
+                label: skill.name,
+                reasoning: `process ${api.processId}`,
+                text: api.message,
+                tools: [],
+              },
+            ]
+          : [];
+      onEvent({ type: "trace-sync", traces });
+      logSkillHandled(query, skill.id);
+      return wrap(api.message, traces, "server", {
+        paper,
+        productRun,
+        route: {
+          skillId: skill.id,
+          skillName: skill.name,
+          score,
+          hits: api.status === "waiting_import" ? ["待导入数据"] : hits,
+          path: "skill",
+        },
+      });
+    } catch (err) {
+      if ((err as Error).name === "AbortError") throw err;
+      const msg = `无法连接办事服务（请运行 npm run dev:full，API :8787）：${err instanceof Error ? err.message : "未知错误"}`;
+      await streamText(msg, onEvent);
+      return wrap(msg, [], "local", {
+        route: { skillId: skill.id, skillName: skill.name, score, hits, path: "skill" },
+      });
+    }
+  }
+
   const reasoning = `命中技能 ${skill.name}（${hits.join("、") || score}）→ ${skill.plan.join(" → ")}`;
   await streamReasoning(reasoning, onEvent);
   onEvent({ type: "iteration", n: 1 });
@@ -848,7 +920,7 @@ export async function runGuestAgentTurn(
             result: { runtime: "local", detail: body?.detail ?? "" },
           },
         });
-        if (step.tool.endsWith("_report__")) {
+        if (step.tool.endsWith("_report__") && !ctx.productWorkbench) {
           onEvent({
             type: "tool-end",
             tool: {
@@ -941,6 +1013,7 @@ export async function runGuestAgentTurn(
           },
         });
       },
+      productWorkbench: ctx.productWorkbench,
     },
   );
 
@@ -977,7 +1050,7 @@ export async function runGuestAgentTurn(
   return wrap(text, finalTraces, "local", {
     hitl,
     policyTrust,
-    paper: paperForSkill(skill, expanded),
+    paper: paperForSkill(skill, expanded, { productWorkbench: ctx.productWorkbench }),
     route: {
       skillId: skill.id,
       skillName: skill.name,

@@ -1,5 +1,12 @@
 /** 表格技能：认列、类型、分组聚合、发票对账。同一份表，配方不同结果就不同。 */
 
+import {
+  datasetToSheetTable,
+  getProductDataset,
+  ProductDataMissingError,
+  type ProductDataSlot,
+} from "./productDataStore";
+
 export type ColumnType = "text" | "number" | "empty";
 
 export type SheetColumn = { name: string; type: ColumnType };
@@ -167,8 +174,13 @@ export function applySheetPatches(table: SheetTable, patches: SheetRowPatch[]): 
   };
 }
 
-/** 问句里夹着表格就用那张表，否则用内置的 5 行报销明细。 */
-export function tableFromQuery(query: string): SheetTable {
+export type TableFromQueryOpts = {
+  /** 产品工作台：只认问句内嵌表或已导入数据，不用内置样例 */
+  productWorkbench?: boolean;
+  dataSlot?: ProductDataSlot;
+};
+
+export function tableFromEmbedded(query: string): SheetTable | null {
   const fenced = query.match(/```(?:csv|tsv)?\n([\s\S]+?)```/);
   const source = fenced?.[1] ?? query;
   if (source.includes("|")) {
@@ -183,6 +195,23 @@ export function tableFromQuery(query: string): SheetTable {
     const parsed = parseDelimited(source, ",");
     if (parsed) return parsed;
   }
+  return null;
+}
+
+/** 问句里夹着表格就用那张表；产品模式否则读导入槽；Hub 演示才用内置样例。 */
+export function tableFromQuery(query: string, opts?: TableFromQueryOpts): SheetTable {
+  const embedded = tableFromEmbedded(query);
+  if (embedded) return embedded;
+
+  if (opts?.productWorkbench) {
+    const slot = opts.dataSlot ?? "expense-ledger";
+    const ds = getProductDataset(slot);
+    if (!ds?.rows.length) {
+      throw new ProductDataMissingError(slot, `请先导入 ${slot} 数据后再执行技能。`);
+    }
+    return datasetToSheetTable(ds);
+  }
+
   const columns: SheetColumn[] = [
     { name: "部门", type: "text" },
     { name: "申请人", type: "text" },
@@ -207,8 +236,12 @@ function money(value: number): string {
   return Number.isInteger(value) ? String(value) : value.toFixed(2);
 }
 
-export function executeSheet(query: string, recipe: SheetRecipe = DEFAULT_RECIPE): SheetExecution {
-  const table = applySheetPatches(tableFromQuery(query), sheetPatchesFromQuery(query));
+export function executeSheet(
+  query: string,
+  recipe: SheetRecipe = DEFAULT_RECIPE,
+  tableOpts?: TableFromQueryOpts,
+): SheetExecution {
+  const table = applySheetPatches(tableFromQuery(query, tableOpts), sheetPatchesFromQuery(query));
   const groupName = table.columns.some((column) => column.name === recipe.groupBy) ? recipe.groupBy : table.columns[0]?.name ?? "部门";
   const amountKey = table.columns.some((column) => column.name === "金额") ? "金额" : table.columns.find((column) => column.type === "number")?.name ?? "";
   const taxKey = table.columns.some((column) => column.name === "税额") ? "税额" : "";
@@ -300,15 +333,27 @@ const PHASE_INDEX: Record<string, number> = {
 export function runSheetTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
   const index = PHASE_INDEX[name];
   if (index == null) return null;
-  const ran = executeSheet(String(args.query ?? ""), sheetRecipeFromArgs(args));
-  const phase = ran.phases[index]!;
-  return {
-    content: {
-      markdown: name === "__sheet_report__" ? ran.markdown : phase.detail,
-      detail: phase.detail,
-      summary: ran.summary,
-      dashboard: { sheet: { phase: phase.id, rows: ran.table.rows.length, summary: ran.summary } },
-      meta: { skill: "sheet-desk" },
-    },
-  };
+  const productWorkbench = args.__productWorkbench === true;
+  try {
+    const ran = executeSheet(String(args.query ?? ""), sheetRecipeFromArgs(args), {
+      productWorkbench,
+      dataSlot: "expense-ledger",
+    });
+    const phase = ran.phases[index]!;
+    return {
+      content: {
+        markdown: name === "__sheet_report__" ? ran.markdown : phase.detail,
+        detail: phase.detail,
+        summary: ran.summary,
+        dashboard: { sheet: { phase: phase.id, rows: ran.table.rows.length, summary: ran.summary } },
+        meta: { skill: "sheet-desk" },
+        grid: ran.grid,
+      },
+    };
+  } catch (err) {
+    if (err instanceof ProductDataMissingError) {
+      return { content: { error: err.message, code: "PRODUCT_DATA_MISSING", slot: err.slot }, isError: true };
+    }
+    throw err;
+  }
 }

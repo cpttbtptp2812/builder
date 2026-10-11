@@ -33,6 +33,7 @@ import { registerSkillGate } from "./skillGate.ts";
 import { registerTraceFeedback } from "./traceFeedback.ts";
 import { registerSkillGovernanceApi } from "./skillGovernanceApi.ts";
 import { registerTeamGovernanceApi } from "./teamGovernanceApi.ts";
+import { registerProductRun } from "./productRun.ts";
 
 const app = new Hono();
 
@@ -58,10 +59,12 @@ registerSkillGate(app);
 registerTraceFeedback(app);
 registerSkillGovernanceApi(app);
 registerTeamGovernanceApi(app);
+registerProductRun(app);
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");
   const workflows = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM workflow_runs");
+  const productProcesses = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM product_processes");
   return c.json({
     ok: true,
     runtime: "builder-api",
@@ -69,6 +72,7 @@ app.get("/api/health", (c) => {
     ragChunks: getChunkCount(),
     skillRuns: skillRuns?.c ?? 0,
     workflowRuns: workflows?.c ?? 0,
+    productProcesses: productProcesses?.c ?? 0,
     llm: Boolean(process.env.DEEPSEEK_API_KEY || process.env.OPENAI_API_KEY),
   });
 });

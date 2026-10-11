@@ -1,0 +1,227 @@
+.own-app--product .ua-shell.product-chat :is(
+  .ua-thread-content,
+  .ua-row,
+  .ua-turn-wrap,
+  .ua-compose-wrap,
+  .ua-compose-pro,
+  .ua-footer
+) {
+  max-width: none !important;
+  margin-left: 0 !important;
+  margin-right: 0 !important;
+  width: 100%;
+}
+
+.own-app--product .ua-shell.product-chat .ua-row.assistant .ua-bubble-wrap {
+  flex: 1;
+  max-width: 100%;
+}
+
+.aw-product-home {
+  padding: 1.25rem 0 0.5rem;
+  max-width: 52rem;
+}
+.aw-product-home-head h2 {
+  margin: 0 0 0.35rem;
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+.aw-product-home-head p {
+  margin: 0 0 1rem;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+.aw-product-api-warn {
+  margin: 0 0 1rem;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+.aw-product-api-warn code {
+  font-size: 0.78rem;
+}
+.ua-right-tabs--product {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+.ua-right-product-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #334155;
+}
+.oa-product-run-wait {
+  margin: 0.35rem 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+.aw-product-examples {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+  gap: 0.55rem;
+  margin-bottom: 1rem;
+}
+.aw-product-ex-outcome {
+  font-size: 0.75rem;
+  color: #475569;
+  line-height: 1.35;
+}
+.aw-product-ex-sample {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  line-height: 1.3;
+}
+.oc-product-settings-link {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+}
+.own-app--product.chat-focus .ua-right-panel {
+  min-width: 16rem;
+  max-width: 22rem;
+}
+.aw-product-ex {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #fff;
+  cursor: pointer;
+  text-align: left;
+}
+.aw-product-ex:hover:not(:disabled) {
+  border-color: #6366f1;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1);
+}
+.aw-product-ex strong {
+  font-size: 0.82rem;
+  color: #312e81;
+}
+.aw-product-ex span {
+  font-size: 0.72rem;
+  color: #64748b;
+  line-height: 1.35;
+}
+.aw-product-skill-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 0.72rem;
+  color: #475569;
+  border-top: 1px solid #e2e8f0;
+  padding-top: 0.75rem;
+}
+.aw-product-skill-list li {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr;
+  gap: 0.35rem 0.75rem;
+  padding: 0.35rem 0;
+}
+
+.oa-product-data-gate-min {
+  margin-top: 0.55rem;
+  padding: 0.5rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  background: #fafafa;
+  font-size: 0.78rem;
+  color: #475569;
+}
+.oa-product-data-gate-list {
+  list-style: none;
+  margin: 0 0 0.45rem;
+  padding: 0;
+}
+.oa-product-data-gate-item {
+  padding: 0.35rem 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+.oa-product-data-gate-item:last-child {
+  border-bottom: none;
+}
+.oa-product-data-gate-label {
+  display: block;
+  font-weight: 600;
+  color: #334155;
+  margin-bottom: 0.35rem;
+}
+.oa-product-data-gate-label em.is-ok {
+  margin-left: 0.4rem;
+  font-style: normal;
+  font-weight: 500;
+  color: #059669;
+  font-size: 0.72rem;
+}
+.oa-product-data-gate-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+.oa-product-data-gate-btn {
+  font-size: 0.72rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  cursor: pointer;
+}
+.oa-product-data-gate-btn.primary {
+  border-color: #6366f1;
+  background: #eef2ff;
+  color: #3730a3;
+}
+.oa-product-data-gate-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.oa-product-data-gate-retry {
+  font-size: 0.72rem;
+  padding: 0.35rem 0.65rem;
+  border-radius: 6px;
+  border: none;
+  background: #4f46e5;
+  color: #fff;
+  cursor: pointer;
+}
+.oa-product-data-gate-retry:disabled {
+  background: #94a3b8;
+  cursor: not-allowed;
+}
+.oa-work-drawer-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.oa-work-drawer-dl {
+  font-size: 0.72rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  cursor: pointer;
+}
+.aw-product-skill-id {
+  font-family: ui-monospace, monospace;
+  color: #6366f1;
+}
+.aw-product-skill-list em {
+  grid-column: 2;
+  font-style: normal;
+  color: #94a3b8;
+}
+
+.own-app--product .ua-shell.product-chat .oa-paper-card {
+  width: 100%;
+  max-width: 36rem;
+  text-align: left;
+  margin-top: 0.5rem;
+}

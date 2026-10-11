@@ -2,7 +2,7 @@
 
 import type { AgentSkill } from "./agentSkills";
 import { executeContract, contractPolicyFromSteps } from "./contractEngine";
-import { executeData, dataRecipeFromSteps } from "./dataEngine";
+import { executeData, dataRecipeFromSteps, monthlyFromCashflowImport } from "./dataEngine";
 import { executeFlow, flowPolicyFromSteps } from "./flowEngine";
 import { executeImage, imagePolicyFromSteps } from "./imageEngine";
 import {
@@ -138,6 +138,29 @@ function toneOf(level: string): PaperTone {
   if (level === "中" || level.startsWith("警告")) return "warn";
   if (level === "低") return "hint";
   return "ok";
+}
+
+export function paperExportGrid(paper: WorkPaper): WorkGrid | null {
+  if (paper.kind === "ledger") return paper.grid;
+  if (paper.kind === "flow") {
+    return {
+      columns: ["关卡", "说明", "状态"],
+      rows: paper.steps.map((s) => [s.label, s.detail, s.state]),
+    };
+  }
+  if (paper.kind === "credit") {
+    return {
+      columns: ["项", "值"],
+      rows: paper.rows.map((r) => [r.label, r.value]),
+    };
+  }
+  if (paper.kind === "contract") {
+    return {
+      columns: ["项", "合同", "模板/审批", "风险"],
+      rows: paper.issues.map((i) => [i.title, i.current, i.expected, i.level]),
+    };
+  }
+  return null;
 }
 
 export function paperDrawerTitle(paper: WorkPaper): string {
@@ -320,12 +343,19 @@ export function showcaseStepName(query: string, stepId: string, fallback: string
   return (key && table[key]?.[stepId]) || fallback;
 }
 
-export function paperForSkill(skill: Pick<AgentSkill, "id" | "steps">, query: string): WorkPaper | null {
+export function paperForSkill(
+  skill: Pick<AgentSkill, "id" | "steps">,
+  query: string,
+  opts?: { productWorkbench?: boolean },
+): WorkPaper | null {
+  const tableOpts = opts?.productWorkbench
+    ? { productWorkbench: true as const, dataSlot: "expense-ledger" as const }
+    : undefined;
   const sheet = sheetRecipeFromSteps(skill.steps);
   if (sheet) {
-    if (/押品/.test(query)) return collateralPaper();
+    if (/押品/.test(query)) return opts?.productWorkbench ? null : collateralPaper();
     const recipe = sheetRecipeFromQuery(query, sheet);
-    const ran = executeSheet(query, recipe);
+    const ran = executeSheet(query, recipe, tableOpts);
     const issues: PaperIssue[] = [];
     const deptMap = new Map<string, number>();
     for (const row of ran.grid.rows) {
@@ -356,8 +386,16 @@ export function paperForSkill(skill: Pick<AgentSkill, "id" | "steps">, query: st
 
   const data = dataRecipeFromSteps(skill.steps);
   if (data) {
-    if (/额度占用/.test(query)) return occupancyPaper(data);
-    const ran = executeData(data);
+    if (/额度占用/.test(query)) return opts?.productWorkbench ? null : occupancyPaper(data);
+    let recipe = data;
+    if (opts?.productWorkbench) {
+      try {
+        recipe = { ...data, monthly: monthlyFromCashflowImport() };
+      } catch {
+        return null;
+      }
+    }
+    const ran = executeData(recipe);
     const cell = (name: string) => ran.grid.rows.find((row) => row[0] === name);
     const cash = cell("现金流测算");
     const adjusted = cell("风险调整");
@@ -392,8 +430,8 @@ export function paperForSkill(skill: Pick<AgentSkill, "id" | "steps">, query: st
 
   const contract = contractPolicyFromSteps(skill.steps);
   if (contract) {
-    if (/放款材料/.test(query)) return checklistPaper(contract);
-    const ran = executeContract(contract);
+    if (/放款材料/.test(query)) return opts?.productWorkbench ? null : checklistPaper(contract);
+    const ran = executeContract(contract, { productWorkbench: opts?.productWorkbench });
     const row = (name: string) => ran.grid.rows.find((item) => item[0]?.includes(name));
     const amount = row("借款金额");
     const term = row("借款期限");
@@ -410,32 +448,44 @@ export function paperForSkill(skill: Pick<AgentSkill, "id" | "steps">, query: st
     return {
       kind: "contract",
       title: "信贷借款合同",
-      no: "2026-XF-00123",
+      no: opts?.productWorkbench ? "导入审查" : "2026-XF-00123",
       lender: "本行信贷中心",
-      borrower: "星图智造",
+      borrower: opts?.productWorkbench ? "（导入数据）" : "星图智造",
       amount: { value: amount?.[1] ?? "", expected: amount?.[2] ?? "", fill: "50万", tone: toneOf(amount?.[3] ?? "") },
       term: { value: term?.[1] ?? "", expected: term?.[2] ?? "", fill: "36个月", tone: toneOf(term?.[3] ?? "") },
       rate: { value: rate?.[1] ?? "", expected: rate?.[2] ?? "", fill: "6.2%", tone: toneOf(rate?.[3] ?? "") },
       repay: { value: repay?.[1] ?? "", expected: repay?.[2] ?? "", fill: "等额本息", tone: toneOf(repay?.[3] ?? "") },
       issues,
-      voucher: [
-        { label: "借款人", value: "星图智造" },
-        { label: "借款金额", value: amount?.[1] ?? "" },
-        { label: "借款期限", value: term?.[1] ?? "" },
-        { label: "借款利率", value: rate?.[1] ?? "" },
-        { label: "放款账户", value: "6222 **** **** 1234" },
-      ],
-      plan: [
-        { label: "采购原材料", value: "150,000.00 元" },
-        { label: "设备款", value: "100,000.00 元" },
-        { label: "周转备用", value: "50,000.00 元" },
-      ],
+      voucher: opts?.productWorkbench
+        ? [
+            { label: "借款金额", value: amount?.[1] ?? "" },
+            { label: "借款期限", value: term?.[1] ?? "" },
+            { label: "借款利率", value: rate?.[1] ?? "" },
+          ]
+        : [
+            { label: "借款人", value: "星图智造" },
+            { label: "借款金额", value: amount?.[1] ?? "" },
+            { label: "借款期限", value: term?.[1] ?? "" },
+            { label: "借款利率", value: rate?.[1] ?? "" },
+            { label: "放款账户", value: "6222 **** **** 1234" },
+          ],
+      plan: opts?.productWorkbench
+        ? []
+        : [
+            { label: "采购原材料", value: "150,000.00 元" },
+            { label: "设备款", value: "100,000.00 元" },
+            { label: "周转备用", value: "50,000.00 元" },
+          ],
     };
   }
 
   const flow = flowPolicyFromSteps(skill.steps);
   if (flow) {
-    const ran = executeFlow(query, flow);
+    const ran = executeFlow(
+      query,
+      flow,
+      opts?.productWorkbench ? { productWorkbench: true, dataSlot: "expense-ledger" } : undefined,
+    );
     let stopped = false;
     const steps = ran.phases.slice(0, 4).map((phase) => {
       const stop = !stopped && (phase.detail.includes("停在") || phase.detail.includes("拦截"));

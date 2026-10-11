@@ -1,6 +1,13 @@
 /** 技能路由 — 聊天与技能管理共用的唯一决策函数，可注入任意技能目录做沙盘推演 */
 
-import { allRunnableSkills, scoreSkillDetailed, type AgentSkill, type SkillDiscoveryRow } from "./agentSkills";
+import {
+  allRunnableSkills,
+  ANSWER_LAYER_SKILL_ID,
+  isCustomerSkill,
+  scoreSkillDetailed,
+  type AgentSkill,
+  type SkillDiscoveryRow,
+} from "./agentSkills";
 import { classifyCapability } from "./policyDesk";
 import { isSheetOperationQuery } from "./showcaseContinuation";
 import { matchCreditFlowSkillId } from "./creditFlowCatalog";
@@ -153,6 +160,22 @@ export function routeQuery(
       return toSkill(activeSkill, "内置规则：信贷多轮流程进行中", 5, ["credit-flow-active"]);
     }
   }
+
+  const INSTANT_DESK_IDS = ["data-desk", "sheet-desk", "contract-desk"] as const;
+  const qNorm = query.trim().toLowerCase();
+  for (const deskId of INSTANT_DESK_IDS) {
+    const deskSkill = find(deskId);
+    if (!deskSkill) continue;
+    const row = ranked.find((r) => r.skill.id === deskId);
+    if (!row || row.score < 2) continue;
+    const flowId = matchCreditFlowSkillId(query);
+    const flowRow = flowId ? ranked.find((r) => r.skill.id === flowId) : undefined;
+    const exactDesk = row.hits.some((h) => qNorm === h.toLowerCase());
+    if (!flowRow || row.score > flowRow.score || (row.score >= flowRow.score && exactDesk)) {
+      return toSkill(deskSkill, `内置规则：${deskId} 一步技能（优先于多轮流程）`, row.score, row.hits);
+    }
+  }
+
   const flowSkillId = matchCreditFlowSkillId(query);
   if (flowSkillId) {
     const flowSkill = find(flowSkillId);
@@ -182,4 +205,18 @@ export function routeQuery(
     return toSkill(faqSkill!, `内置规则：没有更合适的去向，按最接近的产品问题「${near.entry.q}」作答`, 1, [near.entry.q]);
   }
   return toKind("open", top?.score ? `说法只命中 ${top.score} 分，不够 2 分` : "没有命中任何技能的说法");
+}
+
+/** 产品对话：强技能命中时走 runSkill，不要先进入 LLM/RAG 环 */
+export function resolveProductSkillFirstRoute(
+  query: string,
+  catalog: AgentSkill[] = allRunnableSkills(),
+  opts?: RouteQueryOpts,
+): RouteDecision | null {
+  const d = routeQuery(query, catalog, opts);
+  if (d.kind !== "skill" || !d.skill || d.score < 2) return null;
+  if (d.skill.id === ANSWER_LAYER_SKILL_ID || d.skill.id === "product-faq") return null;
+  if (!d.skill.runnable || d.skill.steps.length === 0) return null;
+  if (!isCustomerSkill(d.skill.id) && !d.skill.id.endsWith("-flow-desk")) return null;
+  return d;
 }

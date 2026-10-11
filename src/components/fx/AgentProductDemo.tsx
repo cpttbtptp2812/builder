@@ -8,8 +8,12 @@ import { MessageTimeFoot, ThreadDateDivider } from "./agent/MessageTimeFoot";
 import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { AgentToolChip } from "./agent/AgentToolChip";
 import { AgentWelcome } from "./agent/AgentWelcome";
+import { ProductSkillHome } from "./agent/ProductSkillHome";
+import { ProductRunParts } from "./agent/ProductRunParts";
+import { llmPickSkillId } from "../../lib/productLlmRoute";
 import { logChatSession, markQueryPublished } from "../../lib/analyticsLog";
 import { formatThreadAsPlaza, matchPlaza, publishPlaza, type PlazaItem } from "../../lib/plazaFeed";
+import { checkBackendHealth } from "../../lib/apiClient";
 import { getSessionId } from "../../lib/sessionId";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
@@ -17,7 +21,8 @@ import { InlineEvalCard, runInlineEvalAsync } from "./agent/InlineEvalCard";
 import { ArtifactPanel } from "./agent/ArtifactPanel";
 import { ResultLocator } from "./agent/ResultLocator";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
-import { explainDiscovery, type AgentSkill } from "../../lib/agentSkills";
+import { allRunnableSkills, explainDiscovery, type AgentSkill } from "../../lib/agentSkills";
+import { resolveProductSkillFirstRoute } from "../../lib/skillRouter";
 import { listFollowUpPrompts, listKnowledgePrompts, matchPresetQuery } from "../../lib/ownKnowledge";
 import { AGENT_QUICK_PROMPTS } from "../../lib/agentRuntime";
 import {
@@ -27,7 +32,6 @@ import {
 } from "./agent/OwnSettingsSheet";
 import { loadEnabledMcpTools } from "./agent/AgentMcpRegistry";
 import {
-  runAgentTurn,
   type AgentChatMessage,
   type AgentStreamEvent,
   type AgentTurnTrace,
@@ -118,7 +122,8 @@ import { OwnCommandPalette, type PaletteItem } from "../ownagent/OwnCommandPalet
 import { WorkPaperCard, WorkPaperView } from "../ownagent/WorkPaper";
 import { WorkPaperDrawer } from "../ownagent/WorkPaperDrawer";
 import { FlowOperationDrawer } from "../ownagent/FlowOperationDrawer";
-import { SHOWCASE_PROMPTS, type WorkPaper } from "../../lib/workPaper";
+import { HUB_CHAT_PROMPTS } from "../../lib/platformCatalog";
+import type { WorkPaper } from "../../lib/workPaper";
 import { ShowcaseFlowBubble } from "../ownagent/ShowcaseFlowBubble";
 import { flowUsesUnifiedHubDrawer, shouldBindHubCreditFlow } from "../../lib/creditFlowUiGate";
 import { creditFlowById, matchCreditFlowId } from "../../lib/creditFlowCatalog";
@@ -265,8 +270,8 @@ export function AgentProductDemo({
   const [highlightTerm, setHighlightTerm] = useState<string | null>(null);
   const [liveMulti, setLiveMulti] = useState<MultiAgentStep[]>([]);
   const [inspector, setInspector] = useState(false);
-  const [flowOpen, setFlowOpen] = useState(() => !hubMode);
-  const [rightTab, setRightTab] = useState<"graph" | "trace" | "insight">("graph");
+  const [flowOpen, setFlowOpen] = useState(() => hubMode);
+  const [rightTab, setRightTab] = useState<"graph" | "trace" | "insight">(hubMode ? "graph" : "trace");
   const [sessionsOpen, setSessionsOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [pinned, setPinned] = useState("");
@@ -276,6 +281,9 @@ export function AgentProductDemo({
   const [threadSearch, setThreadSearch] = useState("");
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [resultFlash, setResultFlash] = useState(false);
+  const [liveProductRun, setLiveProductRun] = useState<import("../../lib/productRun/types").ProductRunView | null>(
+    null,
+  );
 
   const { listening: voiceListening, supported: voiceSupported, start: voiceStart, stop: voiceStop } = useVoiceInput(
     useCallback((text: string, _final: boolean) => {
@@ -317,12 +325,14 @@ export function AgentProductDemo({
     const syncConfig = () => {
       setLlmConfig(loadLlmConfig());
       setEnabledTools(loadEnabledMcpTools());
-      setOrchMode(loadOrchestrationMode());
+      if (!hubMode) setOrchMode("single");
+      else setOrchMode(loadOrchestrationMode());
     };
+    syncConfig();
     window.addEventListener("ownagent:config-updated", syncConfig);
     return () => window.removeEventListener("ownagent:config-updated", syncConfig);
-  }, []);
-  const slashMenu = slashSuggestions(input);
+  }, [hubMode]);
+  const slashMenu = hubMode ? slashSuggestions(input) : [];
 
   const railItems = useMemo(
     () =>
@@ -372,7 +382,11 @@ export function AgentProductDemo({
     paper?: WorkPaper | null;
   } | null>(null);
   /** 流程中自由输入：先问是否结束流程（对齐 credit 助手） */
-  const [flowExitPrompt, setFlowExitPrompt] = useState<{ query: string; flowName: string } | null>(null);
+  const [flowExitPrompt, setFlowExitPrompt] = useState<{
+    query: string;
+    flowName: string;
+    intent: "exit" | "freeText";
+  } | null>(null);
 
   const openHubFlowDrawer = useCallback(
     (
@@ -455,13 +469,11 @@ export function AgentProductDemo({
     const out: { label: string; text: string; hint?: string }[] = [];
 
     if (hubMode) {
-      if (creditFlow) {
-        push("继续", "继续", "推进一步");
-        push("退出流程", "退出流程", "结束多轮");
+      if (creditFlow) return out;
+      for (const p of HUB_CHAT_PROMPTS) {
+        if (out.length >= 6) break;
+        push(p.label, p.text, p.hint ?? "Hub");
       }
-      const asked = new Set(messages.map((m) => m.content.trim()));
-      const left = SHOWCASE_PROMPTS.filter((p) => !asked.has(p.text));
-      for (const p of left.slice(0, creditFlow ? 3 : 5)) push(p.label, p.text, "对话触发");
       if (out.length) return out;
     }
 
@@ -516,6 +528,7 @@ export function AgentProductDemo({
     if (ev.type === "trace-sync") setTraces(ev.traces);
     if (ev.type === "reasoning-delta") setStreamReasoning((s) => s + ev.text);
     if (ev.type === "text-delta" && !hubMode) setStreamText((s) => s + ev.text);
+    if (ev.type === "product-run" && !hubMode) setLiveProductRun(ev.run);
     if (ev.type === "tool-start") {
       onFlowActive?.("mcp");
       toolsAcc.push({ id: ev.tool.id, name: ev.tool.name, state: "loading" });
@@ -542,10 +555,31 @@ export function AgentProductDemo({
       text: string,
       forcedVersionId?: string,
       catalog?: AgentSkill[],
-      opts?: { flowSilent?: boolean },
+      opts?: { flowSilent?: boolean; pinSkillId?: string },
     ) => {
       const parsed = parseSlash(text);
       if (!parsed.query.trim() || running || sendLockRef.current) return;
+      if (!hubMode && parsed.matched) {
+        sendLockRef.current = false;
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "user",
+            content: text.trim(),
+            createdAt: Date.now(),
+          },
+          {
+            id: uid(),
+            role: "assistant",
+            content: "请直接描述要办的业务，无需输入命令。技能检查与回归请在左侧「技能」中操作。",
+            createdAt: Date.now(),
+            mode: "guest",
+          },
+        ]);
+        setInput("");
+        return;
+      }
       const clarify = clarifyRef.current;
       clarifyRef.current = null;
       const picked = clarify?.options.find((o) => o.label === text.trim());
@@ -598,23 +632,22 @@ export function AgentProductDemo({
         hubFlowAnchorRef.current = null;
       }
       const hubFlowBind = hubMode && shouldBindHubCreditFlow(q, flowState, { flowSilent });
-      const flowExitTurn = hubMode && Boolean(flowState?.flowId) && isFlowExitQuery(q);
-      if (flowExitTurn) {
-        setFlowOpDrawer(null);
-        setPaperDrawer(null);
-      }
 
       if (
         hubMode &&
         flowState?.flowId &&
-        !hubFlowBind &&
         !flowSilent &&
         !parsed.force &&
-        !inspectPreview
+        !inspectPreview &&
+        (isFlowExitQuery(q) || !hubFlowBind)
       ) {
         const flowName = creditFlowById(flowState.flowId)?.name ?? "信贷流程";
-        setFlowExitPrompt({ query: q, flowName });
-        setInput(q);
+        setFlowExitPrompt({
+          query: q,
+          flowName,
+          intent: isFlowExitQuery(q) ? "exit" : "freeText",
+        });
+        setInput("");
         sendLockRef.current = false;
         return;
       }
@@ -683,6 +716,7 @@ export function AgentProductDemo({
       setStreamReasoning("");
       setStreamText("");
       setLiveTools([]);
+      setLiveProductRun(null);
       window.setTimeout(() => onFlowActive?.("router"), 240);
 
       let fullReasoning = "";
@@ -702,8 +736,9 @@ export function AgentProductDemo({
       let turnRagRuntimeLocal: "server" | "local" | undefined;
       let releaseInspectReport: ReleaseInspectReport | undefined;
       let forcedFollowUps: string[] | undefined;
-      let pinSkillId: string | undefined;
+      let pinSkillId: string | undefined = opts?.pinSkillId;
       let showcaseFlowTurn: OwnChatMessage["showcaseFlow"];
+      let productRun: OwnChatMessage["productRun"];
       let turnDone = false;
 
       const bindStreamJournal = (ev: AgentStreamEvent) => {
@@ -808,15 +843,17 @@ export function AgentProductDemo({
                 tags: ["信贷多轮流程", route?.skillName ?? "流程技能"].filter(Boolean).slice(0, 2),
                 runtime: turnRuntimeLocal,
               }
-            : buildAnswerInsight({
-                flowJournal: journalRef.current,
-                ms,
-                mode,
-                route,
-                toolCount: toolsAcc.length,
-                runtime: turnRuntimeLocal,
-                ragRuntime: turnRagRuntimeLocal,
-              });
+            : hubMode
+              ? buildAnswerInsight({
+                  flowJournal: journalRef.current,
+                  ms,
+                  mode,
+                  route,
+                  toolCount: toolsAcc.length,
+                  runtime: turnRuntimeLocal,
+                  ragRuntime: turnRagRuntimeLocal,
+                })
+              : undefined;
         latestAnswerIdRef.current = assistantId;
         const replyVersionId = forcedVersionId ?? activeVersionId() ?? undefined;
         if (hubMode && showcaseFlowTurn) {
@@ -839,6 +876,8 @@ export function AgentProductDemo({
             setFlowOpDrawer(null);
           }
         } else if (hubMode && workPaper) {
+          setPaperDrawer({ paper: workPaper, messageId: assistantId });
+        } else if (!hubMode && workPaper) {
           setPaperDrawer({ paper: workPaper, messageId: assistantId });
         }
         setMessages((prev) => {
@@ -869,11 +908,12 @@ export function AgentProductDemo({
             route,
             inlineEval,
             followUps,
-            answerInsight: forcedFollowUps ? undefined : answerInsight,
+            answerInsight: hubMode && !forcedFollowUps ? answerInsight : undefined,
             artifacts: deduped.length ? deduped : undefined,
             plazaSource: plazaSourceLocal,
             releaseInspect: releaseInspectReport,
             workPaper,
+            productRun,
             showcaseFlow: showcaseFlowTurn,
             catalogVersionId: replyVersionId,
             catalogVersionOriginId: replyVersionId,
@@ -1040,11 +1080,61 @@ export function AgentProductDemo({
           }
         }
 
+        if (
+          !hubMode &&
+          !parsed.force &&
+          !parsed.evalKind &&
+          !inspectPreview &&
+          parsed.query.trim() !== "/eval"
+        ) {
+          const health = await checkBackendHealth(true);
+          if (!health?.ok) {
+            finish("办事服务未连接，暂时无法受理。请联系管理员确认服务已启动。");
+            return;
+          }
+        }
+
         if (!parsed.force && !parsed.evalKind && hubFlowBind) {
           const bindFlowId = flowState?.flowId ?? matchedFlowId;
           if (bindFlowId) {
             pinSkillId = creditFlowSkillId(bindFlowId);
             jChip("route", `多轮流程 · ${bindFlowId}`);
+          }
+        }
+
+        if (!hubMode && !parsed.force && !parsed.evalKind && !pinSkillId) {
+          const routable = catalog?.length ? catalog : allRunnableSkills();
+          const productRoute = resolveProductSkillFirstRoute(q, routable, {
+            creditFlowActive: Boolean(flowState?.flowId),
+            activeFlowId: flowState?.flowId ?? null,
+          });
+          if (productRoute?.skillId) {
+            pinSkillId = productRoute.skillId;
+            mode = "guest";
+            jChip("route", `办事技能 · ${productRoute.label}`);
+          }
+        }
+
+        if (!hubMode && useLlm && !pinSkillId && !parsed.force && !parsed.evalKind && isLlmConfigured(llmConfig)) {
+          try {
+            jChip("route", `大模型选技能 · ${llmConfig.model}`);
+            jActivate("fetch");
+            const pickedId = await llmPickSkillId(q, llmConfig, {
+              catalog: catalog?.length ? catalog : undefined,
+              signal: ac.signal,
+            });
+            if (pickedId) {
+              pinSkillId = pickedId;
+              mode = "guest";
+              const sk = (catalog?.length ? catalog : allRunnableSkills()).find((s) => s.id === pickedId);
+              jChip("route", `办事技能 · ${sk?.name ?? pickedId}`);
+            }
+          } catch (err) {
+            if ((err as Error).name === "AbortError") return;
+            if (isAuthError(err)) {
+              finish("LLM Key 无效。请在「接入配置」检查 API Key，或关闭 LLM 仅用关键词路由。");
+              return;
+            }
           }
         }
 
@@ -1087,7 +1177,7 @@ export function AgentProductDemo({
           }
         }
 
-        if (!hubMode && !catalog?.length && !parsed.force && !parsed.evalKind && !pinSkillId) {
+        if (hubMode && !catalog?.length && !parsed.force && !parsed.evalKind && !pinSkillId) {
           const preset = matchPresetQuery(q);
           if (preset) {
             mode = "guest";
@@ -1175,7 +1265,7 @@ export function AgentProductDemo({
         if (ws.skillHint) jChip("route", ws.skillHint);
 
         const sheet = synthesizeCompareTable(q);
-        if (sheet && !hubMode && !parsed.force && !parsed.evalKind && !pinSkillId) {
+        if (sheet && hubMode && !useLlm && !parsed.force && !parsed.evalKind && !pinSkillId) {
           mode = "sheet";
           route = {
             skillId: "ai-sheet",
@@ -1192,7 +1282,7 @@ export function AgentProductDemo({
           return;
         }
 
-        if (parsed.evalKind) {
+        if (parsed.evalKind && hubMode) {
           mode = "eval";
           const data = await runInlineEvalAsync(parsed.evalKind);
           inlineEval = data;
@@ -1234,7 +1324,7 @@ export function AgentProductDemo({
           bindStreamJournal(ev);
         };
 
-        if (!hubMode && !catalog?.length && orchMode === "multi" && !parsed.force) {
+        if (hubMode && !catalog?.length && orchMode === "multi" && !parsed.force) {
           mode = "multi";
           route = { skillId: "multi-agent", skillName: "多代理编排", score: 4, hits: ["planner", "executor", "reviewer"], path: "multi" };
           jChip("route", "多代理：Planner → Executor → Reviewer");
@@ -1273,40 +1363,6 @@ export function AgentProductDemo({
           return;
         }
 
-        if (!hubMode && !catalog?.length && useLlm) {
-          try {
-            mode = "llm";
-            route = { skillId: "llm-loop", skillName: llmConfig.model, score: 4, hits: ["tool-call"], path: "llm" };
-            jChip("route", `大模型：${llmConfig.model}`);
-            jActivate("fetch");
-            const result = await runAgentTurn(
-              q,
-              historyRef.current,
-              llmConfig,
-              {
-                snapshotRoot: rootRef.current,
-                signal: ac.signal,
-                enabledTools,
-                memoryBlock: ws.memoryBlock,
-                promptAddon,
-              },
-              onEv,
-            );
-            setTraces(result.traces);
-            historyRef.current = result.messages;
-            setHistory(result.messages);
-            finish(result.assistantText || fullText, fullReasoning || undefined);
-            return;
-          } catch (err) {
-            if ((err as Error).name === "AbortError") return;
-            if (isAuthError(err)) {
-              finish("LLM Key 无效。请在「接入配置」检查 API Key，或关闭 LLM 继续使用内置 Agent。");
-              return;
-            }
-            throw err;
-          }
-        }
-
         jActivate("fetch");
         const guest = await runGuestAgentTurn(
           q,
@@ -1323,6 +1379,8 @@ export function AgentProductDemo({
             creditFlow: hubMode && !hubFlowBind ? null : flowState,
             hubProduct: hubMode,
             hubFlowBind,
+            productWorkbench: !hubMode,
+            sessionId: getSessionId(),
           },
           onEv,
         );
@@ -1334,6 +1392,7 @@ export function AgentProductDemo({
         policyTrust = guest.policyTrust;
         route = guest.route;
         workPaper = guest.paper ?? null;
+        productRun = guest.productRun;
         showcaseFlowTurn = guest.showcaseFlow;
         if (guest.creditFlow !== undefined) {
           setCreditFlow(guest.creditFlow);
@@ -1622,7 +1681,7 @@ export function AgentProductDemo({
   }, [running, store, messages, history]);
 
   const paletteItems: PaletteItem[] = useMemo(() => {
-    return [
+    const items: PaletteItem[] = [
       { id: "new", group: "会话", label: "新对话", kbd: "⌘N", run: newChat },
       {
         id: "connect",
@@ -1663,11 +1722,26 @@ export function AgentProductDemo({
         run: () => switchSession(s.id),
       })),
     ];
+    if (!hubMode) {
+      const drop = new Set([
+        "multi",
+        "eval",
+        "feed",
+        "skills",
+        "trace",
+        "jd",
+        "mcp",
+        "prompts",
+        "theory",
+        "eval-panel",
+      ]);
+      return items.filter((it) => !drop.has(it.id));
+    }
+    return items;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [inspector, store.sessions, messages, history, orchMode]);
+  }, [inspector, store.sessions, messages, history, orchMode, hubMode]);
 
   const toolCount = traces.reduce((n, t) => n + t.tools.length, 0);
-  const modeHint = useLlm ? llmConfig.model : "本地运行";
 
   const displayJournal = useMemo(() => {
     const raw =
@@ -1692,7 +1766,7 @@ export function AgentProductDemo({
 
   return (
     <div
-      className={`ua-shell ua-shell-flow${hubMode ? " hub" : ""}${inspector ? " with-side" : ""}${!flowOpen ? " flow-collapsed" : ""}${running && !hubMode ? " running-pulse" : ""}`}
+      className={`ua-shell ua-shell-flow${hubMode ? " hub" : " product-chat"}${inspector ? " with-side" : ""}${!flowOpen ? " flow-collapsed" : ""}${running && !hubMode ? " running-pulse" : ""}`}
       ref={rootRef}
     >
       <header className="ua-topbar-pro">
@@ -1715,21 +1789,9 @@ export function AgentProductDemo({
           </div>
         )}
 
-        {!hubMode && <SessionStats messages={messages} />}
+        {hubMode ? <SessionStats messages={messages} /> : null}
 
         {/* 实时检索脉冲 — 客户模式隐藏 */}
-        {!hubMode && running && (() => {
-          const liveHits = displayJournal
-            .flatMap((n) => n.evidence ?? [])
-            .filter((e) => e.kind === "hit").length;
-          return liveHits > 0 ? (
-            <div className="ua-live-pulse">
-              <span className="ua-live-pulse-dot" />
-              <span>已检索 {liveHits} 个知识片段</span>
-            </div>
-          ) : null;
-        })()}
-
         <div style={{ flex: 1 }} />
 
         {/* 右：操作区 */}
@@ -1751,14 +1813,14 @@ export function AgentProductDemo({
             title={flowOpen ? "收起思考过程" : "打开思考过程"}
           >
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 3.5h10M2 7h7M2 10.5h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><circle cx="11.5" cy="7" r="1.4" fill="currentColor"/></svg>
-            <span>{hubMode ? "来源" : "轨迹"}</span>
+            <span>{hubMode ? "来源" : "进度"}</span>
           </button>
           {!hubMode && (
             <button
               type="button"
               className={`ua-topbar-btn-pro${inspector ? " active" : ""}`}
               onClick={() => setInspector((o) => !o)}
-              title="运行记录"
+              title="本单执行记录"
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="12" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="7" width="8" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="10" width="10" height="1.4" rx="0.7" fill="currentColor"/></svg>
               <span>记录</span>
@@ -1773,17 +1835,6 @@ export function AgentProductDemo({
             >
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><rect x="1" y="4" width="12" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="7" width="8" height="1.4" rx="0.7" fill="currentColor"/><rect x="1" y="10" width="10" height="1.4" rx="0.7" fill="currentColor"/></svg>
               <span>详情</span>
-            </button>
-          )}
-          {!hubMode && (
-            <button
-              type="button"
-              className="ua-topbar-btn-pro"
-              onClick={() => { setSettingsTab("knowledge"); setSettingsOpen(true); }}
-              title="知识库"
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 2h4v10H2zM8 2h4v10H8z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round"/></svg>
-              <span>知识库</span>
             </button>
           )}
           {hubMode && (
@@ -1862,7 +1913,7 @@ export function AgentProductDemo({
                       <UserMessageBubble text={m.content} />
                     ) : (
                       <>
-                        {m.plazaSource && (
+                        {hubMode && m.plazaSource && (
                           <PlazaRouteCard
                             source={m.plazaSource}
                             onOpenPlaza={() =>
@@ -1876,7 +1927,7 @@ export function AgentProductDemo({
                         {m.multiAgent && m.multiAgent.length > 0 && (
                           <MultiAgentTraceCard steps={m.multiAgent} />
                         )}
-                        {m.showcaseFlow ? (
+                        {hubMode && m.showcaseFlow ? (
                           <ShowcaseFlowBubble
                             flow={m.showcaseFlow}
                             flowBusy={running}
@@ -1894,6 +1945,28 @@ export function AgentProductDemo({
                               void send(t, undefined, undefined, { flowSilent: true });
                             }}
                             onSelectStage={hubMode ? jumpFlowStage : undefined}
+                          />
+                        ) : null}
+                        {m.productRun ? (
+                          <ProductRunParts
+                            run={m.productRun}
+                            disabled={running}
+                            onRunUpdated={(next) => {
+                              setMessages((prev) =>
+                                prev.map((msg) =>
+                                  msg.id === m.id
+                                    ? {
+                                        ...msg,
+                                        content: next.content || msg.content,
+                                        productRun: next.run,
+                                        workPaper: next.paper ?? msg.workPaper,
+                                        runtime: next.runtime,
+                                      }
+                                    : msg,
+                                ),
+                              );
+                              if (next.paper) setPaperDrawer({ paper: next.paper, messageId: m.id });
+                            }}
                           />
                         ) : null}
                         {m.workPaper && !(hubMode && m.showcaseFlow) ? (
@@ -1921,8 +1994,6 @@ export function AgentProductDemo({
                                   onOpen={() => setPaperDrawer({ paper: m.workPaper!, messageId: m.id })}
                                 />
                               </>
-                            ) : m.workPaper ? (
-                              <WorkPaperView paper={m.workPaper} />
                             ) : (
                               <AgentMarkdown text={m.content} promoteTables={hubMode || !m.artifacts?.length} />
                             )}
@@ -1930,7 +2001,7 @@ export function AgentProductDemo({
                         ) : null}
                       </>
                     )}
-                    {(!hubMode || inspector) && m.role === "assistant" && !m.showcaseFlow && m.flowJournal && m.flowJournal.length > 0 && (
+                    {inspector && m.role === "assistant" && !m.showcaseFlow && m.flowJournal && m.flowJournal.length > 0 && (
                       <AnswerDNA flowJournal={m.flowJournal} />
                     )}
                     {hubMode && m.role === "assistant" && !m.showcaseFlow ? (
@@ -1976,10 +2047,20 @@ export function AgentProductDemo({
                           />
                         }
                       />
-                    ) : m.role === "assistant" && m.answerInsight && !m.showcaseFlow ? (
+                    ) : !hubMode &&
+                      m.role === "assistant" &&
+                      !m.showcaseFlow &&
+                      (m.tools?.length || m.route?.path === "skill") ? (
+                      <MessageMetaBar
+                        tools={m.tools?.map((t) => ({ ...t, name: toolLabel(t.name) }))}
+                        message={m}
+                        productSurface
+                      />
+                    ) : m.role === "assistant" && m.answerInsight && !m.showcaseFlow && hubMode ? (
                       <AnswerInsightBar insight={m.answerInsight} compact={false} />
                     ) : null}
-                    {m.role === "assistant" &&
+                    {hubMode &&
+                      m.role === "assistant" &&
                       m.answerInsight &&
                       !m.releaseInspect &&
                       !m.showcaseFlow &&
@@ -2005,17 +2086,6 @@ export function AgentProductDemo({
                         }}
                       />
                     )}
-                    {!hubMode && m.role === "assistant" && !running && idx === messages.length - 1 && (() => {
-                      const userMsg = messages.slice(0, idx).reverse().find(x => x.role === "user");
-                      if (!userMsg) return null;
-                      return (
-                        <PublishToFeedButton
-                          question={userMsg.content}
-                          answer={m.content}
-                          thread={messages.slice(0, idx + 1).map(x => ({ role: x.role, content: x.content }))}
-                        />
-                      );
-                    })()}
                     {(!hubMode || inspector) && m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
                       <ArtifactPanel artifacts={m.artifacts} />
                     )}
@@ -2045,32 +2115,6 @@ export function AgentProductDemo({
                     {inspector && m.role === "assistant" && m.reasoning && (
                       <AgentReasoningBlock text={m.reasoning} thinking={false} defaultOpen={false} />
                     )}
-                    {!hubMode && m.role === "assistant" && idx === messages.length - 1 && (() => {
-                      const prompts = normalizeFollowUps(m.followUps);
-                      if (!prompts.length && m.content) {
-                        const priorUser = messages.slice(0, idx).filter((x) => x.role === "user").map((x) => x.content);
-                        const uq = messages[idx - 1]?.role === "user" ? messages[idx - 1]!.content : "";
-                        return (
-                          <FollowUpRail
-                            prompts={followUpsFor({
-                              exclude: priorUser,
-                              query: uq,
-                              flowJournal: m.flowJournal,
-                              limit: 3,
-                            })}
-                            disabled={running}
-                            onPick={(t) => void send(t)}
-                          />
-                        );
-                      }
-                      return (
-                        <FollowUpRail
-                          prompts={prompts}
-                          disabled={running}
-                          onPick={(t) => void send(t)}
-                        />
-                      );
-                    })()}
                     <div className="ua-msg-actions">
                       <button type="button" className="ua-msg-act" title="复制" onClick={() => void copyMsg(m)}>
                         {copiedId === m.id ? "✓" : "⎘"}
@@ -2080,7 +2124,7 @@ export function AgentProductDemo({
                           ↻
                         </button>
                       )}
-                      {m.role === "assistant" && idx === messages.length - 1 && !running && (
+                      {hubMode && m.role === "assistant" && idx === messages.length - 1 && !running && (
                         <button
                           type="button"
                           className="ua-msg-act ua-msg-act--text"
@@ -2122,6 +2166,18 @@ export function AgentProductDemo({
                         ))}
                       </div>
                     )}
+                    {liveProductRun && liveProductRun.parts.some((p) => p.kind === "process") ? (
+                      <ul className="oa-product-run-steps ua-live-run-steps">
+                        {liveProductRun.parts
+                          .filter((p) => p.kind === "process")
+                          .map((s, i) => (
+                            <li key={`${s.label}-${i}`} className={s.ok ? "ok" : "bad"}>
+                              <strong>{s.label}</strong>
+                              <span>{s.detail}</span>
+                            </li>
+                          ))}
+                      </ul>
+                    ) : null}
                     {streamText ? (
                       <div className="ua-bubble assistant streaming ink">
                         <AgentMarkdown text={streamText} />
@@ -2140,16 +2196,20 @@ export function AgentProductDemo({
 
           {emptyMessage && (
             <div className="ua-empty" style={{ paddingBottom: Math.max(footerHeight + 16, 120) }}>
-              <AgentWelcome
-                kbRev={kbRev}
-                hidePrompts={hubMode}
-                onPrompt={(t) => void send(t)}
-                disabled={running}
-                onOpenPlaza={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
-                onOpenKnowledge={() =>
-                  window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } }))
-                }
-              />
+              {hubMode ? (
+                <AgentWelcome
+                  kbRev={kbRev}
+                  hidePrompts={hubMode}
+                  onPrompt={(t) => void send(t)}
+                  disabled={running}
+                  onOpenPlaza={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
+                  onOpenKnowledge={() =>
+                    window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "rag" } }))
+                  }
+                />
+              ) : (
+                <ProductSkillHome onRun={(t) => void send(t)} disabled={running} />
+              )}
             </div>
           )}
 
@@ -2191,25 +2251,37 @@ export function AgentProductDemo({
               {flowExitPrompt ? (
                 <div className="oa-flow-exit-prompt" role="dialog" aria-labelledby="oa-flow-exit-title">
                   <p id="oa-flow-exit-title">
-                    您正在办理「<strong>{flowExitPrompt.flowName}</strong>
-                    」。这句话不像流程操作，要<strong>结束流程</strong>并当作普通问题发送吗？
+                    {flowExitPrompt.intent === "exit" ? (
+                      <>
+                        您正在办理「<strong>{flowExitPrompt.flowName}</strong>
+                        」。要<strong>结束流程</strong>吗？结束后仍可在流程卡片上续办。
+                      </>
+                    ) : (
+                      <>
+                        您正在办理「<strong>{flowExitPrompt.flowName}</strong>
+                        」。这句话不像流程操作，要<strong>结束流程</strong>并当作普通问题发送吗？
+                      </>
+                    )}
                   </p>
-                  <blockquote className="oa-flow-exit-preview">{flowExitPrompt.query}</blockquote>
+                  {flowExitPrompt.intent === "freeText" ? (
+                    <blockquote className="oa-flow-exit-preview">{flowExitPrompt.query}</blockquote>
+                  ) : null}
                   <div className="oa-flow-exit-actions">
                     <button
                       type="button"
                       className="oa-flow-action primary"
                       onClick={() => {
                         const ask = flowExitPrompt.query;
+                        const asFreeText = flowExitPrompt.intent === "freeText";
                         setFlowExitPrompt(null);
                         setCreditFlow(null);
                         creditFlowRef.current = null;
                         setFlowOpDrawer(null);
-                        void send(ask);
-                        // 保留 hubFlowCheckpointRef / 卡片 checkpoint，便于稍后在卡片上续办
+                        setPaperDrawer(null);
+                        if (asFreeText) void send(ask);
                       }}
                     >
-                      结束流程并发送
+                      {flowExitPrompt.intent === "exit" ? "结束流程" : "结束流程并发送"}
                     </button>
                     <button
                       type="button"
@@ -2218,15 +2290,15 @@ export function AgentProductDemo({
                         setFlowExitPrompt(null);
                       }}
                     >
-                      继续办理，不发这句话
+                      继续办理
                     </button>
                   </div>
                 </div>
               ) : null}
-              {!running && quickPromptItems.length > 0 && (
+              {hubMode && !running && quickPromptItems.length > 0 && (
                 <div className="oc-shortcuts oc-shortcuts--follow">
                   <ChatQuickPrompts
-                    label={hubMode && creditFlow ? "流程续聊" : hubMode ? "信贷场景" : "继续问"}
+                    label="信贷场景"
                     items={quickPromptItems}
                     disabled={running}
                     onPick={(t) =>
@@ -2240,17 +2312,6 @@ export function AgentProductDemo({
                   />
                 </div>
               )}
-              {!running && !hubMode && (
-                <div className="oc-shortcuts oc-shortcuts--inspect">
-                  <ReleaseInspectEntry
-                    disabled={running}
-                    onInspect={(url) => {
-                      const clean = url.replace(/^\/inspect\s+/gi, "").trim();
-                      if (clean) void send(`/inspect ${clean}`);
-                    }}
-                  />
-                </div>
-              )}
 
             <div className="ua-compose-wrap">
               <div className="oc-above">
@@ -2260,10 +2321,10 @@ export function AgentProductDemo({
                   focused={composeFocused}
                   exclude={messages.map((m) => m.content)}
                   onPick={(t) => setInput(t)}
-                  skipPlaza={hubMode}
-                  showExamples={!hubMode || quickPromptItems.length === 0}
+                  skipPlaza={!hubMode}
+                  showExamples={hubMode && quickPromptItems.length === 0}
                 />
-                {!hubMode && composeFocused && (
+                {hubMode && composeFocused && (
                   <PlazaHitPop pre={precheck} onUsePlaza={(item) => void deliverPlazaAnswer(input, item)} />
                 )}
               </div>
@@ -2275,32 +2336,6 @@ export function AgentProductDemo({
                   void send(input);
                 }}
               >
-                {!hubMode && (
-                  <div className="ua-compose-caps">
-                    <button
-                      type="button"
-                      className="ua-compose-cap ua-compose-cap--plaza"
-                      onClick={() => window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "feed" } }))}
-                    >
-                      知识广场
-                    </button>
-                    <span className="ua-compose-cap">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><circle cx="5" cy="5" r="4" stroke="currentColor" strokeWidth="1.2"/><path d="M3 5l1.5 1.5L7 3.5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                      Hybrid RAG
-                    </span>
-                    <span className="ua-compose-cap">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 9L5 1l4 8" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/><path d="M2.5 6.5h5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                      Neural Trace
-                    </span>
-                    <span className="ua-compose-cap">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none"><rect x="1" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="5.5" y="3" width="3.5" height="4" rx="1" stroke="currentColor" strokeWidth="1.2"/><path d="M4.5 5h1" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round"/></svg>
-                      多智能体
-                    </span>
-                    <span className="ua-compose-cap-dot" aria-hidden />
-                    <span className="ua-compose-mode-hint">{modeHint}</span>
-                  </div>
-                )}
-
                 {/* 文本区 */}
                 <textarea
                   ref={composeRef}
@@ -2315,16 +2350,20 @@ export function AgentProductDemo({
                   }}
                   onFocus={() => setComposeFocused(true)}
                   onBlur={() => window.setTimeout(() => setComposeFocused(false), 180)}
-                  placeholder={voiceListening ? "🎤 正在聆听…" : hubMode ? "输入问题，Enter 发送，Shift+Enter 换行" : "输入问题，Enter 发送"}
+                  placeholder={
+                    voiceListening
+                      ? "🎤 正在聆听…"
+                      : hubMode
+                        ? "输入问题，Enter 发送，Shift+Enter 换行"
+                        : "描述要办的事，例如对账、审合同、查进度…"
+                  }
                   disabled={running}
                 />
                 {hubMode ? <PrecheckLine pre={precheck} /> : null}
 
                 <div className="ua-compose-bar-pro">
                   {!hubMode && (
-                    <span className="ua-compose-hint-pro">
-                      ⏎ Enter 发送 &nbsp;·&nbsp; Shift+Enter 换行
-                    </span>
+                    <span className="ua-compose-hint-pro">Enter 发送 · Shift+Enter 换行</span>
                   )}
                   {hubMode && !running && (
                     <ReleaseInspectEntry
@@ -2337,15 +2376,14 @@ export function AgentProductDemo({
                       }}
                     />
                   )}
-                  {hubMode && (
-                    <ComposeModelBar
-                      config={llmConfig}
-                      onChange={handleLlmChange}
-                      orchMode={orchMode}
-                      onOrchChange={setOrchMode}
-                      orchAuto
-                    />
-                  )}
+                  <ComposeModelBar
+                    config={llmConfig}
+                    onChange={handleLlmChange}
+                    orchMode={orchMode}
+                    onOrchChange={setOrchMode}
+                    orchAuto={hubMode}
+                    productMode={!hubMode}
+                  />
                   {input.length > 0 && (
                     <span className="ua-char-count">{input.length}</span>
                   )}
@@ -2391,52 +2429,70 @@ export function AgentProductDemo({
 
         {flowOpen && (
           <div className="ua-right-panel">
-            {/* Tab 切换 */}
-            <div className="ua-right-tabs">
-              <button
-                type="button"
-                className={rightTab === "graph" ? "on" : ""}
-                onClick={() => setRightTab("graph")}
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="4" height="9" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="6" y="4" width="4" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
-                知识溯源
-              </button>
-              <button
-                type="button"
-                className={rightTab === "trace" ? "on" : ""}
-                onClick={() => setRightTab("trace")}
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1h7M2 5.5h5M2 10h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="5.5" r="1.3" fill="currentColor"/></svg>
-                推理过程
-              </button>
-              <button
-                type="button"
-                className={rightTab === "insight" ? "on" : ""}
-                onClick={() => setRightTab("insight")}
-              >
-                <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><polygon points="5.5,1 10,9.5 1,9.5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" fill="none"/><polygon points="5.5,3.5 8.5,9 2.5,9" stroke="currentColor" strokeWidth="0.7" strokeLinejoin="round" fill="none"/></svg>
-                质量洞察
-              </button>
-              <button type="button" className="ua-right-close" onClick={() => setFlowOpen(false)} aria-label="关闭">×</button>
-            </div>
-
-            {rightTab === "graph" ? (
-              <KnowledgeSources
-                messages={messages}
-                running={running}
-                onClose={() => setFlowOpen(false)}
-              />
-            ) : rightTab === "insight" ? (
-              <SessionInsight messages={messages} />
+            {!hubMode ? (
+              <>
+                <div className="ua-right-tabs ua-right-tabs--product">
+                  <span className="ua-right-product-title">办理进度</span>
+                  <button type="button" className="ua-right-close" onClick={() => setFlowOpen(false)} aria-label="关闭">
+                    ×
+                  </button>
+                </div>
+                <TurnFlowPanel
+                  journal={displayJournal}
+                  running={running}
+                  turnStartedAt={flowTurnStartedAt}
+                  runtime={turnRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.runtime}
+                  ragRuntime={turnRagRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.ragRuntime}
+                  onEvidenceClick={handleEvidenceClick}
+                />
+              </>
             ) : (
-              <TurnFlowPanel
-                journal={displayJournal}
-                running={running}
-                turnStartedAt={flowTurnStartedAt}
-                runtime={turnRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.runtime}
-                ragRuntime={turnRagRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.ragRuntime}
-                onEvidenceClick={handleEvidenceClick}
-              />
+              <>
+                <div className="ua-right-tabs">
+                  <button
+                    type="button"
+                    className={rightTab === "graph" ? "on" : ""}
+                    onClick={() => setRightTab("graph")}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><rect x="1" y="1" width="4" height="9" rx="1" stroke="currentColor" strokeWidth="1.2"/><rect x="6" y="4" width="4" height="6" rx="1" stroke="currentColor" strokeWidth="1.2"/></svg>
+                    知识溯源
+                  </button>
+                  <button
+                    type="button"
+                    className={rightTab === "trace" ? "on" : ""}
+                    onClick={() => setRightTab("trace")}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><path d="M2 1h7M2 5.5h5M2 10h7" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round"/><circle cx="9" cy="5.5" r="1.3" fill="currentColor"/></svg>
+                    推理过程
+                  </button>
+                  <button
+                    type="button"
+                    className={rightTab === "insight" ? "on" : ""}
+                    onClick={() => setRightTab("insight")}
+                  >
+                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none"><polygon points="5.5,1 10,9.5 1,9.5" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" fill="none"/><polygon points="5.5,3.5 8.5,9 2.5,9" stroke="currentColor" strokeWidth="0.7" strokeLinejoin="round" fill="none"/></svg>
+                    质量洞察
+                  </button>
+                  <button type="button" className="ua-right-close" onClick={() => setFlowOpen(false)} aria-label="关闭">
+                    ×
+                  </button>
+                </div>
+
+                {rightTab === "graph" ? (
+                  <KnowledgeSources messages={messages} running={running} onClose={() => setFlowOpen(false)} />
+                ) : rightTab === "insight" ? (
+                  <SessionInsight messages={messages} />
+                ) : (
+                  <TurnFlowPanel
+                    journal={displayJournal}
+                    running={running}
+                    turnStartedAt={flowTurnStartedAt}
+                    runtime={turnRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.runtime}
+                    ragRuntime={turnRagRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.ragRuntime}
+                    onEvidenceClick={handleEvidenceClick}
+                  />
+                )}
+              </>
             )}
           </div>
         )}
@@ -2510,17 +2566,17 @@ export function AgentProductDemo({
       ) : null}
       {skillSavedNote ? <div className="own-skm-toast" role="status">{skillSavedNote}</div> : null}
 
-      {hubMode && !creditFlow ? (
+      {(!hubMode || !creditFlow) && (
         <WorkPaperDrawer
           paper={paperDrawer?.paper ?? null}
           open={Boolean(paperDrawer)}
-          interactive={false}
+          interactive={!hubMode}
           onClose={() => setPaperDrawer(null)}
           onAsk={(text) => {
             void send(text);
           }}
         />
-      ) : null}
+      )}
 
       {hubMode ? (
         <FlowOperationDrawer

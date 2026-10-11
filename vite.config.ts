@@ -29,6 +29,12 @@ export default defineConfig({
         rewrite: (p) => p.replace(/^\/llm-proxy/, ""),
         secure: true,
       },
+      "/ollama-cloud-proxy": {
+        target: "https://ollama.com",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/ollama-cloud-proxy/, ""),
+        secure: true,
+      },
     },
   },
 });

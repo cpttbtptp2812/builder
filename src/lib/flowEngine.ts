@@ -1,6 +1,7 @@
 /** 流程技能：单据对上节点，守卫决定停在哪一关。门槛和拦截策略一变，落点就变。 */
 
 import { tableFromQuery, type SheetRow, type WorkGrid } from "./sheetEngine";
+import { ProductDataMissingError } from "./productDataStore";
 
 export type FlowPolicy = {
   directorAt: number;
@@ -44,8 +45,8 @@ function num(row: SheetRow, key: string): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function pickCase(query: string): { dept: string; person: string; amount: number; invoice: number | null } {
-  const table = tableFromQuery(query);
+function pickCase(query: string, tableOpts?: import("./sheetEngine").TableFromQueryOpts): { dept: string; person: string; amount: number; invoice: number | null } {
+  const table = tableFromQuery(query, tableOpts);
   const amountHit = query.match(/(\d{3,})/);
   const asked = amountHit ? Number(amountHit[1]) : null;
   const dept = query.includes("研发") ? "研发" : query.includes("财务") ? "财务" : query.includes("市场") ? "市场" : "";
@@ -63,8 +64,12 @@ function pickCase(query: string): { dept: string; person: string; amount: number
   };
 }
 
-export function executeFlow(query: string, policy: FlowPolicy = DEFAULT_POLICY): FlowExecution {
-  const bill = pickCase(query);
+export function executeFlow(
+  query: string,
+  policy: FlowPolicy = DEFAULT_POLICY,
+  tableOpts?: import("./sheetEngine").TableFromQueryOpts,
+): FlowExecution {
+  const bill = pickCase(query, tableOpts);
   const gap = bill.invoice == null ? null : Math.abs(bill.amount - bill.invoice);
   const phases: FlowPhase[] = [];
   let halt = "";
@@ -142,15 +147,27 @@ const PHASE_INDEX: Record<string, number> = {
 export function runFlowTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
   const index = PHASE_INDEX[name];
   if (index == null) return null;
-  const ran = executeFlow(String(args.query ?? ""), flowPolicyFromArgs(args));
-  const phase = ran.phases[index]!;
-  return {
-    content: {
-      markdown: name === "__flow_report__" ? ran.markdown : phase.detail,
-      detail: phase.detail,
-      summary: ran.summary,
-      dashboard: { flow: { phase: phase.id, halt: ran.halt, summary: ran.summary } },
-      meta: { skill: "flow-desk" },
-    },
-  };
+  const productWorkbench = args.__productWorkbench === true;
+  try {
+    const ran = executeFlow(String(args.query ?? ""), flowPolicyFromArgs(args), {
+      productWorkbench,
+      dataSlot: "expense-ledger",
+    });
+    const phase = ran.phases[index]!;
+    return {
+      content: {
+        markdown: name === "__flow_report__" ? ran.markdown : phase.detail,
+        detail: phase.detail,
+        summary: ran.summary,
+        dashboard: { flow: { phase: phase.id, halt: ran.halt, summary: ran.summary } },
+        meta: { skill: "flow-desk" },
+        grid: ran.grid,
+      },
+    };
+  } catch (err) {
+    if (err instanceof ProductDataMissingError) {
+      return { content: { error: err.message, code: "PRODUCT_DATA_MISSING", slot: err.slot }, isError: true };
+    }
+    throw err;
+  }
 }

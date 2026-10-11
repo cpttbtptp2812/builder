@@ -224,10 +224,12 @@ function persistWorkflowRun(workflowId: string, mode: string, steps: unknown[]) 
   };
 }
 
-type ClientCtx = {
+export type ClientCtx = {
   clientSnapshot?: { nodes?: { role: string; name: string; tag: string }[]; nodeCount?: number };
   clientPerf?: Record<string, unknown>;
   probeUrl?: string;
+  productWorkbench?: boolean;
+  onStep?: (step: SkillTraceStep) => void | Promise<void>;
 };
 
 async function callTool(
@@ -453,6 +455,7 @@ export async function runSkillOnServer(
   for (const step of skill.steps) {
     const stepT0 = performance.now();
     const args = resolveArgs(step, ctx);
+    if (clientCtx.productWorkbench) args.__productWorkbench = true;
     const out = await callTool(step.tool, args, ctx);
 
     applyStepVarWrites(ctx.vars, step.id, step.tool, out.content);
@@ -466,6 +469,7 @@ export async function runSkillOnServer(
       result: out.content,
     };
     trace.push(row);
+    await clientCtx.onStep?.(row);
     lastResult = out.content;
     if ("isError" in out && out.isError) break;
   }

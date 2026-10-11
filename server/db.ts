@@ -171,6 +171,30 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_clip_snippets_created ON clip_snippets(created_at DESC);
+
+  CREATE TABLE IF NOT EXISTS product_datasets (
+    session_id TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    columns_json TEXT NOT NULL,
+    rows_json TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (session_id, slot)
+  );
+
+  CREATE TABLE IF NOT EXISTS product_processes (
+    process_id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL,
+    skill_id TEXT NOT NULL,
+    query TEXT NOT NULL,
+    status TEXT NOT NULL,
+    trace_json TEXT,
+    result_json TEXT,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_product_processes_session ON product_processes(session_id);
 `);
 
 try {

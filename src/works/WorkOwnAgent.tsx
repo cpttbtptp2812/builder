@@ -10,7 +10,27 @@ import { PageToolHost } from "../components/ownagent/PageToolHost";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 
 type TabId = "product" | "theory";
-type ViewId = "chat" | "guide" | "feed" | "skills" | "compare" | "versions" | "savever" | "drafts" | "editset" | "cases" | "fork" | "rag" | "guard" | "trace" | "eval" | "evalops" | "prompts" | "mcp" | "connect" | "jd";
+type ViewId =
+  | "chat"
+  | "guide"
+  | "feed"
+  | "skills"
+  | "compare"
+  | "versions"
+  | "savever"
+  | "drafts"
+  | "editset"
+  | "cases"
+  | "fork"
+  | "rag"
+  | "guard"
+  | "trace"
+  | "eval"
+  | "evalops"
+  | "prompts"
+  | "mcp"
+  | "connect"
+  | "jd";
 
 type NavItem = {
   id: ViewId;
@@ -255,7 +275,13 @@ const MORE_ALL: NavItem[] = [
 ];
 const VIEWS: NavItem[] = [...PRIMARY_VIEWS, ...MORE_ALL, ...ADVANCED_VIEWS];
 
-const LINE_NAV: { line: "talk" | "materials" | "skill" | "rules"; home: ViewId; label: string; desc: string; iconFrom: ViewId }[] = [
+const LINE_NAV: {
+  line: "talk" | "materials" | "skill" | "rules";
+  home: ViewId;
+  label: string;
+  desc: string;
+  iconFrom: ViewId;
+}[] = [
   { line: "talk", home: "chat", label: "对话", desc: "客户这样问，就这样答", iconFrom: "chat" },
   { line: "skill", home: "compare", label: "技能", desc: "改完检查，再决定能不能发", iconFrom: "compare" },
   { line: "materials", home: "rag", label: "资料", desc: "资料库、提示词、知识广场", iconFrom: "rag" },
@@ -458,7 +484,7 @@ export function WorkOwnAgent() {
       <header className="own-app-bar">
         <div className="own-app-brand">
           <strong>OwnAgent</strong>
-          <span className="own-app-tagline">Skill 发版安全</span>
+          <span className="own-app-tagline">办事 · 技能治理 · 回归门禁</span>
         </div>
         <nav className="own-app-tabs" aria-label="主视图">
           <span className={shownTab === "theory" ? "own-app-tabs-thumb is-theory" : "own-app-tabs-thumb"} aria-hidden="true" />
@@ -533,7 +559,7 @@ export function WorkOwnAgent() {
           </aside>
 
           <div className={`own-app-stage${view === "chat" ? " is-chat" : " is-page"}`}>
-            {view === "chat" ? <AgentProductDemo hubMode /> : null}
+            {view === "chat" ? <AgentProductDemo /> : null}
             {lineOf(view) === "skill" ? <SkillLine view={view} onPick={(id) => go("product", id as ViewId)} /> : null}
             {lineOf(view) === "materials" ? <MaterialsLine view={view} onPick={(id) => go("product", id as ViewId)} /> : null}
             {lineOf(view) === "rules" ? <RulesLine view={view} onPick={(id) => go("product", id as ViewId)} /> : null}

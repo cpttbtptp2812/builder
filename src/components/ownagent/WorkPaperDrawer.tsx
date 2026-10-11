@@ -1,7 +1,9 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { WorkPaper } from "../../lib/workPaper";
-import { paperDrawerTitle } from "../../lib/workPaper";
+import { gridToCsv } from "../../lib/productDataStore";
+import { downloadText } from "../../lib/importedSkills";
+import { paperDrawerTitle, paperExportGrid } from "../../lib/workPaper";
 import { WorkPaperView } from "./WorkPaper";
 
 export function WorkPaperDrawer({
@@ -40,9 +42,30 @@ export function WorkPaperDrawer({
             <strong>{paperDrawerTitle(paper)}</strong>
             <p>左侧继续对话，这里看完整文书和明细</p>
           </div>
-          <button type="button" onClick={onClose} aria-label="关闭">
-            ×
-          </button>
+          <div className="oa-work-drawer-actions">
+            {(() => {
+              const grid = paperExportGrid(paper);
+              if (!grid) return null;
+              return (
+                <button
+                  type="button"
+                  className="oa-work-drawer-dl"
+                  onClick={() =>
+                    downloadText(
+                      `${paperDrawerTitle(paper).replace(/[\\/:*?"<>|]/g, " ")}.csv`,
+                      gridToCsv(grid.columns, grid.rows),
+                      "text/csv;charset=utf-8",
+                    )
+                  }
+                >
+                  下载 CSV
+                </button>
+              );
+            })()}
+            <button type="button" onClick={onClose} aria-label="关闭">
+              ×
+            </button>
+          </div>
         </header>
         <div className="oa-work-drawer-body">
           <WorkPaperView paper={paper} interactive={interactive} onAsk={onAsk} />

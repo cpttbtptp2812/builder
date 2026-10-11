@@ -1,6 +1,7 @@
 /** 额度测算：月均流水 × 稳定系数 × 偿债比例，再乘信用、行业、年限，最后卡政策上限。 */
 
-import type { WorkGrid } from "./sheetEngine";
+import { datasetToSheetTable, getProductDataset, ProductDataMissingError } from "./productDataStore";
+import { tableFromEmbedded, type WorkGrid } from "./sheetEngine";
 
 export type DataRecipe = {
   monthly: number;
@@ -60,6 +61,42 @@ function wan(value: number): string {
   return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(1);
 }
 
+/** 问句内嵌 CSV（服务端 run 注入数据时用） */
+export function monthlyFromCashflowQuery(query: string): number | null {
+  const table = tableFromEmbedded(query);
+  if (!table?.rows.length) return null;
+  const inflowCol =
+    table.columns.find((c) => /流入|inflow|金额|流水/i.test(c.name)) ??
+    table.columns.find((c) => c.type === "number");
+  if (!inflowCol) return null;
+  const values = table.rows
+    .map((row) => row[inflowCol.name])
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (!values.length) return null;
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  return Math.round(avg * 100) / 100;
+}
+
+export function monthlyFromCashflowImport(): number {
+  const ds = getProductDataset("cashflow-monthly");
+  if (!ds?.rows.length) {
+    throw new ProductDataMissingError("cashflow-monthly", "请先导入按月经营流水后再做额度测算。");
+  }
+  const table = datasetToSheetTable(ds);
+  const inflowCol =
+    table.columns.find((c) => /流入|inflow|金额|流水/i.test(c.name)) ??
+    table.columns.find((c) => c.type === "number");
+  if (!inflowCol) {
+    throw new Error("流水表需包含数值列（如「流入万元」）。");
+  }
+  const values = table.rows
+    .map((row) => row[inflowCol.name])
+    .filter((v): v is number => typeof v === "number" && Number.isFinite(v));
+  if (!values.length) throw new Error("流水表没有可用的数值行。");
+  const avg = values.reduce((a, b) => a + b, 0) / values.length;
+  return Math.round(avg * 100) / 100;
+}
+
 export function executeData(recipe: DataRecipe = DEFAULT_RECIPE): DataExecution {
   const cash = recipe.monthly * recipe.stability * recipe.debtRatio;
   const adjusted = cash * recipe.credit * recipe.industry * recipe.years;
@@ -96,18 +133,37 @@ const PHASE_INDEX: Record<string, number> = {
   __data_report__: 3,
 };
 
-export function runDataTool(name: string, args: Record<string, unknown>): { content: unknown } | null {
+export function runDataTool(name: string, args: Record<string, unknown>): { content: unknown; isError?: boolean } | null {
   const index = PHASE_INDEX[name];
   if (index == null) return null;
-  const ran = executeData(dataRecipeFromArgs(args));
-  const phase = ran.phases[index]!;
-  return {
-    content: {
-      markdown: name === "__data_report__" ? ran.markdown : phase.detail,
-      detail: phase.detail,
-      summary: ran.summary,
-      dashboard: { data: { phase: phase.id, finalAmount: ran.finalAmount, summary: ran.summary } },
-      meta: { skill: "data-desk" },
-    },
-  };
+  const productWorkbench = args.__productWorkbench === true;
+  try {
+    let recipe = dataRecipeFromArgs(args);
+    const q = String(args.query ?? "");
+    const fromQuery = monthlyFromCashflowQuery(q);
+    if (fromQuery != null) recipe = { ...recipe, monthly: fromQuery };
+    else if (productWorkbench) {
+      recipe = { ...recipe, monthly: monthlyFromCashflowImport() };
+    }
+    const ran = executeData(recipe);
+    const phase = ran.phases[index]!;
+    return {
+      content: {
+        markdown: name === "__data_report__" ? ran.markdown : phase.detail,
+        detail: phase.detail,
+        summary: ran.summary,
+        dashboard: { data: { phase: phase.id, finalAmount: ran.finalAmount, summary: ran.summary } },
+        meta: { skill: "data-desk" },
+        grid: ran.grid,
+      },
+    };
+  } catch (err) {
+    if (err instanceof ProductDataMissingError) {
+      return { content: { error: err.message, code: "PRODUCT_DATA_MISSING", slot: err.slot }, isError: true };
+    }
+    if (err instanceof Error) {
+      return { content: { error: err.message }, isError: true };
+    }
+    throw err;
+  }
 }

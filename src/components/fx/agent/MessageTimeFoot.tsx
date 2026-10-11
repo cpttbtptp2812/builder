@@ -20,15 +20,20 @@ export function MessageTimeFoot({
 
   const tags: string[] = [];
   if (message.role === "assistant") {
-    if (message.showcaseFlow) {
+    if (hubMode && message.showcaseFlow) {
       const si = message.showcaseFlow.stepIndex;
       const st = message.showcaseFlow.stepTotal;
       tags.push(st && si ? `流程 ${si}/${st}` : "流程");
+    } else if (!hubMode && message.route?.skillName) {
+      tags.push(message.route.skillName);
+    } else if (hubMode && message.mode && MODE_LABEL[message.mode]) {
+      tags.push(MODE_LABEL[message.mode]);
     }
-    else if (message.mode && MODE_LABEL[message.mode]) tags.push(MODE_LABEL[message.mode]);
-    if (typeof message.ms === "number" && message.ms > 0) tags.push(`${message.ms}ms`);
-    if (message.runtime === "server") tags.push("SQLite");
-    else if (message.runtime === "local") tags.push("浏览器");
+    if (typeof message.ms === "number" && message.ms > 0) tags.push(`${(message.ms / 1000).toFixed(1)}s`);
+    if (hubMode) {
+      if (message.runtime === "server") tags.push("SQLite");
+      else if (message.runtime === "local") tags.push("浏览器");
+    }
   }
 
   return (

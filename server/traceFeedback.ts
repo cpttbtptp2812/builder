@@ -6,6 +6,7 @@ import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { dbAll, dbRun } from "./db.ts";
+import { authenticateTeamSession, canPerform } from "./teamGovernance.ts";
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const CASES_FILE = path.join(process.env.OWNAGENT_CONFIG_DIR ?? path.join(ROOT, ".ownagent"), "cases.json");
@@ -84,10 +85,17 @@ function proposedCase(record: IngestTraceRecord) {
   };
 }
 
-function authorized(header: string | undefined): boolean {
-  const expected = process.env.OWNAGENT_INGEST_KEY;
+function authorizedIngest(header: string | undefined): boolean {
+  const expected = process.env.OWNAGENT_INGEST_KEY?.trim();
+  const raw = header?.trim() ?? "";
+  if (expected && (raw === expected || raw === `Bearer ${expected}`)) return true;
+  const token = raw.replace(/^Bearer\s+/i, "").trim();
+  if (token) {
+    const session = authenticateTeamSession(token);
+    if (session && canPerform(session.member.role, "prod", "publish")) return true;
+  }
   if (!expected) return process.env.NODE_ENV !== "production";
-  return header === expected || header === `Bearer ${expected}`;
+  return false;
 }
 
 function writeCase(skillId: string, proposed: Record<string, unknown>) {
@@ -107,7 +115,7 @@ export function registerTraceFeedback(app: Hono) {
 
   app.post("/api/skill-gate/traces/ingest", async (c) => {
     const key = c.req.header("authorization") ?? c.req.header("x-ownagent-key");
-    if (!authorized(key)) return c.json({ error: "unauthorized" }, 401);
+    if (!authorizedIngest(key)) return c.json({ error: "unauthorized" }, 401);
     const body = await c.req.json<{ records?: IngestTraceRecord[] }>();
     const records = Array.isArray(body.records) ? body.records.slice(0, 100) : [];
     if (!records.length) return c.json({ error: "records required" }, 400);

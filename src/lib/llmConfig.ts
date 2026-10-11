@@ -1,6 +1,6 @@
 /** LLM 连接配置 — localStorage + 可选 .env.local（仅本地开发） */
 
-export type LlmPresetId = "deepseek" | "openai" | "ollama" | "custom";
+export type LlmPresetId = "deepseek" | "openai" | "ollama" | "ollama-cloud" | "custom";
 
 export type LlmConfig = {
   preset: LlmPresetId;
@@ -44,6 +44,14 @@ export const LLM_PRESETS: Record<
     keyUrl: "https://ollama.com/download",
     keySteps: "安装 Ollama → 拉模型 → 无需 API Key",
   },
+  "ollama-cloud": {
+    label: "Ollama Cloud",
+    baseUrl: "https://ollama.com/v1",
+    model: "gpt-oss:120b",
+    hint: "ollama.com 控制台 Create API key · 开发可走 /ollama-cloud-proxy",
+    keyUrl: "https://ollama.com/settings/keys",
+    keySteps: "登录 ollama.com → Keys → Create API key",
+  },
 };
 
 export function defaultLlmConfig(): LlmConfig {
@@ -79,9 +87,14 @@ export function loadLlmConfig(): LlmConfig {
     const base = defaultLlmConfig();
     if (!raw) return base;
     const saved = JSON.parse(raw) as Partial<LlmConfig>;
+    let baseUrl = saved.baseUrl ?? base.baseUrl;
+    if (baseUrl.includes("ollama.com/api/v1")) {
+      baseUrl = baseUrl.replace("ollama.com/api/v1", "ollama.com/v1");
+    }
     return {
       ...base,
       ...saved,
+      baseUrl,
       enabled: Boolean(saved.enabled),
       apiKey: saved.enabled ? (saved.apiKey?.trim() || ENV_API_KEY) : (saved.apiKey?.trim() ?? ""),
     };
@@ -109,6 +122,7 @@ export function isLlmConfigured(config: LlmConfig): boolean {
   if (!config.enabled) return false;
   if (!config.baseUrl.trim() || !config.model.trim()) return false;
   if (config.preset === "ollama") return true;
+  if (config.preset === "ollama-cloud") return Boolean(config.apiKey.trim());
   return Boolean(config.apiKey.trim());
 }
 
@@ -117,6 +131,9 @@ export function resolveLlmBaseUrl(baseUrl: string): string {
   const trimmed = baseUrl.replace(/\/$/, "");
   if (import.meta.env.DEV && trimmed.includes("api.deepseek.com")) {
     return "/llm-proxy/v1";
+  }
+  if (import.meta.env.DEV && trimmed.includes("ollama.com")) {
+    return "/ollama-cloud-proxy/v1";
   }
   return trimmed;
 }

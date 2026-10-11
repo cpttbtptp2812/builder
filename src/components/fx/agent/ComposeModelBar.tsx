@@ -13,6 +13,7 @@ const PRESET_OPTIONS: { id: LlmPresetId | "guest"; label: string }[] = [
   { id: "deepseek", label: "DeepSeek" },
   { id: "openai", label: "OpenAI" },
   { id: "ollama", label: "Ollama" },
+  { id: "ollama-cloud", label: "Ollama Cloud" },
   { id: "custom", label: "自定义" },
 ];
 
@@ -22,6 +23,7 @@ export function ComposeModelBar({
   orchMode,
   onOrchChange,
   orchAuto = false,
+  productMode = false,
 }: {
   config: LlmConfig;
   onChange: (cfg: LlmConfig) => void;
@@ -29,7 +31,23 @@ export function ComposeModelBar({
   onOrchChange: (m: OrchestrationMode) => void;
   /** Hub 信贷：固定自动编排，仅展示图标与说明 */
   orchAuto?: boolean;
+  /** 产品办事：模型与编排进接入配置，输入区不展示开发者控件 */
+  productMode?: boolean;
 }) {
+  if (productMode) {
+    return (
+      <button
+        type="button"
+        className="oc-status idle oc-product-settings-link"
+        title="模型与工具连接"
+        onClick={() =>
+          window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "connect" } }))
+        }
+      >
+        <span>连接与模型</span>
+      </button>
+    );
+  }
   const llmReady = isLlmConfigured(config);
   const activePreset = config.enabled ? config.preset : "guest";
 

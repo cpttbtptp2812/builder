@@ -546,6 +546,8 @@ export async function runSkillFromIndex(
     onStepStart?: (step: SkillStep) => void;
     probeUrl?: string;
     mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
+    /** 产品工作台：引擎读用户导入数据，不用 Hub 内置样例 */
+    productWorkbench?: boolean;
     /** 步骤优先调用当前页面注册的工具；页面上没有的外部工具直接失败 */
     preferPageTools?: boolean;
     /** do(action): 跳过这些 step 索引，不执行也不写入 trace */
@@ -572,6 +574,7 @@ export async function runSkillFromIndex(
     const t0 = performance.now();
     const rawArgs = typeof step.args === "function" ? step.args(ctx) : step.args;
     const args = resolveStepArgs(rawArgs, { query: ctx.query, probeUrl, vars: ctx.vars });
+    if (opts?.productWorkbench) args.__productWorkbench = true;
 
     const mockFn = opts?.mockProfile?.[tool];
     const pageTool = opts?.preferPageTools ? getPageTool(tool) : undefined;
@@ -620,6 +623,7 @@ export async function runSkill(
     onStepStart?: (step: SkillStep) => void;
     probeUrl?: string;
     mockProfile?: Record<string, (args: Record<string, unknown>) => unknown>;
+    productWorkbench?: boolean;
     preferPageTools?: boolean;
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {

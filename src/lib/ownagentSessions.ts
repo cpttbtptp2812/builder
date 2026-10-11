@@ -78,6 +78,8 @@ export type OwnChatMessage = {
   };
   /** Hub：流程暂停/断开后的进度快照，便于卡片按钮随时续办 */
   creditFlowCheckpoint?: import("./creditFlowEngine").CreditFlowState | null;
+  /** 产品：服务端 process run（import / 步骤 / finish） */
+  productRun?: import("./productRun/types").ProductRunView;
 };
 
 export type OwnSession = {

@@ -45,7 +45,8 @@ export type AgentStreamEvent =
   | { type: "tool-start"; tool: AgentToolTrace }
   | { type: "tool-end"; tool: AgentToolTrace }
   | { type: "done"; iterations: number; toolCount: number }
-  | { type: "error"; message: string };
+  | { type: "error"; message: string }
+  | { type: "product-run"; run: import("./productRun/types").ProductRunView };
 
 type StreamDelta = {
   content?: string;

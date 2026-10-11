@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App";
 import { ensureDemoReady } from "./lib/demoSeed";
 import "./styles.css";
+import "./styles/ownagent-product-chat.css";
 
 ensureDemoReady();
 

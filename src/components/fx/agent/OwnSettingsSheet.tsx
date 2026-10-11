@@ -201,6 +201,7 @@ export function OwnSettingsSheet({
                   <option value="deepseek">DeepSeek</option>
                   <option value="openai">OpenAI</option>
                   <option value="ollama">Ollama 本地</option>
+                  <option value="ollama-cloud">Ollama Cloud</option>
                   <option value="custom">自定义</option>
                 </select>
               </label>
@@ -232,6 +233,7 @@ export function OwnSettingsSheet({
         </section>
         </>
         ) : null}
+
       </aside>
     </div>
   );
