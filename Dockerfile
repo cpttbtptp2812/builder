@@ -14,9 +14,9 @@ RUN npm run build
 FROM node:24-slim AS production
 WORKDIR /app
 
-# Install only server dependencies
+# 生产依赖 + tsx。Node 直接跑 .ts 不会解析无扩展名的 import（如 ./profile）。
 COPY package*.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev && npm install tsx@4.19.4
 
 # Copy server source
 COPY server ./server
@@ -35,5 +35,4 @@ ENV OWNAGENT_CONFIG_DIR=/data/.ownagent
 # Expose port
 EXPOSE 8787
 
-# Start server (Node 24 runs TypeScript natively via --experimental-strip-types)
-CMD ["node", "--experimental-strip-types", "server/index.ts"]
+CMD ["npx", "tsx", "server/index.ts"]

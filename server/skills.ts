@@ -497,7 +497,8 @@ async function callTool(
             }
           : undefined,
       });
-      return { content: body };
+      const failed = body.meta?.llm === "failed";
+      return failed ? { content: body, isError: true as const } : { content: body };
     }
     default:
       return { content: { error: `unknown tool: ${name}` }, isError: true as const };

@@ -164,11 +164,12 @@ export async function probeLlmConnection(
   }
   const t0 = performance.now();
   const baseUrl = resolveLlmBaseUrl(config.baseUrl);
+  const target = `${baseUrl}/chat/completions`;
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
 
   try {
-    const res = await fetch(`${baseUrl}/chat/completions`, {
+    const res = await fetch(target, {
       method: "POST",
       headers,
       body: JSON.stringify({
@@ -181,14 +182,19 @@ export async function probeLlmConnection(
     const ms = Math.round(performance.now() - t0);
     if (!res.ok) {
       const errText = await res.text().catch(() => "");
-      return { ok: false, ms, detail: `HTTP ${res.status}: ${errText.slice(0, 120) || res.statusText}` };
+      return {
+        ok: false,
+        ms,
+        detail: `HTTP ${res.status} · ${target}: ${errText.slice(0, 120) || res.statusText}`,
+      };
     }
-    return { ok: true, ms, detail: `${config.model} · ${ms}ms` };
+    return { ok: true, ms, detail: `已连通 ${config.model} · ${target} · ${ms}ms` };
   } catch (err) {
-    return {
-      ok: false,
-      ms: Math.round(performance.now() - t0),
-      detail: err instanceof Error ? err.message : "网络错误",
-    };
+    const msg = err instanceof Error ? err.message : "网络错误";
+    const local = /localhost|127\.0\.0\.1/.test(baseUrl);
+    const hint = local
+      ? "请求打到本机 Ollama，不会使用 ollama.com 的 Key。本机需已启动 ollama serve。"
+      : "浏览器没有连上该地址。云端 Key 请把预设选成 Ollama Cloud，Base URL 用 https://ollama.com/v1。";
+    return { ok: false, ms: Math.round(performance.now() - t0), detail: `${msg} · ${target}。${hint}` };
   }
 }

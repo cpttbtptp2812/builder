@@ -177,7 +177,7 @@ export async function executeLlmProductBriefTool(opts: {
   if (!isProductLlmConfigured(opts.llm)) {
     return {
       summary: engineLine,
-      detail: engineLine,
+      detail: `未启用大模型，未发起模型请求。计算结论：${engineLine}`,
       meta: { llm: "skipped", reason: "not_configured" },
     };
   }
@@ -204,8 +204,8 @@ export async function executeLlmProductBriefTool(opts: {
   }
 
   return {
-    summary: engineLine,
-    detail: `${engineLine}（模型说明未采用：${llmOut.reason}）`,
-    meta: { llm: "fallback", reason: llmOut.reason },
+    summary: `大模型未连通：${llmOut.reason}`,
+    detail: `大模型未连通：${llmOut.reason}`,
+    meta: { llm: "failed", reason: llmOut.reason },
   };
 }

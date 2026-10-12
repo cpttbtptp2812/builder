@@ -98,6 +98,21 @@
   cursor: pointer;
   text-align: left;
 }
+.aw-product-ex:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  background: #f8fafc;
+}
+.aw-product-api-retry {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.15rem 0.45rem;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  background: #fff;
+  color: #991b1b;
+  cursor: pointer;
+}
 .aw-product-ex:hover:not(:disabled) {
   border-color: #6366f1;
   box-shadow: 0 4px 14px rgba(99, 102, 241, 0.1);

@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { checkBackendHealth } from "../../../lib/apiClient";
+import { useCallback, useEffect, useState } from "react";
+import { apiUrl, checkBackendHealth } from "../../../lib/apiClient";
 
 /** 客户可见：按业务场景入口，不出现技能 ID / 技术名词 */
 const SCENARIOS = [
@@ -43,12 +43,18 @@ export function ProductSkillHome({
   disabled?: boolean;
 }) {
   const [ready, setReady] = useState<boolean | null>(null);
+  const healthUrl = apiUrl("/health");
 
-  useEffect(() => {
+  const refresh = useCallback(() => {
+    setReady(null);
     void checkBackendHealth(true).then((h) => setReady(Boolean(h?.ok)));
   }, []);
 
-  const blocked = disabled || ready === false;
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const blocked = disabled || ready !== true;
 
   return (
     <div className="aw-root aw-product-home">
@@ -57,7 +63,11 @@ export function ProductSkillHome({
         <p>用日常业务语言描述需求即可。若需要您的表或文件，系统会在办理过程中提示上传。</p>
         {ready === false ? (
           <p className="aw-product-api-warn" role="alert">
-            当前无法连接办事服务。请联系管理员确认服务已启动，或稍后再试。
+            办事服务未连通，入口已停用。检测地址 <code>{healthUrl}</code>
+            。这和接入里的大模型 Key 不是同一条连接：Key 测通也不会代替这个接口。
+            <button type="button" className="aw-product-api-retry" onClick={refresh}>
+              重新检测
+            </button>
           </p>
         ) : null}
       </header>
