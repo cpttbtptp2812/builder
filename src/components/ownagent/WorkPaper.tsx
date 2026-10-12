@@ -1,4 +1,5 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type MutableRefObject, type ReactNode } from "react";
+import type { LedgerInvoiceOverride } from "../../lib/productPaperPatch";
 import type { FlowUiValidation } from "../../lib/creditFlowUiGate";
 import type { PaperIssue, PaperTone, WorkPaper } from "../../lib/workPaper";
 import { useDebouncedValidation } from "../../lib/useDebouncedValidation";
@@ -397,6 +398,7 @@ function LedgerView({
   onApplyFix,
   onSealDeliverable,
   deliverySealed,
+  ledgerInvoiceOverridesRef,
 }: {
   paper: Extract<WorkPaper, { kind: "ledger" }>;
   interactive?: boolean;
@@ -404,11 +406,17 @@ function LedgerView({
   onApplyFix?: () => void | Promise<void>;
   onSealDeliverable?: () => void | Promise<void>;
   deliverySealed?: boolean;
+  ledgerInvoiceOverridesRef?: MutableRefObject<LedgerInvoiceOverride>;
 }) {
   const openBad = paper.issues.some((i) => i.level === "bad");
   return (
     <>
-      <LedgerTableDesk paper={paper} interactive={interactive} onAsk={onAsk} />
+      <LedgerTableDesk
+        paper={paper}
+        interactive={interactive}
+        onAsk={onAsk}
+        invoiceOverridesRef={ledgerInvoiceOverridesRef}
+      />
       <Issues issues={paper.issues} interactive={interactive} onFix={onApplyFix} fixKind="ledger" />
       {interactive ? (
         <PaperProcessFooter openBad={openBad} sealed={deliverySealed} onSeal={onSealDeliverable} />
@@ -623,6 +631,7 @@ export function WorkPaperView({
   onApplyFix,
   onSealDeliverable,
   deliverySealed,
+  ledgerInvoiceOverridesRef,
 }: {
   paper: WorkPaper;
   interactive?: boolean;
@@ -632,6 +641,7 @@ export function WorkPaperView({
   onApplyFix?: () => void | Promise<void>;
   onSealDeliverable?: () => void | Promise<void>;
   deliverySealed?: boolean;
+  ledgerInvoiceOverridesRef?: MutableRefObject<LedgerInvoiceOverride>;
 }) {
   if (paper.kind === "contract") {
     return (
@@ -648,6 +658,7 @@ export function WorkPaperView({
         onApplyFix={onApplyFix}
         onSealDeliverable={onSealDeliverable}
         deliverySealed={deliverySealed}
+        ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
       />
     );
   }

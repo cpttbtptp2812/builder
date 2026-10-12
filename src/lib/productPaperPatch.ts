@@ -5,35 +5,62 @@ import { requirementsForSkill } from "./productSkillInputs";
 import type { ProductDataSlot } from "./productDataStore";
 import type { WorkPaper } from "./workPaper";
 
+export type LedgerInvoiceOverride = Record<number, string>;
+
 export function primaryDataSlotForSkill(skillId: string): ProductDataSlot | null {
   const req = requirementsForSkill(skillId)[0];
   return req?.slot ?? null;
 }
 
-/** 对账明细：按 issue 补发票额（源表 6 列，与导入模板一致） */
-export function ledgerSourceCsvPatch(paper: Extract<WorkPaper, { kind: "ledger" }>): string {
+function stripMoney(s: string): string {
+  return s.replace(/,/g, "").trim();
+}
+
+/** 对账明细 grid → 源 CSV（6 列导入格式） */
+export function ledgerSourceCsvPatch(
+  paper: Extract<WorkPaper, { kind: "ledger" }>,
+  invoiceOverrides: LedgerInvoiceOverride = {},
+): string {
   const cols = ["部门", "申请人", "金额", "税额", "发票额", "状态"];
-  const badPeople = new Set<string>();
+  const badByPerson = new Map<string, { issue?: (typeof paper.issues)[0]; judge: string }>();
   for (const issue of paper.issues) {
     if (issue.level !== "bad") continue;
     const person = issue.title.split("·")[0]?.trim();
-    if (person) badPeople.add(person);
+    if (person) badByPerson.set(person, { issue, judge: "" });
   }
 
-  const rows = paper.grid.rows.map((row) => {
+  const rows = paper.grid.rows.map((row, index) => {
     const dept = row[0] ?? "";
     const person = row[1] ?? "";
-    const amount = row[2] ?? "";
-    const tax = row[3] ?? "";
-    let invoice = row[5] ?? "";
-    let status = "待审";
-    if (badPeople.has(person) && (!invoice || invoice === "空")) {
-      invoice = amount;
-      status = "待审";
-    } else if (invoice && invoice !== "空") {
-      status = "待审";
+    const amount = stripMoney(row[2] ?? "");
+    const tax = stripMoney(row[3] ?? "");
+    const judge = String(row[7] ?? "");
+    let invoiceRaw = invoiceOverrides[index] ?? row[5] ?? "";
+    if (invoiceRaw === "空" || invoiceRaw === "—") invoiceRaw = "";
+
+    const meta = badByPerson.get(person);
+    const blocked =
+      meta ||
+      judge.includes("拦截") ||
+      (invoiceOverrides[index] != null && invoiceOverrides[index] !== "");
+
+    if (blocked) {
+      const manual = invoiceOverrides[index]?.trim();
+      if (manual) {
+        invoiceRaw = stripMoney(manual);
+      } else if (meta?.issue) {
+        const cur = meta.issue.current;
+        if (cur.includes("发票 空") || cur.includes("缺票") || !invoiceRaw) {
+          invoiceRaw = amount;
+        } else if (cur.includes("差额") || judge.includes("差额")) {
+          invoiceRaw = amount;
+        }
+      } else if (judge.includes("差额") || judge.includes("缺票") || !invoiceRaw) {
+        invoiceRaw = amount;
+      }
     }
-    return [dept, person, amount, tax, invoice === "空" ? "" : invoice, status];
+
+    return [dept, person, amount, tax, invoiceRaw, "待审"];
   });
 
   return gridToCsv(cols, rows);
@@ -56,11 +83,12 @@ export function contractClausesCsvPatch(paper: Extract<WorkPaper, { kind: "contr
 export function csvPatchForPaperRerun(
   paper: WorkPaper,
   skillId: string,
+  opts?: { invoiceOverrides?: LedgerInvoiceOverride },
 ): { slot: ProductDataSlot; csv: string } | null {
   const slot = primaryDataSlotForSkill(skillId);
   if (!slot) return null;
   if (paper.kind === "ledger" && slot === "expense-ledger") {
-    return { slot, csv: ledgerSourceCsvPatch(paper) };
+    return { slot, csv: ledgerSourceCsvPatch(paper, opts?.invoiceOverrides ?? {}) };
   }
   if (paper.kind === "contract" && slot === "contract-clauses") {
     const csv = contractClausesCsvPatch(paper);

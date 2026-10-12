@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type MutableRefObject } from "react";
 import type { WorkPaper } from "../../lib/workPaper";
 
 type LedgerPaper = Extract<WorkPaper, { kind: "ledger" }>;
@@ -29,10 +29,13 @@ export function LedgerTableDesk({
   paper,
   interactive,
   onAsk,
+  invoiceOverridesRef,
 }: {
   paper: LedgerPaper;
   interactive?: boolean;
   onAsk?: (text: string) => void;
+  /** 一键修正前读取用户手改的发票额（行 index → 值） */
+  invoiceOverridesRef?: MutableRefObject<Record<number, string>>;
 }) {
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState<string>("全部");
@@ -40,6 +43,11 @@ export function LedgerTableDesk({
   const [selected, setSelected] = useState<number | null>(null);
   const [invoiceOverrides, setInvoiceOverrides] = useState<Record<number, string>>({});
   const [handled, setHandled] = useState<Set<number>>(() => new Set());
+
+  useEffect(() => {
+    if (!invoiceOverridesRef) return;
+    invoiceOverridesRef.current = invoiceOverrides;
+  }, [invoiceOverrides, invoiceOverridesRef]);
 
   const depts = useMemo(() => ["全部", ...paper.deptTotals.map((d) => d.dept)], [paper.deptTotals]);
 

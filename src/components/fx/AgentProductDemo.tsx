@@ -406,6 +406,7 @@ export function AgentProductDemo({
 
   const [replayMsg, setReplayMsg] = useState<OwnChatMessage | null>(null);
   const [paperDrawer, setPaperDrawer] = useState<PaperDrawerCtx | null>(null);
+  const ledgerInvoiceOverridesRef = useRef<Record<number, string>>({});
   const [sealedPaperMessages, setSealedPaperMessages] = useState<Set<string>>(() => new Set());
   const [flowOpDrawer, setFlowOpDrawer] = useState<{
     messageId: string;
@@ -425,7 +426,9 @@ export function AgentProductDemo({
       window.alert("请在本轮办理完成后使用一键修正；若流程已过期，请用同一问法重新发起。");
       throw new Error("missing process");
     }
-    const patch = csvPatchForPaperRerun(ctx.paper, ctx.skillId);
+    const patch = csvPatchForPaperRerun(ctx.paper, ctx.skillId, {
+      invoiceOverrides: ledgerInvoiceOverridesRef.current,
+    });
     if (!patch) {
       window.alert("当前文书暂不支持自动写回，请在左侧说明要改的内容。");
       throw new Error("no patch");
@@ -461,7 +464,12 @@ export function AgentProductDemo({
       ),
     );
 
-    const res = await apiRerunProductRun(ctx.processId, sessionId, {
+    const llmPayload =
+      isLlmConfigured(llmConfig) ? toProductLlmConfig(llmConfig) : undefined;
+    const res = await apiRerunProductRun(
+      ctx.processId,
+      sessionId,
+      {
       onStep: (part) => {
         live = {
           ...live,
@@ -482,7 +490,10 @@ export function AgentProductDemo({
           parts: fin.parts,
         };
       },
-    });
+    },
+      undefined,
+      llmPayload,
+    );
 
     if (!res.ok) {
       window.alert(res.error);
@@ -516,6 +527,7 @@ export function AgentProductDemo({
       ),
     );
     if (nextPaper) {
+      ledgerInvoiceOverridesRef.current = {};
       setPaperDrawer({
         paper: nextPaper,
         messageId,
@@ -524,7 +536,7 @@ export function AgentProductDemo({
         query: nextRun.query,
       });
     }
-  }, [paperDrawer]);
+  }, [paperDrawer, llmConfig]);
 
   const sealPaperDeliverable = useCallback(async () => {
     const ctx = paperDrawer;
@@ -2844,6 +2856,7 @@ export function AgentProductDemo({
           open={Boolean(paperDrawer)}
           interactive={!hubMode}
           onClose={() => setPaperDrawer(null)}
+          ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
           onApplyFix={!hubMode && paperDrawer?.processId ? applyPaperRerun : undefined}
           onSealDeliverable={!hubMode && paperDrawer?.paper?.kind === "ledger" ? sealPaperDeliverable : undefined}
           deliverySealed={paperDrawer ? sealedPaperMessages.has(paperDrawer.messageId) : false}

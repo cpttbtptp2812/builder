@@ -1,6 +1,8 @@
 import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import type { WorkPaper } from "../../lib/workPaper";
+import type { LedgerInvoiceOverride } from "../../lib/productPaperPatch";
+import type { MutableRefObject } from "react";
 import { gridToCsv } from "../../lib/productDataStore";
 import { downloadText } from "../../lib/importedSkills";
 import { paperDrawerTitle, paperExportGrid } from "../../lib/workPaper";
@@ -15,6 +17,7 @@ export function WorkPaperDrawer({
   onSealDeliverable,
   deliverySealed,
   interactive = true,
+  ledgerInvoiceOverridesRef,
 }: {
   paper: WorkPaper | null;
   open: boolean;
@@ -25,6 +28,7 @@ export function WorkPaperDrawer({
   onSealDeliverable?: () => void | Promise<void>;
   deliverySealed?: boolean;
   interactive?: boolean;
+  ledgerInvoiceOverridesRef?: MutableRefObject<LedgerInvoiceOverride>;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -82,6 +86,7 @@ export function WorkPaperDrawer({
             onApplyFix={onApplyFix}
             onSealDeliverable={onSealDeliverable}
             deliverySealed={deliverySealed}
+            ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
           />
         </div>
       </aside>
