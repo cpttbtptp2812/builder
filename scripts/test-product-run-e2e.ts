@@ -7,7 +7,7 @@ import path from "node:path";
 
 process.env.DATABASE_PATH = path.join(os.tmpdir(), `ownagent-e2e-${randomUUID()}.sqlite`);
 
-import { continueProductRun, saveServerDataset, startProductRun } from "../server/productRun.ts";
+import { archiveProductRun, continueProductRun, saveServerDataset, startProductRun } from "../server/productRun.ts";
 import type { ProductDataSlot } from "../src/lib/productDataStore.ts";
 
 const DEMO_FORBIDDEN = [/12800/, /4200/, /张三/, /李四/, /王旭/, /星图智造/, /问句里的表/];
@@ -125,11 +125,117 @@ async function testLedgerFinish() {
   console.log("OK  ledger-desk finish with upload + llm step");
 }
 
+type DeskCase = {
+  skillId: string;
+  query: string;
+  uploads: { slot: ProductDataSlot; title: string; columns: string[]; rows: string[][] }[];
+  expect: RegExp[];
+};
+
+const DESK_CASES: DeskCase[] = [
+  {
+    skillId: "ticket-desk",
+    query: "把这批工单分派一下，看看时效",
+    uploads: [
+      {
+        slot: "service-tickets",
+        title: "E2E十月工单",
+        columns: ["工单号", "客户", "创建时间", "首次响应时间", "解决时间", "标题", "内容", "状态"],
+        rows: [
+          ["Q771", "客户Q1", "2026-10-13 09:00", "2026-10-13 09:20", "", "退款没到账", "申请退款一周了还没到账", "处理中"],
+          ["Q772", "客户Q2", "2026-10-13 10:00", "", "", "APP 闪退", "一打开就闪退", "待处理"],
+          ["Q773", "客户Q3", "2026-10-13 11:00", "2026-10-13 11:05", "2026-10-13 11:40", "如何改密码", "请问在哪里改密码", "已解决"],
+        ],
+      },
+      {
+        slot: "service-agents",
+        title: "E2E坐席",
+        columns: ["坐席", "技能组", "在岗"],
+        rows: [
+          ["坐席Q1", "账务组|综合组", "是"],
+          ["坐席Q2", "技术组", "是"],
+        ],
+      },
+    ],
+    expect: [/E2E十月工单/, /共 3 张工单/, /未结 2 张/, /已分派 2 张/],
+  },
+  {
+    skillId: "shift-desk",
+    query: "按员工表和班次需求排一下班",
+    uploads: [
+      {
+        slot: "staff-roster",
+        title: "E2E店员",
+        columns: ["员工", "岗位技能", "用工类型", "时薪"],
+        rows: [
+          ["店员Q1", "收银|值班长", "全职", "31"],
+          ["店员Q2", "收银", "全职", "27"],
+        ],
+      },
+      {
+        slot: "shift-demand",
+        title: "E2E班次",
+        columns: ["日期", "开始", "结束", "岗位", "人数"],
+        rows: [
+          ["2026-10-19", "09:00", "17:00", "收银", "1"],
+          ["2026-10-20", "09:00", "17:00", "收银", "2"],
+        ],
+      },
+    ],
+    expect: [/E2E班次/, /共需 3 人次，排上 3 人次/, /覆盖率 100\.0%/],
+  },
+];
+
+async function testDeskGateAndFinish(c: DeskCase) {
+  const sessionId = `e2e-${c.skillId}-${randomUUID()}`;
+  const first = await startProductRun({ sessionId, skillId: c.skillId, query: c.query });
+  if (!first.ok || first.status !== "waiting_import") {
+    fail(`${c.skillId} gate: 无材料应 waiting_import，得 ${first.ok ? first.status : "error"}`);
+  }
+  assertNoDemo(first.message, `${c.skillId} gate message`);
+  assertCustomerGateCopy(first.message, `${c.skillId} gate message`);
+  if (/客户Q|店员Q|坐席Q/.test(first.message)) fail(`${c.skillId} gate: 不该出现数据`);
+  const gateImports = first.parts.filter((p) => p.kind === "import");
+  if (gateImports.length !== c.uploads.length) {
+    fail(`${c.skillId} gate: 应有 ${c.uploads.length} 个导入位，得 ${gateImports.length}`);
+  }
+  if (first.parts.some((p) => p.kind === "process")) fail(`${c.skillId} gate: 门闩时不该有处理步骤`);
+  console.log(`OK  gate  ${c.skillId} waiting_import (${gateImports.length} slot)`);
+
+  for (const u of c.uploads) saveServerDataset(sessionId, u);
+  const fin = await continueProductRun(first.processId, sessionId);
+  if (!fin.ok || fin.status !== "finish") {
+    fail(`${c.skillId} finish: 上传后应 finish，得 ${fin.ok ? fin.status : "error"} ${fin.ok ? fin.message.slice(0, 200) : ""}`);
+  }
+  const blob = finishBlob(fin);
+  assertNoDemo(blob, `${c.skillId} finish output`);
+  assertNoDuplicateSentences(fin.message, `${c.skillId} finish message`);
+  for (const re of c.expect) {
+    if (!re.test(blob)) fail(`${c.skillId} finish: 结论应含 ${re}：${blob.slice(0, 600)}`);
+  }
+  const trace = fin.trace as { tool?: string; ok?: boolean }[] | undefined;
+  if (!trace?.some((t) => t.tool === "__llm_product_brief__" && t.ok)) {
+    fail(`${c.skillId} finish: trace 须含成功的 __llm_product_brief__ 步`);
+  }
+  const steps = fin.parts.filter((p) => p.kind === "process");
+  if (steps.length < 10) fail(`${c.skillId} finish: 处理步骤只有 ${steps.length} 步`);
+  const corrected = c.uploads[0]!;
+  saveServerDataset(sessionId, { ...corrected, title: `修正后-${corrected.title}` });
+  const rerun = await continueProductRun(first.processId, sessionId, undefined, undefined, "rerun");
+  if (!rerun.ok || rerun.status !== "finish") fail(`${c.skillId}: 替换材料后应可 rerun 办结`);
+  const duplicate = await continueProductRun(first.processId, sessionId);
+  if (duplicate.ok || !duplicate.error.includes("已经完成")) fail(`${c.skillId}: 已办结 process 不应被重复 continue`);
+  const archived = archiveProductRun(first.processId, sessionId, "e2e-user");
+  if (!archived.ok || !archived.archivedAt) fail(`${c.skillId}: 办结后应可持久化归档`);
+  console.log(`OK  ${c.skillId} finish with upload (${steps.length} steps)`);
+}
+
 async function main() {
   await testGateNoData();
   await testStaleSessionDoesNotAutoRun();
   await testLedgerFinish();
-  console.log("OK  test-product-run-e2e (ledger-desk)");
+  for (const c of DESK_CASES) await testDeskGateAndFinish(c);
+  console.log("OK  test-product-run-e2e (ledger-desk, ticket-desk, shift-desk)");
 }
 
 main().catch((e) => {

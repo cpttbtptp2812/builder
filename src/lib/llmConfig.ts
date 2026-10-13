@@ -1,5 +1,7 @@
 /** LLM 连接配置 — localStorage + 可选 .env.local（仅本地开发） */
 
+import { apiUrl, checkBackendHealth, getTeamToken } from "./apiClient";
+
 export type LlmPresetId = "deepseek" | "openai" | "ollama" | "ollama-cloud" | "custom";
 
 export type LlmConfig = {
@@ -12,6 +14,7 @@ export type LlmConfig = {
 };
 
 const STORAGE_KEY = "uniagent-llm-config";
+const KEY_STORAGE_KEY = "uniagent-llm-key";
 
 /** 本地 .env.local：VITE_UNIAGENT_API_KEY=sk-xxx（勿提交 git，勿用于公开站点 build） */
 const ENV_API_KEY = (import.meta.env.VITE_UNIAGENT_API_KEY as string | undefined)?.trim() ?? "";
@@ -91,12 +94,15 @@ export function loadLlmConfig(): LlmConfig {
     if (baseUrl.includes("ollama.com/api/v1")) {
       baseUrl = baseUrl.replace("ollama.com/api/v1", "ollama.com/v1");
     }
+    const browserKey = localStorage.getItem(KEY_STORAGE_KEY)?.trim() ?? "";
+    const legacyKey = saved.apiKey?.trim() ?? "";
+    if (!browserKey && legacyKey) localStorage.setItem(KEY_STORAGE_KEY, legacyKey);
     return {
       ...base,
       ...saved,
       baseUrl,
       enabled: Boolean(saved.enabled),
-      apiKey: saved.enabled ? (saved.apiKey?.trim() || ENV_API_KEY) : (saved.apiKey?.trim() ?? ""),
+      apiKey: saved.enabled ? (browserKey || legacyKey || ENV_API_KEY) : (browserKey || legacyKey),
     };
   } catch {
     return defaultLlmConfig();
@@ -104,8 +110,11 @@ export function loadLlmConfig(): LlmConfig {
 }
 
 export function saveLlmConfig(config: LlmConfig) {
-  const raw = JSON.stringify(config);
+  const { apiKey, ...metadata } = config;
+  const raw = JSON.stringify(metadata);
   localStorage.setItem(STORAGE_KEY, raw);
+  if (apiKey.trim()) localStorage.setItem(KEY_STORAGE_KEY, apiKey.trim());
+  else localStorage.removeItem(KEY_STORAGE_KEY);
   try {
     sessionStorage.removeItem(STORAGE_KEY);
   } catch {
@@ -116,6 +125,73 @@ export function saveLlmConfig(config: LlmConfig) {
   } catch {
     /* ignore */
   }
+}
+
+export function clearStoredLlmKey() {
+  try {
+    localStorage.removeItem(KEY_STORAGE_KEY);
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      delete parsed.apiKey;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+    }
+    localStorage.removeItem(PROBE_KEY);
+    window.dispatchEvent(new CustomEvent("ownagent:config-updated"));
+  } catch {
+    /* ignore */
+  }
+}
+
+const PROBE_KEY = "uniagent-llm-probe";
+
+export type LlmProbeRecord = {
+  ok: boolean;
+  model: string;
+  baseUrl: string;
+  keyStamp: string;
+};
+
+function keyStamp(apiKey: string): string {
+  let h = 0;
+  for (let i = 0; i < apiKey.length; i += 1) h = (h * 31 + apiKey.charCodeAt(i)) >>> 0;
+  return `${apiKey.length}:${h}`;
+}
+
+export function saveLlmProbe(config: LlmConfig, ok: boolean) {
+  const record: LlmProbeRecord = {
+    ok,
+    model: config.model.trim(),
+    baseUrl: config.baseUrl.trim(),
+    keyStamp: keyStamp(config.apiKey.trim()),
+  };
+  try {
+    localStorage.setItem(PROBE_KEY, JSON.stringify(record));
+    window.dispatchEvent(new CustomEvent("ownagent:config-updated"));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function loadLlmProbe(): LlmProbeRecord | null {
+  try {
+    const raw = localStorage.getItem(PROBE_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as LlmProbeRecord;
+  } catch {
+    return null;
+  }
+}
+
+/** 只有最近一次测试成功，且模型、地址、Key 都没改过，才算连上。 */
+export function isLlmProbeLive(config: LlmConfig): boolean {
+  const probe = loadLlmProbe();
+  if (!probe?.ok || !isLlmConfigured(config)) return false;
+  return (
+    probe.model === config.model.trim() &&
+    probe.baseUrl === config.baseUrl.trim() &&
+    probe.keyStamp === keyStamp(config.apiKey.trim())
+  );
 }
 
 /** 传给 product-run / 服务端 LLM 步（不含 enabled 以外的敏感扩展） */
@@ -164,20 +240,27 @@ export async function probeLlmConnection(
   }
   const t0 = performance.now();
   const baseUrl = resolveLlmBaseUrl(config.baseUrl);
-  const target = `${baseUrl}/chat/completions`;
+  const local = config.preset === "ollama" || /localhost|127\.0\.0\.1/.test(baseUrl);
+  const target = local ? `${baseUrl}/chat/completions` : apiUrl("/llm/probe");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
+  const teamToken = getTeamToken();
+  if (local && config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
+  if (!local && teamToken) headers.Authorization = `Bearer ${teamToken}`;
 
   try {
     const res = await fetch(target, {
       method: "POST",
       headers,
-      body: JSON.stringify({
-        model: config.model,
-        messages: [{ role: "user", content: "ping" }],
-        max_tokens: 5,
-        stream: false,
-      }),
+      body: JSON.stringify(
+        local
+          ? {
+              model: config.model,
+              messages: [{ role: "user", content: "ping" }],
+              max_tokens: 5,
+              stream: false,
+            }
+          : { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey },
+      ),
     });
     const ms = Math.round(performance.now() - t0);
     if (!res.ok) {
@@ -188,10 +271,13 @@ export async function probeLlmConnection(
         detail: `HTTP ${res.status} · ${target}: ${errText.slice(0, 120) || res.statusText}`,
       };
     }
+    if (!local) {
+      const data = (await res.json()) as { detail?: string };
+      return { ok: true, ms, detail: data.detail ?? `已连通 ${config.model} · ${ms}ms` };
+    }
     return { ok: true, ms, detail: `已连通 ${config.model} · ${target} · ${ms}ms` };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "网络错误";
-    const local = /localhost|127\.0\.0\.1/.test(baseUrl);
     const hint = local
       ? "请求打到本机 Ollama，不会使用 ollama.com 的 Key。本机需已启动 ollama serve。"
       : "浏览器没有连上该地址。云端 Key 请把预设选成 Ollama Cloud，Base URL 用 https://ollama.com/v1。";

@@ -10,28 +10,16 @@ const SCENARIOS = [
     example: "按部门汇总报销表，标出和发票对不上的",
   },
   {
-    id: "credit",
-    title: "授信与额度",
-    outcome: "按规则测算可批额度与要点说明",
-    example: "测算这笔授信额度",
+    id: "ticket",
+    title: "客服工单",
+    outcome: "分派坐席、检查时效，列出临期与升级工单",
+    example: "把这批工单分派一下，看看哪些快超时了",
   },
   {
-    id: "contract",
-    title: "合同审查",
-    outcome: "抽取条款、对照制度给出风险提示",
-    example: "审查这份借款合同",
-  },
-  {
-    id: "flow",
-    title: "流程查询",
-    outcome: "查询单据当前环节与待办",
-    example: "市场部9600报销单现在走到哪",
-  },
-  {
-    id: "image",
-    title: "单据识读",
-    outcome: "从影像提取字段并结构化",
-    example: "识别这份借款凭证影像",
+    id: "shift",
+    title: "门店排班",
+    outcome: "按技能和用工规则排班，检查缺口并计算成本",
+    example: "按员工表和班次需求排一下下周的班",
   },
 ] as const;
 
@@ -82,7 +70,7 @@ export function ProductSkillHome({
           >
             <strong>{s.title}</strong>
             <span className="aw-product-ex-outcome">{s.outcome}</span>
-            <span className="aw-product-ex-sample">示例：{s.example}</span>
+            <span className="aw-product-ex-sample">可以这样说：{s.example}</span>
           </button>
         ))}
       </div>

@@ -10,6 +10,8 @@ export type ProductLlmConfig = {
 
 export type EngineFacts = {
   engineSummary: string;
+  /** report 步给模型的完整事实（含明细），没有则只用 engineSummary */
+  engineDetail?: string;
   lockedNumbers: string[];
   materialTitle?: string;
   rowCount?: number;
@@ -36,6 +38,7 @@ export function engineFactsFromReport(
   const r = report as {
     summary?: string;
     detail?: string;
+    llmFacts?: string;
     dashboard?: { sheet?: { summary?: string } };
   } | null;
   const engineSummary =
@@ -47,6 +50,7 @@ export function engineFactsFromReport(
   const lockedNumbers = extractLockedNumbers(engineSummary);
   return {
     engineSummary,
+    engineDetail: typeof r?.llmFacts === "string" && r.llmFacts.trim() ? r.llmFacts.trim() : undefined,
     lockedNumbers,
     materialTitle: extras?.materialTitle,
     rowCount: extras?.rowCount,
@@ -82,11 +86,25 @@ export function briefMatchesLockedNumbers(brief: string, locked: string[]): bool
   return hits >= Math.min(locked.length, Math.max(1, Math.ceil(locked.length * 0.6)));
 }
 
+export type LlmBriefStyle = {
+  /** 角色一句话，例如「客服主管」 */
+  role?: string;
+  /** 要写什么 */
+  task?: string;
+  /** true：输出必须包含引擎关键数字（默认）；false：写回复/通知类内容，只禁止编造 */
+  lockNumbers?: boolean;
+  maxTokens?: number;
+};
+
+const DEFAULT_ROLE = "企业报销对账办事员";
+const DEFAULT_TASK = "只根据给定的「引擎事实」写一段中文办结说明（2～4 句）。不要 Markdown 标题，不要列表，不要括号里的技术说明。";
+
 export async function runLlmProductBrief(opts: {
   query: string;
   facts: EngineFacts;
   llm: ProductLlmConfig;
   materialSample?: string;
+  style?: LlmBriefStyle;
 }): Promise<{ ok: true; brief: string } | { ok: false; reason: string }> {
   if (!isProductLlmConfigured(opts.llm)) {
     return { ok: false, reason: "LLM 未启用或未配置" };
@@ -94,19 +112,22 @@ export async function runLlmProductBrief(opts: {
   const baseUrl = resolveLlmBaseUrlServer(opts.llm.baseUrl);
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   if (opts.llm.apiKey.trim()) headers.Authorization = `Bearer ${opts.llm.apiKey.trim()}`;
+  const lock = opts.style?.lockNumbers !== false;
 
   const system = [
-    "你是企业报销对账办事员，只根据给定的「引擎事实」写一段中文办结说明（2～4 句）。",
-    "禁止修改、编造任何金额、合计、行数、拦截/警告条数；必须与引擎事实一致。",
-    "不要 Markdown 标题，不要列表，不要括号里的技术说明。",
+    `你是${opts.style?.role?.trim() || DEFAULT_ROLE}。`,
+    opts.style?.task?.trim() || DEFAULT_TASK,
+    lock
+      ? "禁止修改、编造任何金额、合计、行数、条数；必须与引擎事实一致。"
+      : "所有编号、时间、人名、数字只能照抄引擎事实里出现的，不得编造事实里没有的承诺或数字。",
   ].join("\n");
 
   const user = [
     `用户诉求：${opts.query.slice(0, 400)}`,
     opts.facts.materialTitle ? `材料：${opts.facts.materialTitle}${opts.facts.rowCount != null ? `，${opts.facts.rowCount} 行` : ""}` : "",
     opts.materialSample ? `材料片段（仅语境）：\n${opts.materialSample.slice(0, 800)}` : "",
-    `引擎事实（数字不可改）：\n${opts.facts.engineSummary}`,
-    opts.facts.lockedNumbers.length ? `锁数：${opts.facts.lockedNumbers.join("、")}` : "",
+    `引擎事实（数字不可改）：\n${opts.facts.engineDetail ?? opts.facts.engineSummary}`,
+    lock && opts.facts.lockedNumbers.length ? `锁数：${opts.facts.lockedNumbers.join("、")}` : "",
   ]
     .filter(Boolean)
     .join("\n\n");
@@ -122,7 +143,7 @@ export async function runLlmProductBrief(opts: {
           { role: "user", content: user },
         ],
         temperature: 0.2,
-        max_tokens: 320,
+        max_tokens: opts.style?.maxTokens && opts.style.maxTokens > 0 ? Math.min(4000, opts.style.maxTokens) : 320,
         stream: false,
       }),
     });
@@ -133,7 +154,7 @@ export async function runLlmProductBrief(opts: {
     const json = (await res.json()) as { choices?: { message?: { content?: string } }[] };
     const brief = json.choices?.[0]?.message?.content?.trim() ?? "";
     if (!brief) return { ok: false, reason: "LLM 空回复" };
-    if (!briefMatchesLockedNumbers(brief, opts.facts.lockedNumbers)) {
+    if (lock && !briefMatchesLockedNumbers(brief, opts.facts.lockedNumbers)) {
       return { ok: false, reason: "LLM 说明与引擎锁数不一致" };
     }
     return { ok: true, brief };
@@ -154,7 +175,9 @@ export async function executeLlmProductBriefTool(opts: {
   reportVar: unknown;
   llm?: ProductLlmConfig;
   material?: { title?: string; rowCount?: number; columns?: string[]; rows?: string[][] };
-}): Promise<{
+  /** 结论之后附上模型写的内容（回复草稿、通知），而不是用模型的话替换结论 */
+  keepEngineLine?: boolean;
+} & LlmBriefStyle): Promise<{
   summary: string;
   detail: string;
   markdown?: string;
@@ -192,13 +215,15 @@ export async function executeLlmProductBriefTool(opts: {
     facts,
     llm: opts.llm!,
     materialSample,
+    style: { role: opts.role, task: opts.task, lockNumbers: opts.lockNumbers, maxTokens: opts.maxTokens },
   });
 
   if (llmOut.ok) {
+    const text = opts.keepEngineLine ? `${engineLine}\n\n${llmOut.brief}` : llmOut.brief;
     return {
-      summary: llmOut.brief,
+      summary: text,
       detail: llmOut.brief,
-      markdown: llmOut.brief,
+      markdown: text,
       meta: { llm: "used", model: opts.llm!.model },
     };
   }

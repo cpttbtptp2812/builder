@@ -28,11 +28,13 @@ COPY tsconfig.json ./
 COPY --from=frontend-build /app/dist ./dist
 
 # SQLite data volume
-RUN mkdir -p /data
+RUN mkdir -p /data && chown -R node:node /data /app
 ENV DATABASE_PATH=/data/builder.db
 ENV OWNAGENT_CONFIG_DIR=/data/.ownagent
+ENV NODE_ENV=production
 
 # Expose port
 EXPOSE 8787
 
+USER node
 CMD ["npx", "tsx", "server/index.ts"]

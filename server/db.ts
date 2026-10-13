@@ -10,8 +10,15 @@ const DB_PATH = process.env.DATABASE_PATH ?? path.join(DATA_DIR, "builder.db");
 fs.mkdirSync(DATA_DIR, { recursive: true });
 
 export const db = new DatabaseSync(DB_PATH);
+db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA foreign_keys=ON;");
 
 db.exec(`
+  CREATE TABLE IF NOT EXISTS schema_migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    applied_at TEXT NOT NULL
+  );
+
   /* ── 知识库文档（客户可通过管理后台增删改） ── */
   CREATE TABLE IF NOT EXISTS knowledge_docs (
     id TEXT PRIMARY KEY,
@@ -99,15 +106,25 @@ const CHAT_SESSION_MIGRATIONS = [
   "ALTER TABLE chat_sessions ADD COLUMN published INTEGER NOT NULL DEFAULT 0",
 ] as const;
 
-for (const sql of CHAT_SESSION_MIGRATIONS) {
-  try { db.exec(sql); } catch { /* column exists */ }
+function runMigration(version: number, name: string, apply: () => void) {
+  if (db.prepare("SELECT version FROM schema_migrations WHERE version=?").get(version)) return;
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    apply();
+    db.prepare("INSERT INTO schema_migrations(version,name,applied_at) VALUES(?,?,?)")
+      .run(version, name, new Date().toISOString());
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
 }
 
-/* ── 管理员密码默认配置 ── */
-try {
-  db.prepare(`INSERT OR IGNORE INTO app_config(key,value,updated_at) VALUES(?,?,?)`)
-    .run("admin_password", process.env.ADMIN_PASSWORD ?? "admin123", new Date().toISOString());
-} catch { /* ignore */ }
+runMigration(1, "chat analytics columns", () => {
+  for (const sql of CHAT_SESSION_MIGRATIONS) {
+    try { db.exec(sql); } catch { /* column exists */ }
+  }
+});
 
 db.exec(`
   CREATE TABLE IF NOT EXISTS rag_chunks (
@@ -195,13 +212,47 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_product_processes_session ON product_processes(session_id);
+
+  CREATE TABLE IF NOT EXISTS product_session_owners (
+    session_id TEXT PRIMARY KEY,
+    owner_id TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS idx_product_session_owners_owner ON product_session_owners(owner_id, updated_at DESC);
+
+  CREATE TABLE IF NOT EXISTS skill_versions (
+    skill_id TEXT NOT NULL,
+    version TEXT NOT NULL,
+    raw TEXT NOT NULL,
+    gate TEXT,
+    actor_id TEXT,
+    note TEXT,
+    created_at TEXT NOT NULL,
+    PRIMARY KEY (skill_id, version)
+  );
+
+  CREATE TABLE IF NOT EXISTS live_skills (
+    skill_id TEXT PRIMARY KEY,
+    version TEXT NOT NULL,
+    raw TEXT NOT NULL,
+    actor_id TEXT,
+    published_at TEXT NOT NULL
+  );
 `);
 
-try {
-  db.exec(`ALTER TABLE clip_snippets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`);
-} catch {
-  /* column exists */
-}
+runMigration(2, "clip tags", () => {
+  try { db.exec(`ALTER TABLE clip_snippets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`); } catch { /* column exists */ }
+});
+runMigration(3, "product archive and run token", () => {
+  for (const sql of [
+    "ALTER TABLE product_processes ADD COLUMN archived_at TEXT",
+    "ALTER TABLE product_processes ADD COLUMN archived_by TEXT",
+    "ALTER TABLE product_processes ADD COLUMN run_token TEXT",
+  ] as const) {
+    try { db.exec(sql); } catch { /* column exists */ }
+  }
+});
 
 export function nowIso() {
   return new Date().toISOString();
@@ -217,14 +268,14 @@ export type RagChunkRow = {
   char_count: number;
 };
 
-export function dbGet<T>(sql: string, params: unknown[] = []): T | undefined {
+export function dbGet<T>(sql: string, params: any[] = []): T | undefined {
   return db.prepare(sql).get(...params) as T | undefined;
 }
 
-export function dbAll<T>(sql: string, params: unknown[] = []): T[] {
+export function dbAll<T>(sql: string, params: any[] = []): T[] {
   return db.prepare(sql).all(...params) as T[];
 }
 
-export function dbRun(sql: string, params: unknown[] = []) {
+export function dbRun(sql: string, params: any[] = []) {
   return db.prepare(sql).run(...params);
 }

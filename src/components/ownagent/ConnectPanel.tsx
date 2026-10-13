@@ -4,12 +4,14 @@ import { loadEnabledMcpTools } from "../fx/agent/AgentMcpRegistry";
 import { loadOrchestrationMode, type OrchestrationMode } from "../fx/agent/OwnSettingsSheet";
 import {
   LLM_PRESETS,
+  clearStoredLlmKey,
   getEnvApiKey,
   hasEnvApiKey,
   isLlmConfigured,
   loadLlmConfig,
   probeLlmConnection,
   saveLlmConfig,
+  saveLlmProbe,
   type LlmConfig,
   type LlmPresetId,
 } from "../../lib/llmConfig";
@@ -24,6 +26,7 @@ import {
   setActivePromptId,
 } from "../../lib/agentPromptRuntime";
 import { listPromptTemplates, PROMPT_CATEGORY_LABEL } from "../../lib/promptTemplates";
+import { apiFetch, getTeamToken, setTeamToken } from "../../lib/apiClient";
 import { McpToolsPanel } from "./McpToolsPanel";
 import {
   OaBadge,
@@ -44,7 +47,9 @@ function saveMcpEnabled(names: string[]) {
 
 /** 接入配置 — 大模型 + MCP + 高级能力（客户可用，非 Demo） */
 export function ConnectPanel() {
-  const [tab, setTab] = useState<"llm" | "mcp" | "advanced">("llm");
+  const [tab, setTab] = useState<"access" | "llm" | "mcp" | "advanced">("access");
+  const [accessToken, setAccessToken] = useState(() => getTeamToken() ?? "");
+  const [accessState, setAccessState] = useState<"idle" | "checking" | "ok" | "error">("idle");
   const [llm, setLlm] = useState<LlmConfig>(() => loadLlmConfig());
   const [mcpEnabled, setMcpEnabled] = useState<string[]>(() => loadEnabledMcpTools());
   const [orchMode, setOrchMode] = useState<OrchestrationMode>(() => loadOrchestrationMode());
@@ -106,7 +111,15 @@ export function ConnectPanel() {
   async function runProbe() {
     setProbe({ running: true });
     const res = await probeLlmConnection(llm);
+    saveLlmProbe(llm, res.ok);
     setProbe({ running: false, ok: res.ok, detail: res.detail });
+  }
+
+  async function saveAccessToken() {
+    setAccessState("checking");
+    setTeamToken(accessToken.trim() || null);
+    const me = await apiFetch<{ member?: { displayName?: string } }>("/team/me");
+    setAccessState(me?.member ? "ok" : "error");
   }
 
   return (
@@ -125,11 +138,40 @@ export function ConnectPanel() {
         value={tab}
         onChange={setTab}
         tabs={[
+          { id: "access", label: "办事服务" },
           { id: "llm", label: "大模型" },
           { id: "mcp", label: "MCP 工具" },
           { id: "advanced", label: "高级能力" },
         ]}
       />
+
+      {tab === "access" && (
+        <OaStack>
+          <p className="oa-toolbar-lead">
+            私有部署由管理员为每位办事员发放访问令牌。令牌只保存在当前浏览器，用来保护材料、办理记录和技能发布。
+          </p>
+          <OaField label="访问令牌">
+            <input
+              className="oa-input"
+              type="password"
+              autoComplete="off"
+              value={accessToken}
+              onChange={(e) => {
+                setAccessToken(e.target.value);
+                setAccessState("idle");
+              }}
+              placeholder="由管理员提供"
+            />
+          </OaField>
+          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <OaBtn onClick={() => void saveAccessToken()} disabled={!accessToken.trim() || accessState === "checking"}>
+              {accessState === "checking" ? "检查中…" : "保存并检查"}
+            </OaBtn>
+            {accessState === "ok" ? <OaBadge tone="ok">已连接办事服务</OaBadge> : null}
+            {accessState === "error" ? <OaBadge tone="danger">令牌无效或服务未连接</OaBadge> : null}
+          </div>
+        </OaStack>
+      )}
 
       {tab === "llm" && (
         <OaStack>
@@ -158,6 +200,7 @@ export function ConnectPanel() {
                   <option value="deepseek">DeepSeek</option>
                   <option value="openai">OpenAI</option>
                   <option value="ollama">Ollama 本地</option>
+                  <option value="ollama-cloud">Ollama Cloud</option>
                   <option value="custom">自定义</option>
                 </select>
               </OaField>
@@ -184,6 +227,19 @@ export function ConnectPanel() {
                   placeholder="sk-…"
                 />
               </OaField>
+              <p className="oa-toolbar-lead">
+                Key 只保存在当前浏览器；办理或测试时通过 HTTPS 临时交给办事服务调用模型，不写入业务数据库或运行记录。
+              </p>
+              <OaBtn
+                variant="ghost"
+                onClick={() => {
+                  clearStoredLlmKey();
+                  setLlm((c) => ({ ...c, apiKey: "", enabled: false }));
+                  setProbe({ running: false });
+                }}
+              >
+                清除此设备上的 Key
+              </OaBtn>
               {llm.preset !== "custom" && LLM_PRESETS[llm.preset as Exclude<LlmPresetId, "custom">] && (
                 <p className="oa-toolbar-lead">
                   {LLM_PRESETS[llm.preset as Exclude<LlmPresetId, "custom">].hint}

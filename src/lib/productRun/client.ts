@@ -1,4 +1,4 @@
-import { apiUrl } from "../apiClient";
+import { apiUrl, getTeamToken } from "../apiClient";
 import type { ProductLlmConfig } from "../llmProductBrief";
 import type { ProductDataSlot } from "../productDataStore";
 import type {
@@ -7,6 +7,11 @@ import type {
   ProductRunStreamHandlers,
   ProductRunView,
 } from "./types";
+
+function productHeaders(extra?: Record<string, string>): Record<string, string> {
+  const token = getTeamToken();
+  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
+}
 
 async function parseSseBody(
   body: ReadableStream<Uint8Array>,
@@ -88,7 +93,7 @@ export async function streamProductRun(
 ): Promise<ProductRunApiResult> {
   const res = await fetch(apiUrl("/product-run/stream"), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+    headers: productHeaders({ "Content-Type": "application/json", Accept: "text/event-stream" }),
     body: JSON.stringify(body),
     signal,
   });
@@ -131,7 +136,7 @@ export async function apiStartProductRun(opts: {
   }
   const res = await fetch(apiUrl("/product-run/start"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: productHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(opts),
     signal: opts.signal,
   });
@@ -150,7 +155,7 @@ export async function apiContinueProductRun(
   }
   const res = await fetch(apiUrl("/product-run/continue"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: productHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ processId, sessionId }),
     signal,
   });
@@ -169,7 +174,7 @@ export async function apiRerunProductRun(
   }
   const res = await fetch(apiUrl("/product-run/continue"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: productHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ processId, sessionId }),
     signal,
   });
@@ -181,7 +186,7 @@ export async function apiFetchDeskTemplate(
   slot: ProductDataSlot,
 ): Promise<{ ok: boolean; error?: string; filename?: string; csv?: string }> {
   const q = new URLSearchParams({ skillId, slot });
-  const res = await fetch(apiUrl(`/product-run/template?${q}`));
+  const res = await fetch(apiUrl(`/product-run/template?${q}`), { headers: productHeaders() });
   return (await res.json()) as { ok: boolean; error?: string; filename?: string; csv?: string };
 }
 
@@ -200,7 +205,7 @@ export async function apiUploadProductDataset(opts: {
 }> {
   const res = await fetch(apiUrl("/product-run/dataset"), {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: productHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(opts),
   });
   return (await res.json()) as {
@@ -210,4 +215,16 @@ export async function apiUploadProductDataset(opts: {
     schemaOk?: boolean;
     schemaIssues?: string[];
   };
+}
+
+export async function apiArchiveProductRun(
+  processId: string,
+  sessionId: string,
+): Promise<{ ok: boolean; error?: string; archivedAt?: string }> {
+  const res = await fetch(apiUrl("/product-run/archive"), {
+    method: "POST",
+    headers: productHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ processId, sessionId }),
+  });
+  return (await res.json()) as { ok: boolean; error?: string; archivedAt?: string };
 }

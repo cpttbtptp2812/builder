@@ -301,7 +301,7 @@ export function replyForProject(text: string): string | null {
     return (
       `【${project.name} · 成果】\n\n` +
       project.achievements.map((a) => `• ${a}`).join("\n") +
-      `\n\n技术栈：${project.stack.join(" · ")}\n\n${project.narrative.split("\n\n").slice(-1)[0]}`
+      `\n\n技术栈：${(project.stack ?? []).join(" · ")}\n\n${project.narrative.split("\n\n").slice(-1)[0]}`
     );
   }
 

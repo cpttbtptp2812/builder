@@ -1,6 +1,7 @@
 /** 办事技能 ↔ 用户数据槽（产品模式必须导入，无内置业务数据） */
 
 import { datasetRowCount, type ProductDataSlot } from "./productDataStore";
+import { DESK_METAS } from "./deskProgramMeta";
 
 export type SkillDataRequirement = {
   slot: ProductDataSlot;
@@ -52,6 +53,7 @@ const VOUCHER_OCR_TEMPLATE = tpl([
 ]);
 
 export const SKILL_DATA_REQUIREMENTS: Record<string, SkillDataRequirement[]> = {
+  ...Object.fromEntries(DESK_METAS.map((m) => [m.skillId, m.requirements])),
   "ledger-desk": [
     {
       slot: "expense-ledger",
@@ -133,6 +135,6 @@ export function gateQueryWithSampleData(skillId: string, query: string): string 
 }
 
 export function allDeskTemplateRequirements(): { skillId: string; req: SkillDataRequirement }[] {
-  const deskIds = ["ledger-desk"] as const;
+  const deskIds = ["ledger-desk", ...DESK_METAS.map((m) => m.skillId)];
   return deskIds.flatMap((skillId) => requirementsForSkill(skillId).map((req) => ({ skillId, req })));
 }

@@ -20,13 +20,13 @@ import {
   runRouterEval,
   runSkillBenchmark,
   runSkillOnServer,
-  runSkillManifestOnServer,
-  SKILL_CATALOG,
+  currentSkillCatalog,
+  type ClientCtx,
 } from "./skills.ts";
-import { enrichSkillCatalog, hydrateSkill } from "../src/lib/skillMarkdown.ts";
 import { compileParsedOnly, parseSkillMarkdown } from "../src/lib/skillMarkdown.ts";
 import { compileSkill } from "../src/lib/skillSemcompiler.ts";
 import { runPolicyEval } from "../src/lib/policyDesk.ts";
+import { runInlineSkill, type InlineRunInput } from "./skillTryRun.ts";
 import { dbGet, dbAll, dbRun } from "./db.ts";
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { randomUUID } from "node:crypto";
@@ -36,6 +36,9 @@ import { registerTraceFeedback } from "./traceFeedback.ts";
 import { registerSkillGovernanceApi } from "./skillGovernanceApi.ts";
 import { registerTeamGovernanceApi } from "./teamGovernanceApi.ts";
 import { registerProductRun } from "./productRun.ts";
+import { createAdminSession, initializeAdminCredential, isAdminSession, revokeAdminSession } from "./adminAuth.ts";
+import { assertSafeExternalUrl, fetchExternal, productionApiGuard, rateLimit, readResponseTextLimited, requestSizeLimit } from "./security.ts";
+import { metricsSnapshot, recordLlmError, safeLog } from "./observability.ts";
 
 const app = new Hono();
 
@@ -47,12 +50,18 @@ app.use(
   cors({
     origin: (origin) => {
       if (!origin) return "*";
-      if (CORS_ORIGINS.some((o) => origin.startsWith(o.trim()))) return origin;
-      return CORS_ORIGINS[0] ?? origin;
+      if (CORS_ORIGINS.some((o) => origin === o.trim())) return origin;
+      return undefined;
     },
   }),
 );
+app.use("/api/*", requestSizeLimit);
+app.use("/api/*", productionApiGuard);
+app.use("/api/admin/login", rateLimit({ name: "admin-login", max: 10, windowMs: 60_000 }));
+app.use("/api/llm/*", rateLimit({ name: "llm", max: 30, windowMs: 60_000 }));
+app.use("/api/product-run/*", rateLimit({ name: "product-run", max: 120, windowMs: 60_000 }));
 
+initializeAdminCredential();
 seedRagCorpus();
 seedFaqChunks();
 seedCustomerData();
@@ -62,6 +71,97 @@ registerTraceFeedback(app);
 registerSkillGovernanceApi(app);
 registerTeamGovernanceApi(app);
 registerProductRun(app);
+
+app.post("/api/llm/probe", async (c) => {
+  const body = await c.req.json<{ baseUrl?: string; model?: string; apiKey?: string }>();
+  const baseUrl = (body.baseUrl ?? "").trim().replace(/\/$/, "");
+  const model = (body.model ?? "").trim();
+  const apiKey = (body.apiKey ?? "").trim();
+  let host = "";
+  try {
+    const u = assertSafeExternalUrl(baseUrl);
+    host = u.hostname;
+  } catch (error) {
+    return c.json({ ok: false, ms: 0, detail: error instanceof Error ? error.message : "Base URL 无效" }, 400);
+  }
+  if (!model) return c.json({ ok: false, ms: 0, detail: "缺少模型名" }, 400);
+
+  const t0 = Date.now();
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (apiKey) headers.Authorization = `Bearer ${apiKey}`;
+  try {
+    const res = await fetchExternal(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 5,
+        stream: false,
+      }),
+    }, { maxBytes: 256 * 1024 });
+    const ms = Date.now() - t0;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      return c.json({
+        ok: false,
+        ms,
+        detail: `HTTP ${res.status} · ${host}: ${errText.slice(0, 160) || res.statusText}`,
+      });
+    }
+    return c.json({ ok: true, ms, detail: `已连通 ${model} · ${host} · ${ms}ms` });
+  } catch (err) {
+    return c.json({
+      ok: false,
+      ms: Date.now() - t0,
+      detail: err instanceof Error ? err.message : "模型请求失败",
+    });
+  }
+});
+
+/** 个人 Key 代理：Key 仅用于当前请求，不入库、不写日志。 */
+app.post("/api/llm/byok/chat", async (c) => {
+  const body = await c.req.json<{
+    baseUrl?: string;
+    model?: string;
+    apiKey?: string;
+    messages?: unknown[];
+    temperature?: number;
+    maxTokens?: number;
+  }>();
+  const baseUrl = String(body.baseUrl ?? "").trim().replace(/\/$/, "");
+  const model = String(body.model ?? "").trim();
+  const apiKey = String(body.apiKey ?? "").trim();
+  if (!baseUrl || !model || !apiKey || !Array.isArray(body.messages)) {
+    return c.json({ error: "模型地址、模型、Key 与消息不能为空" }, 400);
+  }
+  try {
+    assertSafeExternalUrl(baseUrl);
+    const res = await fetchExternal(`${baseUrl}/chat/completions`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({
+        model,
+        messages: body.messages,
+        temperature: Number.isFinite(body.temperature) ? body.temperature : 0.2,
+        max_tokens: Math.min(4000, Math.max(1, Number(body.maxTokens) || 320)),
+        stream: false,
+      }),
+    }, { timeoutMs: 60_000, maxBytes: 1024 * 1024 });
+    const text = await readResponseTextLimited(res, 1024 * 1024);
+    if (!res.ok) {
+      recordLlmError();
+      safeLog("llm.error", { status: res.status, providerHost: new URL(baseUrl).hostname });
+      return c.json({ error: `模型服务返回 HTTP ${res.status}` }, 502);
+    }
+    const data = JSON.parse(text) as { choices?: { message?: { content?: string } }[] };
+    return c.json({ content: data.choices?.[0]?.message?.content?.trim() ?? "" });
+  } catch (error) {
+    recordLlmError();
+    safeLog("llm.error", { reason: error instanceof Error ? error.message : "request_failed" });
+    return c.json({ error: error instanceof Error ? error.message : "模型请求失败" }, 502);
+  }
+});
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");
@@ -88,6 +188,8 @@ app.get("/api/ready", (c) => {
   }
 });
 
+app.get("/api/internal/metrics", (c) => c.json(metricsSnapshot()));
+
 app.post("/api/rag/retrieve", async (c) => {
   const body = await c.req.json<{ query: string; topK?: number }>();
   return c.json(retrieveRagFromDb(body.query ?? "", body.topK ?? 5));
@@ -95,7 +197,7 @@ app.post("/api/rag/retrieve", async (c) => {
 
 /** 跨域 URL 探活 — 浏览器直连受 CORS/网络限制，走服务端 fetch */
 app.post("/api/tools/http-probe", async (c) => {
-  const body = await c.req.json<{ url?: string; method?: "GET" | "HEAD" }>().catch(() => ({}));
+  const body: { url?: string; method?: "GET" | "HEAD" } = await c.req.json().catch(() => ({}));
   const url = String(body.url ?? "").trim();
   if (!url) return c.json({ error: "url required" }, 400);
   try {
@@ -130,7 +232,10 @@ app.post("/api/skills/run", async (c) => {
     probeUrl?: string;
   }>();
   const result = await runSkillOnServer(body.skillId, body.query, body.sessionId ?? "anon", {
-    clientSnapshot: body.clientSnapshot as { nodes?: { role: string }[] },
+    clientSnapshot: body.clientSnapshot as {
+      nodes?: { role: string; name: string; tag: string }[];
+      nodeCount?: number;
+    },
     clientPerf: body.clientPerf as Record<string, unknown>,
     probeUrl: body.probeUrl,
   });
@@ -139,32 +244,15 @@ app.post("/api/skills/run", async (c) => {
 
 /** 发版对比 / 治理试跑：指定 SKILL 原文 + 办事模式（与 product-run 同引擎） */
 app.post("/api/skills/run-inline", async (c) => {
-  const body = await c.req.json<{
-    skillId: string;
-    raw: string;
-    query: string;
-    productWorkbench?: boolean;
-    sessionId?: string;
-  }>();
-  if (!body.skillId?.trim() || !body.raw?.trim()) {
-    return c.json({ error: "skillId and raw required" }, 400);
-  }
-  const skill = enrichSkillCatalog(
-    [hydrateSkill(body.raw, { id: body.skillId, skillPath: `inline://${body.skillId}` })],
-    "server",
-  )[0];
-  if (!skill) return c.json({ error: "skill compile failed" }, 400);
-  const compileErr = (skill.diagnostics ?? []).find((d) => d.level === "error");
-  if (compileErr) return c.json({ error: compileErr.message }, 400);
-  const result = await runSkillManifestOnServer(skill, body.query ?? "", body.sessionId ?? "gate-inline", {
-    productWorkbench: body.productWorkbench !== false,
-  });
-  return c.json(result);
+  const body = await c.req.json<InlineRunInput>();
+  const out = await runInlineSkill(body);
+  if (!out.ok) return c.json({ error: out.error }, 400);
+  return c.json(out.result);
 });
 
 app.get("/api/skills/list", (c) =>
   c.json({
-    skills: SKILL_CATALOG.map((s) => ({
+    skills: currentSkillCatalog().map((s) => ({
       id: s.id,
       name: s.name,
       description: s.description,
@@ -184,15 +272,15 @@ app.get("/api/skills/list", (c) =>
 app.post("/api/skills/parse", async (c) => {
   const body = await c.req.json<{ markdown?: string }>().catch(() => ({ markdown: "" }));
   const parsed = parseSkillMarkdown(body.markdown ?? "");
-  const compile = compileParsedOnly(parsed, parsed.name || "preview", SKILL_CATALOG.map((s) => ({ id: s.id, triggers: s.triggers })), "server");
+  const compile = compileParsedOnly(parsed, parsed.name || "preview", currentSkillCatalog().map((s) => ({ id: s.id, triggers: s.triggers })), "server");
   return c.json({ parsed, ...compile });
 });
 
 app.post("/api/skills/compile", async (c) => {
-  const body = await c.req.json<{ markdown?: string; skillId?: string }>().catch(() => ({}));
+  const body: { markdown?: string; skillId?: string } = await c.req.json().catch(() => ({}));
   const parsed = parseSkillMarkdown(body.markdown ?? "");
   const skillId = body.skillId ?? parsed.name ?? "preview";
-  const peers = SKILL_CATALOG.filter((s) => s.id !== skillId).map((s) => ({ id: s.id, triggers: s.triggers }));
+  const peers = currentSkillCatalog().filter((s) => s.id !== skillId).map((s) => ({ id: s.id, triggers: s.triggers }));
   const compile = compileSkill(parsed, { skillId, env: "server", peers });
   return c.json({
     skillId,
@@ -234,13 +322,13 @@ app.post("/api/agent/guest", async (c) => {
     clientPerf?: unknown;
     probeUrl?: string;
   }>();
-  const result = await runGuestAgentOnServer(body.query, body.sessionId ?? "anon", body);
+  const result = await runGuestAgentOnServer(body.query, body.sessionId ?? "anon", body as ClientCtx);
   return c.json(result);
 });
 
 app.post("/api/multi-agent/run", async (c) => {
   const body = await c.req.json<{ query: string; sessionId: string; clientSnapshot?: unknown; clientPerf?: unknown; probeUrl?: string }>();
-  const result = await runMultiAgentOnServer(body.query, body.sessionId ?? "anon", body);
+  const result = await runMultiAgentOnServer(body.query, body.sessionId ?? "anon", body as ClientCtx);
   return c.json(result);
 });
 
@@ -323,28 +411,25 @@ app.post("/api/agent/chat", async (c) => {
 
 function nowIsoLocal() { return new Date().toISOString(); }
 
-/* ─── 鉴权中间件 ──────────────────────────────────────────── */
-function getAdminPassword() {
-  const row = dbGet<{ value: string }>("SELECT value FROM app_config WHERE key='admin_password'");
-  return row?.value ?? process.env.ADMIN_PASSWORD ?? "admin123";
-}
-
 app.post("/api/admin/login", async (c) => {
   const { password } = await c.req.json<{ password: string }>();
-  if (password === getAdminPassword()) {
-    return c.json({ ok: true, token: Buffer.from(`admin:${password}`).toString("base64") });
-  }
+  const token = createAdminSession(password ?? "");
+  if (token) return c.json({ ok: true, token });
   return c.json({ ok: false, error: "密码错误" }, 401);
 });
 
 function requireAdmin(c: { req: { header: (k: string) => string | undefined }; json: (b: unknown, s?: number) => Response }) {
-  const auth = c.req.header("x-admin-token") ?? "";
-  const decoded = Buffer.from(auth, "base64").toString("utf8");
-  return decoded.startsWith("admin:") && decoded.slice(6) === getAdminPassword();
+  return isAdminSession(c.req.header("x-admin-token"));
 }
+
+app.post("/api/admin/logout", (c) => {
+  revokeAdminSession(c.req.header("x-admin-token"));
+  return c.json({ ok: true });
+});
 
 /* ─── 知识库 CRUD ─────────────────────────────────────────── */
 app.get("/api/admin/knowledge", (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
   const docs = dbAll<{ id: string; title: string; body: string; prompts: string; tags: string; enabled: number; created_at: string; updated_at: string }>(
     "SELECT * FROM knowledge_docs ORDER BY updated_at DESC"
   );
@@ -393,15 +478,15 @@ app.delete("/api/admin/knowledge/:id", (c) => {
 
 /* ─── URL 内容抓取（用于知识库导入） ─────────────────────── */
 app.post("/api/admin/knowledge/import-url", async (c) => {
+  if (!requireAdmin(c as Parameters<typeof requireAdmin>[0])) return c.json({ error: "未授权" }, 401);
   const { url } = await c.req.json<{ url: string }>();
   if (!url?.trim()) return c.json({ error: "URL 不能为空" }, 400);
   try {
-    const res = await fetch(url, {
+    const res = await fetchExternal(url, {
       headers: { "User-Agent": "Mozilla/5.0 OwnAgent-KnowledgeImporter/1.0", "Accept": "text/html,text/plain,*/*" },
-      signal: AbortSignal.timeout(15000),
-    });
+    }, { timeoutMs: 15_000, maxBytes: 1024 * 1024 });
     if (!res.ok) return c.json({ error: `请求失败: ${res.status}` }, 502);
-    const html = await res.text();
+    const html = await readResponseTextLimited(res, 1024 * 1024);
 
     // Extract title
     const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);

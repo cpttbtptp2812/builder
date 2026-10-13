@@ -2,7 +2,7 @@
 
 import { dbAll, dbRun, nowIso } from "./db.ts";
 import { formatRagContext, retrieveRagFromDb } from "./rag.ts";
-import { explainDiscovery, runSkillOnServer, getSkill, matchProductFaqOnServer } from "./skills.ts";
+import { explainDiscovery, runSkillOnServer, getSkill, matchProductFaqOnServer, type ClientCtx } from "./skills.ts";
 import { classifyCapability } from "../src/lib/policyDesk.ts";
 import { matchFaqLoose } from "../src/data/productFaq.ts";
 import { ragHitsForMcp } from "./rag.ts";
@@ -86,7 +86,7 @@ function pickSkill(query: string): { skillId: string | null; hits: string[]; sco
 export async function runMultiAgentOnServer(
   query: string,
   sessionId: string,
-  clientCtx: { clientSnapshot?: unknown; clientPerf?: unknown; probeUrl?: string } = {},
+  clientCtx: ClientCtx = {},
 ) {
   const t0 = performance.now();
   const steps: Array<{
@@ -199,7 +199,7 @@ export async function runMultiAgentOnServer(
 export async function runGuestAgentOnServer(
   query: string,
   sessionId: string,
-  clientCtx: { clientSnapshot?: unknown; clientPerf?: unknown; probeUrl?: string } = {},
+  clientCtx: ClientCtx = {},
 ) {
   const picked = pickSkill(query);
 

@@ -65,6 +65,8 @@ import {
 import { needsSkillRepair, repairSkillMarkdown } from "../../lib/skillRepair";
 import { diffStats, foldDiff, lineDiff } from "../../lib/lineDiff";
 import { INITIAL_SKILL_VERSION } from "../../lib/skillVersion";
+import { shippedVersionsFor } from "../../lib/shippedSkillVersions";
+import { syncServerLiveSkills } from "../../lib/skillPublished";
 import {
   defaultSampleQuery,
   fmtUpdatedAt,
@@ -90,6 +92,7 @@ import { buildZip, downloadBlob } from "../../lib/zipStore";
 import { apiFetch } from "../../lib/apiClient";
 import { SkillEvolutionPanel } from "./SkillEvolution";
 import { ScmCaseEditor } from "./ScmCaseEditor";
+import { SkillTryRun } from "./SkillTryRun";
 import { SkillBreakPanel } from "./SkillBreak";
 import { PageToolWalk } from "./PageToolWalk";
 import { SkillClauseNote, useSkillClauses } from "./SkillClauseNote";
@@ -743,7 +746,6 @@ function SkillDetail({
     const fuzz = fuzzReport && reportRaw === draft ? fuzzReport : null;
     if (shadow?.routeDriftCount && !window.confirm(`真实回流：${shadow.routeDriftCount} 条历史问句在新版下路由变了。仍要发布？`)) return;
     if (fuzz?.lostCount && !window.confirm(`路由邻域：${fuzz.lostCount} 种说法变体会被别的技能抢走。仍要发布？`)) return;
-    const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
     const gate = buildReleaseGateSummary(r);
     await ensureTeamSession();
     const published = await apiFetch("/skill-gate/publish", {
@@ -751,7 +753,7 @@ function SkillDetail({
       body: JSON.stringify({
         skillId,
         raw: draft,
-        version: applied.version,
+        version: draftVersion,
         gate: gate.gate,
         actor: "local",
         override: force,
@@ -761,8 +763,13 @@ function SkillDetail({
         note: gate.reasons[0] ?? r.verdict.title,
       }),
     });
+    if (!published) {
+      toast.show("发布失败：服务端没有切换线上版本，本地也未生效");
+      return;
+    }
+    const applied = publishSkillVersion(skillId, skillName, draft, r.verdict.title);
+    await syncServerLiveSkills();
     setBaselineTick((n) => n + 1);
-    if (!published && !approvalOffline) toast.show("本地已发布，服务端 baseline 没有写上");
     try {
       const witness = await buildReleaseWitness({
         skillId,
@@ -845,17 +852,18 @@ function SkillDetail({
 
   async function rollbackTo(raw: string, version: string) {
     if (!window.confirm(`直接把线上换成 v${version} 的内容？会生成新版本号，旧记录都保留。`)) return;
-    const applied = publishSkillVersion(skillId, skillName, raw, `回滚到 v${version} 的内容`, "rollback");
     await ensureTeamSession();
-    await apiFetch("/skill-gate/baseline", {
+    const rolled = await apiFetch<{ live?: { raw?: string } }>("/skill-gate/rollback", {
       method: "POST",
-      body: JSON.stringify({ skillId, raw, version: applied.version, env: "prod" }),
+      body: JSON.stringify({ skillId, version, raw, newVersion: draftVersion, actor: "local" }),
     });
+    if (!rolled?.live?.raw) {
+      toast.show("回滚失败：服务端没有找到这个历史版本");
+      return;
+    }
+    const applied = publishSkillVersion(skillId, skillName, rolled.live.raw, `回滚到 v${version} 的内容`, "rollback");
+    await syncServerLiveSkills();
     setBaselineTick((n) => n + 1);
-    void apiFetch("/skill-gate/rollback", {
-      method: "POST",
-      body: JSON.stringify({ skillId, version, actor: "local" }),
-    });
     const next = reloadOnline();
     if (!hasChanges) setDraft(next);
     toast.show(`已回滚：线上现为 v${applied.version}（内容同 v${version}）`);
@@ -873,6 +881,11 @@ function SkillDetail({
   }
 
   const sentenceCount = listGateQuestionRows(skillId).length;
+  const tryStepLabels = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const s of [...onlineParsed.steps, ...draftParsed.steps]) if (!map[s.id]) map[s.id] = s.label?.trim() || s.id;
+    return map;
+  }, [onlineParsed, draftParsed]);
 
   return (
     <OaPage title={title} desc={skillSubtitle({ description: onlineParsed.description })}>
@@ -909,6 +922,13 @@ function SkillDetail({
             </span>
           </div>
           <div className="sk-work-actions">
+            <button
+              type="button"
+              className="own-compare-secondary-btn"
+              onClick={() => document.getElementById("sk-try-run")?.scrollIntoView({ behavior: "smooth", block: "start" })}
+            >
+              用材料试跑
+            </button>
             <button type="button" className="own-compare-secondary-btn" onClick={() => void exportAudit()}>
               导出记录
             </button>
@@ -1032,6 +1052,16 @@ function SkillDetail({
             ) : null}
           </section>
         </div>
+        <SkillTryRun
+          skillId={skillId}
+          online={online}
+          draft={draft}
+          hasChanges={hasChanges}
+          liveVersion={liveVersion}
+          draftVersion={draftVersion}
+          stepLabels={tryStepLabels}
+          defaultQuery={defaultSampleQuery(skillId, onlineParsed.triggers)}
+        />
       </div>
       {historyOpen ? (
         <div className="sk-history-layer">
@@ -1782,6 +1812,12 @@ function History({
       .map((h) => ({ key: h.recordId, version: h.version, raw: h.raw, at: h.savedAt, note: h.note, kind: h.kind }));
     if (!seen.has(INITIAL_SKILL_VERSION)) {
       rows.push({ key: "builtin", version: INITIAL_SKILL_VERSION, raw: builtinRaw, at: "", note: "出厂内置配置", kind: "publish" });
+      seen.add(INITIAL_SKILL_VERSION);
+    }
+    for (const v of shippedVersionsFor(skillId)) {
+      if (seen.has(v.version)) continue;
+      seen.add(v.version);
+      rows.push({ key: `shipped-${v.version}`, version: v.version, raw: v.raw, at: "", note: "出厂内置配置", kind: "publish" });
     }
     return rows;
   }, [skillId, builtinRaw]);

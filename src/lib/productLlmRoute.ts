@@ -1,7 +1,8 @@
 /** 产品模式：LLM 只做技能路由（不跑 RAG 工具环） */
 
 import { allRunnableSkills, isCustomerSkill, type AgentSkill } from "./agentSkills";
-import { isLlmConfigured, resolveLlmBaseUrl, type LlmConfig } from "./llmConfig";
+import { isLlmConfigured, type LlmConfig } from "./llmConfig";
+import { callByokLlm } from "./byokLlm";
 
 function routableSkills(catalog?: AgentSkill[]): AgentSkill[] {
   const base = catalog?.length ? catalog : allRunnableSkills();
@@ -27,9 +28,6 @@ export async function llmPickSkillId(
   const skills = routableSkills(opts?.catalog);
   if (!skills.length) return null;
 
-  const baseUrl = resolveLlmBaseUrl(config.baseUrl);
-  const headers: Record<string, string> = {};
-  if (config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
   const system = [
     "你是 OwnAgent 产品技能路由器。用户要用「办事技能」处理业务，不是闲聊或搜文档。",
     "只能从下面列表选一个 skill id；若明显不属于任何技能，回复 JSON：{\"skillId\":null}。",
@@ -38,23 +36,15 @@ export async function llmPickSkillId(
     skillCatalogBlock(skills),
   ].join("\n");
 
-  const res = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...headers },
-    signal: opts?.signal,
-    body: JSON.stringify({
-      model: config.model,
-      temperature: 0,
-      max_tokens: 120,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: query.trim() },
-      ],
-    }),
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const raw = data.choices?.[0]?.message?.content?.trim() ?? "";
+  if (opts?.signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  const raw = await callByokLlm(
+    config,
+    [
+      { role: "system", content: system },
+      { role: "user", content: query.trim() },
+    ],
+    { temperature: 0, maxTokens: 120 },
+  );
   const jsonMatch = raw.match(/\{[\s\S]*\}/);
   if (!jsonMatch) return null;
   try {

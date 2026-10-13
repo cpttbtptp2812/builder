@@ -19,6 +19,7 @@ import {
   getApproval,
   listTeamMembers,
 } from "./teamGovernance.ts";
+import { liveSkill, listLiveSkills, publishLiveSkill, rollbackLiveSkill } from "./liveSkills.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.join(__dirname, "..");
@@ -82,7 +83,11 @@ function teamAccess(
   environment: string,
   action: string,
 ): { ok: true; actor?: string; role?: string } | { ok: false; status: 401 | 403; error: string } {
-  if (!listTeamMembers({ includeInactive: false }).length) return { ok: true };
+  if (!listTeamMembers({ includeInactive: false }).length) {
+    return process.env.NODE_ENV === "production"
+      ? { ok: false, status: 401, error: "team bootstrap required" }
+      : { ok: true };
+  }
   const token = authorization?.replace(/^Bearer\s+/i, "").trim() ?? "";
   const session = authenticateTeamSession(token);
   if (!session) return { ok: false, status: 401, error: "team authentication required" };
@@ -133,6 +138,19 @@ function writeAudit(row: {
 }
 
 export function registerSkillGate(app: Hono) {
+  app.get("/api/skills/live", (c) => {
+    const access = teamAccess(c.req.header("authorization"), "prod", "read");
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+    return c.json({ skills: listLiveSkills() });
+  });
+
+  app.get("/api/skills/live/:skillId", (c) => {
+    const access = teamAccess(c.req.header("authorization"), "prod", "read");
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+    const row = liveSkill(c.req.param("skillId"));
+    return row ? c.json({ skill: row }) : c.json({ skill: null });
+  });
+
   ensureAuditTable();
 
   app.get("/api/skill-gate/baselines", (c) => {
@@ -349,6 +367,14 @@ export function registerSkillGate(app: Hono) {
       raw: body.raw,
       publishedAt: new Date().toISOString(),
     });
+    publishLiveSkill({
+      skillId: body.skillId,
+      version: body.version,
+      raw: body.raw,
+      gate: body.gate,
+      actorId: access.actor,
+      note: body.override ? body.overrideReason : body.note,
+    });
     writeAudit({
       skillId: body.skillId,
       action: body.override ? "publish.override" : "publish",
@@ -379,14 +405,29 @@ export function registerSkillGate(app: Hono) {
       return c.json({ error: "cases object required" }, 400);
     }
     writeJsonAtomic(CASES_FILE, body);
-    const count = Object.values(body).reduce((n, rows) => n + (Array.isArray(rows) ? rows.length : 0), 0);
+    const count = Object.values(body).reduce<number>((n, rows) => n + (Array.isArray(rows) ? rows.length : 0), 0);
     writeAudit({ skillId: "*", action: "cases.sync", note: `${count} cases` });
     return c.json({ ok: true, path: ".ownagent/cases.json", cases: count });
   });
 
   app.post("/api/skill-gate/rollback", async (c) => {
-    const body = await c.req.json<{ skillId: string; version: string; actor?: string }>();
-    writeAudit({ skillId: body.skillId, action: "rollback", note: body.version, actor: body.actor });
-    return c.json({ ok: true, skillId: body.skillId, rolledBackTo: body.version });
+    const body = await c.req.json<{ skillId: string; version: string; raw?: string; newVersion?: string; actor?: string }>();
+    const access = teamAccess(c.req.header("authorization"), "prod", "publish");
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+    const rolled =
+      rollbackLiveSkill(body.skillId, body.version, access.actor, body.newVersion) ??
+      (body.raw?.trim() && body.newVersion?.trim()
+        ? publishLiveSkill({
+            skillId: body.skillId,
+            version: body.newVersion,
+            raw: body.raw,
+            gate: "ROLLBACK",
+            actorId: access.actor,
+            note: `rollback from bundled ${body.version}`,
+          })
+        : null);
+    if (!rolled) return c.json({ error: "version not found" }, 404);
+    writeAudit({ skillId: body.skillId, action: "rollback", note: body.version, actor: access.actor ?? body.actor });
+    return c.json({ ok: true, skillId: body.skillId, rolledBackTo: body.version, live: rolled });
   });
 }

@@ -245,7 +245,7 @@ function buildEscalations(
 }
 
 function buildGrids(
-  state: Omit<SheetProgramState, "detailGrid" | "deptGrid" | "escalationGrid" | "exceptionGrid">,
+  state: Omit<SheetProgramState, "summary" | "detailGrid" | "deptGrid" | "escalationGrid" | "exceptionGrid">,
   pricedMeta: ReturnType<typeof priceRows>,
 ): Pick<SheetProgramState, "detailGrid" | "deptGrid" | "escalationGrid" | "exceptionGrid"> {
   const { priced, whoKey, groupName, taxKey } = pricedMeta;
@@ -345,7 +345,7 @@ export function buildSheetProgramState(
     blocked,
   };
   const grids = buildGrids(partial, pricedMeta);
-  const summary = schema.ok ? composeSummary({ ...partial, ...grids, summary: "" }) : `表结构未通过：${schema.issues.join("；")}`;
+  const summary = schema.ok ? composeSummary({ ...partial, ...grids }) : `表结构未通过：${schema.issues.join("；")}`;
   return { ...partial, ...grids, summary };
 }
 

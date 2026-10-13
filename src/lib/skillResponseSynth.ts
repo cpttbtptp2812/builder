@@ -1,6 +1,8 @@
 import type { AgentSkill, SkillResult } from "./agentSkills";
 
-const CUSTOMER_DESK_FINISH_IDS = new Set(["ledger-desk"]);
+import { DESK_METAS } from "./deskProgramMeta";
+
+const CUSTOMER_DESK_FINISH_IDS = new Set(["ledger-desk", ...DESK_METAS.map((m) => m.skillId)]);
 
 /** 对话 product-run 办结：一句结论，不把整份 markdown 当正文 */
 export function synthesizeProductFinishMessage(skillId: string, result: unknown): string {

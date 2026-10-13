@@ -1,6 +1,7 @@
 /** MCP + Internal 工具注册表 — Semcompiler 与运行时环境能力校验 */
 
 import { MCP_TOOLS, getMcpTool, type McpTool } from "./mcpBridgeLab";
+import { DESK_METAS } from "./deskProgramMeta";
 
 export type SkillEffect = "pure" | "read_dom" | "read_remote" | "hitl" | "mutate";
 
@@ -102,6 +103,12 @@ export const INTERNAL_TOOLS: InternalToolDef[] = [
   { name: "__image_report__", label: "影像结论", effect: "pure", availableIn: ["browser", "server"] },
   { name: "__credit_flow_turn__", label: "信贷流程推进一步", effect: "pure", availableIn: ["browser", "server"] },
 ];
+
+for (const meta of DESK_METAS) {
+  for (const tool of meta.tools) {
+    INTERNAL_TOOLS.push({ name: tool.name, label: tool.label, effect: "pure", availableIn: ["browser", "server"] });
+  }
+}
 
 const INTERNAL_BY_NAME = new Map(INTERNAL_TOOLS.map((t) => [t.name, t]));
 

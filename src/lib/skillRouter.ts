@@ -14,6 +14,7 @@ import { matchCreditFlowSkillId } from "./creditFlowCatalog";
 import { creditFlowSkillId } from "./creditFlowUi";
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { matchFaq, matchFaqLoose } from "../data/productFaq";
+import { DESK_METAS } from "./deskProgramMeta";
 
 /** 资料库问答段优先，内置产品问答兜底 */
 function matchProductQuestion(query: string): { q: string; score: number } | null {
@@ -28,6 +29,9 @@ export const ABOUT_SITE_INTENT =
   /是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|看一下这个站|本站是干嘛|这个站是/i;
 export const KNOWLEDGE_INTENT = /介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent|剑池|难点|挑战|架构/i;
 export const URL_RE = /https?:\/\/[^\s)）"'<>]+/i;
+
+/** 一步办完的办事技能：触发词命中即办，优先于多轮流程 */
+const INSTANT_DESK_IDS = ["ledger-desk", ...DESK_METAS.map((m) => m.skillId)] as const;
 
 export type RouteKind = "skill" | "open" | "knowledge" | "about-site";
 
@@ -167,13 +171,14 @@ export function routeQuery(
     }
   }
 
-  const INSTANT_DESK_IDS = ["ledger-desk"] as const;
   const qNorm = query.trim().toLowerCase();
-  for (const deskId of INSTANT_DESK_IDS) {
+  const instantRows = ranked
+    .filter((r) => (INSTANT_DESK_IDS as readonly string[]).includes(r.skill.id) && r.score >= 2)
+    .sort((a, b) => b.score - a.score);
+  for (const row of instantRows) {
+    const deskId = row.skill.id;
     const deskSkill = find(deskId);
     if (!deskSkill) continue;
-    const row = ranked.find((r) => r.skill.id === deskId);
-    if (!row || row.score < 2) continue;
     const flowId = matchCreditFlowSkillId(query);
     const flowRow = flowId ? ranked.find((r) => r.skill.id === flowId) : undefined;
     const exactDesk = row.hits.some((h) => qNorm === h.toLowerCase());

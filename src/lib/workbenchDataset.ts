@@ -9,6 +9,15 @@ import {
 } from "./productDataStore";
 import type { SheetTable } from "./sheetEngine";
 import { tableFromEmbedded } from "./sheetEngine";
+import { SKILL_DATA_REQUIREMENTS } from "./productSkillInputs";
+
+function slotLabel(slot: ProductDataSlot): string {
+  for (const reqs of Object.values(SKILL_DATA_REQUIREMENTS)) {
+    const hit = reqs.find((r) => r.slot === slot);
+    if (hit) return hit.label;
+  }
+  return "材料";
+}
 
 type ServerDatasetResolver = (sessionId: string, slot: ProductDataSlot) => ProductDataset | null;
 
@@ -57,7 +66,7 @@ export function resolveWorkbenchSheetTable(query: string, opts?: WorkbenchTableO
     if (fromSlot) return fromSlot;
     const embedded = tableFromEmbedded(query);
     if (embedded?.rows.length) return { ...embedded, title: embedded.title === "问句里的表" ? "附表材料" : embedded.title };
-    throw new ProductDataMissingError(slot, `请先导入材料（${slot}）后再继续办理。`);
+    throw new ProductDataMissingError(slot, `请先导入「${slotLabel(slot)}」后再继续办理。`);
   }
 
   const embedded = tableFromEmbedded(query);

@@ -6,6 +6,10 @@ dist/
 !.env.example
 .DS_Store
 *.log
+test-results/
+playwright-report/
+deploy/private/backups/
+deploy/private/certs/*.pem
 
 # ClipHub 工具源码不公开（网站仅放插件 zip）
 clip-hub/

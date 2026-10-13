@@ -97,7 +97,7 @@ const PROBE_URL =
     ? `${window.location.origin}${import.meta.env.BASE_URL}index.html`
     : "/index.html";
 
-export const CUSTOMER_SKILL_IDS = ["ledger-desk"] as const;
+export const CUSTOMER_SKILL_IDS = ["ledger-desk", "ticket-desk", "shift-desk"] as const;
 
 export function isCreditFlowDeskSkill(id: string): boolean {
   return id.endsWith("-flow-desk");
@@ -127,6 +127,8 @@ export const CREDIT_FLOW_DESK_IDS = [
 
 const SKILL_ORDER = [
   "ledger-desk",
+  "ticket-desk",
+  "shift-desk",
   "sheet-desk",
   "data-desk",
   "contract-desk",

@@ -49,6 +49,9 @@ export const SKILL_SAMPLE_QUERIES: Record<string, string> = {
   "policy-desk": "满一年年假有几天",
   "dom-probe": "分析页面 DOM 结构",
   "workflow-orchestrator": "执行自动化 workflow 回放",
+  "ledger-desk": "按部门汇总报销，发票对不上的拦下来",
+  "ticket-desk": "把今天的工单分派给坐席，超时的升级",
+  "shift-desk": "按下周班次需求给门店排班",
 };
 
 export function defaultSampleQuery(skillId: string, triggers: string[]): string {

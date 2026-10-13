@@ -1,0 +1,234 @@
+.sk-try {
+  margin-top: 1.1rem;
+}
+.sk-try-body {
+  padding: 1rem 1.25rem 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  color: #0f172a;
+}
+.sk-try-lead {
+  margin: 0;
+  font-size: 0.8125rem;
+  line-height: 1.55;
+  color: #475569;
+}
+.sk-try-materials {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.sk-try-materials li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  padding: 0.65rem 0.8rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+.sk-try-mat-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font-weight: 700;
+  font-size: 0.875rem;
+  color: #0f172a;
+  min-width: 0;
+}
+.sk-try-mat-label em {
+  font-style: normal;
+  font-weight: 500;
+  font-size: 0.78rem;
+  color: #64748b;
+}
+.sk-try-mat-label em.is-ok {
+  color: #047857;
+}
+.sk-try-mat-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.sk-try-pick {
+  border-color: #4f46e5 !important;
+  color: #3730a3 !important;
+  font-weight: 700;
+}
+.sk-try-query {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #334155;
+}
+.sk-try-query input {
+  font: inherit;
+  font-weight: 500;
+  color: #0f172a;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+}
+.sk-try-query input:focus {
+  outline: 2px solid #c7d2fe;
+  border-color: #6366f1;
+}
+.sk-try-llm {
+  margin: 0;
+  font-size: 0.78rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+}
+.sk-try-llm.is-ok {
+  color: #065f46;
+  background: #ecfdf5;
+}
+.sk-try-llm.is-warn {
+  color: #92400e;
+  background: #fffbeb;
+}
+.sk-try-llm.is-off {
+  color: #475569;
+  background: #f1f5f9;
+}
+.sk-try-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+.sk-try-run:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.sk-try-hint {
+  font-size: 0.78rem;
+  color: #475569;
+}
+.sk-try-hint.is-warn {
+  color: #92400e;
+  font-weight: 700;
+}
+.sk-try-note {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #065f46;
+}
+.sk-try-error {
+  margin: 0;
+  font-size: 0.8125rem;
+  color: #991b1b;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  padding: 0.5rem 0.65rem;
+}
+.sk-try-result {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+}
+.sk-try-verdicts {
+  display: grid;
+  gap: 0.6rem;
+}
+.sk-try-verdicts.is-two {
+  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+}
+.sk-try-verdict {
+  border: 1px solid #a7f3d0;
+  background: #f0fdf4;
+  border-radius: 10px;
+  padding: 0.65rem 0.8rem;
+}
+.sk-try-verdict.is-bad {
+  border-color: #fecaca;
+  background: #fef2f2;
+}
+.sk-try-verdict-tag {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #334155;
+}
+.sk-try-verdict p {
+  margin: 0.3rem 0 0;
+  font-size: 0.875rem;
+  line-height: 1.55;
+  color: #0f172a;
+}
+.sk-try-verdict p.sk-try-model {
+  font-size: 0.8rem;
+  color: #334155;
+}
+.sk-try-verdict p.sk-try-model.is-failed {
+  color: #991b1b;
+}
+.sk-try-diff {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: #065f46;
+}
+.sk-try-diff.is-changed {
+  color: #92400e;
+}
+.sk-try-table-wrap {
+  overflow-x: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+}
+.sk-try-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+  color: #0f172a;
+  background: #ffffff;
+}
+.sk-try-table th,
+.sk-try-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 0.5rem 0.65rem;
+  border-bottom: 1px solid #f1f5f9;
+  line-height: 1.5;
+}
+.sk-try-table thead th {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.sk-try-table tbody th {
+  font-weight: 700;
+  color: #1e293b;
+  white-space: nowrap;
+  width: 7rem;
+}
+.sk-try-table tbody th span {
+  display: inline-block;
+  min-width: 1.4rem;
+  color: #64748b;
+  font-weight: 600;
+}
+.sk-try-table tr.is-changed {
+  background: #fef3c7;
+}
+.sk-try-table tr.is-changed th {
+  box-shadow: inset 3px 0 0 #d97706;
+}
+.sk-try-cell.is-bad {
+  color: #991b1b;
+}
+.sk-try-cell.is-none {
+  color: #64748b;
+  font-style: italic;
+}

@@ -5,6 +5,8 @@ import type { PaperIssue, PaperTone, WorkPaper } from "../../lib/workPaper";
 import { useDebouncedValidation } from "../../lib/useDebouncedValidation";
 import { paperBrief } from "../../lib/workPaper";
 import { LedgerTableDesk } from "./LedgerTableDesk";
+import { DeskTablesPaper } from "./DeskTablesPaper";
+import type { ProductDataSlot } from "../../lib/productDataStore";
 
 const LEVEL: Record<PaperTone, string> = {
   bad: "严重",
@@ -629,6 +631,7 @@ export function WorkPaperView({
   onAsk,
   onValidationChange,
   onApplyFix,
+  onReplaceMaterial,
   onSealDeliverable,
   deliverySealed,
   ledgerInvoiceOverridesRef,
@@ -639,10 +642,21 @@ export function WorkPaperView({
   onValidationChange?: (v: FlowUiValidation) => void;
   /** 产品模式：修正后写回数据并 rerun process */
   onApplyFix?: () => void | Promise<void>;
+  onReplaceMaterial?: (slot: ProductDataSlot, csv: string, title: string) => void | Promise<void>;
   onSealDeliverable?: () => void | Promise<void>;
   deliverySealed?: boolean;
   ledgerInvoiceOverridesRef?: MutableRefObject<LedgerInvoiceOverride>;
 }) {
+  if (paper.kind === "tables") {
+    return (
+      <DeskTablesPaper
+        paper={paper}
+        onReplaceMaterial={onReplaceMaterial}
+        onSealDeliverable={onSealDeliverable}
+        deliverySealed={deliverySealed}
+      />
+    );
+  }
   if (paper.kind === "contract") {
     return (
       <ContractView paper={paper} interactive={interactive} onValidationChange={onValidationChange} />

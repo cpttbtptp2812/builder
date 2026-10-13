@@ -3,6 +3,8 @@
  */
 
 import type { ProductDataSlot, ProductDataset } from "./productDataStore";
+import { deskColumnsForSlot } from "./deskProgramMeta";
+import { normalizeByColumns } from "./materialColumns";
 
 export type MaterialNormalizeResult =
   | { ok: true; dataset: ProductDataset; mappedFrom: string[] }
@@ -204,7 +206,10 @@ export function normalizeMaterialDataset(raw: ProductDataset): MaterialNormalize
       return normalizeContract(raw);
     case "voucher-ocr-blocks":
       return normalizeVoucherOcr(raw);
-    default:
+    default: {
+      const desk = deskColumnsForSlot(raw.slot);
+      if (desk) return normalizeByColumns(raw, desk.specs, { emptyMessage: desk.emptyMessage, reject: desk.reject });
       return { ok: true, dataset: raw, mappedFrom: [] };
+    }
   }
 }

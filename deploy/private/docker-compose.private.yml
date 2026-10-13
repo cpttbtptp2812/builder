@@ -9,6 +9,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "8787"
+      NODE_ENV: "production"
       DATABASE_PATH: /data/builder.db
       OWNAGENT_CONFIG_DIR: /data/.ownagent
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:?Set ADMIN_PASSWORD in deploy/private/.env}"
@@ -24,6 +25,9 @@ services:
       SLACK_WEBHOOK_URL: "${SLACK_WEBHOOK_URL:-}"
       APPROVAL_EMAIL_TO: "${APPROVAL_EMAIL_TO:-}"
       EMAIL_NOTIFICATION_ENDPOINT: "${EMAIL_NOTIFICATION_ENDPOINT:-}"
+      MAX_REQUEST_BYTES: "${MAX_REQUEST_BYTES:-10485760}"
+      MAX_CSV_BYTES: "${MAX_CSV_BYTES:-5242880}"
+      MAX_CSV_ROWS: "${MAX_CSV_ROWS:-50000}"
     expose:
       - "8787"
     volumes:
@@ -57,21 +61,42 @@ services:
     volumes:
       - frontend-assets:/srv/www
 
+  backup:
+    image: ownagent:${OWNAGENT_IMAGE_TAG:-private-local}
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["while true; do npx tsx server/backup.ts; sleep $${BACKUP_INTERVAL_SECONDS:-86400}; done"]
+    environment:
+      DATABASE_PATH: /data/builder.db
+      BACKUP_DIR: /backups
+      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-86400}"
+      BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-14}"
+    volumes:
+      - ownagent-data:/data
+      - "${BACKUP_HOST_PATH:?Set BACKUP_HOST_PATH to a second storage mount}:/backups"
+    depends_on:
+      app:
+        condition: service_healthy
+    networks:
+      - private
+
   nginx:
     image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
-      - "${PRIVATE_HTTP_PORT:-8080}:80"
+      - "${PRIVATE_HTTPS_PORT:-8443}:443"
     volumes:
       - frontend-assets:/usr/share/nginx/html:ro
       - ./nginx.private.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs/fullchain.pem:/etc/nginx/tls/fullchain.pem:ro
+      - ./certs/privkey.pem:/etc/nginx/tls/privkey.pem:ro
     depends_on:
       app:
         condition: service_healthy
       frontend-assets:
         condition: service_completed_successfully
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost/api/health >/dev/null || exit 1"]
+      test: ["CMD-SHELL", "wget --no-check-certificate -qO- https://localhost/api/health >/dev/null || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 3

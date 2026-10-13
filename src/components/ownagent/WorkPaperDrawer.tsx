@@ -7,6 +7,7 @@ import { gridToCsv } from "../../lib/productDataStore";
 import { downloadText } from "../../lib/importedSkills";
 import { paperDrawerTitle, paperExportGrid } from "../../lib/workPaper";
 import { WorkPaperView } from "./WorkPaper";
+import type { ProductDataSlot } from "../../lib/productDataStore";
 
 export function WorkPaperDrawer({
   paper,
@@ -14,6 +15,7 @@ export function WorkPaperDrawer({
   onClose,
   onAsk,
   onApplyFix,
+  onReplaceMaterial,
   onSealDeliverable,
   deliverySealed,
   interactive = true,
@@ -24,6 +26,7 @@ export function WorkPaperDrawer({
   onClose: () => void;
   onAsk?: (text: string) => void;
   onApplyFix?: () => void | Promise<void>;
+  onReplaceMaterial?: (slot: ProductDataSlot, csv: string, title: string) => void | Promise<void>;
   /** 人工复核通过后办结归档 */
   onSealDeliverable?: () => void | Promise<void>;
   deliverySealed?: boolean;
@@ -69,7 +72,7 @@ export function WorkPaperDrawer({
                     )
                   }
                 >
-                  下载对账表 CSV
+                  {paper.kind === "tables" ? "下载当前交付表 CSV" : "下载对账表 CSV"}
                 </button>
               );
             })()}
@@ -84,6 +87,7 @@ export function WorkPaperDrawer({
             interactive={interactive}
             onAsk={onAsk}
             onApplyFix={onApplyFix}
+            onReplaceMaterial={onReplaceMaterial}
             onSealDeliverable={onSealDeliverable}
             deliverySealed={deliverySealed}
             ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}

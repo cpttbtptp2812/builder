@@ -1,8 +1,10 @@
 /** 对话框工具栏 — 模型选择 + 快捷跳转完整配置 */
 
+import { useEffect, useState } from "react";
 import {
   LLM_PRESETS,
   isLlmConfigured,
+  isLlmProbeLive,
   type LlmConfig,
   type LlmPresetId,
 } from "../../../lib/llmConfig";
@@ -34,17 +36,27 @@ export function ComposeModelBar({
   /** 产品办事：模型与编排进接入配置，输入区不展示开发者控件 */
   productMode?: boolean;
 }) {
+  const [live, setLive] = useState(() => isLlmProbeLive(config));
+  useEffect(() => {
+    const sync = () => setLive(isLlmProbeLive(config));
+    sync();
+    window.addEventListener("ownagent:config-updated", sync);
+    return () => window.removeEventListener("ownagent:config-updated", sync);
+  }, [config]);
+
   if (productMode) {
+    const label = live ? config.model.trim() : "未连接";
     return (
       <button
         type="button"
-        className="oc-status idle oc-product-settings-link"
-        title="模型与工具连接"
+        className={`oc-status ${live ? "ok" : "idle"} oc-product-settings-link`}
+        title={live ? `已连通 ${config.model}` : "还没有测通模型，点此去接入配置"}
         onClick={() =>
           window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "connect" } }))
         }
       >
-        <span>连接与模型</span>
+        <i aria-hidden />
+        <span>{label}</span>
       </button>
     );
   }

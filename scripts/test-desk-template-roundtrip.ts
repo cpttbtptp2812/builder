@@ -1,5 +1,5 @@
 /**
- * ledger-desk：仅用「下载模板」正文 → 导入 → continue，必须能跑通。
+ * 每个办事技能：仅用「下载模板」正文 → 导入全部材料 → continue，必须能办结。
  */
 import { randomUUID } from "node:crypto";
 import os from "node:os";
@@ -13,6 +13,8 @@ import { continueProductRun, saveServerDataset, startProductRun } from "../serve
 
 const QUERIES: Record<string, string> = {
   "ledger-desk": "按部门汇总报销表",
+  "ticket-desk": "把这批工单分派一下",
+  "shift-desk": "按员工表和班次需求排一下班",
 };
 
 function fail(msg: string): never {
@@ -21,24 +23,30 @@ function fail(msg: string): never {
 }
 
 async function main() {
-  for (const { skillId, req } of allDeskTemplateRequirements()) {
-    const parsed = parseCsvText(req.templateCsv, req.filename, req.slot);
-    if ("error" in parsed) fail(`${skillId} 模板不可解析: ${parsed.error}`);
-
+  const bySkill = new Map<string, ReturnType<typeof allDeskTemplateRequirements>>();
+  for (const item of allDeskTemplateRequirements()) {
+    bySkill.set(item.skillId, [...(bySkill.get(item.skillId) ?? []), item]);
+  }
+  for (const [skillId, reqs] of bySkill) {
     const sessionId = `tpl-rt-${skillId}-${randomUUID()}`;
     const gate = await startProductRun({ sessionId, skillId, query: QUERIES[skillId] ?? "试跑" });
     if (!gate.ok || gate.status !== "waiting_import") fail(`${skillId} 应门闩`);
 
-    saveServerDataset(sessionId, {
-      slot: parsed.slot,
-      title: req.filename.replace(/\.csv$/i, ""),
-      columns: parsed.columns,
-      rows: parsed.rows,
-    });
+    for (const { req } of reqs) {
+      const parsed = parseCsvText(req.templateCsv, req.filename, req.slot);
+      if ("error" in parsed) fail(`${skillId} 模板不可解析: ${parsed.error}`);
+      saveServerDataset(sessionId, {
+        slot: parsed.slot,
+        title: req.filename.replace(/\.csv$/i, ""),
+        columns: parsed.columns,
+        rows: parsed.rows,
+      });
+    }
 
     const cont = await continueProductRun(gate.processId, sessionId);
     if (!cont.ok) fail(`${skillId} 模板导入后应能 continue: ${"error" in cont ? cont.error : ""}`);
-    console.log(`OK  template roundtrip  ${skillId}`);
+    if (cont.status !== "finish") fail(`${skillId} 模板导入后应办结，得 ${cont.status}: ${cont.message.slice(0, 200)}`);
+    console.log(`OK  template roundtrip  ${skillId}（${reqs.length} 份材料）`);
   }
   console.log("\nAll desk template roundtrips passed.");
 }

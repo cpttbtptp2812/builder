@@ -1,6 +1,7 @@
 /** 一句话改技能 — 自然语言 → 结构化修改操作（规则解析，配置了大模型时优先用模型） */
 
-import { isLlmConfigured, loadLlmConfig, resolveLlmBaseUrl } from "./llmConfig";
+import { isLlmConfigured, loadLlmConfig } from "./llmConfig";
+import { callByokLlm } from "./byokLlm";
 import { parseSkillMarkdown, type ParsedSkillDoc } from "./skillMarkdown";
 import { moveStepTo, removeStep, renameStep, setDescription, setTriggers } from "./skillFormEdit";
 
@@ -247,25 +248,15 @@ async function planByLlm(raw: string, text: string, signal?: AbortSignal): Promi
     '{"op":"rename_step","index":n,"label":string} {"op":"remove_step","index":n} {"op":"move_step","from":n,"to":n}',
     "不能新增步骤、不能改工具；做不到的放进 unknown。",
   ].join("\n");
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  if (cfg.apiKey.trim()) headers.Authorization = `Bearer ${cfg.apiKey.trim()}`;
-  const res = await fetch(`${resolveLlmBaseUrl(cfg.baseUrl)}/chat/completions`, {
-    method: "POST",
-    headers,
-    signal,
-    body: JSON.stringify({
-      model: cfg.model,
-      temperature: 0,
-      stream: false,
-      messages: [
-        { role: "system", content: system },
-        { role: "user", content: `当前技能：${JSON.stringify(state)}\n修改要求：${text}` },
-      ],
-    }),
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { choices?: { message?: { content?: string } }[] };
-  const content = data.choices?.[0]?.message?.content ?? "";
+  if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+  const content = await callByokLlm(
+    cfg,
+    [
+      { role: "system", content: system },
+      { role: "user", content: `当前技能：${JSON.stringify(state)}\n修改要求：${text}` },
+    ],
+    { temperature: 0, maxTokens: 800 },
+  );
   const json = content.match(/\{[\s\S]*\}/)?.[0];
   if (!json) return null;
   const parsed = JSON.parse(json) as { ops?: unknown; unknown?: unknown };

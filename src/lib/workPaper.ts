@@ -1,6 +1,8 @@
 /** 信贷那种文书和测算页：合同正文、问题卡、左右条目、公式块。 */
 
 import type { AgentSkill } from "./agentSkills";
+import type { TablesPaper } from "./deskProgramKit";
+import { deskPaperForSkill, deskProgramForSkill } from "./deskPrograms";
 import { executeContract, contractPolicyFromSteps } from "./contractEngine";
 import { executeData, dataRecipeFromSteps } from "./dataEngine";
 import { buildDataProgramState, dataProgramRecipeFromSteps, type DataProgramState } from "./dataDeskProgram";
@@ -25,6 +27,7 @@ export type PaperIssue = {
 };
 
 export type WorkPaper =
+  | TablesPaper
   | {
       kind: "contract";
       title: string;
@@ -143,6 +146,7 @@ function toneOf(level: string): PaperTone {
 
 export function paperExportGrid(paper: WorkPaper): WorkGrid | null {
   if (paper.kind === "ledger") return paper.grid;
+  if (paper.kind === "tables") return paper.tables[0]?.grid ?? null;
   if (paper.kind === "flow") {
     return {
       columns: ["关卡", "说明", "状态"],
@@ -184,6 +188,8 @@ export function paperDrawerTitle(paper: WorkPaper): string {
       return "借款凭证";
     case "disbursement":
       return "放款计划与指令";
+    case "tables":
+      return paper.title;
     default:
       return "处理详情";
   }
@@ -197,6 +203,13 @@ export function paperBrief(paper: WorkPaper): { tag: string; title: string; subt
         ? paper.items.filter((item) => item.tone !== "ok").length
         : 0;
   switch (paper.kind) {
+    case "tables":
+      return {
+        tag: paper.tag,
+        title: paper.title,
+        subtitle: paper.subtitle.length > 52 ? `${paper.subtitle.slice(0, 52)}…` : paper.subtitle,
+        issues: paper.metrics.filter((m) => m.tone === "bad" && m.value !== "0").length,
+      };
     case "contract":
       return { tag: "合同", title: paper.title, subtitle: paper.borrower, issues };
     case "credit":
@@ -399,6 +412,13 @@ export function paperForSkill(
   query: string,
   opts?: { productWorkbench?: boolean; sessionId?: string },
 ): WorkPaper | null {
+  if (deskProgramForSkill(skill.id)) {
+    return deskPaperForSkill(skill.id, skill.steps, {
+      sessionId: opts?.sessionId,
+      productWorkbench: opts?.productWorkbench === true,
+      query,
+    });
+  }
   const tableOpts = opts?.productWorkbench
     ? {
         productWorkbench: true as const,

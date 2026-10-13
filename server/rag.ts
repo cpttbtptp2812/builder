@@ -1,7 +1,8 @@
 /** 服务端 RAG — 从 SQLite 检索 */
 
 import { matchProject } from "../src/data/knowledge.ts";
-import { getAllChunks, type RagChunkRow } from "./seed.ts";
+import { type RagChunkRow } from "./db.ts";
+import { getAllChunks } from "./seed.ts";
 
 function tokenize(text: string): string[] {
   return text.toLowerCase().match(/[\u4e00-\u9fff]{1,8}|[a-z0-9]{2,}/g) ?? [];

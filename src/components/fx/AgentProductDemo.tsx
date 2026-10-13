@@ -131,10 +131,12 @@ import { WorkPaperCard, WorkPaperView } from "../ownagent/WorkPaper";
 import { WorkPaperDrawer } from "../ownagent/WorkPaperDrawer";
 import { FlowOperationDrawer } from "../ownagent/FlowOperationDrawer";
 import { HUB_CHAT_PROMPTS } from "../../lib/platformCatalog";
+import { syncServerLiveSkills } from "../../lib/skillPublished";
 import type { WorkPaper } from "../../lib/workPaper";
 import { csvPatchForPaperRerun } from "../../lib/productPaperPatch";
-import { apiRerunProductRun, apiUploadProductDataset, viewFromStreamStart } from "../../lib/productRun/client";
+import { apiArchiveProductRun, apiRerunProductRun, apiUploadProductDataset, viewFromStreamStart } from "../../lib/productRun/client";
 import type { ProductRunView } from "../../lib/productRun/types";
+import type { ProductDataSlot } from "../../lib/productDataStore";
 
 type PaperDrawerCtx = {
   paper: WorkPaper;
@@ -281,6 +283,10 @@ export function AgentProductDemo({
   const [running, setRunning] = useState(false);
   const precheck = usePrecheck(hubMode ? input : "", running);
 
+  useEffect(() => {
+    if (!hubMode) void syncServerLiveSkills();
+  }, [hubMode]);
+
   useLayoutEffect(() => {
     const el = composeRef.current;
     if (!el) return;
@@ -420,15 +426,17 @@ export function AgentProductDemo({
     intent: "exit" | "freeText";
   } | null>(null);
 
-  const applyPaperRerun = useCallback(async () => {
+  const applyPaperRerun = useCallback(async (replacement?: { slot: ProductDataSlot; csv: string; title: string }) => {
     const ctx = paperDrawer;
     if (!ctx?.processId || !ctx.skillId) {
       window.alert("请在本轮办理完成后使用一键修正；若流程已过期，请用同一问法重新发起。");
       throw new Error("missing process");
     }
-    const patch = csvPatchForPaperRerun(ctx.paper, ctx.skillId, {
-      invoiceOverrides: ledgerInvoiceOverridesRef.current,
-    });
+    const patch =
+      replacement ??
+      csvPatchForPaperRerun(ctx.paper, ctx.skillId, {
+        invoiceOverrides: ledgerInvoiceOverridesRef.current,
+      });
     if (!patch) {
       window.alert("当前文书暂不支持自动写回，请在左侧说明要改的内容。");
       throw new Error("no patch");
@@ -438,6 +446,7 @@ export function AgentProductDemo({
       sessionId,
       slot: patch.slot,
       csv: patch.csv,
+      title: replacement?.title,
     });
     if (!up.ok) {
       window.alert(up.error ?? "写回业务数据失败");
@@ -538,11 +547,23 @@ export function AgentProductDemo({
     }
   }, [paperDrawer, llmConfig]);
 
+  const replacePaperMaterial = useCallback(
+    async (slot: ProductDataSlot, csv: string, title: string) => {
+      await applyPaperRerun({ slot, csv, title });
+    },
+    [applyPaperRerun],
+  );
+
   const sealPaperDeliverable = useCallback(async () => {
     const ctx = paperDrawer;
-    if (!ctx?.messageId) return;
-    const sealLine =
-      "\n\n**办结**：人工复核通过，报销对账结果已归档；明细可在文书抽屉右上角「下载对账表 CSV」。";
+    if (!ctx?.messageId || !ctx.processId) return;
+    const archived = await apiArchiveProductRun(ctx.processId, getSessionId());
+    if (!archived.ok) {
+      window.alert(archived.error ?? "办结归档失败");
+      return;
+    }
+    const deliverable = ctx.paper.kind === "tables" ? "各交付表可在文书中分别下载 CSV" : "明细可在文书抽屉右上角下载 CSV";
+    const sealLine = `\n\n**办结**：人工复核通过，本次办理结果已归档；${deliverable}。`;
     setSealedPaperMessages((prev) => new Set(prev).add(ctx.messageId));
     setMessages((prev) =>
       prev.map((msg) =>
@@ -647,14 +668,12 @@ export function AgentProductDemo({
 
     if (!hubMode) {
       const productScenes = [
-        { label: "表格对账", text: "按部门汇总报销表，标出和发票对不上的", hint: "办事" },
-        { label: "额度测算", text: "测算这笔授信额度", hint: "办事" },
-        { label: "合同审查", text: "审查这份借款合同", hint: "办事" },
-        { label: "流程查询", text: "市场部9600报销单现在走到哪", hint: "办事" },
-        { label: "单据识读", text: "识别这份借款凭证影像", hint: "办事" },
+        { label: "报销对账", text: "按部门汇总报销表，标出和发票对不上的", hint: "办事" },
+        { label: "客服工单", text: "整理客服工单、分级并分派给坐席", hint: "办事" },
+        { label: "门店排班", text: "根据员工和班次需求安排下周排班", hint: "办事" },
       ];
       for (const p of productScenes) push(p.label, p.text, p.hint);
-      if (!emptyMessage) return out.slice(0, 5);
+      if (!emptyMessage) return out.slice(0, 3);
     }
 
     if (emptyMessage) {
@@ -2858,7 +2877,8 @@ export function AgentProductDemo({
           onClose={() => setPaperDrawer(null)}
           ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
           onApplyFix={!hubMode && paperDrawer?.processId ? applyPaperRerun : undefined}
-          onSealDeliverable={!hubMode && paperDrawer?.paper?.kind === "ledger" ? sealPaperDeliverable : undefined}
+          onReplaceMaterial={!hubMode && paperDrawer?.processId && paperDrawer.paper.kind === "tables" ? replacePaperMaterial : undefined}
+          onSealDeliverable={!hubMode && (paperDrawer?.paper?.kind === "ledger" || paperDrawer?.paper?.kind === "tables") ? sealPaperDeliverable : undefined}
           deliverySealed={paperDrawer ? sealedPaperMessages.has(paperDrawer.messageId) : false}
           onAsk={(text) => {
             void send(text);

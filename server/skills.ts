@@ -36,6 +36,10 @@ import { traceStepDisplayLabel } from "../src/lib/deskStepLabels.ts";
 import { registerWorkbenchDatasetResolver } from "../src/lib/workbenchDataset.ts";
 import { getServerDataset } from "./productDataStore.ts";
 import { executeLlmProductBriefTool, type ProductLlmConfig } from "../src/lib/llmProductBrief.ts";
+import { runRegisteredDeskTool } from "../src/lib/deskPrograms.ts";
+import type { ProductDataSlot } from "../src/lib/productDataStore.ts";
+import { fetchExternal } from "./security.ts";
+import { listLiveSkills } from "./liveSkills.ts";
 
 registerWorkbenchDatasetResolver((sessionId, slot) => {
   const ds = getServerDataset(sessionId, slot);
@@ -70,6 +74,8 @@ const SKILL_ORDER = [
   "workflow-orchestrator",
   "policy-desk",
   "ledger-desk",
+  "ticket-desk",
+  "shift-desk",
   "sheet-desk",
   "flow-desk",
   "preloan-flow-desk",
@@ -120,8 +126,20 @@ function loadCatalog(): AgentSkill[] {
 export const SKILL_CATALOG: AgentSkill[] = loadCatalog();
 export const AGENT_SKILLS: AgentSkill[] = SKILL_CATALOG.filter((s) => s.runnable);
 
+export function currentSkillCatalog(): AgentSkill[] {
+  const live = new Map(listLiveSkills().map((row) => [row.skillId, row]));
+  if (!live.size) return SKILL_CATALOG;
+  const cores = SKILL_CATALOG.map((skill) => {
+    const row = live.get(skill.id);
+    return row
+      ? hydrateSkill(row.raw, { id: skill.id, skillPath: `live://${skill.id}@${row.version}` })
+      : skill;
+  });
+  return enrichSkillCatalog(cores, "server") as AgentSkill[];
+}
+
 export function getSkill(id: string) {
-  return SKILL_CATALOG.find((s) => s.id === id);
+  return currentSkillCatalog().find((s) => s.id === id);
 }
 
 function scoreSkill(skill: AgentSkill, q: string) {
@@ -146,20 +164,19 @@ function scoreSkill(skill: AgentSkill, q: string) {
 }
 
 export function explainDiscovery(query: string) {
+  const skills = currentSkillCatalog().filter((s) => s.runnable);
   const q = query.trim().toLowerCase();
-  if (!q) return AGENT_SKILLS.map((s) => ({ skill: s, score: 0, hits: [] as string[], breakdown: [] }));
-  return AGENT_SKILLS.map((s) => scoreSkill(s, q)).sort((a, b) => b.score - a.score);
+  if (!q) return skills.map((s) => ({ skill: s, score: 0, hits: [] as string[], breakdown: [] }));
+  return skills.map((s) => scoreSkill(s, q)).sort((a, b) => b.score - a.score);
 }
 
 export async function probeHttpTool(url: string, method: "GET" | "HEAD" = "GET") {
   const t0 = performance.now();
   try {
-    const res = await fetch(url, {
+    const res = await fetchExternal(url, {
       method,
       cache: "no-store",
-      redirect: "follow",
-      signal: AbortSignal.timeout(30_000),
-    });
+    }, { timeoutMs: 30_000, maxBytes: 512 * 1024 });
     const latencyMs = Math.round(performance.now() - t0);
     const contentType = res.headers.get("content-type");
     let body: unknown = null;
@@ -483,11 +500,18 @@ async function callTool(
     }
     case "__llm_product_brief__": {
       const sessionId = String(args.__sessionId ?? "");
-      const ds = sessionId ? getServerDataset(sessionId, "expense-ledger") : null;
+      const slot = (typeof args.slot === "string" && args.slot.trim() ? args.slot.trim() : "expense-ledger") as ProductDataSlot;
+      const from = typeof args.from === "string" && args.from.trim() ? args.from.trim() : "report";
+      const ds = sessionId ? getServerDataset(sessionId, slot) : null;
       const body = await executeLlmProductBriefTool({
         query: String(args.query ?? ctx.query ?? ""),
-        reportVar: ctx.vars.report,
+        reportVar: ctx.vars[from],
         llm: ctx.llmConfig,
+        role: typeof args.role === "string" ? args.role : undefined,
+        task: typeof args.task === "string" ? args.task : undefined,
+        lockNumbers: args.lockNumbers !== false,
+        keepEngineLine: args.keepEngineLine === true,
+        maxTokens: typeof args.maxTokens === "number" ? args.maxTokens : undefined,
         material: ds
           ? {
               title: ds.title,
@@ -500,8 +524,11 @@ async function callTool(
       const failed = body.meta?.llm === "failed";
       return failed ? { content: body, isError: true as const } : { content: body };
     }
-    default:
+    default: {
+      const desk = runRegisteredDeskTool(name, args, ctx.vars, String(args.query ?? ctx.query ?? ""));
+      if (desk) return desk.isError ? { content: desk.content, isError: true as const } : { content: desk.content };
       return { content: { error: `unknown tool: ${name}` }, isError: true as const };
+    }
   }
 }
 
@@ -609,7 +636,7 @@ export function runRouterEval() {
 
 export async function runSkillBenchmark(sessionId: string) {
   const traces: SkillTraceStep[][] = [];
-  for (const skill of AGENT_SKILLS) {
+  for (const skill of currentSkillCatalog().filter((s) => s.runnable)) {
     const { trace } = await runSkillOnServer(skill.id, "benchmark", sessionId);
     traces.push(trace);
   }

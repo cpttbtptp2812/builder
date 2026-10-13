@@ -7,7 +7,11 @@ export type ProductDataSlot =
   | "expense-ledger"
   | "cashflow-monthly"
   | "contract-clauses"
-  | "voucher-ocr-blocks";
+  | "voucher-ocr-blocks"
+  | "service-tickets"
+  | "service-agents"
+  | "staff-roster"
+  | "shift-demand";
 
 export type ProductDataset = {
   slot: ProductDataSlot;
@@ -89,6 +93,9 @@ function csvHeaderRecognitionScore(text: string): number {
   if (/部门|所属|成本中心/.test(line)) score += 35;
   if (/申请人|报销人|员工/.test(line)) score += 25;
   if (/金额|报销金额/.test(line)) score += 25;
+  if (/工单|客户|坐席|技能组|创建时间/.test(line)) score += 40;
+  if (/班次|岗位|日期|时薪|姓名/.test(line)) score += 40;
+  score += Math.min(30, line.match(/[\u4e00-\u9fa5]/g)?.length ?? 0);
   if (/[\uFFFD]/.test(line)) score -= 80;
   const parts = line.split(/[,，;\t]/).filter(Boolean);
   if (parts.length >= 4) score += 15;

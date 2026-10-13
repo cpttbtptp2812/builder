@@ -28,17 +28,26 @@ const GATE_QUERIES: { q: string; want: string }[] = [
   { q: "报销表", want: "ledger-desk" },
   { q: "智能对账", want: "ledger-desk" },
   { q: "按部门汇总报销", want: "ledger-desk" },
+  { q: "把这批工单分派一下", want: "ticket-desk" },
+  { q: "看看哪些工单首响超时了", want: "ticket-desk" },
+  { q: "客服工单按技能组汇总一下时效", want: "ticket-desk" },
+  { q: "帮我排一下下周的班", want: "shift-desk" },
+  { q: "门店排班，算一下人工成本", want: "shift-desk" },
+  { q: "按班次需求汇总一下每人工时", want: "shift-desk" },
 ];
 
+const WANT_CATALOG = ["ledger-desk", "shift-desk", "ticket-desk"];
 const catalog = loadCustomerCatalog();
-if (catalog.length !== 1 || catalog[0]?.id !== "ledger-desk") {
-  console.error("FAIL customer catalog 应仅 ledger-desk，得:", catalog.map((s) => s.id).join(", "));
+const got = catalog.map((s) => s.id).sort();
+if (got.join(",") !== WANT_CATALOG.join(",")) {
+  console.error(`FAIL customer catalog 应为 ${WANT_CATALOG.join(", ")}，得:`, got.join(", "));
   process.exit(1);
 }
-const ledger = catalog[0]!;
-if (!ledger.runnable) {
-  console.error("FAIL ledger-desk not runnable");
-  process.exit(1);
+for (const s of catalog) {
+  if (!s.runnable) {
+    console.error(`FAIL ${s.id} not runnable`);
+    process.exit(1);
+  }
 }
 
 let failed = 0;

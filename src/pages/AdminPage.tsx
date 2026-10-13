@@ -113,7 +113,7 @@ function LoginScreen({ onLogin }: { onLogin: (token: string) => void }) {
             {loading ? "验证中…" : "登录"}
           </button>
         </form>
-        <p className="adm-login-hint">默认密码: admin123（正式部署请在 .env 修改 ADMIN_PASSWORD）</p>
+        <p className="adm-login-hint">管理员密码由部署人员在服务端初始化；系统不提供默认密码。</p>
         <p className="adm-login-demo">
           GitHub Pages 为<strong>演示部署</strong>，管理后台需连接后端。
           本地完整体验：<code>npm run dev:full</code> 或 <code>docker compose up -d</code>

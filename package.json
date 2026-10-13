@@ -9,12 +9,16 @@
     "dev:clip": "tsx watch server/clipServer.ts",
     "dev:full": "concurrently -n web,api,clip -c blue,green,cyan \"npm run dev\" \"npm run dev:server\" \"npm run dev:clip\"",
     "build": "vite build",
+    "typecheck:server": "tsc -p tsconfig.server.json",
     "build:extensions": "node scripts/build-extensions.mjs",
     "build:all": "npm run build:extensions && npm run build",
     "preview": "vite preview",
     "start:server": "tsx server/index.ts",
+    "backup": "tsx server/backup.ts",
     "prove": "tsx scripts/prove.ts",
-    "test:ownagent": "tsx scripts/test-product-route.ts && tsx scripts/test-product-run-e2e.ts && tsx scripts/test-desk-templates.ts && tsx scripts/test-desk-template-roundtrip.ts && tsx scripts/test-material-normalize.ts && tsx scripts/test-product-paper-patch.ts && tsx scripts/test-step1-import.ts && tsx scripts/test-data-desk-paper-sync.ts && tsx scripts/test-desk-browser-block.ts && tsx scripts/test-trace-gate-journal.ts && tsx scripts/test-skills-smoke.ts && tsx scripts/test-ownagent-consistency.ts && tsx scripts/test-skill-governance.ts",
+    "test:ownagent": "tsx scripts/test-product-route.ts && tsx scripts/test-product-run-e2e.ts && tsx scripts/test-desk-templates.ts && tsx scripts/test-desk-template-roundtrip.ts && tsx scripts/test-material-normalize.ts && tsx scripts/test-product-paper-patch.ts && tsx scripts/test-skill-try-run.ts && tsx scripts/test-desk-programs.ts && tsx scripts/test-production-security.ts && tsx scripts/test-live-skill-catalog.ts && tsx scripts/test-backup-restore.ts && tsx scripts/test-step1-import.ts && tsx scripts/test-data-desk-paper-sync.ts && tsx scripts/test-desk-browser-block.ts && tsx scripts/test-trace-gate-journal.ts && tsx scripts/test-skills-smoke.ts && tsx scripts/test-ownagent-consistency.ts && tsx scripts/test-skill-governance.ts",
+    "test:browser": "playwright test",
+    "check:production": "npm run typecheck:server && npm run test:ownagent && npm run build && npm run test:browser && npm audit --audit-level=high",
     "benchmark:ownagent": "tsx scripts/ownagent-benchmark.ts",
     "check:skills": "tsx scripts/ownagent-check.ts --all --ci",
     "check:skill": "tsx scripts/ownagent-check.ts"
@@ -31,6 +35,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.0",
@@ -38,5 +43,10 @@
     "tsx": "^4.19.4",
     "typescript": "^5.9.0",
     "vite": "^6.3.0"
+  },
+  "overrides": {
+    "shell-quote": "^1.11.0",
+    "source-map-js": "^1.2.2",
+    "sharp": "^0.35.5"
   }
 }

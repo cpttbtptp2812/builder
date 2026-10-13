@@ -6,6 +6,7 @@ import { imageProgramPolicyFromArgs } from "./imageDeskProgram";
 import { flowPolicyFromArgs } from "./flowEngine";
 import { sheetProgramRecipeFromArgs } from "./sheetDeskProgram";
 import { sheetRecipeFromArgs } from "./sheetEngine";
+import { deskToolLabel } from "./deskProgramMeta";
 
 export type DeskStepLike = {
   id: string;
@@ -124,7 +125,7 @@ export function deskStepCaption(step: DeskStepLike): string {
     case "__image_report__":
       return "输出采用的字段表";
     default:
-      return step.label?.trim() || step.id;
+      return step.label?.trim() || deskToolLabel(step.tool) || step.id;
   }
 }
 
@@ -164,7 +165,24 @@ export function traceStepDisplayLabel(step: DeskStepLike, result?: unknown): str
   return deskStepCaption(step);
 }
 
+function ticketRuleLine(steps: DeskStepLike[]): string {
+  const sla = (steps.find((s) => s.tool === "__ticket_sla__")?.args?.targets ?? {}) as Record<string, Record<string, unknown>>;
+  const levels = ["P1", "P2", "P3"]
+    .filter((p) => sla[p])
+    .map((p) => `${p} 首响 ${sla[p]!.firstResponseMinutes ?? "—"} 分/解决 ${sla[p]!.resolveHours ?? "—"} 时`);
+  const dedupe = steps.some((s) => s.tool === "__ticket_dedupe__") ? "合并重复" : "不合并重复";
+  return [...levels, dedupe].join(" · ");
+}
+
+function shiftRuleLine(steps: DeskStepLike[]): string {
+  const a = steps.find((s) => s.tool === "__shift_rules__")?.args ?? {};
+  const repair = steps.some((s) => s.tool === "__shift_repair__") ? "调换补缺" : "不调换";
+  return `休息 ≥ ${a.minRestHours ?? 11} 时 · 每天 ≤ ${a.maxDailyHours ?? 10} 时 · 连上 ≤ ${a.maxConsecutiveDays ?? 6} 天 · ${repair}`;
+}
+
 export function deskSkillRuleSummary(skillId: string, steps: DeskStepLike[]): string {
+  if (skillId === "ticket-desk") return ticketRuleLine(steps);
+  if (skillId === "shift-desk") return shiftRuleLine(steps);
   const first = steps.find((s) => s.tool.startsWith("__"));
   if (!first) return "";
   switch (skillId) {
@@ -191,6 +209,7 @@ export function isDeskProcessTool(tool: string): boolean {
     tool.startsWith("__contract_") ||
     tool.startsWith("__data_") ||
     tool.startsWith("__flow_") ||
-    tool.startsWith("__image_")
+    tool.startsWith("__image_") ||
+    deskToolLabel(tool) !== undefined
   );
 }

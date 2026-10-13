@@ -25,6 +25,9 @@ import {
   validateDatasetForSlot,
 } from "../src/lib/productDatasetValidate.ts";
 import type { ProductLlmConfig } from "../src/lib/llmProductBrief.ts";
+import { isDeskGuardCode } from "../src/lib/deskProgramMeta.ts";
+import { requestIdentity } from "./security.ts";
+import { recordProductRun, safeLog } from "./observability.ts";
 
 export type ProductRunImportPart = {
   kind: "import";
@@ -134,7 +137,7 @@ function datasetBlockMessage(sessionId: string, skillId: string): string | null 
 
 function gateMessage(skillName: string, missing: SkillDataRequirement[]): string {
   return [
-    `办理 **${skillName}** 还需要您提供下面这份材料：`,
+    `办理 **${skillName}** 还需要您提供下面${missing.length > 1 ? ` ${missing.length} 份` : "这份"}材料：`,
     "",
     ...missing.map((m) => `- **${m.label}** — ${m.hint}`),
     "",
@@ -250,8 +253,11 @@ async function executeProcess(
       guardCode === "SHEET_GUARD" ||
       guardCode === "CONTRACT_GUARD" ||
       guardCode === "DATA_GUARD" ||
-      guardCode === "IMAGE_GUARD";
+      guardCode === "IMAGE_GUARD" ||
+      isDeskGuardCode(guardCode);
     if (!businessGuard) {
+      recordProductRun("error", totalMs);
+      safeLog("product_run.error", { processId, skillId, code: guardCode ?? "step_error", totalMs });
       await emit?.("error", { error: errText });
       dbRun(`UPDATE product_processes SET status = ?, updated_at = ? WHERE process_id = ?`, [
         "waiting_import",
@@ -261,6 +267,8 @@ async function executeProcess(
       return { ok: false, error: errText };
     }
     const text = errText;
+    recordProductRun("guard", totalMs);
+    safeLog("product_run.guard", { processId, skillId, code: guardCode, totalMs });
     parts.push({ kind: "finish", processId, summary: text.slice(0, 240) });
     const materialParts = importParts(sessionId, processId, skillId);
     const allParts = [...materialParts, ...parts];
@@ -295,6 +303,8 @@ async function executeProcess(
     `UPDATE product_processes SET status = ?, trace_json = ?, result_json = ?, updated_at = ? WHERE process_id = ?`,
     ["finish", JSON.stringify(trace), JSON.stringify({ text, paper, totalMs }), nowIso(), processId],
   );
+  recordProductRun("finish", totalMs);
+  safeLog("product_run.finish", { processId, skillId, totalMs });
 
   const finish = {
     ok: true as const,
@@ -341,28 +351,65 @@ export async function continueProductRun(
   sessionId: string,
   emit?: StreamEmit,
   llmConfig?: ProductLlmConfig,
+  mode: "continue" | "rerun" = "continue",
 ): Promise<ProductRunStartResult> {
-  const row = dbGet<{ skill_id: string; query: string; session_id: string }>(
-    `SELECT skill_id, query, session_id FROM product_processes WHERE process_id = ?`,
+  const row = dbGet<{ skill_id: string; query: string; session_id: string; status: string }>(
+    `SELECT skill_id, query, session_id, status FROM product_processes WHERE process_id = ?`,
     [processId],
   );
   if (!row) return { ok: false, error: "process 不存在或已过期" };
   if (row.session_id !== sessionId) return { ok: false, error: "session 与 process 不匹配" };
+  if (row.status === "running") return { ok: false, error: "正在办理，请勿重复提交" };
+  if (row.status === "cancelled") return { ok: false, error: "这次办理已取消，请重新发起" };
+  if (row.status === "finish" && mode !== "rerun") return { ok: false, error: "这次办理已经完成" };
   const missing = missingForSession(sessionId, row.skill_id);
   if (missing.length) {
     return { ok: false, error: `请先导入：${missing.map((m) => m.label).join("、")}` };
   }
   const schemaBlock = datasetBlockMessage(sessionId, row.skill_id);
   if (schemaBlock) return { ok: false, error: schemaBlock };
+  const locked = dbRun(
+    `UPDATE product_processes SET status='running', run_token=?, updated_at=?
+     WHERE process_id=? AND status<>'running'`,
+    [randomUUID(), nowIso(), processId],
+  );
+  if (!Number(locked.changes)) return { ok: false, error: "正在办理，请勿重复提交" };
   return executeProcess(processId, sessionId, row.skill_id, row.query, emit, llmConfig);
 }
 
 export { saveServerDataset, getServerDataset };
 
+export function archiveProductRun(processId: string, sessionId: string, actor: string) {
+  const at = nowIso();
+  const changed = dbRun(
+    `UPDATE product_processes SET archived_at=?, archived_by=?, updated_at=?
+     WHERE process_id=? AND session_id=? AND status='finish'`,
+    [at, actor, at, processId, sessionId],
+  );
+  return Number(changed.changes) ? { ok: true as const, archivedAt: at } : { ok: false as const };
+}
+
+function ownsSession(c: Parameters<typeof requestIdentity>[0], sessionId: string): boolean {
+  const actor = requestIdentity(c);
+  if (!actor) return process.env.NODE_ENV !== "production";
+  const existing = dbGet<{ owner_id: string }>(
+    "SELECT owner_id FROM product_session_owners WHERE session_id=?",
+    [sessionId],
+  );
+  if (existing) return existing.owner_id === actor.member.id;
+  const now = nowIso();
+  dbRun(
+    "INSERT INTO product_session_owners(session_id,owner_id,created_at,updated_at) VALUES(?,?,?,?)",
+    [sessionId, actor.member.id, now, now],
+  );
+  return true;
+}
+
 export function registerProductRun(app: Hono) {
   app.get("/api/product-run/active", (c) => {
     const sessionId = c.req.query("sessionId")?.trim();
     if (!sessionId) return c.json({ ok: false, error: "缺少 sessionId" }, 400);
+    if (!ownsSession(c, sessionId)) return c.json({ ok: false, error: "forbidden" }, 403);
     const rows = dbAll<{
       process_id: string;
       skill_id: string;
@@ -384,6 +431,9 @@ export function registerProductRun(app: Hono) {
       | { action: "continue"; processId: string; sessionId: string; llmConfig?: ProductLlmConfig }
       | { action: "rerun"; processId: string; sessionId: string; llmConfig?: ProductLlmConfig }
     >();
+    if (!body.sessionId?.trim() || !ownsSession(c, body.sessionId.trim())) {
+      return c.json({ ok: false, error: "forbidden" }, 403);
+    }
 
     return streamSSE(c, async (stream) => {
       const emit: StreamEmit = async (event, data) => {
@@ -414,6 +464,7 @@ export function registerProductRun(app: Hono) {
             body.sessionId.trim(),
             emit,
             body.llmConfig,
+            body.action,
           );
           if (!result.ok) await emit("error", result);
         } else {
@@ -432,6 +483,7 @@ export function registerProductRun(app: Hono) {
     if (!body.sessionId?.trim() || !body.skillId?.trim() || !body.query?.trim()) {
       return c.json({ ok: false, error: "缺少 sessionId / skillId / query" }, 400);
     }
+    if (!ownsSession(c, body.sessionId.trim())) return c.json({ ok: false, error: "forbidden" }, 403);
     const result = await startProductRun({
       sessionId: body.sessionId.trim(),
       skillId: body.skillId.trim(),
@@ -445,8 +497,32 @@ export function registerProductRun(app: Hono) {
     if (!body.processId?.trim() || !body.sessionId?.trim()) {
       return c.json({ ok: false, error: "缺少 processId / sessionId" }, 400);
     }
+    if (!ownsSession(c, body.sessionId.trim())) return c.json({ ok: false, error: "forbidden" }, 403);
     const result = await continueProductRun(body.processId.trim(), body.sessionId.trim());
     return c.json(result);
+  });
+
+  app.post("/api/product-run/cancel", async (c) => {
+    const body = await c.req.json<{ processId: string; sessionId: string }>();
+    if (!body.processId?.trim() || !body.sessionId?.trim()) return c.json({ ok: false, error: "缺少 processId / sessionId" }, 400);
+    if (!ownsSession(c, body.sessionId.trim())) return c.json({ ok: false, error: "forbidden" }, 403);
+    const changed = dbRun(
+      `UPDATE product_processes SET status='cancelled', updated_at=?
+       WHERE process_id=? AND session_id=? AND status IN ('starting','waiting_import','running')`,
+      [nowIso(), body.processId.trim(), body.sessionId.trim()],
+    );
+    if (Number(changed.changes) > 0) recordProductRun("cancelled");
+    return c.json({ ok: Number(changed.changes) > 0, status: Number(changed.changes) > 0 ? "cancelled" : "unchanged" });
+  });
+
+  app.post("/api/product-run/archive", async (c) => {
+    const body = await c.req.json<{ processId: string; sessionId: string }>();
+    if (!body.processId?.trim() || !body.sessionId?.trim()) return c.json({ ok: false, error: "缺少 processId / sessionId" }, 400);
+    if (!ownsSession(c, body.sessionId.trim())) return c.json({ ok: false, error: "forbidden" }, 403);
+    const archived = archiveProductRun(body.processId.trim(), body.sessionId.trim(), requestIdentity(c)?.member.id ?? "local");
+    return archived.ok
+      ? c.json(archived)
+      : c.json({ ok: false, error: "只有已完成的办理可以归档" }, 409);
   });
 
   app.get("/api/product-run/template", (c) => {
@@ -463,8 +539,15 @@ export function registerProductRun(app: Hono) {
     if (!body.sessionId?.trim() || !body.slot || !body.csv?.trim()) {
       return c.json({ ok: false, error: "缺少 sessionId / slot / csv" }, 400);
     }
+    if (!ownsSession(c, body.sessionId.trim())) return c.json({ ok: false, error: "forbidden" }, 403);
+    const maxCsvBytes = Number(process.env.MAX_CSV_BYTES ?? 5 * 1024 * 1024);
+    if (Buffer.byteLength(body.csv, "utf8") > maxCsvBytes) {
+      return c.json({ ok: false, error: "CSV 文件过大" }, 413);
+    }
     const parsed = parseCsvText(body.csv, body.title ?? body.slot, body.slot);
     if ("error" in parsed) return c.json({ ok: false, error: parsed.error }, 400);
+    const maxRows = Number(process.env.MAX_CSV_ROWS ?? 50_000);
+    if (parsed.rows.length > maxRows) return c.json({ ok: false, error: `CSV 超过 ${maxRows} 行上限` }, 413);
     try {
       saveServerDataset(body.sessionId.trim(), {
         slot: parsed.slot,

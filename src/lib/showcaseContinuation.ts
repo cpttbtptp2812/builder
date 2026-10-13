@@ -1,10 +1,12 @@
 /** Hub 展示技能：追问应留在同一业务流（对账/改数/重算），不要掉进制度 FAQ。 */
 
 import { isCustomerSkill } from "./agentSkills";
+import { deskMetaFor, matchesOtherDeskDomain } from "./deskProgramMeta";
 
 export function isSheetOperationQuery(query: string): boolean {
   const q = query.trim();
   if (!q) return false;
+  if (matchesOtherDeskDomain(q)) return false;
   if (/制度|手册|规定是什么|可以吗\?*$|能不能报销$|需要什么材料$/.test(q) && !/对账|汇总|补齐|容差/.test(q)) {
     return false;
   }
@@ -33,8 +35,10 @@ export function isContinuationForSkill(query: string, skillId: string): boolean 
       return /走到|流程|哪一步|推进|卡在哪|审批/.test(q);
     case "image-desk":
       return /凭证|影像|识别|字段|OCR/.test(q);
-    default:
-      return false;
+    default: {
+      const desk = deskMetaFor(skillId);
+      return desk ? desk.domainWords.test(q) || /重算|重排|再排|再分派|重新分派|改一下|调整/.test(q) : false;
+    }
   }
 }
 
