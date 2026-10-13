@@ -11,6 +11,14 @@ const PUBLIC_PATHS = new Set([
   "/api/admin/login",
 ]);
 
+/** 客户办事：模型测试、个人 Key 代理、办理流程、已发布技能只读。管理与发版不在此列。 */
+export function customerApiOpen(path: string, method: string): boolean {
+  if (method === "POST" && (path === "/api/llm/probe" || path === "/api/llm/byok/chat")) return true;
+  if (path === "/api/product-run" || path.startsWith("/api/product-run/")) return true;
+  if (method === "GET" && (path === "/api/skills/live" || path.startsWith("/api/skills/live/"))) return true;
+  return false;
+}
+
 const buckets = new Map<string, { count: number; resetAt: number }>();
 
 export function requestIdentity(c: Context): AuthenticatedSession | undefined {
@@ -18,7 +26,11 @@ export function requestIdentity(c: Context): AuthenticatedSession | undefined {
 }
 
 export async function productionApiGuard(c: Context, next: Next) {
-  if (process.env.NODE_ENV !== "production" || PUBLIC_PATHS.has(c.req.path)) {
+  if (
+    process.env.NODE_ENV !== "production" ||
+    PUBLIC_PATHS.has(c.req.path) ||
+    customerApiOpen(c.req.path, c.req.method)
+  ) {
     await next();
     return;
   }

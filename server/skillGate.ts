@@ -139,14 +139,10 @@ function writeAudit(row: {
 
 export function registerSkillGate(app: Hono) {
   app.get("/api/skills/live", (c) => {
-    const access = teamAccess(c.req.header("authorization"), "prod", "read");
-    if (!access.ok) return c.json({ error: access.error }, access.status);
     return c.json({ skills: listLiveSkills() });
   });
 
   app.get("/api/skills/live/:skillId", (c) => {
-    const access = teamAccess(c.req.header("authorization"), "prod", "read");
-    if (!access.ok) return c.json({ error: access.error }, access.status);
     const row = liveSkill(c.req.param("skillId"));
     return row ? c.json({ skill: row }) : c.json({ skill: null });
   });

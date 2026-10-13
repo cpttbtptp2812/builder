@@ -391,16 +391,16 @@ export function archiveProductRun(processId: string, sessionId: string, actor: s
 
 function ownsSession(c: Parameters<typeof requestIdentity>[0], sessionId: string): boolean {
   const actor = requestIdentity(c);
-  if (!actor) return process.env.NODE_ENV !== "production";
+  const ownerId = actor?.member.id ?? `browser:${sessionId}`;
   const existing = dbGet<{ owner_id: string }>(
     "SELECT owner_id FROM product_session_owners WHERE session_id=?",
     [sessionId],
   );
-  if (existing) return existing.owner_id === actor.member.id;
+  if (existing) return existing.owner_id === ownerId;
   const now = nowIso();
   dbRun(
     "INSERT INTO product_session_owners(session_id,owner_id,created_at,updated_at) VALUES(?,?,?,?)",
-    [sessionId, actor.member.id, now, now],
+    [sessionId, ownerId, now, now],
   );
   return true;
 }

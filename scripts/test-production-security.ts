@@ -5,7 +5,7 @@ import path from "node:path";
 process.env.DATABASE_PATH = path.join(os.tmpdir(), `ownagent-security-${randomUUID()}.sqlite`);
 process.env.ADMIN_PASSWORD = "A-strong-private-password";
 
-const { assertSafeExternalUrl } = await import("../server/security.ts");
+const { assertSafeExternalUrl, customerApiOpen, productionApiGuard } = await import("../server/security.ts");
 const { createAdminSession, initializeAdminCredential, isAdminSession, revokeAdminSession } =
   await import("../server/adminAuth.ts");
 const { dbGet } = await import("../server/db.ts");
@@ -48,5 +48,40 @@ console.log("PASS  admin password hash + revocable opaque session");
 const legacy = dbGet<{ value: string }>("SELECT value FROM app_config WHERE key='admin_password'");
 if (legacy) fail("不得写入旧的明文管理员密码配置");
 console.log("PASS  no default/plaintext admin password");
+
+for (const [method, path, open] of [
+  ["POST", "/api/llm/probe", true],
+  ["POST", "/api/llm/byok/chat", true],
+  ["POST", "/api/product-run/stream", true],
+  ["GET", "/api/skills/live", true],
+  ["GET", "/api/admin/knowledge", false],
+  ["POST", "/api/skill-gate/publish", false],
+  ["GET", "/api/internal/metrics", false],
+] as const) {
+  if (customerApiOpen(path, method) !== open) fail(`客户接口判定错误 ${method} ${path}`);
+}
+
+const previousEnv = process.env.NODE_ENV;
+process.env.NODE_ENV = "production";
+let customerReached = false;
+await productionApiGuard(
+  { req: { path: "/api/llm/probe", method: "POST", header: () => undefined } } as never,
+  async () => {
+    customerReached = true;
+  },
+);
+if (!customerReached) fail("客户测试模型不应要求办事凭证");
+const denied = await productionApiGuard(
+  {
+    req: { path: "/api/admin/knowledge", method: "GET", header: () => undefined },
+    json: (body: unknown, status: number) => ({ body, status }),
+  } as never,
+  async () => {
+    fail("未登录不得进入管理接口");
+  },
+);
+if (!denied || (denied as { status?: number }).status !== 401) fail("管理接口应返回 401");
+process.env.NODE_ENV = previousEnv;
+console.log("PASS  customer product routes open, admin routes closed");
 
 console.log("\nproduction security checks OK");
