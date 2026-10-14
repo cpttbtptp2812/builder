@@ -18,11 +18,14 @@ function downloadCsv(filename: string, csv: string) {
 
 export function DeskTablesPaper({
   paper,
+  embeddedInDrawer,
   onReplaceMaterial,
   onSealDeliverable,
   deliverySealed,
 }: {
   paper: TablesPaper;
+  /** 右侧抽屉内：标题已在抽屉头展示，正文只保留摘要与明细 */
+  embeddedInDrawer?: boolean;
   onReplaceMaterial?: (slot: ProductDataSlot, csv: string, title: string) => void | Promise<void>;
   onSealDeliverable?: () => void | Promise<void>;
   deliverySealed?: boolean;
@@ -34,15 +37,17 @@ export function DeskTablesPaper({
   const requirements = requirementsForSkill(paper.skillId);
 
   return (
-    <div className="oa-paper dtp">
+    <div className={`oa-paper dtp${embeddedInDrawer ? " dtp--drawer" : ""}`}>
       <header className="dtp-head">
-        <span className="dtp-tag">{paper.tag}</span>
-        <h3>{paper.title}</h3>
-        {paper.subtitle ? <p>{paper.subtitle}</p> : null}
+        <div className="dtp-head-row">
+          <span className="dtp-tag">{paper.tag}</span>
+          {!embeddedInDrawer ? <h3>{paper.title}</h3> : null}
+        </div>
+        {paper.subtitle ? <p className="dtp-summary">{paper.subtitle}</p> : null}
       </header>
 
       {paper.metrics.length ? (
-        <ul className="dtp-metrics">
+        <ul className="dtp-metrics" aria-label="关键指标">
           {paper.metrics.map((m) => (
             <li key={m.label} className={m.tone ? `is-${m.tone}` : undefined}>
               <b>{m.value}</b>
@@ -53,52 +58,64 @@ export function DeskTablesPaper({
       ) : null}
 
       {paper.notes.length ? (
-        <ul className="dtp-notes">
-          {paper.notes.map((n) => (
-            <li key={n}>{n}</li>
-          ))}
-        </ul>
+        <div className="dtp-notes" role="note">
+          <ul>
+            {paper.notes.map((n) => (
+              <li key={n}>{n}</li>
+            ))}
+          </ul>
+        </div>
       ) : null}
 
       {paper.tables.length ? (
         <>
-          <div className="dtp-tabs" role="tablist">
-            {paper.tables.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={t.id === table?.id}
-                className={t.id === table?.id ? "is-on" : undefined}
-                onClick={() => {
-                  setActive(t.id);
-                  setShown(PAGE);
-                }}
-              >
-                {t.name}
-                <em>{t.grid.rows.length}</em>
-              </button>
-            ))}
+          <div className="dtp-tabs-wrap">
+            <div className="dtp-tabs" role="tablist" aria-label="交付表格">
+              {paper.tables.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={t.id === table?.id}
+                  className={t.id === table?.id ? "is-on" : undefined}
+                  onClick={() => {
+                    setActive(t.id);
+                    setShown(PAGE);
+                  }}
+                >
+                  <span className="dtp-tab-label">{t.name}</span>
+                  <span className="dtp-tab-count">{t.grid.rows.length}</span>
+                </button>
+              ))}
+            </div>
           </div>
           {table ? (
             <section className="dtp-table">
               <div className="dtp-table-bar">
-                <span>
-                  {table.name} · {table.grid.rows.length} 行
+                <span className="dtp-table-title">
+                  {table.name}
+                  <small>{table.grid.rows.length} 行</small>
                 </span>
-                <button type="button" onClick={() => downloadCsv(table.filename, gridToCsv(table.grid.columns, table.grid.rows))}>
-                  下载这张表
-                </button>
-                {paper.tables.length > 1 ? (
+                <div className="dtp-table-actions">
                   <button
                     type="button"
-                    onClick={() => {
-                      for (const t of paper.tables) downloadCsv(t.filename, gridToCsv(t.grid.columns, t.grid.rows));
-                    }}
+                    className="dtp-btn"
+                    onClick={() => downloadCsv(table.filename, gridToCsv(table.grid.columns, table.grid.rows))}
                   >
-                    全部下载（{paper.tables.length} 张）
+                    下载这张表
                   </button>
-                ) : null}
+                  {paper.tables.length > 1 ? (
+                    <button
+                      type="button"
+                      className="dtp-btn dtp-btn--primary"
+                      onClick={() => {
+                        for (const t of paper.tables) downloadCsv(t.filename, gridToCsv(t.grid.columns, t.grid.rows));
+                      }}
+                    >
+                      全部下载（{paper.tables.length} 张）
+                    </button>
+                  ) : null}
+                </div>
               </div>
               {table.grid.rows.length ? (
                 <div className="dtp-scroll">

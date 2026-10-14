@@ -627,6 +627,7 @@ export function WorkPaperCard({
 
 export function WorkPaperView({
   paper,
+  layout,
   interactive = true,
   onAsk,
   onValidationChange,
@@ -637,6 +638,8 @@ export function WorkPaperView({
   ledgerInvoiceOverridesRef,
 }: {
   paper: WorkPaper;
+  /** drawer = 右侧文书抽屉内嵌 */
+  layout?: "drawer" | "inline";
   interactive?: boolean;
   onAsk?: (text: string) => void;
   onValidationChange?: (v: FlowUiValidation) => void;
@@ -651,6 +654,7 @@ export function WorkPaperView({
     return (
       <DeskTablesPaper
         paper={paper}
+        embeddedInDrawer={layout === "drawer"}
         onReplaceMaterial={onReplaceMaterial}
         onSealDeliverable={onSealDeliverable}
         deliverySealed={deliverySealed}

@@ -47,7 +47,7 @@ export function WorkPaperDrawer({
   return createPortal(
     <div className="oa-work-drawer-back" onClick={onClose} role="presentation">
       <aside
-        className="oa-work-drawer"
+        className={paper.kind === "tables" ? "oa-work-drawer is-desk-tables" : "oa-work-drawer"}
         onClick={(ev) => ev.stopPropagation()}
         aria-label={paperDrawerTitle(paper)}
       >
@@ -84,6 +84,7 @@ export function WorkPaperDrawer({
         <div className="oa-work-drawer-body">
           <WorkPaperView
             paper={paper}
+            layout="drawer"
             interactive={interactive}
             onAsk={onAsk}
             onApplyFix={onApplyFix}
