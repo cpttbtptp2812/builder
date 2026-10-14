@@ -425,13 +425,26 @@ export async function proveLedgerRules(baselineRaw: string, candidateRaw: string
         const confirmed = !sameField(eb, ec, field);
         const modelMatchesEngine = sameField(mb, eb, field) && sameField(mc, ec, field);
         const range = await grossRange(ctx, v, scale, goal, stats);
-        const same = counterexamples.find(
-          (c) =>
-            c.field === field &&
-            JSON.stringify([c.baseline, c.candidate, c.grossRange]) === JSON.stringify([eb, ec, range]),
-        );
-        if (same) {
-          same.steps.push(...pair.steps);
+        const existing = counterexamples.find((c) => c.field === field);
+        if (existing) {
+          for (const s of pair.steps) if (!existing.steps.includes(s)) existing.steps.push(s);
+          const nextConfirmed = confirmed && modelMatchesEngine;
+          if (nextConfirmed && !existing.engineConfirmed) {
+            existing.row = row;
+            existing.baseline = eb;
+            existing.candidate = ec;
+            existing.engineConfirmed = true;
+            existing.engineNote = "两版真实工具复跑结果与求解器一致。";
+            existing.grossRange = range;
+            existing.csv = rowCsv(row);
+          } else if (existing.grossRange == null && range.min != null && range.max != null) {
+            existing.grossRange = range;
+          } else if (existing.grossRange && range.min != null && range.max != null) {
+            existing.grossRange = {
+              min: existing.grossRange.min == null ? range.min : Math.min(existing.grossRange.min, range.min),
+              max: existing.grossRange.max == null ? range.max : Math.max(existing.grossRange.max, range.max),
+            };
+          }
           continue;
         }
         counterexamples.push({
