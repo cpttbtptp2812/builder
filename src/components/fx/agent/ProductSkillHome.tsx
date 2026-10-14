@@ -65,6 +65,7 @@ export function ProductSkillHome({
             key={s.id}
             type="button"
             className="aw-product-ex"
+            aria-label={s.title}
             disabled={blocked}
             onClick={() => onRun(s.example)}
           >

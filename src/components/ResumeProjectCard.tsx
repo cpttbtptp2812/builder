@@ -62,7 +62,6 @@ export function ResumeProjectCard({ project }: { project: ResumeProjectEntry }) 
 
       {plain ? (
         <div className="resume-boss-panel">
-          <p className="resume-boss-hint">以下内容可直接粘贴至 BOSS 直聘「项目经历」</p>
           <BossBlock label="项目描述" text={plain.description} />
           <BossBlock label="项目业绩" text={plain.performance} />
         </div>

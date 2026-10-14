@@ -523,13 +523,19 @@ export const WORK_NOTES: Record<string, WorkNote> = {
   ownagent: {
     slug: "ownagent",
     purpose:
-      "企业级 AI 知识助手，全栈可部署给客户用。React + Hono + SQLite + Docker；知识库、知识广场、管理后台；底层 Agent Loop + MCP + Hybrid RAG。",
+      "客户导入 CSV、Excel 或 PDF，服务端按技能办理报销对账、工单和排班，再交付文书。合计由引擎锁定。发版前用客户原话对比现用版和新版。React + Hono + SQLite + Docker。",
     highlights: [
       {
-        title: "知识广场 · 先搜再问",
+        title: "办事主链 · 数字由引擎锁定",
         analysis:
-          "共享问答存 SQLite，提问时优先匹配已有答案（≥ 70% 直接返回、零 Token）。对话可发布单条或整段到广场，支持编辑、JSON 导入导出。客户不用重复问同样的问题。",
-        metric: "广场优先 · 零 Token 命中",
+          "Excel、PDF 先转成与 CSV 同一套校验再入库。排不成表的 PDF 不入账。办结里的金额和行数来自计算，模型只写说明，数字对不上就丢掉说明。问只看某个部门时按部门列过滤，对不上就停住，不退回整张表。",
+        metric: "导入材料 · 引擎锁数 · 点回原单元格",
+      },
+      {
+        title: "发版检查 · 单步弄坏后重放",
+        analysis:
+          "客户必问和本周真实问句进同一套 case。现用版和草稿各跑一遍。把一步弄坏、跳过或换工具后，向下游确定性重放，从过变成不过的那一步就是先别发的原因。结论是可以发、先看一眼再发或先别发。npm run check:skills 与 GitHub Action 跑同一套门禁。",
+        metric: "可以发 / 先看一眼再发 / 先别发",
       },
       {
         title: "全栈可部署 · 管理后台",
@@ -569,7 +575,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       },
     ],
     content:
-      "从 Demo 做到可交付产品：客户能自己配知识库、搜广场、问 AI、发布共享。底层 Agent 机制（Loop / MCP / RAG / 能力锁）是引擎，上面是面向客户的产品层。",
+      "客户交上表，服务端按 SKILL.md 里的步骤办完，交出带数字的文书。草稿和线上分开。发版前用客户原话对比两版，单步弄坏后能看出哪一句从过变成不过。Loop、MCP、RAG 仍在下面，数字不由模型改。",
     techJots: [
       { tag: "Loop", text: "tool_call 参数按 delta 累积，凑齐 JSON 才执行。" },
       { tag: "MCP", text: "进程内 JSON-RPC，Schema 校验 + isError 统一异常。" },
@@ -577,7 +583,7 @@ export const WORK_NOTES: Record<string, WorkNote> = {
       { tag: "记忆", text: "IndexedDB 长期 + sessionStorage 会话态。" },
     ],
     scraps: ["后续：trace 导出 JSON", "接向量检索替换关键词打分"],
-    siteNote: "产品页：对话 + 知识广场 + 管理后台；理论页：Agent 能力全景。",
+    siteNote: "产品页：导入材料办事、改技能、发版检查。合计由引擎算出。",
   },
 
   extension: {

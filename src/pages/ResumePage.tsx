@@ -68,9 +68,6 @@ export function ResumePage() {
 
         <section className="resume-section resume-section-projects">
           <h2>项目经历</h2>
-          <p className="resume-section-lead">
-            已按 BOSS 直聘格式整理「项目描述 / 项目业绩」，点击卡片右上角「复制 BOSS 格式」可直接粘贴。
-          </p>
           <div className="resume-project-grid">
             {[...resumeProjects]
               .sort((a, b) => {
@@ -85,9 +82,6 @@ export function ResumePage() {
 
         <section className="resume-section resume-section-jobs">
           <h2>工作经历</h2>
-          <p className="resume-section-lead">
-            已按 BOSS 直聘格式整理「工作内容 / 工作业绩」；技术细节见上方项目经历。
-          </p>
           <div className="resume-jobs-list">
             {experience.map((job) => (
               <ResumeJobCard key={job.company} job={job} />

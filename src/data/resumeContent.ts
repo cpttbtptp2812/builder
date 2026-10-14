@@ -7,7 +7,7 @@ export type ResumeSection = {
   subsections?: { heading: string; bullets: string[] }[];
 };
 
-/** 项目经历 — 长文导出字段（工作内容 / 项目业绩） */
+/** 项目经历 — 项目描述 / 项目业绩 */
 export type ProjectPlainFields = {
   name: string;
   role: string;
@@ -132,9 +132,11 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
       },
     ],
     achievements: [
-      "全局队列 + PostMessage 解决多窗口抢跑，调度与对话 UI 在生产环境稳定运行",
-      "定位瀑布把回放成功率做到 90%+；分包与压缩把 SDK 初始包降约 30%",
-      "Playwright + TypeScript 把回放/对话主链路变成可回归的质量门禁",
+      "独立完成产品、前端、Hono 服务端、技能引擎、发版门禁与 Docker 部署，三条办事技能可在客户自有表格上跑通",
+      "办结数字由服务端确定性计算，模型说明与引擎不一致会被丢弃，数字可回溯原单元格",
+      "发版门禁含回放、反事实重放与变异测试，check:skills 与 GitHub Action 同一套",
+      "Z3 规则证明 / HiGHS 排班最优性证明 / Ed25519 离线验真已接入发布与实验室能力",
+      "自研 SSE Agent Loop 与进程内 MCP 已用于对话与技能执行路径",
     ],
     plain: {
       name: "iMean AI 智能自动化操作平台",
@@ -149,7 +151,7 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
   },
   {
     id: "ownagent",
-    name: "OwnAgent — 浏览器内 AI Agent 平台",
+    name: "OwnAgent — 企业技能发版与办事运行时",
     role: "独立设计与全栈开发",
     period: "2026.03 — 至今",
     personal: true,
@@ -157,31 +159,36 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
     stack: [
       "React 19",
       "TypeScript",
-      "SSE / JSON-RPC",
       "Hono",
       "SQLite",
-      "IndexedDB",
+      "SKILL.md",
+      "SSE / JSON-RPC",
+      "Docker",
       "Agent Loop",
-      "Hybrid RAG",
       "MCP",
     ],
     sections: [
       {
         heading: "项目背景",
         paragraphs: [
-          "OwnAgent 是我从零独立实现的浏览器内 AI Agent 平台（2026.03 至今）。常见做法是把 Loop、工具协议、检索封在服务端 SDK，前端只吃一条 SSE；出问题打开 Network 只有一条 pending 请求，分不清是意图路由选错了，还是工具入参拼了半截 JSON，还是检索根本没召回。本项目把这几层在 TypeScript 里逐层拆开实现，每一步选了哪个技能、调了哪个工具、入参如何拼装、检索命中哪一块均可追踪，不依赖 LangChain。",
+          "OwnAgent 以企业办事技能发版治理为核心：SKILL.md 草稿与现用版分离，回放、反事实重放、变异测试与 GitHub Action 门禁；报销对账、客服工单、门店排班为同一运行面上的验收技能。",
         ],
       },
       {
-        heading: "工作台七模块",
+        heading: "办事主链",
         bullets: [
-          "对话：SSE 流式 Agent Loop + Guest Runtime 双模，同一套工具接口",
-          "运行追踪：TraceSpan 记录 user → route → tool → reply，耗时/状态/入参落 localStorage",
-          "知识检索：Hybrid RAG，命中带 chunkId 可点回原段",
-          "技能路由：SKILL.md 声明 + 加权打分，打分矩阵页面可查",
-          "回归评测：8 道路由题 + 5 道能力锁题，精度/预测值/前三名可视",
-          "能力锁：read / mutate / abstain 先于路由和检索执行",
-          "能力全景：所有技能触发词、工具列表、步骤流水线一览",
+          "Excel、PDF 先转成与 CSV 同一套校验再入库。排不成表、列对不齐的 PDF 不入账。办结里的数字可点回原单元格",
+          "问「只看某部门」时按部门列过滤。材料里没有这个部门就停住并说明表里有哪些部门，不退回整张表",
+          "正在办理的技能是报销对账、客服工单、门店排班。每一步的权限、超时和耗时写进这次办理的事件，可回到某一步改参数重跑",
+          "外部 HTTP 工具按声明登记，只授予该步声明的能力。产品办理不默认开放任意网络",
+        ],
+      },
+      {
+        heading: "发版检查",
+        bullets: [
+          "客户必问和本周真实问句进同一套 case。现用版与草稿各跑一遍",
+          "单步弄坏、跳过或换工具后，向下游确定性重放。从过变成不过的那一步，就是先别发的原因",
+          "结论是可以发、先看一眼再发或先别发。npm run check:skills 与 GitHub Action 跑同一套门禁",
         ],
       },
       {
@@ -205,10 +212,8 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
         heading: "技能路由 — SKILL.md 声明式注册",
         bullets: [
           "每个技能声明 triggers / tools / steps，步骤 args 支持 `{{query}}` 模板和 `$prevResult` 引用",
-          "打分规则：触发词长度 ≥ 4 字记 2 分，短词 1 分，技能名命中 +3 分；全员零分停止路由，不默认兜底",
-          "固定优先级：site-analyzer → dom-probe → workflow-orchestrator → policy-desk → knowledge-lookup → 打分 Top-1",
-          "Guest Runtime 再加一层意图正则（HEALTH/ABOUT/KNOWLEDGE/DOM/POLICY）覆盖打分，避免短句误路由",
-          "7 道路由固定题：expectedSkillId 对预测值，显示前三名和失败样本，改触发词立即可验",
+          "打分规则：触发词四个字及以上或整句命中记 2 分，短词 1 分，技能名命中加 3 分。达到 2 分且领先第二名则交给该技能，不够 2 分不兜底",
+          "改触发词后用固定问句看预测、前几名和失败样本",
         ],
       },
       {
@@ -239,20 +244,21 @@ export const resumeProjectEntries: ResumeProjectEntry[] = [
       },
     ],
     achievements: [
-      "自研 SSE 流式 Agent Loop：按 index 缓冲 tool_call name/arguments，完整后 JSON.parse，8 轮收敛，单点 isError 不中断",
-      "进程内 JSON-RPC 2.0 MCP Server + SKILL.md 技能路由，全员零分不兜底；7 道路由题 + 5 道能力锁题固定回归",
-      "Hybrid RAG 纯浏览器可跑，chunkId 溯源；能力信封锁权限优先于路由，制度问答带出处，改权限误开通为 0",
-      "客户友好 UX：场景引导 + 文件/网页/粘贴导入 + 知识溯源 + 缺口检测 + 会话质量雷达",
+      "交付发版治理链：草稿/现用版分离、双版本回放、反事实重放、变异测试、CI 门禁",
+      "check:skills 与 GitHub Action skill-gate 同源",
+      "三技能 product-run 跑通用户表格，办结数字由引擎锁定",
+      "Z3 / HiGHS / Ed25519 证据接入发版评审与实验室",
+      "test:ownagent 含 product-run E2E",
     ],
     plain: {
-      name: "OwnAgent — 浏览器内 AI Agent 平台",
+      name: "OwnAgent — 业务办理 Agent 平台",
       role: "独立设计与全栈开发",
       period: "2026.03 — 至今",
       url: "https://cpttbtptp2812.github.io/builder/#/work/ownagent",
       description:
-        "从零独立设计并实现浏览器内 AI Agent 平台 OwnAgent（2026.03 至今）。常见做法是把 Loop、工具协议、检索封在服务端 SDK，前端只消费一段 SSE；出问题 Network 只有一条 pending，分不清是意图路由选错、工具入参拼了半截 JSON、还是检索根本没召回。本项目在 TypeScript 里把这几层逐层拆开，每步可追踪、可对账、可回归，不依赖 LangChain。\n\n1. 负责 Agent Loop：SSE 按 `data:` 行切分，用 Map 按 index 增量累积 tool_call（name/arguments 字符串拼接），流结束后整条 JSON.parse；tool 结果带 tool_call_id 写回 messages 发起下一轮；8 轮硬上限防止工具互相调用死循环\n2. 负责进程内 MCP Server（JSON-RPC 2.0）：tools/list + tools/call，validateParams JSON Schema 校验；校验失败/未知工具/运行时异常均返回 isError，不抛 UI，单工具失败整轮可继续；已实现 http_probe / knowledge_search / browser_snapshot / policy_search / ticket_draft / ticket_commit 等工具\n3. 负责技能路由（SKILL.md 声明式）：触发词 ≥4 字 2 分/短词 1 分/技能名 +3 分，固定优先级 + Top-1 执行，全员零分不兜底；Guest Runtime 加一层意图正则覆盖打分防止短句误路由；7 道固定题回归，改触发词影响可立即量化\n4. 负责 Hybrid RAG：文档按 desc/architecture/narrative/challenge/aspect 分块生成 chunkId；关键词 token 重叠 +0.11、整句命中 +0.25、项目直匹配 +0.22、阈值 0.12；命中带 chunkId/score/摘录可点回原段；无向量库，纯浏览器可跑\n5. 负责能力信封：classifyCapability() 问句先锁 read/mutate/abstain，优先于路由和检索执行；制度问答只输出手册原句带条款编号，detectConflict() 检测同 slot 现行/废止值冲突则 POLICY_CONFLICT 熔断；改权限只起草 ticket_draft，ticket_commit 未收到人工 allow 直接拒绝\n6. 负责记忆与 Trace：sessionStorage 12 轮短期记忆 + IndexedDB 长期记忆注入 system prompt；每轮 TraceSpan 落盘（耗时/状态/入参），localStorage 最多 20 条可跨页回放\n7. 负责双模运行时：无 API Key 走浏览器内 Guest Runtime（意图分类 + MCP 工具 + 规则合成），配 Key 走 LLM Agent Loop，同一套 MCP 接口，有后端走 Hono + SQLite\n\n技术栈：React 19、TypeScript、SSE、JSON-RPC 2.0、Hono、SQLite、IndexedDB",
+        "OwnAgent 是我独立设计并全栈实现的企业技能发版与办事运行时（2026.03—至今）。平台把办事技能当成可版本化的程序：SKILL.md 描述 triggers、tools、steps 与参数，草稿与现用版分离；改完技能后，用同一批客户原话与验收 case 对两版做确定性回放，对照路由、步骤链与问句是否从通过变为不通过，再给出可以发 / 先看一眼再发 / 先别发。React 19、Hono、SQLite、Docker Compose，LLM Key 服务端代理。\n\n1. 发版门禁：现用版与草稿双跑；单步 break、skip、swap 后只向下游确定性重放，输出根因步骤；变异测试批量改阈值、删步骤、换顺序、换工具，漏检补 case。npm run check:skills 与 .github/workflows/skill-gate.yml 执行同一套逻辑，未通过不得替换线上。\n\n2. 运行面与发版同源：对话 product-run 与服务端 runSkill 共用技能目录与 sheet/contract/flow 引擎。客户 Excel、PDF、CSV 归一入库，报销对账、客服工单、门店排班逐步 process，交付文书与 CSV；金额、行数、拦截由计算引擎写入，模型仅生成说明。办理过程 SQLite 只追加事件（runId、seq），reducer 归约，支持 fork 重跑；工具网关记录 capability、超时与耗时。\n\n3. 规则与排班求解（服务发版评审）：报销阈值进 Z3 SMT，两版等价证明或反例 + 真实引擎复跑，不可达审批标死规则。排班 0-1 MILP，HiGHS 分层优化并输出最优性证明，不可行时求最小松弛约束。\n\n4. 证据链：办理材料、步骤、交付物与结论数字 RFC 6962 Merkle 树，RFC 8785 JCS 规范化根，Ed25519 签名，WebCrypto 离线验真。\n\n5. Agent 执行与路由：自研 SSE Agent Loop（index 累积 tool_call、JSON.parse 后执行、tool_call_id 回写、8 轮上限）；进程内 MCP JSON-RPC 2.0 + JSON Schema，isError 隔离单工具失败。触发词加权路由 + 分割共形（LAC）预测集；Hybrid RAG（chunkId、TF-IDF 混合）；classifyCapability read/mutate/abstain，制度冲突熔断，权限变更需人工 allow。\n\n6. 工程与回归：技能 Semcompiler / 工具注册表、发版 eval harness、test-product-run-e2e 与 test:ownagent 覆盖三技能无材料门闩与上传 CSV 办结路径。\n\n技术栈：SKILL.md、TypeScript、Hono、SQLite、Event Sourcing、Z3、HiGHS、Ed25519、SSE、JSON-RPC 2.0、GitHub Actions",
       performance:
-        "1. 自研 Agent Loop / 进程内 MCP Server / Hybrid RAG / Skill 路由 / Trace / Eval 全栈，不依赖 LangChain 一类框架，网上可打开实际运行\n2. SSE 按 index 缓冲 tool_call + JSON Schema 校验 + isError 回流，流式工具调用 8 轮收敛，三类异常均不抛 UI，单点失败整轮可继续\n3. 路由打分矩阵 + RAG chunkId 可对账；7 道路由固定题 + 5 道能力锁固定题，精度/前三名/失败样本页面可查\n4. 能力信封先于路由执行，制度问答带出处（GROUNDED），同 slot 新旧冲突熔断（POLICY_CONFLICT），改权限对话里误开通为 0（NEEDS_HITL → 人工 allow → COMMITTED）",
+        "1. 交付 SKILL 草稿/现用版分离、发版回放、反事实重放、变异测试与 CI 门禁一整条治理链\n2. check:skills 与 GitHub Action skill-gate 同源，发版结论可本地复现\n3. 报销对账、客服工单、门店排班在 product-run 与服务端引擎上跑通，材料为用户上传表格，办结数字由引擎锁定\n4. 发版 case 可定位问句从通过变不通过的步骤；规则改动可走 Z3，排班可走 HiGHS，办理记录可导出签名证据包\n5. 自研 SSE Agent Loop、进程内 MCP、共形路由与 Hybrid RAG 接入对话触发与技能试跑\n6. test:ownagent 含 product-run E2E，覆盖门闩与真实 CSV 办结主链",
     },
   },
   {

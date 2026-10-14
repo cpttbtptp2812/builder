@@ -20,22 +20,9 @@ export function formatBossJob(
   ].join("\n");
 }
 
-/** 格式化为 BOSS 直聘「项目经历」粘贴文本 */
+/** 格式化为 BOSS 直聘「项目经历」里要填的两栏 */
 export function formatBossProject(p: ProjectPlainFields): string {
-  return [
-    `项目名称：${p.name}`,
-    `项目角色：${p.role}`,
-    `项目时间：${p.period}`,
-    p.url ? `项目链接：${p.url}` : null,
-    "",
-    "项目描述：",
-    p.description.trim(),
-    "",
-    "项目业绩：",
-    p.performance.trim(),
-  ]
-    .filter((line) => line !== null)
-    .join("\n");
+  return [`项目描述：`, p.description.trim(), "", `项目业绩：`, p.performance.trim()].join("\n");
 }
 
 /** 将「1. xxx\n2. xxx」拆成列表项展示 */

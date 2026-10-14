@@ -12,7 +12,7 @@ test.beforeEach(async ({ page }) => {
 test("customer home only promises the three released skills", async ({ page }) => {
   await page.goto(route);
 
-  for (const label of ["报销对账", "客服工单", "门店排班"]) {
+  for (const label of ["费用与对账", "客服工单", "门店排班"]) {
     await expect(page.getByRole("button", { name: label, exact: true })).toBeVisible();
   }
   for (const withdrawn of ["额度测算", "合同审查", "流程查询", "单据识读"]) {
@@ -102,7 +102,11 @@ test("ticket desk imports both source systems, reruns and archives", async ({ pa
     mimeType: "text/csv",
     buffer: Buffer.from("\uFEFF坐席,技能组,在岗\n坐席甲,账务组|综合组,是\n坐席乙,技术组,是\n"),
   });
-  await page.getByRole("button", { name: "继续执行", exact: true }).click();
+  await expect(page.getByText("十月客服工单", { exact: false })).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("十月客服坐席", { exact: false })).toBeVisible({ timeout: 30_000 });
+  const continueBtn = page.getByRole("button", { name: "继续执行", exact: true });
+  await expect(continueBtn).toBeEnabled({ timeout: 30_000 });
+  await continueBtn.click();
   await expect(page.getByText(/共 3 张工单/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("heading", { name: "修正材料后重新办理" })).toBeVisible();
 
@@ -132,7 +136,10 @@ test("reimbursement desk imports, delivers CSV and archives", async ({ page }, t
         "华东运营,经办乙,88802,11544,88802,待审\n",
     ),
   });
-  await page.getByRole("button", { name: "继续执行", exact: true }).click();
+  await expect(page.locator("em").filter({ hasText: /已导入/ })).toHaveCount(1);
+  const continueBtn = page.getByRole("button", { name: "继续执行", exact: true });
+  await expect(continueBtn).toBeEnabled({ timeout: 30_000 });
+  await continueBtn.click();
   await expect(page.getByText(/166503/).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("button", { name: "下载对账表 CSV", exact: true })).toBeVisible();
   const download = page.waitForEvent("download");
