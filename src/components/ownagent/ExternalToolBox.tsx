@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { apiFetch } from "../../lib/apiClient";
-import { OaBtn, OaField, OaStack } from "./oaUi";
+import { OaBtn, OaField, OaStack } from "./OaUi";
 
 type Tool = { name: string; title: string; endpoint: string; capability: string; timeoutMs: number };
 
