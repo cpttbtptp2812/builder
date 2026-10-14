@@ -12,6 +12,7 @@ import { allRunnableSkills, getSkill, type AgentSkill, type SkillTraceStep } fro
 import { routeQuery, skillLabel } from "../../lib/skillRouter";
 import { catalogWith } from "../../lib/skillImpact";
 import { parseSkillMarkdown } from "../../lib/skillMarkdown";
+import { defaultSampleQuery, sampleTriggers } from "./skillVerUi";
 import {
   catchPhrase,
   draftCatches,
@@ -23,28 +24,11 @@ import {
 import { suggestCaseFromTrace, applyTraceSuggestion } from "../../lib/traceCaseSuggest";
 
 const GRADERS: { id: OutcomeGrader["kind"]; label: string }[] = [
-  { id: "skeleton", label: "步骤契约对齐 (Skeleton)" },
-  { id: "all_ok", label: "全链路执行通过 (All Steps OK)" },
-  { id: "release_overall", label: "发版判定合格 (Overall Pass)" },
-  { id: "min_steps", label: "最少步数阈值 (Min Steps)" },
+  { id: "skeleton", label: "步骤要对上" },
+  { id: "all_ok", label: "每一步都跑通" },
+  { id: "release_overall", label: "整体结论是可以发" },
+  { id: "min_steps", label: "至少跑够几步" },
 ];
-
-const PROBE_PRESETS: Record<string, string[]> = {
-  "dom-inspector": [
-    "帮我检测页面 DOM 树层深与 a11y 节点分布",
-    "分析页面无障碍树结构并查找交互 locator",
-    "探测 shadow dom 与动态挂载组件",
-  ],
-  "release-inspector": [
-    "帮我巡检 https://example.com 能否上线",
-    "检测发布依赖证书链与静态资源响应",
-    "灰度验证接口状态码与可用性",
-  ],
-  "route-pilot": [
-    "请帮我把这句指令分发给最合适的智能体",
-    "跨技能语义边界模糊探测与意图仲裁",
-  ],
-};
 
 function graderLabel(kind: OutcomeGrader["kind"] | undefined) {
   return GRADERS.find((g) => g.id === kind)?.label ?? "步骤要对上";
@@ -177,10 +161,10 @@ export function ScmCaseEditor({
     onChanged();
   }
 
-  const presets = PROBE_PRESETS[skillId] ?? [
-    "帮我巡检目标系统并分析执行链路",
-    "跨技能边界语义模糊试探与意图仲裁",
-  ];
+  const presets = useMemo(() => {
+    const own = [defaultSampleQuery(skillId, skill?.triggers ?? []), ...sampleTriggers(skill?.triggers ?? [], 3)];
+    return [...new Set(own.map((s) => s.trim()))].filter((p) => p && !cases.some((c) => c.query.trim() === p));
+  }, [skillId, skill, cases]);
 
   return (
     <div className="own-qbank">
@@ -194,9 +178,9 @@ export function ScmCaseEditor({
         <div className="own-qbank-hdr">
           <label htmlFor={`qbank-${skillId}`} className="own-qbank-label">
             <span className="own-qbank-dot" />
-            意图探针注入 · 黄金评测集 (Intent Probe Injection)
+            发版时要问的话
           </label>
-          <span className="own-qbank-badge">{cases.length} 样本受管</span>
+          <span className="own-qbank-badge">{cases.length} 句</span>
         </div>
 
         <div className="own-qbank-compose">
@@ -206,43 +190,44 @@ export function ScmCaseEditor({
               id={`qbank-${skillId}`}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="输入测试样本探针，例如：帮我巡检 https://example.com 能否上线"
+              placeholder={`客户会怎么说，例如：${defaultSampleQuery(skillId, skill?.triggers ?? [])}`}
             />
           </div>
           <button type="submit" className="own-qbank-submit-btn" disabled={!query.trim()}>
-            + 注入评测集
+            加进去
           </button>
         </div>
 
-        {/* 快捷推荐探针芯片，极大提升可玩性与探索欲 */}
-        <div className="own-qbank-presets">
-          <span className="own-qbank-preset-label">快捷探针:</span>
-          {presets.map((p) => (
-            <button
-              key={p}
-              type="button"
-              className="own-qbank-preset-chip"
-              onClick={() => setQuery(p)}
-              title="点击快速填充探针样本"
-            >
-              {p}
-            </button>
-          ))}
-        </div>
+        {presets.length ? (
+          <div className="own-qbank-presets">
+            <span className="own-qbank-preset-label">这个技能常被这样问：</span>
+            {presets.map((p) => (
+              <button
+                key={p}
+                type="button"
+                className="own-qbank-preset-chip"
+                onClick={() => setQuery(p)}
+                title="填进输入框，确认后再加"
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        ) : null}
 
         <div className="own-qbank-tools">
           <button type="button" className="own-qbank-quiet" onClick={() => setShowRule((v) => !v)}>
-            {showRule ? "收起断言标准" : "配置断言判定规则 (Grader)"}
+            {showRule ? "收起判定方式" : "怎么算答对"}
           </button>
           {fromTrace?.trace.length ? (
             <button type="button" className="own-qbank-quiet" onClick={addFromTrace}>
-              采纳前次真实调用链路
+              用刚才那次的问法
             </button>
           ) : null}
         </div>
         {showRule ? (
           <div className="own-qbank-rule">
-            <span>断言判定标准:</span>
+            <span>算答对的标准：</span>
             <select value={grader} onChange={(e) => setGrader(e.target.value as OutcomeGrader["kind"])}>
               {GRADERS.map((g) => (
                 <option key={g.id} value={g.id}>
@@ -268,18 +253,18 @@ export function ScmCaseEditor({
       <div className="own-qbank-info-bar">
         <span className="own-qbank-info-icon">ℹ</span>
         <span>
-          门禁已纳管 <strong>{cases.length}</strong> 条基准断言样本{mine ? `（其中 ${mine} 条为手动注入）` : ""}。线上回流未收录意图亦将联动质量门禁进行阻断校验。
+          发版检查会把这 <strong>{cases.length}</strong> 句挨个问一遍{mine ? `（其中 ${mine} 句是您加的）` : ""}，新版答不上就不让发。
         </span>
       </div>
 
       {week.length ? (
         <div className="own-week">
-          <p className="own-week-title">线上高频回流样本 (待归入基准库)</p>
+          <p className="own-week-title">最近客户真的问过、还没加进来的</p>
           <ul>
             {week.map((q) => (
               <li key={q}>
                 <span>{q}</span>
-                <button type="button" onClick={() => adoptWeek(q)}>纳入门禁</button>
+                <button type="button" onClick={() => adoptWeek(q)}>加进去</button>
               </li>
             ))}
           </ul>
@@ -299,7 +284,7 @@ export function ScmCaseEditor({
               onClaim={onClaim}
               onDelete={() => {
                 deleteCustomCase(skillId, row.id);
-                bump("已移出基准库。发版门禁将不再比对该断言。");
+                bump("已移出。发版检查不再问这句。");
               }}
               onRule={(kind, count) => {
                 if (!isCustom(row)) return;
@@ -309,7 +294,7 @@ export function ScmCaseEditor({
           ))}
         </ul>
       ) : (
-        <p className="own-qbank-empty">暂无回归断言样本。可在上方注入业务意图探针，发版门禁将以此作为基准进行回归压测与意图拦截校验。</p>
+        <p className="own-qbank-empty">还没有要问的话。在上面写一句客户会怎么说，发版检查就会拿它来问新版。</p>
       )}
 
       {onCheck ? (
@@ -372,17 +357,17 @@ function QuestionRow({
         <div className="own-qbank-top-acts">
           {onAsk ? (
             <button type="button" className="own-qbank-pill-btn" onClick={() => onAsk(row.query)}>
-              ▶ 沙盒探活
+              去对话里问
             </button>
           ) : null}
           <button type="button" className="own-qbank-pill-btn" disabled={racing} onClick={() => void compare()}>
-            {racing ? "两端并发对决中…" : "意图对决 (Duel)"}
+            {racing ? "比较中…" : "看哪个技能答得好"}
           </button>
         </div>
       </div>
       {!matched && phrase && onClaim ? (
         <button type="button" className="own-qbank-claim" onClick={() => onClaim(phrase)}>
-          绑定触发词元「{phrase}」捕获该意图
+          把说法「{phrase}」写进技能，让这句归这里
         </button>
       ) : null}
       {race ? (
@@ -390,22 +375,22 @@ function QuestionRow({
           {race.map((s) => (
             <li key={s.id} className={s.pass ? "is-pass" : ""}>
               <strong>{s.label}</strong>
-              <span>{s.total ? `${s.ok}/${s.total} 步通过契约` : "无法执行"}{s.pass ? " · 断言通过" : " · 断言失败"}</span>
+              <span>{s.total ? `${s.ok}/${s.total} 步跑通` : "跑不了"}{s.pass ? " · 算答对" : " · 没答对"}</span>
               {s.here && !matched && phrase && onClaim ? (
                 <button type="button" onClick={() => onClaim(phrase)}>归入本技能</button>
               ) : null}
-              {s.here && matched ? <em>当前承接方</em> : null}
+              {s.here && matched ? <em>现在归它</em> : null}
             </li>
           ))}
         </ul>
       ) : null}
       <div className="own-qbank-meta">
         <span className={`own-qbank-origin ${mine ? "is-custom" : "is-system"}`}>
-          {mine ? "CUSTOM PROBE" : "BENCHMARK"}
+          {mine ? "您加的" : "自带"}
         </span>
         {mine ? (
           <select
-            aria-label="断言判定规则"
+            aria-label="怎么算答对"
             value={kind}
             onChange={(e) => onRule(e.target.value as OutcomeGrader["kind"], row.grader?.kind === "min_steps" ? row.grader.count : undefined)}
           >
@@ -418,16 +403,16 @@ function QuestionRow({
         ) : (
           <span className="own-qbank-grader-tag">{graderLabel(kind)}</span>
         )}
-        {elsewhere ? <span className="own-qbank-route-tag is-rival">当前路由至: {who.label}</span> : null}
-        {who.kind !== "skill" ? <span className="own-qbank-route-tag is-unrouted">无路由承接 (Unassigned)</span> : null}
+        {elsewhere ? <span className="own-qbank-route-tag is-rival">现在交给：{who.label}</span> : null}
+        {who.kind !== "skill" ? <span className="own-qbank-route-tag is-unrouted">没有技能接</span> : null}
         {mine ? (
           <button type="button" className="own-qbank-del-btn" onClick={onDelete}>
             移除
           </button>
         ) : null}
       </div>
-      {elsewhere ? <small>流量当前路由至 {skillLabel(who.skill ?? { name: who.label, description: who.label })}。可根据对决结果决定是否提取词元抢回路由。</small> : null}
-      {who.kind !== "skill" ? <small>当前意图未被任何技能接管。可配置触发槽位以纳入门禁自动化回归。</small> : null}
+      {elsewhere ? <small>这句现在会交给「{skillLabel(who.skill ?? { name: who.label, description: who.label })}」。点「看哪个技能答得好」比一比，再决定要不要接过来。</small> : null}
+      {who.kind !== "skill" ? <small>这句话现在没有技能能接。给技能加一个对应的说法，它才会被接住。</small> : null}
     </li>
   );
 }

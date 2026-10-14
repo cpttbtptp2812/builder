@@ -244,6 +244,36 @@ db.exec(`
 runMigration(2, "clip tags", () => {
   try { db.exec(`ALTER TABLE clip_snippets ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`); } catch { /* column exists */ }
 });
+runMigration(4, "material cells, collab, external tools", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS dataset_cells (
+      session_id TEXT NOT NULL,
+      slot TEXT NOT NULL,
+      sheet TEXT NOT NULL,
+      cell TEXT NOT NULL,
+      row_index INTEGER NOT NULL,
+      column_name TEXT NOT NULL,
+      value TEXT NOT NULL,
+      PRIMARY KEY (session_id, slot, sheet, cell)
+    );
+    CREATE TABLE IF NOT EXISTS y_updates (
+      room TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      update_b64 TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      PRIMARY KEY (room, seq)
+    );
+    CREATE TABLE IF NOT EXISTS external_tools (
+      name TEXT PRIMARY KEY,
+      title TEXT NOT NULL,
+      endpoint TEXT NOT NULL,
+      capability TEXT NOT NULL,
+      timeout_ms INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+  `);
+});
+
 runMigration(3, "product archive and run token", () => {
   for (const sql of [
     "ALTER TABLE product_processes ADD COLUMN archived_at TEXT",

@@ -65,7 +65,27 @@ if (!fs.existsSync(BASELINE_DIR) && fs.existsSync(path.join(REPO_CONFIG_DIR, "ba
   }
 }
 
-function loadGateCases(skillId: string): SkillTraceCase[] {
+export function loadGatePolicy() {
+  return fs.existsSync(POLICY_FILE) ? parseGatePolicy(fs.readFileSync(POLICY_FILE, "utf8")) : DEFAULT_GATE_POLICY;
+}
+
+/** 追加（同 id 覆盖）某技能的自定义检查 case */
+export function appendGateCases(skillId: string, cases: SkillTraceCase[]): number {
+  let store: Record<string, SkillTraceCase[]> = {};
+  if (fs.existsSync(CASES_FILE)) {
+    try {
+      store = JSON.parse(fs.readFileSync(CASES_FILE, "utf8")) as Record<string, SkillTraceCase[]>;
+    } catch {
+      store = {};
+    }
+  }
+  const ids = new Set(cases.map((c) => c.id));
+  store[skillId] = [...(store[skillId] ?? []).filter((c) => !ids.has(c.id)), ...cases];
+  writeJsonAtomic(CASES_FILE, store);
+  return store[skillId]!.length;
+}
+
+export function loadGateCases(skillId: string): SkillTraceCase[] {
   let custom: SkillTraceCase[] = [];
   if (fs.existsSync(CASES_FILE)) {
     try {
@@ -78,7 +98,7 @@ function loadGateCases(skillId: string): SkillTraceCase[] {
   return mergeSkillGateCases(skillId, custom, SKILL_TRACE_CASES);
 }
 
-function teamAccess(
+export function teamAccess(
   authorization: string | undefined,
   environment: string,
   action: string,
@@ -112,7 +132,7 @@ function ensureAuditTable() {
   `);
 }
 
-function writeAudit(row: {
+export function writeAudit(row: {
   skillId: string;
   action: string;
   gate?: string;
@@ -223,9 +243,7 @@ export function registerSkillGate(app: Hono) {
       "server",
     )[0]!;
     const environment = body.environment ?? "prod";
-    const policy = fs.existsSync(POLICY_FILE)
-      ? parseGatePolicy(fs.readFileSync(POLICY_FILE, "utf8"))
-      : DEFAULT_GATE_POLICY;
+    const policy = loadGatePolicy();
     const gateCases = loadGateCases(body.skillId);
     const decision = await evaluateSkillGate(
       {

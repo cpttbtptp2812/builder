@@ -10,6 +10,19 @@ import {
   apiUploadProductDataset,
 } from "../../../lib/productRun/client";
 import type { ProductRunImportPart, ProductRunView } from "../../../lib/productRun/types";
+import { ProductRunInsights } from "../../platform/ProductRunInsights";
+import { loadLlmConfig } from "../../../lib/llmConfig";
+import { LocalModelBox } from "../../ownagent/LocalModelBox";
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
 
 function importPartsForRun(run: ProductRunView): ProductRunImportPart[] {
   const fromRun = run.parts.filter((p): p is ProductRunImportPart => p.kind === "import");
@@ -96,14 +109,14 @@ function MaterialGatePanel({
                   disabled={fileBusy}
                   onClick={() => fileRefs.current[part.slot]?.click()}
                 >
-                  {part.ready ? "换一份文件" : "导入 CSV"}
+                  {part.ready ? "换一份文件" : "导入文件"}
                 </button>
                 <input
                   ref={(el) => {
                     fileRefs.current[part.slot] = el;
                   }}
                   type="file"
-                  accept=".csv,.txt,text/csv"
+                  accept=".csv,.txt,.xlsx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   disabled={fileBusy}
                   hidden
                   aria-hidden
@@ -151,13 +164,17 @@ export function ProductRunParts({
 
   const onFile = useCallback(
     async (part: ProductRunImportPart, file: File) => {
-      const csv = decodeUploadCsvText(await file.arrayBuffer());
+      const buf = await file.arrayBuffer();
+      const lower = file.name.toLowerCase();
+      const workbook = lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".pdf");
       setBusy(true);
       try {
         const up = await apiUploadProductDataset({
           sessionId: part.sessionId,
           slot: part.slot as ProductDataSlot,
-          csv,
+          csv: workbook ? undefined : decodeUploadCsvText(buf),
+          workbookBase64: workbook ? arrayBufferToBase64(buf) : undefined,
+          filename: file.name,
           title: file.name.replace(/\.[^.]+$/, ""),
         });
         if (!up.ok) {
@@ -304,6 +321,17 @@ export function ProductRunParts({
           primaryDisabled={runLocked || !canContinue}
           onPrimary={() => void executeStream(run.status === "finish" ? "rerun" : "continue")}
           onPickFile={(part, file) => void onFile(part, file)}
+        />
+      ) : null}
+      {run.status === "finish" && !busy && loadLlmConfig().enabled && loadLlmConfig().preset === "webllm" ? (
+        <LocalModelBox summary={run.parts.find((p) => p.kind === "finish")?.summary} />
+      ) : null}
+      {run.status === "finish" && !busy ? (
+        <ProductRunInsights
+          sessionId={imports[0]?.sessionId ?? getSessionId()}
+          processId={run.processId}
+          skillId={run.skillId}
+          version={run.parts.find((p) => p.kind === "finish")?.summary ?? ""}
         />
       ) : null}
     </div>

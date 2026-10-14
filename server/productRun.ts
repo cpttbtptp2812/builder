@@ -14,9 +14,12 @@ import {
   deleteServerDataset,
   getServerDataset,
   ProductDatasetNormalizeError,
+  listDatasetCells,
+  saveDatasetCells,
   saveServerDataset,
   serverDatasetRowCount,
 } from "./productDataStore.ts";
+import { workbookBufferToTable } from "../src/lib/workbookImport.ts";
 import { paperForSkill } from "../src/lib/workPaper.ts";
 import { synthesizeProductFinishMessage } from "../src/lib/skillResponseSynth.ts";
 import { skillLabel } from "../src/lib/skillRouter.ts";
@@ -28,6 +31,7 @@ import type { ProductLlmConfig } from "../src/lib/llmProductBrief.ts";
 import { isDeskGuardCode } from "../src/lib/deskProgramMeta.ts";
 import { requestIdentity } from "./security.ts";
 import { recordProductRun, safeLog } from "./observability.ts";
+import { productRunRecorder } from "./runEventStore.ts";
 
 export type ProductRunImportPart = {
   kind: "import";
@@ -233,18 +237,36 @@ async function executeProcess(
   await emit?.("running", { processId, skillId, query });
 
   const parts: ProductRunPart[] = [];
-  const { trace, result, totalMs } = await runSkillOnServer(skillId, query, sessionId, {
-    productWorkbench: true,
-    llmConfig,
-    onStep: async (step) => {
-      const part = stepToPart(processId, step);
-      parts.push(part);
-      await emit?.("step", part);
-    },
-  });
+  const recorder = productRunRecorder(processId, sessionId, skillId, query);
+  let ran: Awaited<ReturnType<typeof runSkillOnServer>>;
+  try {
+    ran = await runSkillOnServer(skillId, query, sessionId, {
+      productWorkbench: true,
+      llmConfig,
+      ...(recorder ? { exec: recorder.exec } : {}),
+      onStep: async (step) => {
+        const part = stepToPart(processId, step);
+        parts.push(part);
+        await emit?.("step", part);
+      },
+    });
+  } catch (err) {
+    recorder?.finish([{ stepId: "run", label: "运行异常", tool: "", ms: 0, ok: false, result: { error: err instanceof Error ? err.message : String(err) } }], 0);
+    throw err;
+  }
+  const { trace, result, totalMs } = ran;
+  recorder?.finish(trace, totalMs);
 
   const allOk = trace.every((t) => t.ok);
-  if (!allOk) {
+  const llmNoteOnly =
+    !allOk &&
+    trace.every((t) => {
+      if (t.ok) return true;
+      if (t.tool !== "__llm_product_brief__") return false;
+      const meta = (t.result as { meta?: { llm?: string } } | undefined)?.meta;
+      return meta?.llm === "failed";
+    });
+  if (!allOk && !llmNoteOnly) {
     const failed = trace.find((t) => !t.ok);
     const body = failed?.result as { error?: string; detail?: string; code?: string } | undefined;
     const errText = body?.detail?.trim() || body?.error?.trim() || failed?.label || "办理未通过校验";
@@ -293,7 +315,10 @@ async function executeProcess(
     return finish;
   }
 
-  const text = synthesizeProductFinishMessage(skill.id, result);
+  const text = synthesizeProductFinishMessage(
+    skill.id,
+    llmNoteOnly ? trace.find((t) => t.tool === "__llm_product_brief__")?.result : result,
+  );
   const paper = paperForSkill(skill, query, { productWorkbench: true, sessionId });
   parts.push({ kind: "finish", processId, summary: text.slice(0, 240) });
   const materialParts = importParts(sessionId, processId, skillId);
@@ -304,7 +329,7 @@ async function executeProcess(
     ["finish", JSON.stringify(trace), JSON.stringify({ text, paper, totalMs }), nowIso(), processId],
   );
   recordProductRun("finish", totalMs);
-  safeLog("product_run.finish", { processId, skillId, totalMs });
+  safeLog("product_run.finish", { processId, skillId, totalMs, ...(llmNoteOnly ? { llm: "failed" } : {}) });
 
   const finish = {
     ok: true as const,
@@ -389,7 +414,7 @@ export function archiveProductRun(processId: string, sessionId: string, actor: s
   return Number(changed.changes) ? { ok: true as const, archivedAt: at } : { ok: false as const };
 }
 
-function ownsSession(c: Parameters<typeof requestIdentity>[0], sessionId: string): boolean {
+export function ownsSession(c: Parameters<typeof requestIdentity>[0], sessionId: string): boolean {
   const actor = requestIdentity(c);
   const ownerId = actor?.member.id ?? `browser:${sessionId}`;
   const existing = dbGet<{ owner_id: string }>(
@@ -535,26 +560,40 @@ export function registerProductRun(app: Hono) {
   });
 
   app.post("/api/product-run/dataset", async (c) => {
-    const body = await c.req.json<{ sessionId: string; slot: ProductDataSlot; csv: string; title?: string }>();
-    if (!body.sessionId?.trim() || !body.slot || !body.csv?.trim()) {
-      return c.json({ ok: false, error: "缺少 sessionId / slot / csv" }, 400);
+    const body = await c.req.json<{ sessionId: string; slot: ProductDataSlot; csv?: string; title?: string; workbookBase64?: string; filename?: string }>();
+    const sessionId = body.sessionId?.trim() ?? "";
+    if (!sessionId || !body.slot || (!body.csv?.trim() && !body.workbookBase64?.trim())) {
+      return c.json({ ok: false, error: "缺少 sessionId / slot / 文件" }, 400);
     }
-    if (!ownsSession(c, body.sessionId.trim())) return c.json({ ok: false, error: "forbidden" }, 403);
+    if (!ownsSession(c, sessionId)) return c.json({ ok: false, error: "forbidden" }, 403);
     const maxCsvBytes = Number(process.env.MAX_CSV_BYTES ?? 5 * 1024 * 1024);
-    if (Buffer.byteLength(body.csv, "utf8") > maxCsvBytes) {
+    let csv = body.csv ?? "";
+    let title = body.title;
+    let cells: { sheet: string; cell: string; row: number; column: string; value: string }[] = [];
+    if (body.workbookBase64?.trim()) {
+      const buf = Buffer.from(body.workbookBase64, "base64");
+      if (buf.byteLength > maxCsvBytes) return c.json({ ok: false, error: "文件过大" }, 413);
+      const table = await workbookBufferToTable(buf, body.filename || body.title || "材料");
+      if ("error" in table) return c.json({ ok: false, error: table.error }, 400);
+      csv = table.csv;
+      title = title || table.title;
+      cells = table.cells;
+    }
+    if (Buffer.byteLength(csv, "utf8") > maxCsvBytes) {
       return c.json({ ok: false, error: "CSV 文件过大" }, 413);
     }
-    const parsed = parseCsvText(body.csv, body.title ?? body.slot, body.slot);
+    const parsed = parseCsvText(csv, title ?? body.slot, body.slot);
     if ("error" in parsed) return c.json({ ok: false, error: parsed.error }, 400);
     const maxRows = Number(process.env.MAX_CSV_ROWS ?? 50_000);
     if (parsed.rows.length > maxRows) return c.json({ ok: false, error: `CSV 超过 ${maxRows} 行上限` }, 413);
     try {
-      saveServerDataset(body.sessionId.trim(), {
+      saveServerDataset(sessionId, {
         slot: parsed.slot,
         title: parsed.title,
         columns: parsed.columns,
         rows: parsed.rows,
       });
+      if (cells.length) saveDatasetCells(sessionId, parsed.slot, cells);
     } catch (err) {
       const msg =
         err instanceof ProductDatasetNormalizeError
@@ -572,5 +611,24 @@ export function registerProductRun(app: Hono) {
       schemaOk: true,
       schemaIssues: [] as string[],
     });
+  });
+
+  app.get("/api/product-run/materials", (c) => {
+    const sessionId = c.req.query("sessionId")?.trim() ?? "";
+    const skillId = c.req.query("skillId")?.trim() ?? "";
+    if (!sessionId || !skillId) return c.json({ error: "缺少 sessionId / skillId" }, 400);
+    if (!ownsSession(c, sessionId)) return c.json({ error: "forbidden" }, 403);
+    const materials = requirementsForSkill(skillId).map((req) => {
+      const ds = getServerDataset(sessionId, req.slot);
+      return {
+        slot: req.slot,
+        label: req.label,
+        title: ds?.title ?? "",
+        columns: ds?.columns ?? [],
+        rows: ds?.rows ?? [],
+        cells: listDatasetCells(sessionId, req.slot),
+      };
+    });
+    return c.json({ materials });
   });
 }

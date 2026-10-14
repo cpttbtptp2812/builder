@@ -74,6 +74,7 @@ export type SkillTraceStep = {
   ms: number;
   ok: boolean;
   result?: unknown;
+  gateway?: import("./platformProtocol.ts").GatewayMeta;
 };
 
 export type SkillCandidate = {

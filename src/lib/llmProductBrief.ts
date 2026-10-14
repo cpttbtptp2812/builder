@@ -21,7 +21,7 @@ export type EngineFacts = {
 export function isProductLlmConfigured(cfg: ProductLlmConfig | undefined): boolean {
   if (!cfg?.enabled) return false;
   if (!cfg.baseUrl.trim() || !cfg.model.trim()) return false;
-  if (cfg.preset === "ollama") return true;
+  if (cfg.preset === "ollama" || cfg.preset === "webllm") return true;
   if (cfg.preset === "ollama-cloud") return Boolean(cfg.apiKey.trim());
   return Boolean(cfg.apiKey.trim());
 }
@@ -58,7 +58,7 @@ export function engineFactsFromReport(
   };
 }
 
-function extractLockedNumbers(text: string): string[] {
+export function extractLockedNumbers(text: string): string[] {
   const found = new Set<string>();
   const re = /\d[\d,]*(?:\.\d+)?/g;
   let m: RegExpExecArray | null;
@@ -197,6 +197,14 @@ export async function executeLlmProductBriefTool(opts: {
   }
 
   const engineLine = facts.engineSummary;
+  if (opts.llm?.enabled && opts.llm.preset === "webllm") {
+    return {
+      summary: engineLine,
+      detail: engineLine,
+      markdown: engineLine,
+      meta: { llm: "browser", model: opts.llm.model, lockedNumbers: facts.lockedNumbers, engineSummary: engineLine },
+    };
+  }
   if (!isProductLlmConfigured(opts.llm)) {
     return {
       summary: engineLine,
@@ -229,8 +237,9 @@ export async function executeLlmProductBriefTool(opts: {
   }
 
   return {
-    summary: `大模型未连通：${llmOut.reason}`,
-    detail: `大模型未连通：${llmOut.reason}`,
+    summary: `${engineLine}\n\n模型说明未生成。`,
+    detail: "模型说明未生成。",
+    markdown: engineLine,
     meta: { llm: "failed", reason: llmOut.reason },
   };
 }

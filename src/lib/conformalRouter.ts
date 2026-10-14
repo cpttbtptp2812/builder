@@ -10,12 +10,13 @@
  * 集合只有 1 个 → 直接执行；2–3 个 → 反问用户；空集或超出范围 → 交给通用流程。
  */
 
-import { allRunnableSkills, ANSWER_LAYER_SKILL_ID } from "./agentSkills";
+import { allRunnableSkills, ANSWER_LAYER_SKILL_ID, type AgentSkill } from "./agentSkills";
 import { cosine, lexicalEmbedder, loadSemanticEmbedder, type Embedder, type EmbedderKind, type LoadProgress } from "./embedder";
 import { listKnowledgeDocs } from "./ownKnowledge";
 import { PRODUCT_FAQ } from "../data/productFaq";
 import { ROUTE_CALIBRATION, ROUTE_OOD, type CalibrationCase } from "../data/routeCalibration";
 import { skillDisplayTitle, skillSubtitle } from "../components/ownagent/skillVerUi";
+import { SKILL_TRACE_CASES } from "./provingGround";
 
 export const ANSWER_CLASS = "@answer";
 export const ROUTER_EVENT = "ownagent:router-updated";
@@ -70,8 +71,8 @@ function readPlazaQuestions(): string[] {
   return [];
 }
 
-export function buildRouteClasses(): RouteClass[] {
-  const skills = allRunnableSkills();
+export function buildRouteClasses(catalog: AgentSkill[] = allRunnableSkills()): RouteClass[] {
+  const skills = catalog;
   const classes: RouteClass[] = skills
     .filter((s) => !ANSWER_SKILLS.has(s.id))
     .map((s) => ({
@@ -95,6 +96,14 @@ export function buildRouteClasses(): RouteClass[] {
     ],
   });
   return classes;
+}
+
+/** 发版门禁的必问句：带真实去向（所属技能），去掉内嵌材料只留问法；只作留出测试集，不参与校准 */
+export function gateQuestionCases(cases: { skillId: string; query: string }[] = SKILL_TRACE_CASES): CalibrationCase[] {
+  return cases.map((c) => ({
+    q: c.query.replace(/```[\s\S]*?```/g, " ").replace(/\s+/g, " ").trim(),
+    label: ANSWER_SKILLS.has(c.skillId) ? ANSWER_CLASS : c.skillId,
+  })).filter((c, i, all) => c.q && all.findIndex((x) => x.q === c.q) === i);
 }
 
 export function readRouteFeedback(): CalibrationCase[] {
@@ -158,6 +167,87 @@ export function conformalQuantile(scores: number[], alpha: number): number {
   if (k > n || n === 0) return 1;
   return [...scores].sort((a, b) => a - b)[k - 1]!;
 }
+
+/** 正则化不完全 Beta 函数 I_x(a,b)（连分式，Lentz 法） */
+function betaInc(x: number, a: number, b: number): number {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const lnBeta = lgamma(a) + lgamma(b) - lgamma(a + b);
+  const front = Math.exp(Math.log(x) * a + Math.log(1 - x) * b - lnBeta);
+  if (x > (a + 1) / (a + b + 2)) return 1 - betaInc(1 - x, b, a);
+  let f = 1;
+  let c = 1;
+  let d = 0;
+  for (let i = 0; i <= 400; i++) {
+    const m = Math.floor(i / 2);
+    let num: number;
+    if (i === 0) num = 1;
+    else if (i % 2 === 0) num = (m * (b - m) * x) / ((a + 2 * m - 1) * (a + 2 * m));
+    else num = -((a + m) * (a + b + m) * x) / ((a + 2 * m) * (a + 2 * m + 1));
+    d = 1 + num * d;
+    if (Math.abs(d) < 1e-30) d = 1e-30;
+    d = 1 / d;
+    c = 1 + num / c;
+    if (Math.abs(c) < 1e-30) c = 1e-30;
+    const cd = c * d;
+    f *= cd;
+    if (Math.abs(1 - cd) < 1e-12) break;
+  }
+  return (front * (f - 1)) / a;
+}
+
+function lgamma(z: number): number {
+  const g = [76.18009172947146, -86.50532032941677, 24.01409824083091, -1.231739572450155, 0.1208650973866179e-2, -0.5395239384953e-5];
+  let x = z;
+  let y = z;
+  let tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  for (const c of g) ser += c / ++y;
+  return -tmp + Math.log((2.5066282746310005 * ser) / x);
+}
+
+function betaQuantile(p: number, a: number, b: number): number {
+  let lo = 0;
+  let hi = 1;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lo + hi) / 2;
+    if (betaInc(mid, a, b) < p) lo = mid;
+    else hi = mid;
+  }
+  return (lo + hi) / 2;
+}
+
+export type CoverageBand = {
+  n: number;
+  alpha: number;
+  /** 平均覆盖率 = 1 - l/(n+1)，保证 ≥ 1-α */
+  expected: number;
+  /** 换一批同样大小的校准句，单次校准后的真实覆盖率有 90% 落在 [lo, hi] */
+  lo: number;
+  hi: number;
+  /** 校准句少于这个数时，集合会包含所有去向（保证成立但没用） */
+  minUseful: number;
+};
+
+/** 分割共形的有限样本事实：给定校准集，覆盖率服从 Beta(n+1-l, l)，l = ⌊(n+1)α⌋（Vovk 2012；Angelopoulos & Bates 2021 §3） */
+export function coverageBand(n: number, alpha: number): CoverageBand {
+  const minUseful = Math.ceil(1 / alpha) - 1;
+  const l = Math.floor((n + 1) * alpha);
+  if (n < minUseful || l < 1) return { n, alpha, expected: 1, lo: 1, hi: 1, minUseful };
+  const a = n + 1 - l;
+  return { n, alpha, expected: a / (n + 1), lo: betaQuantile(0.05, a, l), hi: betaQuantile(0.95, a, l), minUseful };
+}
+
+export type ClassCoverage = { id: string; label: string; n: number; coverage: number | null; enough: boolean };
+
+export type HeldOutReport = {
+  n: number;
+  coverage: number;
+  avgSetSize: number;
+  asked: number;
+  misses: { q: string; label: string; set: string[] }[];
+};
 
 /* ───────── 路由器 ───────── */
 
@@ -290,8 +380,53 @@ export class ConformalRouter {
     };
   }
 
-  static async build(embedder: Embedder): Promise<ConformalRouter> {
-    const classes = buildRouteClasses();
+  /** 按去向分组的覆盖率（Mondrian 视角）：样本不够的组明说“没有保证” */
+  classCoverage(alpha: number, rounds = 200): ClassCoverage[] {
+    const rand = mulberry32(11);
+    const T = this.temperature;
+    const hit = new Map<number, { ok: number; n: number }>();
+    for (let r = 0; r < rounds; r++) {
+      const rows = shuffle(this.conf, rand);
+      const half = Math.floor(rows.length / 2);
+      const q = conformalQuantile(rows.slice(0, half).map((c) => 1 - softmax(c.logits, T)[c.y]!), alpha);
+      for (const t of rows.slice(half)) {
+        const p = softmax(t.logits, T);
+        const h = hit.get(t.y) ?? { ok: 0, n: 0 };
+        h.n += 1;
+        h.ok += 1 - p[t.y]! <= q ? 1 : 0;
+        hit.set(t.y, h);
+      }
+    }
+    const minUseful = Math.ceil(1 / alpha) - 1;
+    return this.classes.map((c, y) => {
+      const n = this.conf.filter((x) => x.y === y).length;
+      const h = hit.get(y);
+      return { id: c.id, label: c.label, n, coverage: h?.n ? h.ok / h.n : null, enough: n >= minUseful };
+    });
+  }
+
+  /** 拿另一份带标注的问句（如发版必问句）当测试集：全部校准句定阈值，不重新拟合 */
+  async heldOut(cases: { q: string; label: string }[], alpha: number): Promise<HeldOutReport> {
+    const index = new Map(this.classes.map((c, i) => [c.id, i]));
+    const rows = cases.filter((c) => index.has(c.label));
+    const vecs = await this.embedder.embed(rows.map((r) => r.q));
+    let ok = 0;
+    let size = 0;
+    let asked = 0;
+    const misses: HeldOutReport["misses"] = [];
+    rows.forEach((r, i) => {
+      const v = this.verdictFor(this.scoreVec(vecs[i]!), alpha);
+      size += v.set.length;
+      if (v.status !== "confident") asked += 1;
+      if (v.set.some((c) => c.id === r.label)) ok += 1;
+      else misses.push({ q: r.q, label: r.label, set: v.set.map((c) => c.id) });
+    });
+    const n = rows.length;
+    return { n, coverage: n ? ok / n : 0, avgSetSize: n ? size / n : 0, asked: n ? asked / n : 0, misses };
+  }
+
+  static async build(embedder: Embedder, catalog?: AgentSkill[]): Promise<ConformalRouter> {
+    const classes = buildRouteClasses(catalog);
     const index = new Map(classes.map((c, i) => [c.id, i]));
     const exemplarVecs: Float32Array[][] = [];
     for (const c of classes) exemplarVecs.push(await embedder.embed(c.exemplars));

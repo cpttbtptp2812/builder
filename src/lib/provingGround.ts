@@ -10,6 +10,13 @@ export type TraceExpectation = {
   ok?: boolean;
 };
 
+/** 某一步的输出指纹：来自已认可版本对同一材料的真实运行 */
+export type TraceObservation = {
+  stepId: string;
+  fingerprint: string;
+  detail?: string;
+};
+
 export type SkillTraceCase = {
   id: string;
   skillId: string;
@@ -19,6 +26,9 @@ export type SkillTraceCase = {
   expect: {
     steps: TraceExpectation[];
     effectBound?: SkillEffect;
+    observe?: TraceObservation[];
+    /** 这份材料必须在该步被门闩拦下（ok=false 且不再往下走） */
+    stopAt?: string;
   };
 };
 
@@ -168,10 +178,23 @@ export const SKILL_TRACE_CASES: SkillTraceCase[] = [
     query: "表格对账，按部门汇总报销",
     expect: {
       steps: [
-        { stepId: "parse", tool: "__sheet_parse__" },
-        { stepId: "price", tool: "__sheet_aggregate__" },
-        { stepId: "check", tool: "__sheet_reconcile__" },
+        { stepId: "intake", tool: "__sheet_intake__" },
+        { stepId: "schema", tool: "__sheet_validate_schema__" },
+        { stepId: "rows", tool: "__sheet_validate_rows__" },
+        { stepId: "norm", tool: "__sheet_normalize__" },
+        { stepId: "dup", tool: "__sheet_duplicate_scan__" },
+        { stepId: "agg", tool: "__sheet_aggregate__" },
+        { stepId: "foot", tool: "__sheet_cross_foot__" },
+        { stepId: "recon", tool: "__sheet_reconcile__" },
+        { stepId: "miss", tool: "__sheet_missing_guard__" },
+        { stepId: "esc", tool: "__sheet_escalation__" },
+        { stepId: "exc", tool: "__sheet_exception_queue__" },
+        { stepId: "dept", tool: "__sheet_dept_rollup__" },
+        { stepId: "d1", tool: "__sheet_deliver_detail__" },
+        { stepId: "d2", tool: "__sheet_deliver_dept__" },
+        { stepId: "d3", tool: "__sheet_deliver_escalation__" },
         { stepId: "report", tool: "__sheet_report__" },
+        { stepId: "llm_brief", tool: "__llm_product_brief__", ok: false },
       ],
     },
   },
@@ -230,6 +253,28 @@ export const SKILL_TRACE_CASES: SkillTraceCase[] = [
   },
 ];
 
+/** 发版验收对照当前技能步骤。样本名单对不上时用技能自己的步骤，模型说明失败不挡发布。 */
+export function expectStepsForCase(
+  skill: { steps: { id: string; tool: string }[] },
+  traceCase: SkillTraceCase,
+): TraceExpectation[] {
+  const declared = traceCase.expect.steps;
+  const aligned =
+    declared.length > 0 &&
+    declared.length === skill.steps.length &&
+    declared.every((exp, i) => {
+      const step = skill.steps[i];
+      return Boolean(step && step.id === exp.stepId && step.tool === exp.tool);
+    });
+  let source: TraceExpectation[] = aligned
+    ? declared
+    : skill.steps.map((step) => ({ stepId: step.id, tool: step.tool }));
+  const stopAt = traceCase.expect.stopAt;
+  const cut = stopAt ? source.findIndex((step) => step.stepId === stopAt) : -1;
+  if (cut >= 0) source = [...source.slice(0, cut), { ...source[cut]!, ok: false }];
+  return source.map((step) => (step.tool === "__llm_product_brief__" ? { ...step, ok: false } : step));
+}
+
 export function matchTrace(actual: SkillTraceStep[], expect: TraceExpectation[]): { pass: boolean; detail: string } {
   if (actual.length < expect.length) {
     return { pass: false, detail: `步数不足：期望 ${expect.length}，实际 ${actual.length}` };
@@ -249,6 +294,61 @@ export function matchTrace(actual: SkillTraceStep[], expect: TraceExpectation[])
     }
   }
   return { pass: true, detail: "trace 骨架一致" };
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, v]) => v !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+/** 只取业务输出（结论文字、表格、是否拦截），不含耗时等易变字段；FNV-1a 64 位 */
+export function stepFingerprint(result: unknown): string {
+  const r = (result ?? {}) as Record<string, unknown>;
+  const text = canonicalJson({ detail: r.detail, grid: r.grid, grids: r.grids, blocked: r.blocked, error: r.error });
+  let h1 = 0x811c9dc5;
+  let h2 = 0xcbf29ce4;
+  for (let i = 0; i < text.length; i += 1) {
+    const c = text.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 0x01000193) >>> 0;
+    h2 = Math.imul(h2 ^ c, 0x0100019d) >>> 0;
+  }
+  return h1.toString(16).padStart(8, "0") + h2.toString(16).padStart(8, "0");
+}
+
+export function matchObserved(actual: SkillTraceStep[], observe: readonly TraceObservation[] | undefined): { pass: boolean; detail: string } {
+  let prevAt = -1;
+  for (const obs of observe ?? []) {
+    const at = actual.findIndex((s) => s.stepId === obs.stepId);
+    const step = actual[at];
+    if (!step) return { pass: false, detail: `缺少步骤 ${obs.stepId} 的输出` };
+    if (at < prevAt) return { pass: false, detail: `步骤 ${obs.stepId} 的执行顺序与认可版本不同` };
+    prevAt = at;
+    if (stepFingerprint(step.result) !== obs.fingerprint) {
+      const now = String((step.result as { detail?: unknown } | undefined)?.detail ?? "").slice(0, 80);
+      return { pass: false, detail: `步骤 ${obs.stepId} 输出变了${obs.detail ? `：原为「${obs.detail.slice(0, 60)}」` : ""}${now ? `，现为「${now}」` : ""}` };
+    }
+  }
+  return { pass: true, detail: observe?.length ? `骨架与 ${observe.length} 步输出一致` : "trace 骨架一致" };
+}
+
+/** 发版检查对一条 case 的判定：骨架 + 输出指纹（如有） */
+export function matchCase(actual: SkillTraceStep[], expect: TraceExpectation[], traceCase: SkillTraceCase): { pass: boolean; detail: string } {
+  const skeleton = matchTrace(actual, expect);
+  if (!skeleton.pass) return skeleton;
+  const stopAt = traceCase.expect.stopAt;
+  if (stopAt) {
+    const last = actual[actual.length - 1];
+    if (!last || last.stepId !== stopAt || last.ok) {
+      return { pass: false, detail: `应在「${stopAt}」步拦下，实际${last ? (last.ok ? `一路办到「${last.stepId}」` : `停在「${last.stepId}」`) : "没有运行"}` };
+    }
+  }
+  return matchObserved(actual, traceCase.expect.observe);
 }
 
 export async function runTraceCase(c: SkillTraceCase): Promise<TraceEvalRow> {

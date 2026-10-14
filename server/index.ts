@@ -32,10 +32,21 @@ import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { randomUUID } from "node:crypto";
 import { registerEvalOps } from "./evalops.ts";
 import { registerSkillGate } from "./skillGate.ts";
+import { registerRuleProof } from "./ruleProver.ts";
+import { registerLabSession } from "./labSession.ts";
+import { registerRuleSynth } from "./ruleSynth.ts";
+import { registerSkillMutation } from "./skillMutation.ts";
+import { registerSkillTwin } from "./skillTwin.ts";
+import { registerShiftOptimizer } from "./shiftOptimizer.ts";
+import { registerRunConsole, resumeInterruptedRuns } from "./runEventStore.ts";
+import { registerEvidence } from "./evidence.ts";
 import { registerTraceFeedback } from "./traceFeedback.ts";
 import { registerSkillGovernanceApi } from "./skillGovernanceApi.ts";
 import { registerTeamGovernanceApi } from "./teamGovernanceApi.ts";
 import { registerProductRun } from "./productRun.ts";
+import { registerProductInsights } from "./productInsights.ts";
+import { registerExternalTools } from "./externalTools.ts";
+import { attachCollab } from "./collab.ts";
 import { createAdminSession, initializeAdminCredential, isAdminSession, revokeAdminSession } from "./adminAuth.ts";
 import { assertSafeExternalUrl, fetchExternal, productionApiGuard, rateLimit, readResponseTextLimited, requestSizeLimit } from "./security.ts";
 import { metricsSnapshot, recordLlmError, safeLog } from "./observability.ts";
@@ -67,10 +78,20 @@ seedFaqChunks();
 seedCustomerData();
 registerEvalOps(app);
 registerSkillGate(app);
+registerRuleProof(app);
+registerLabSession(app);
+registerRuleSynth(app);
+registerSkillMutation(app);
+registerSkillTwin(app);
+registerShiftOptimizer(app);
+registerRunConsole(app);
+registerEvidence(app);
 registerTraceFeedback(app);
 registerSkillGovernanceApi(app);
 registerTeamGovernanceApi(app);
 registerProductRun(app);
+registerProductInsights(app);
+registerExternalTools(app);
 
 app.post("/api/llm/probe", async (c) => {
   const body = await c.req.json<{ baseUrl?: string; model?: string; apiKey?: string }>();
@@ -984,4 +1005,8 @@ app.delete("/api/feed/:id", (c) => {
 
 console.log(`[builder-api] SQLite ready · ${getChunkCount()} RAG chunks · http://localhost:${PORT}`);
 
-serve({ fetch: app.fetch, port: PORT });
+const server = serve({ fetch: app.fetch, port: PORT });
+attachCollab(server);
+
+const resumedRuns = resumeInterruptedRuns();
+if (resumedRuns.length) console.log(`[builder-api] 运行台：恢复 ${resumedRuns.length} 次中断的运行`);

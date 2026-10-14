@@ -476,6 +476,7 @@ function RunDock({
           hasBaseline={hasBaseline}
           runHistory={runHistory}
           trace={trace}
+          runtime={runtime}
           onClose={() => setDevOpen(false)}
           onProve={() => void runProve()}
           onPinBaseline={pinBaseline}
@@ -499,6 +500,7 @@ function DeveloperModeSheet({
   hasBaseline,
   runHistory,
   trace,
+  runtime,
   onClose,
   onProve,
   onPinBaseline,
@@ -516,6 +518,7 @@ function DeveloperModeSheet({
   hasBaseline: boolean;
   runHistory: SkillRunRecord[];
   trace: SkillTraceStep[];
+  runtime: "server" | "local" | null;
   onClose: () => void;
   onProve: () => void;
   onPinBaseline: () => void;

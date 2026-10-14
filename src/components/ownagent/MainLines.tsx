@@ -42,9 +42,8 @@ function Stations({
 }) {
   return (
     <nav className="oa-line-stations" aria-label="这一条上的步骤">
-      {items.map((item, i) => (
-        <button key={item.id} type="button" className={item.id === current ? "on" : ""} onClick={() => onPick(item.id)}>
-          <span>{i + 1}</span>
+      {items.map((item) => (
+        <button key={item.id} type="button" className={item.id === current ? "on" : ""} onClick={() => onPick(item.id)} aria-current={item.id === current ? "page" : undefined}>
           {item.label}
         </button>
       ))}

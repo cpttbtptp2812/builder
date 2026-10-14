@@ -8,7 +8,7 @@ import type {
   ProductRunView,
 } from "./types";
 
-function productHeaders(extra?: Record<string, string>): Record<string, string> {
+export function productHeaders(extra?: Record<string, string>): Record<string, string> {
   const token = getTeamToken();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...extra };
 }
@@ -193,8 +193,10 @@ export async function apiFetchDeskTemplate(
 export async function apiUploadProductDataset(opts: {
   sessionId: string;
   slot: ProductDataSlot;
-  csv: string;
+  csv?: string;
   title?: string;
+  workbookBase64?: string;
+  filename?: string;
 }): Promise<{
   ok: boolean;
   error?: string;

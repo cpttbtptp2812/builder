@@ -34,7 +34,11 @@ import { ReleaseCheckExtras } from "./ReleaseCheckExtras";
 import { ReleaseDependencyCard } from "./ReleaseDependencyCard";
 import { CompareSideColumn, downloadFullReportMd, FullCompareReport } from "./releaseCompareUi";
 import { ScmAttributionPanel } from "./ScmAttributionPanel";
-import { releaseGateLevel, gateLead, customerReason } from "./ScmVisuals";
+import { gateLead, customerReason } from "./ScmVisuals";
+import { RuleProofPanel } from "./RuleProofPanel";
+import { SkillCollab } from "./SkillCollab";
+import { SkillTwinPanel } from "../platform/SkillTwinPanel";
+import { mustRunServerProcessSkill } from "../../lib/customerSkillKernel";
 import { runPageToolWalk, type PageWalkResult } from "./PageToolWalk";
 import { buildReleaseDependencyProof, type ReleaseDependencyProof } from "../../lib/releaseDependencyProof";
 import { listGateQuestionRows } from "../../lib/skillGateQuestions";
@@ -76,6 +80,7 @@ import {
   skillDisplayTitle,
   skillSubtitle,
   deskRuleSummaryForSkill,
+  stepNamesText,
   stepPipelineText,
   stepShortLabel,
 } from "./skillVerUi";
@@ -372,9 +377,6 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
           <button type="button" className="oa-bar-btn" onClick={toggleAll} disabled={!rows.length}>
             {selectedRows.length === rows.length && rows.length ? "取消全选" : "全选"}
           </button>
-          <button type="button" className="oa-bar-btn" onClick={() => setImportOpen((v) => !v)}>
-            {importOpen ? "收起" : "导入"}
-          </button>
           <button type="button" className="oa-bar-btn" onClick={exportJson} disabled={!exportTargets.length}>
             导出
           </button>
@@ -389,8 +391,13 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
             </button>
           ) : null}
         </div>
-        <button type="button" className="oa-skill-create" onClick={() => setImportOpen(true)}>
-          导入 SKILL
+        <button
+          type="button"
+          className="oa-skill-create"
+          aria-expanded={importOpen}
+          onClick={() => setImportOpen((v) => !v)}
+        >
+          {importOpen ? "收起导入" : "导入技能"}
         </button>
       </div>
       {importOpen ? (
@@ -472,6 +479,7 @@ function SkillListCard({
   const applied = getAppliedSkill(skill.id);
   const samples = sampleTriggers(skill.triggers);
   const usage = skillQueryStats(skill.id);
+  const stepNames = stepNamesText(skill.steps, skill.id);
 
   return (
     <li className={checked ? "own-skill-ver-item own-skill-ver-item--on" : "own-skill-ver-item"}>
@@ -505,7 +513,11 @@ function SkillListCard({
           {deskRuleSummaryForSkill(skill) ? (
             <p className="own-skill-ver-pipe-line">规则：{deskRuleSummaryForSkill(skill)}</p>
           ) : null}
-          <p className="own-skill-ver-pipe-line">步骤：{stepPipelineText(skill.steps, skill.id)}</p>
+          <ol className="own-skill-ver-steps" aria-label={`${stepNames.length} 个步骤`}>
+            {stepNames.map((name, i) => (
+              <li key={`${i}-${name}`}>{name}</li>
+            ))}
+          </ol>
           {samples.length ? (
             <p className="own-skill-ver-samples own-skill-ver-samples--muted">识别用说法：{samples.join("、")}</p>
           ) : null}
@@ -945,7 +957,7 @@ function SkillDetail({
                 <span className="sk-col-h-tag">和现在比</span>
                 <h2>和正在用的差别</h2>
               </div>
-              <span className="sk-col-h-badge">{hasChanges ? `+${stats.added} −${stats.removed} 行变更` : "与线上基线一致"}</span>
+              <span className="sk-col-h-badge">{hasChanges ? `改了 +${stats.added} −${stats.removed} 行` : "和线上一样"}</span>
             </header>
             <LiveSkillCompare
               skillId={skillId}
@@ -956,6 +968,7 @@ function SkillDetail({
             />
             <details className="sk-fold" open={editing} onToggle={(e) => setEditing(e.currentTarget.open)}>
               <summary>改内容</summary>
+              <SkillCollab skillId={skillId} raw={draft} onChange={setDraft} />
               <Editor
                 skillId={skillId}
                 raw={draft}
@@ -976,19 +989,21 @@ function SkillDetail({
                 <span className="sk-col-h-tag">能不能发</span>
                 <h2>先看结论，再决定发不发</h2>
               </div>
-              <span className="sk-col-h-badge">{hasChanges ? `目标 v${draftVersion}` : "等待草稿变更"}</span>
+              <span className="sk-col-h-badge">{hasChanges ? `准备发 v${draftVersion}` : "还没改"}</span>
             </header>
+            <RuleProofPanel online={online} draft={draft} onlineParsed={onlineParsed} draftParsed={draftParsed} />
+            {mustRunServerProcessSkill(skillId) ? <SkillTwinPanel skillId={skillId} online={online} draft={draft} onDraft={setDraft} /> : null}
             <details className="sk-fold" open={casesOpen} onToggle={(e) => setCasesOpen(e.currentTarget.open)}>
-              <summary>用来检查的 {sentenceCount} 句话</summary>
+              <summary>发版检查要问的 {sentenceCount} 句话</summary>
               <ScmCaseEditor
                 skillId={skillId}
                 draftRaw={hasChanges ? draft : online}
                 onAsk={(q) => askInChat(q)}
                 onClaim={(phrase) => {
                   setDraft((d) => addTriggerTo(d, phrase));
-                  toast.show(`已在草稿触发词中注入「${phrase}」`);
+                  toast.show(`已把说法「${phrase}」写进草稿`);
                 }}
-                onChanged={() => toast.show("已更新评测断言库。下次门禁检查将自动纳入。")}
+                onChanged={() => toast.show("已更新。下次发版检查会问这些话。")}
               />
             </details>
             {hasChanges ? (
@@ -1018,38 +1033,40 @@ function SkillDetail({
               </div>
             )}
             <div className="sk-release-actions">
-              <button type="button" className="own-compare-secondary-btn" onClick={discard} disabled={!hasChanges}>
-                放弃这次修改
-              </button>
-              <button
-                type="button"
-                className="own-compare-secondary-btn sk-check-trigger-btn"
-                onClick={() => void runCheck()}
-                disabled={Boolean(publishBlock) || checking}
-              >
-                {checking ? "正在检查…" : report && !reportStale ? "再查一次" : "检查能不能发"}
-              </button>
-              <OaBtn
-                onClick={() => void publish()}
-                disabled={Boolean(publishBlock) || checking || decided?.gate === "BLOCK"}
-              >
-                {checking ? "检查中…" : !report || reportStale ? "检查后发布" : `发布 v${draftVersion}`}
-              </OaBtn>
-            </div>
-            {decided?.gate === "BLOCK" ? (
-              <p className="own-ver-sticky-note own-ver-sticky-note--bad">
-                {decided.reasons[0] ?? humanVerdict("reject").hint}{" "}
+              {decided?.gate === "BLOCK" ? (
+                <p className="sk-release-block">
+                  {decided.reasons[0] ?? humanVerdict("reject").hint}
+                  <button
+                    type="button"
+                    className="own-skill-inline-btn"
+                    onClick={() => {
+                      if (window.confirm("检查建议先别发布。确认了解风险，仍要发布？")) void publish(true);
+                    }}
+                  >
+                    我确认，仍要发布
+                  </button>
+                </p>
+              ) : null}
+              <div className="sk-release-actions-row">
+                <button type="button" className="own-compare-secondary-btn" onClick={discard} disabled={!hasChanges}>
+                  放弃这次修改
+                </button>
                 <button
                   type="button"
-                  className="own-skill-inline-btn"
-                  onClick={() => {
-                    if (window.confirm("检查建议先别发布。确认了解风险，仍要发布？")) void publish(true);
-                  }}
+                  className="own-compare-secondary-btn sk-check-trigger-btn"
+                  onClick={() => void runCheck()}
+                  disabled={Boolean(publishBlock) || checking}
                 >
-                  我确认，仍要发布
+                  {checking ? "正在检查…" : report && !reportStale ? "再查一次" : "检查能不能发"}
                 </button>
-              </p>
-            ) : null}
+                <OaBtn
+                  onClick={() => void publish()}
+                  disabled={Boolean(publishBlock) || checking || decided?.gate === "BLOCK"}
+                >
+                  {checking ? "检查中…" : !report || reportStale ? "检查后发布" : `发布 v${draftVersion}`}
+                </OaBtn>
+              </div>
+            </div>
           </section>
         </div>
         <SkillTryRun
@@ -1439,6 +1456,50 @@ function LiveSkillCompare({
   if (descChanged) notes.push("说明有改动");
   if (bodyChanged && !descChanged) notes.push("详细说明有改动");
   if (!notes.length) notes.push("配置和现用版一样");
+  const changedStepIds = new Set(
+    draft.steps
+      .filter((s) => {
+        const before = onlineById.get(s.id);
+        return before && stepShortLabel(before, skillId) !== stepShortLabel(s, skillId);
+      })
+      .map((s) => s.id),
+  );
+  const same = !stepsChanged && !descChanged && !bodyChanged && !addedTriggers.length && !removedTriggers.length;
+
+  if (same) {
+    return (
+      <div className="rv-compare rv-compare--same">
+        <div className="rv-pane">
+          <div className="rv-pane-head">
+            <span className="rv-kicker">正在用</span>
+            <span className="rv-ver">v{liveVersion}</span>
+            <span className="rv-same-note">草稿和它一样，展开「改内容」开始改</span>
+          </div>
+          <div className="rv-block rv-block--primary">
+            <p className="rv-k">办理步骤 · {online.steps.length} 步</p>
+            {online.steps.length ? (
+              <ol className="rv-pipeline">
+                {online.steps.map((s, idx) => (
+                  <li key={s.id}>
+                    <span className="rv-pipeline-step-idx">{idx + 1}</span>
+                    {stepShortLabel(s, skillId)}
+                  </li>
+                ))}
+              </ol>
+            ) : <span className="rv-empty">无执行步骤</span>}
+          </div>
+          <div className="rv-block rv-block--secondary">
+            <p className="rv-k">常见说法（用来认出是这件事，不影响怎么办）</p>
+            <div className="rv-triggers">
+              {online.triggers.length
+                ? online.triggers.map((t) => <span key={t} className="rv-tag">{t}</span>)
+                : <span className="rv-empty">还没有说法</span>}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rv-compare">
@@ -1448,11 +1509,11 @@ function LiveSkillCompare({
           <span className="rv-ver">v{liveVersion}</span>
         </div>
         <div className="rv-block rv-block--primary">
-          <p className="rv-k">办理步骤（业务程序）</p>
+          <p className="rv-k">办理步骤 · {online.steps.length} 步</p>
           {online.steps.length ? (
             <ol className="rv-pipeline">
               {online.steps.map((s, idx) => (
-                <li key={s.id} className={draftById.has(s.id) ? undefined : "is-gone"}>
+                <li key={s.id} className={!draftById.has(s.id) ? "is-gone" : changedStepIds.has(s.id) ? "is-old" : undefined}>
                   <span className="rv-pipeline-step-idx">{idx + 1}</span>
                   {stepShortLabel(s, skillId)}
                 </li>
@@ -1461,7 +1522,7 @@ function LiveSkillCompare({
           ) : <span className="rv-empty">无执行步骤</span>}
         </div>
         <div className="rv-block rv-block--secondary">
-          <p className="rv-k">常见说法（辅助识别，不代替办理）</p>
+          <p className="rv-k">常见说法（用来认出是这件事，不影响怎么办）</p>
           <div className="rv-triggers">
             {online.triggers.length
               ? online.triggers.map((t) => (
@@ -1483,11 +1544,11 @@ function LiveSkillCompare({
           <span className="rv-ver">v{draftVersion}</span>
         </div>
         <div className="rv-block rv-block--primary">
-          <p className="rv-k">办理步骤（业务程序）</p>
+          <p className="rv-k">办理步骤 · {draft.steps.length} 步</p>
           {draft.steps.length ? (
             <ol className="rv-pipeline">
               {draft.steps.map((s, idx) => (
-                <li key={s.id} className={onlineById.has(s.id) ? undefined : "is-new"}>
+                <li key={s.id} className={!onlineById.has(s.id) ? "is-new" : changedStepIds.has(s.id) ? "is-changed" : undefined}>
                   <span className="rv-pipeline-step-idx">{idx + 1}</span>
                   {stepShortLabel(s, skillId)}
                 </li>
@@ -1496,7 +1557,7 @@ function LiveSkillCompare({
           ) : <span className="rv-empty">无执行步骤</span>}
         </div>
         <div className="rv-block rv-block--secondary">
-          <p className="rv-k">常见说法（辅助识别，不代替办理）</p>
+          <p className="rv-k">常见说法（用来认出是这件事，不影响怎么办）</p>
           <div className="rv-triggers">
             {draft.triggers.length
               ? draft.triggers.map((t) => (
@@ -1512,7 +1573,7 @@ function LiveSkillCompare({
           </div>
         ) : null}
         <div className="rv-change-note-bar">
-          <span className="rv-change-note-icon">⚡</span>
+          <span className="rv-change-note-icon" aria-hidden>●</span>
           <span className="rv-change-note-text">{notes.join(" · ")}</span>
         </div>
       </div>
@@ -1597,8 +1658,9 @@ function CheckView({
 
   const activeReport = reportStale ? null : report;
   const hasReport = Boolean(activeReport && !checking);
-  const gateReasons = activeReport ? buildReleaseGateSummary(activeReport).reasons : [];
-  const gate = activeReport ? releaseGateLevel(activeReport.verdict.level) : null;
+  const gateSummary = activeReport ? buildReleaseGateSummary(activeReport) : null;
+  const gateReasons = gateSummary?.reasons ?? [];
+  const gate = gateSummary?.level ?? null;
   const lead = activeReport && gate ? gateLead(gate, activeReport.scm) : null;
   const notes = gate && gate !== "pass"
     ? [...new Set(gateReasons.map(customerReason))].slice(0, 3)

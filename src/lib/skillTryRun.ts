@@ -148,7 +148,7 @@ export function summarizeTryRun(raw: { trace?: RawTrace[]; totalMs?: number }): 
     ms: Number(t.ms ?? 0),
     detail: resultText(t.result, "detail") || errorText(t.result) || String(t.label ?? t.stepId),
   }));
-  const failedStep = steps.find((s) => !s.ok) ?? null;
+  const failedStep = steps.find((s) => !s.ok && s.tool !== LLM_TOOL) ?? null;
 
   let conclusion = "";
   for (let i = trace.length - 1; i >= 0; i--) {

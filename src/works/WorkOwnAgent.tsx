@@ -1,13 +1,12 @@
 import type React from "react";
 import { startTransition, useEffect, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useSearchParams } from "react-router-dom";
 import { BackendStatusBar } from "../components/BackendStatusBar";
 import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { AgentWorkbenchPanel } from "../components/ownagent/AgentWorkbenchPanel";
 import { MaterialsLine, RulesLine, SkillLine, lineOf } from "../components/ownagent/MainLines";
 import { PageToolHost } from "../components/ownagent/PageToolHost";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
-
 type ViewId =
   | "chat"
   | "guide"
@@ -28,6 +27,7 @@ type ViewId =
   | "prompts"
   | "mcp"
   | "connect"
+  | "lab"
   | "jd";
 
 type NavItem = {
@@ -217,6 +217,18 @@ const RESOURCE_VIEWS: NavItem[] = [
 
 const ADVANCED_VIEWS: NavItem[] = [
   {
+    id: "lab",
+    label: "实验台",
+    desc: "回放 · 求解 · 签名验真",
+    sidebar: false,
+    icon: (
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+        <path d="M5.5 1.5h4M6 1.5v4L2.5 12a1 1 0 0 0 .9 1.5h8.2a1 1 0 0 0 .9-1.5L9 5.5v-4" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
+        <path d="M4 9.5h7" stroke="currentColor" strokeWidth="1.1" strokeLinecap="round"/>
+      </svg>
+    ),
+  },
+  {
     id: "trace",
     label: "处理记录",
     desc: "看清一次提问是怎么答完的",
@@ -318,34 +330,34 @@ function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
   const STEPS = [
     {
       num: 1,
-      title: "选择或导入 Skill",
-      desc: "在技能列表中打开内置 Skill，或导入你的 SKILL.md。格式不完整会自动修复。",
-      detail: "进入「技能」→ 点「导入」拖入 .md 文件，或点卡片打开内置 skill 查看结构。",
+      title: "打开一个办事技能",
+      desc: "三个正在用的技能是报销对账、客服工单、门店排班。点卡片看它按哪几步办、用什么规则。",
+      detail: "进入「技能」，点一张卡片。要换成自己写的，点右上角「导入技能」，拖入文件。",
       action: "打开技能列表",
       target: "compare" as ViewId,
     },
     {
       num: 2,
-      title: "编辑并生成草稿",
-      desc: "改 triggers、步骤或说明。所有改动自动存为草稿，线上版本不受影响。",
-      detail: "打开某个 skill →「编辑」Tab → 改触发说法或步骤 → 底部显示草稿 v0.x。",
+      title: "改规则，先存成草稿",
+      desc: "改的是容差、缺票、时限、休息时长这些规则，或者客户怎么说才会接到这个技能。线上正在用的版本不受影响。",
+      detail: "打开技能 → 展开「改内容」→ 改完自动保存成下一版草稿。",
       action: "去编辑技能",
       target: "compare" as ViewId,
     },
     {
       num: 3,
-      title: "运行发版检查",
-      desc: "用客户会问的几句话，对比现用版和新版能不能答上。",
-      detail: "「发版检查」→「检查这些问题」→ 看能不能发。过不了就回编辑改，过了就去对话里再确认一遍。",
-      action: "了解发版检查",
+      title: "先看能不能发",
+      desc: "用客户会说的几句话，对比现在这一版和草稿。答不上的不让发。",
+      detail: "右侧点「检查能不能发」。过不了就回去改；过了再到对话里用自己的材料办一单。",
+      action: "去看能不能发",
       target: "compare" as ViewId,
     },
     {
       num: 4,
-      title: "对话试跑确认",
-      desc: "用真实用户问法在对话里试一遍，确认体感 OK 后再发布。",
-      detail: "「对话试跑」→ 输入 trigger 相关问法 → 看路由和回答是否符合预期。",
-      action: "去对话试跑",
+      title: "用自己的材料办一单",
+      desc: "在对话里说要办的事，按提示上传表格。办完的数字来自这份材料。",
+      detail: "对话里说「核对报销」或「排下周的班」，上传文件，看结论和文书。确认没问题再回去发布。",
+      action: "去对话办理",
       target: "chat" as ViewId,
     },
   ];
@@ -353,9 +365,9 @@ function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
   const FAQ = [
     { q: "可以发 / 先看一眼再发 / 先别发 是什么意思？", a: "可以发：这几句都过了。先看一眼再发：能过，但有一处建议发前再看。先别发：有问法过不了，改完再检查。" },
     { q: "「假如只改一步」那张表是什么？", a: "不是检查结果。是假设实验：单独弄坏某一步，看「能不能过」会不会变，给排查用。" },
-    { q: "发版检查和对话有什么区别？", a: "发版检查用固定几句客户话批量对比两版；对话是你自己随便问，确认体感。" },
-    { q: "资料库和知识广场还要用吗？", a: "要。Skill 里的 knowledge_search 等工具依赖资料库；广场用于共享已验证的问答。" },
-    { q: "导入的 Skill 格式不对怎么办？", a: "打开 skill 后点「一键修复格式」，或重新导入（导入时自动修复）。" },
+    { q: "发版检查和对话有什么区别？", a: "发版检查用固定几句客户话批量对比两版；对话是你自己上传材料办一单，确认结果。" },
+    { q: "资料库还要用吗？", a: "办事技能按您上传的表格计算，不靠资料库。资料库给问答用：把制度和说明录进去，问到时会引用。" },
+    { q: "导入的文件格式不对怎么办？", a: "打开技能后点「一键修复格式」，或重新导入，导入时会自动修。" },
   ];
 
   const progress = Math.round((doneSteps.size / STEPS.length) * 100);
@@ -363,7 +375,7 @@ function QuickStartGuide({ onGo }: { onGo: (view: ViewId) => void }) {
   return (
     <OaPage
       title="快速上手"
-      desc="四步完成首次 Skill 发版：导入 → 编辑 → 发版检查 → 对话确认。"
+      desc="四步把一个技能改完并发出去：打开 → 改规则 → 检查 → 用自己的材料办一单。"
       actions={
         <span className="oa-guide-progress">
           完成 {doneSteps.size}/{STEPS.length}
@@ -471,6 +483,8 @@ export function WorkOwnAgent() {
       setParams(next, { replace: true });
     }
   }, [params, setParams]);
+
+  if (view === "lab") return <Navigate to="/lab" replace />;
 
   return (
     <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}`}>

@@ -4,6 +4,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dbAll, dbRun, nowIso } from "./db.ts";
+import { callExternalTool, externalTool } from "./externalTools.ts";
+import { invokeThroughGateway, productGrant } from "./toolGateway.ts";
 import {
   FAQ_MATCH_THRESHOLD,
   faqAnswerMarkdown,
@@ -21,7 +23,7 @@ import {
   resolveStepArgs,
   type SkillManifest,
 } from "../src/lib/skillMarkdown.ts";
-import { applyStepVarWrites } from "../src/lib/skillVarBindings.ts";
+import { applyStepVarWrites, stepVarWrites } from "../src/lib/skillVarBindings.ts";
 import { composeStepsMarkdown } from "../src/lib/composeSteps.ts";
 import { runContractTool } from "../src/lib/contractDeskProgram.ts";
 import { runDataTool } from "../src/lib/dataDeskProgram.ts";
@@ -33,18 +35,12 @@ import { composeReleaseReport, isSameOriginUrl, releaseReportMarkdown } from "..
 import { loadRuntimeConfig } from "./runtimeConfig.ts";
 import { buildProbeBodyFromHtml, readProbeHtml } from "../src/lib/htmlProbeMeta.ts";
 import { traceStepDisplayLabel } from "../src/lib/deskStepLabels.ts";
-import { registerWorkbenchDatasetResolver } from "../src/lib/workbenchDataset.ts";
 import { getServerDataset } from "./productDataStore.ts";
 import { executeLlmProductBriefTool, type ProductLlmConfig } from "../src/lib/llmProductBrief.ts";
 import { runRegisteredDeskTool } from "../src/lib/deskPrograms.ts";
 import type { ProductDataSlot } from "../src/lib/productDataStore.ts";
 import { fetchExternal } from "./security.ts";
 import { listLiveSkills } from "./liveSkills.ts";
-
-registerWorkbenchDatasetResolver((sessionId, slot) => {
-  const ds = getServerDataset(sessionId, slot);
-  return ds ? { slot: ds.slot, title: ds.title, columns: ds.columns, rows: ds.rows, updatedAt: ds.updatedAt } : null;
-});
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "src", "skills");
@@ -258,6 +254,19 @@ export type ClientCtx = {
   productWorkbench?: boolean;
   llmConfig?: ProductLlmConfig;
   onStep?: (step: SkillTraceStep) => void | Promise<void>;
+  /** 运行台：从第 startAt 步接着跑（initialVars 为之前步骤的检查点），以及每步开始/结束的事件钩子 */
+  exec?: {
+    startAt?: number;
+    initialVars?: Record<string, unknown>;
+    argOverrides?: Record<string, Record<string, unknown>>;
+    onStepStart?: (step: AgentSkill["steps"][0], index: number, args: Record<string, unknown>) => void | Promise<void>;
+    onStepDone?: (
+      row: SkillTraceStep,
+      index: number,
+      args: Record<string, unknown>,
+      varDelta: Record<string, unknown>,
+    ) => void | Promise<void>;
+  };
 };
 
 async function callTool(
@@ -545,9 +554,10 @@ export async function runSkillManifestOnServer(
   sessionId: string,
   clientCtx: ClientCtx = {},
 ) {
+  const exec = clientCtx.exec;
   const ctx = {
     ...clientCtx,
-    vars: { query } as Record<string, unknown>,
+    vars: { query, ...(exec?.initialVars ?? {}) } as Record<string, unknown>,
     query,
     probeUrl: clientCtx.probeUrl || DEFAULT_PROBE_URL,
   };
@@ -555,14 +565,23 @@ export async function runSkillManifestOnServer(
   const t0 = performance.now();
   let lastResult: unknown = null;
 
-  for (const step of skill.steps) {
+  for (let index = exec?.startAt ?? 0; index < skill.steps.length; index += 1) {
+    const step = skill.steps[index]!;
     const stepT0 = performance.now();
-    const args = resolveArgs(step, ctx);
+    const args = { ...resolveArgs(step, ctx), ...(exec?.argOverrides?.[step.id] ?? {}) };
     if (clientCtx.productWorkbench) {
       args.__productWorkbench = true;
       args.__sessionId = sessionId;
     }
-    const out = await callTool(step.tool, args, ctx);
+    await exec?.onStepStart?.(step, index, args);
+    const registered = externalTool(step.tool);
+    const out = await invokeThroughGateway({
+      name: step.tool,
+      grant: clientCtx.productWorkbench ? productGrant(registered ? [registered.capability] : []) : ["read", "write", "network", "model"],
+      declaredCapability: registered?.capability,
+      timeoutMs: registered?.timeoutMs,
+      run: () => (registered ? callExternalTool(registered, args) : callTool(step.tool, args, ctx)),
+    });
 
     applyStepVarWrites(ctx.vars, step.id, step.tool, out.content);
 
@@ -570,14 +589,24 @@ export async function runSkillManifestOnServer(
       stepId: step.id,
       label: traceStepDisplayLabel(step, out.content),
       tool: step.tool,
-      ms: Math.max(1, Math.round(performance.now() - stepT0)),
+      ms: out.gateway.ms || Math.max(1, Math.round(performance.now() - stepT0)),
       ok: !("isError" in out && out.isError),
       result: out.content,
+      gateway: out.gateway,
     };
     trace.push(row);
+    if (exec?.onStepDone) {
+      const delta: Record<string, unknown> = {};
+      for (const key of stepVarWrites(step.id, step.tool)) delta[key] = ctx.vars[key];
+      for (const key of Object.keys(ctx.vars)) if (key.startsWith("__desk:")) delta[key] = ctx.vars[key];
+      await exec.onStepDone(row, index, args, delta);
+    }
     await clientCtx.onStep?.(row);
     lastResult = out.content;
-    if ("isError" in out && out.isError) break;
+    const llmNoteOnly =
+      step.tool === "__llm_product_brief__" &&
+      (out.content as { meta?: { llm?: string } }).meta?.llm === "failed";
+    if ("isError" in out && out.isError && !llmNoteOnly) break;
   }
 
   const totalMs = Math.max(1, Math.round(performance.now() - t0));

@@ -74,6 +74,10 @@ function stateKey(skillId: string) {
   return `__desk:${skillId}`;
 }
 
+export function deskStateOf<S>(program: DeskProgram<S>, vars: Record<string, unknown>): S | null {
+  return (vars[stateKey(program.skillId)] as S | undefined) ?? null;
+}
+
 export function deskEnvFromArgs(args: DeskArgs, query: string): DeskEnv {
   return {
     sessionId: typeof args.__sessionId === "string" ? args.__sessionId : undefined,

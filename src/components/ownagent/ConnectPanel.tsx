@@ -15,6 +15,8 @@ import {
   type LlmConfig,
   type LlmPresetId,
 } from "../../lib/llmConfig";
+import { ExternalToolBox } from "./ExternalToolBox";
+import { LocalModelBox } from "./LocalModelBox";
 import {
   dispatchAgentConfigUpdated,
   loadAgentCapabilities,
@@ -201,9 +203,12 @@ export function ConnectPanel() {
                   <option value="openai">OpenAI</option>
                   <option value="ollama">Ollama 本地</option>
                   <option value="ollama-cloud">Ollama Cloud</option>
+                  <option value="webllm">浏览器本地模型</option>
                   <option value="custom">自定义</option>
                 </select>
               </OaField>
+              {llm.preset === "webllm" ? <LocalModelBox /> : (
+                <>
               <OaField label="Base URL">
                 <input
                   className="oa-input"
@@ -255,6 +260,8 @@ export function ConnectPanel() {
                   <OaBadge tone={probe.ok ? "ok" : "danger"}>{probe.detail}</OaBadge>
                 )}
               </div>
+                </>
+              )}
             </>
           )}
         </OaStack>
@@ -287,6 +294,7 @@ export function ConnectPanel() {
             全选工具
           </OaBtn>
 
+          <ExternalToolBox />
           <details className="oa-details" open>
             <summary>工具调用测试（沙箱）</summary>
             <div className="oa-details-body oa-connect-mcp-sandbox">

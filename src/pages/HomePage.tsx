@@ -7,7 +7,7 @@ import { SiteShell } from "../components/SiteShell";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { PERSONAL_EXTENSIONS } from "../data/clipHubExtensions";
 import { profile } from "../data/profile";
-import { ENGINEERING_WORKS, IMEAN_WORKS, LAB_WORKS, PERSONAL_WORKS } from "../data/works";
+import { ENGINEERING_WORKS, IMEAN_WORKS, PERSONAL_WORKS } from "../data/works";
 import { formatWorkTenure, useWorkTenure } from "../lib/workTenure";
 
 export function HomePage() {
@@ -71,17 +71,6 @@ export function HomePage() {
           </div>
         </section>
 
-        <section className="works-section works-section-lab">
-          <div className="works-section-head">
-            <h2 className="works-section-label">技术实验室</h2>
-            <span className="works-section-hint">Agent Trace · SSE · 定位 · SDK</span>
-          </div>
-          <div className="home-featured-grid home-featured-grid--lab">
-            {LAB_WORKS.map((w) => (
-              <FeaturedWorkCard key={w.id} work={w} compact onBrief={() => setBriefSlug(w.slug)} />
-            ))}
-          </div>
-        </section>
       </SiteShell>
 
       <WorkBriefModal slug={briefSlug} onClose={() => setBriefSlug(null)} />

@@ -36,7 +36,7 @@ import { DEMAND_COLUMNS, SHIFT_DESK_ID, SHIFT_DESK_META, STAFF_COLUMNS } from ".
 
 const DAY = 1440;
 
-type Staff = {
+export type Staff = {
   rowNo: number;
   name: string;
   skills: string[];
@@ -52,7 +52,7 @@ type Staff = {
   valid: boolean;
 };
 
-type Demand = {
+export type Demand = {
   idx: number;
   rowNo: number;
   date: number;
@@ -67,9 +67,9 @@ type Demand = {
   valid: boolean;
 };
 
-type Seat = { key: string; d: Demand; assignee: string | null; via: "初排" | "调换" | "" };
+export type Seat = { key: string; d: Demand; assignee: string | null; via: "初排" | "调换" | "最优解" | "" };
 
-type Rules = {
+export type Rules = {
   minRestHours: number;
   maxDailyHours: number;
   maxShiftsPerDay: number;
@@ -186,11 +186,11 @@ function parseDayList(text: string): { days: Set<number>; bad: string[] } {
   return { days, bad };
 }
 
-function fmtDay(day: number) {
+export function fmtDay(day: number) {
   return `${dayKey(day).slice(5)}（${WEEKDAY_NAMES[weekdayOf(day)]}）`;
 }
 
-function seatLabel(d: Demand) {
+export function seatLabel(d: Demand) {
   return `${fmtDay(d.date)} ${d.shift || "班"} ${fmtClock(d.start)}-${fmtClock(d.end)} ${d.role}`;
 }
 
@@ -443,7 +443,7 @@ function rulesPhase(state: ShiftDeskState, args: DeskArgs): DeskPhaseResult {
   };
 }
 
-function staticReason(s: Staff, d: Demand): string | null {
+export function staticReason(s: Staff, d: Demand): string | null {
   if (!s.skills.includes(d.role)) return `不会${d.role}`;
   if (s.unavailable.has(d.date) || (d.end > DAY && s.unavailable.has(d.date + 1))) return "当天请假";
   if (!s.days.has(weekdayOf(d.date))) return `${WEEKDAY_NAMES[weekdayOf(d.date)]}不上班`;
@@ -485,7 +485,7 @@ function eligibility(state: ShiftDeskState): DeskPhaseResult {
 
 /* ───────────── 约束 ───────────── */
 
-function conflictReason(s: Staff, seat: Seat, mine: Seat[], rules: Rules): string | null {
+export function conflictReason(s: Staff, seat: Seat, mine: Seat[], rules: Rules): string | null {
   const d = seat.d;
   for (const o of mine) {
     if (o.d.idx === d.idx) return "同一班次已排";
@@ -515,7 +515,7 @@ function conflictReason(s: Staff, seat: Seat, mine: Seat[], rules: Rules): strin
   return null;
 }
 
-function isNightShift(d: Demand, rules: Rules): boolean {
+export function isNightShift(d: Demand, rules: Rules): boolean {
   return nightMinutes(d, rules) >= rules.nightShiftMinMinutes;
 }
 

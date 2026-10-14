@@ -151,6 +151,26 @@ export function sheetPatchesFromQuery(query: string): SheetRowPatch[] {
   return patches;
 }
 
+/** 「只看财务部门」里的部门名。对不上材料时调用方要停，不能退回整张表。 */
+export function sheetDeptFromQuery(query: string): string | null {
+  const match = query.match(/只看\s*([^\s，,。]{1,20}?)部门/);
+  const name = match?.[1]?.trim().replace(/的$/, "") ?? "";
+  if (!name || name === "各" || name === "全部" || name === "所有") return null;
+  return name;
+}
+
+export function scopeSheetToDept(table: SheetTable, dept: string | null): SheetTable | { error: string } {
+  if (!dept) return table;
+  const column = table.columns.some((item) => item.name === "部门") ? "部门" : null;
+  if (!column) return { error: "这张表没有「部门」列，没法只看某一个部门。" };
+  const rows = table.rows.filter((row) => String(row[column] ?? "").trim() === dept);
+  if (!rows.length) {
+    const known = [...new Set(table.rows.map((row) => String(row[column] ?? "").trim()).filter(Boolean))];
+    return { error: known.length ? `材料里没有「${dept}」。这张表里的部门是：${known.join("、")}。` : `材料里没有「${dept}」。` };
+  }
+  return { ...table, rows, title: table.title ? `${table.title}（只看${dept}）` : `只看${dept}` };
+}
+
 export function applySheetPatches(table: SheetTable, patches: SheetRowPatch[]): SheetTable {
   if (!patches.length) return table;
   return {
@@ -271,7 +291,7 @@ export function executeSheet(
     if (item.invoice == null) {
       return [{ name, kind: recipe.missing === "block" ? "拦截" : "警告", reason: "缺票" }];
     }
-    const gap = Math.abs(item.gross - item.invoice);
+    const gap = Math.round(Math.abs(item.gross - item.invoice) * 100) / 100;
     if (gap > recipe.tolerance) {
       return [{ name, kind: "拦截", reason: `差额 ${money(gap)}` }];
     }
@@ -307,7 +327,7 @@ export function executeSheet(
     rows: priced.map((item) => {
       const name = String(item.row[whoKey] ?? "");
       const flag = flags.find((row) => row.name === name);
-      const gap = item.invoice == null ? "—" : money(Math.abs(item.gross - item.invoice));
+      const gap = item.invoice == null ? "—" : money(Math.round(Math.abs(item.gross - item.invoice) * 100) / 100);
       return [
         String(item.row[groupName] ?? ""),
         name,

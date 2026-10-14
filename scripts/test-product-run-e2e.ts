@@ -125,6 +125,41 @@ async function testLedgerFinish() {
   console.log("OK  ledger-desk finish with upload + llm step");
 }
 
+async function testLedgerKeepsResultWhenModelFails() {
+  const sessionId = `e2e-llm-fail-${randomUUID()}`;
+  const query = "按部门汇总报销表，标出和发票对不上的";
+  const first = await startProductRun({ sessionId, skillId: PRODUCT_SKILL, query });
+  if (!first.ok || first.status !== "waiting_import") fail("llm-fail: 第一步应门闩");
+  saveServerDataset(sessionId, {
+    slot: "expense-ledger",
+    title: "E2E模型失败报销",
+    columns: ["部门", "申请人", "金额", "税额", "发票额", "状态"],
+    rows: [
+      ["测试部", "用例甲", "77701", "10101", "77701", "待审"],
+      ["测试部", "用例乙", "88802", "11544", "88802", "待审"],
+    ],
+  });
+  const fin = await continueProductRun(first.processId, sessionId, undefined, {
+    enabled: true,
+    baseUrl: "https://127.0.0.1:9",
+    model: "unused",
+    apiKey: "test-key-not-real",
+  });
+  if (!fin.ok || fin.status !== "finish") {
+    fail(`llm-fail: 模型失败后仍应办结，得 ${fin.ok ? fin.status : fin.error}`);
+  }
+  if (!/166503/.test(fin.message)) fail(`llm-fail: 办结结论应保留引擎合计：${fin.message}`);
+  if (!fin.message.includes("模型说明未生成")) fail("llm-fail: 应标明模型说明未生成");
+  if (/fetch failed|大模型未连通/.test(fin.message)) fail("llm-fail: 结论不应只剩连接错误");
+  const trace = fin.trace as { tool?: string; ok?: boolean; result?: { meta?: { llm?: string } } }[] | undefined;
+  const brief = trace?.find((t) => t.tool === "__llm_product_brief__");
+  if (!brief || brief.ok || brief.result?.meta?.llm !== "failed") fail("llm-fail: 模型步应标为未生成");
+  if (!fin.paper) fail("llm-fail: 文书应仍在");
+  const archived = archiveProductRun(first.processId, sessionId, "e2e-user");
+  if (!archived.ok) fail("llm-fail: 模型失败后仍应可归档");
+  console.log("OK  ledger-desk keeps engine result when model brief fails");
+}
+
 type DeskCase = {
   skillId: string;
   query: string;
@@ -234,6 +269,7 @@ async function main() {
   await testGateNoData();
   await testStaleSessionDoesNotAutoRun();
   await testLedgerFinish();
+  await testLedgerKeepsResultWhenModelFails();
   for (const c of DESK_CASES) await testDeskGateAndFinish(c);
   console.log("OK  test-product-run-e2e (ledger-desk, ticket-desk, shift-desk)");
 }

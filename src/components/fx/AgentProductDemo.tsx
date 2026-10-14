@@ -667,13 +667,7 @@ export function AgentProductDemo({
     }
 
     if (!hubMode) {
-      const productScenes = [
-        { label: "报销对账", text: "按部门汇总报销表，标出和发票对不上的", hint: "办事" },
-        { label: "客服工单", text: "整理客服工单、分级并分派给坐席", hint: "办事" },
-        { label: "门店排班", text: "根据员工和班次需求安排下周排班", hint: "办事" },
-      ];
-      for (const p of productScenes) push(p.label, p.text, p.hint);
-      if (!emptyMessage) return out.slice(0, 3);
+      if (emptyMessage) return out;
     }
 
     if (emptyMessage) {

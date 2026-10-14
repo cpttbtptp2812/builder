@@ -52,7 +52,7 @@ export function deskStepCaption(step: DeskStepLike): string {
     case "__sheet_parse__":
       return "读入您导入的报销明细";
     case "__sheet_validate_schema__":
-      return "校验必需列契约（缺列可 failFast 终止）";
+      return "检查必需的列（缺列时直接停下）";
     case "__sheet_validate_rows__":
       return "行级金额/上限/税额校验";
     case "__sheet_normalize__":
@@ -66,7 +66,7 @@ export function deskStepCaption(step: DeskStepLike): string {
     case "__sheet_reconcile__":
       return `发票容差对账（${sheetRuleLine(step.args)}）`;
     case "__sheet_missing_guard__":
-      return "缺票策略守卫（block 时可终止流程）";
+      return "缺票把关（设为拦截时整批停下）";
     case "__sheet_escalation__":
       return "按金额线写入出纳/负责人/总监/财务队列";
     case "__sheet_exception_queue__":
@@ -81,7 +81,7 @@ export function deskStepCaption(step: DeskStepLike): string {
     case "__sheet_report__":
       return "结论与四表打包";
     case "__llm_product_brief__":
-      return "大模型读材料摘要，在引擎锁数下写办结说明";
+      return "大模型写办结说明（数字以计算结果为准）";
     case "__contract_read__":
       return "从您导入的条款表读出要素";
     case "__contract_diff__":
@@ -101,9 +101,9 @@ export function deskStepCaption(step: DeskStepLike): string {
     case "__flow_batch_scan__":
       return "扫描本批单据与对账拦截数";
     case "__flow_sheet_sync__":
-      return "同步 sheet-desk 对账/拦截结论";
+      return "同步报销对账的拦截结论";
     case "__flow_dept_cap__":
-      return "部门月度累计 cap 守卫";
+      return "部门月度累计上限检查";
     case "__flow_dual_sign__":
       return "大额双签要求";
     case "__flow_intake__":

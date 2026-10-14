@@ -11,6 +11,7 @@ export function SiteFooter() {
       <nav className="site-home-foot-nav" aria-label="页脚导航">
         <Link to="/">全部作品</Link>
         <Link to="/resume">个人履历</Link>
+        <Link to="/lab">实验室</Link>
         <Link to="/work/ownagent">OwnAgent</Link>
         <Link to="/tools/extensions">联调工具包</Link>
         <Link to="/tools/clips">片段库</Link>

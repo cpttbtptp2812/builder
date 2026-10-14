@@ -4,6 +4,7 @@ import { ExtensionDetailPage } from "./pages/ExtensionDetailPage";
 import { ExtensionsPage } from "./pages/ExtensionsPage";
 import { ClipsLibraryPage } from "./pages/ClipsLibraryPage";
 import { HomePage } from "./pages/HomePage";
+import { LabPage } from "./pages/LabPage";
 import { ResumePage } from "./pages/ResumePage";
 import { SecretRomancePage } from "./pages/SecretRomancePage";
 import { WorkRouter } from "./works/WorkRouter";
@@ -18,6 +19,7 @@ export default function App() {
           <Route index element={<WorkRouter />} />
         </Route>
         <Route path="/resume" element={<ResumePage />} />
+        <Route path="/lab" element={<LabPage />} />
         <Route path="/tools/extensions" element={<ExtensionsPage />} />
         <Route path="/tools/extensions/:extId" element={<ExtensionDetailPage />} />
         <Route path="/tools/clips" element={<ClipsLibraryPage />} />

@@ -37,6 +37,11 @@ export function stepPipelineText(steps: { id: string; label: string; tool?: stri
   return steps.map((s) => stepShortLabel(s, skillId)).join(" → ") || "（无步骤）";
 }
 
+/** 列表卡片：只列步骤名；参数已在「规则」一行，括号里的参数不再逐步重复 */
+export function stepNamesText(steps: { id: string; label: string; tool?: string; args?: Record<string, unknown> }[], skillId?: string): string[] {
+  return steps.map((s) => stepShortLabel(s, skillId).replace(/（[^）]*）/g, "").trim()).filter(Boolean);
+}
+
 export function deskRuleSummaryForSkill(skill: Pick<AgentSkill, "id" | "steps">): string {
   if (!mustRunServerProcessSkill(skill.id)) return "";
   return deskSkillRuleSummary(skill.id, skill.steps);

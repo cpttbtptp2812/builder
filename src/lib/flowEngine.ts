@@ -71,7 +71,7 @@ export function executeFlow(
   tableOpts?: import("./sheetEngine").TableFromQueryOpts,
 ): FlowExecution {
   const bill = pickCase(query, tableOpts);
-  const gap = bill.invoice == null ? null : Math.abs(bill.amount - bill.invoice);
+  const gap = bill.invoice == null ? null : Math.round(Math.abs(bill.amount - bill.invoice) * 100) / 100;
   const phases: FlowPhase[] = [];
   let halt = "";
 

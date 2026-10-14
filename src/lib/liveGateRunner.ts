@@ -4,7 +4,7 @@ import type { SkillTraceStep } from "./agentSkills";
 import { apiFetch } from "./apiClient";
 import { mustRunServerProcessSkill } from "./customerSkillKernel";
 import { gateQueryWithSampleData } from "./productSkillInputs";
-import { matchTrace, type SkillTraceCase } from "./provingGround";
+import { expectStepsForCase, matchCase, type SkillTraceCase } from "./provingGround";
 import type { SkillManifest } from "./skillMarkdown";
 import type { MockGateResult } from "./mockGateRunner";
 
@@ -22,11 +22,6 @@ export async function fetchInlineSkillTrace(
       productWorkbench: true,
     }),
   });
-}
-
-function expectStepsForCase(skill: SkillManifest, traceCase: SkillTraceCase) {
-  if (traceCase.expect.steps.length) return traceCase.expect.steps;
-  return skill.steps.map((s) => ({ stepId: s.id, tool: s.tool, ok: true }));
 }
 
 async function runLiveTrace(skill: SkillManifest, traceCase: SkillTraceCase): Promise<SkillTraceStep[]> {
@@ -69,7 +64,7 @@ export async function runLiveGateComparison(
       runLiveTrace(baseline, traceCase),
       runLiveTrace(candidate, traceCase),
     ]);
-    const match = matchTrace(candidateTrace, expect);
+    const match = matchCase(candidateTrace, expect, traceCase);
     if (match.pass) tracePass += 1;
     else failedCases.push({ id: traceCase.id, query: traceCase.query, detail: match.detail });
     if (baselineTrace.every((t) => t.ok)) baselinePassCount += 1;

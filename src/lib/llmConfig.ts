@@ -2,7 +2,7 @@
 
 import { apiUrl, checkBackendHealth, getTeamToken } from "./apiClient";
 
-export type LlmPresetId = "deepseek" | "openai" | "ollama" | "ollama-cloud" | "custom";
+export type LlmPresetId = "deepseek" | "openai" | "ollama" | "ollama-cloud" | "webllm" | "custom";
 
 export type LlmConfig = {
   preset: LlmPresetId;
@@ -54,6 +54,12 @@ export const LLM_PRESETS: Record<
     hint: "ollama.com 控制台 Create API key · 开发可走 /ollama-cloud-proxy",
     keyUrl: "https://ollama.com/settings/keys",
     keySteps: "登录 ollama.com → Keys → Create API key",
+  },
+  webllm: {
+    label: "浏览器本地模型",
+    baseUrl: "webllm://local",
+    model: "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+    hint: "不配 Key，点下载后才拉取约 1GB 模型。办结说明在浏览器里写，数字仍以计算结果为准。需要 WebGPU。",
   },
 };
 
@@ -214,7 +220,7 @@ export function toProductLlmConfig(config: LlmConfig): {
 export function isLlmConfigured(config: LlmConfig): boolean {
   if (!config.enabled) return false;
   if (!config.baseUrl.trim() || !config.model.trim()) return false;
-  if (config.preset === "ollama") return true;
+  if (config.preset === "ollama" || config.preset === "webllm") return true;
   if (config.preset === "ollama-cloud") return Boolean(config.apiKey.trim());
   return Boolean(config.apiKey.trim());
 }

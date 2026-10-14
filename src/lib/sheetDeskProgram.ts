@@ -5,6 +5,8 @@
 
 import {
   applySheetPatches,
+  scopeSheetToDept,
+  sheetDeptFromQuery,
   sheetPatchesFromQuery,
   sheetRecipeFromArgs,
   tableFromQuery,
@@ -177,7 +179,7 @@ function priceRows(table: SheetTable, recipe: SheetProgramRecipe) {
     const tax = taxKey ? num(row, taxKey) ?? 0 : 0;
     const booked = recipe.tax === "exclude" ? gross - tax : gross;
     const invoice = invoiceKey ? num(row, invoiceKey) : null;
-    const gap = invoice == null ? null : Math.abs(gross - invoice);
+    const gap = invoice == null ? null : Math.round(Math.abs(gross - invoice) * 100) / 100;
     return { row, gross, booked, invoice, gap, whoKey, groupName, taxKey, invoiceKey, amountKey };
   });
 
@@ -312,12 +314,37 @@ function composeSummary(state: Omit<SheetProgramState, "summary">): string {
     .join(" ");
 }
 
+function failedSheetState(table: SheetTable, recipe: SheetProgramRecipe, issue: string): SheetProgramState {
+  const empty: WorkGrid = { columns: [], rows: [] };
+  return {
+    table,
+    recipe,
+    schemaOk: false,
+    schemaIssues: [issue],
+    rowIssues: [],
+    priced: [],
+    deptTotals: [],
+    reconcileFlags: [],
+    escalations: [],
+    duplicateHits: [],
+    blocked: true,
+    detailGrid: empty,
+    deptGrid: empty,
+    escalationGrid: empty,
+    exceptionGrid: empty,
+    summary: issue,
+  };
+}
+
 export function buildSheetProgramState(
   query: string,
   recipe: SheetProgramRecipe,
   tableOpts?: TableFromQueryOpts,
 ): SheetProgramState {
-  const table = applySheetPatches(tableFromQuery(query, tableOpts), sheetPatchesFromQuery(query));
+  const loaded = applySheetPatches(tableFromQuery(query, tableOpts), sheetPatchesFromQuery(query));
+  const scoped = scopeSheetToDept(loaded, sheetDeptFromQuery(query));
+  if ("error" in scoped) return failedSheetState(loaded, recipe, scoped.error);
+  const table = scoped;
   const schema = validateSchema(table, recipe.requireColumns);
   const rowIssues = schema.ok ? validateRows(table, recipe.maxSingleAmount) : [];
   const duplicates = schema.ok ? findDuplicates(table) : [];
@@ -345,7 +372,10 @@ export function buildSheetProgramState(
     blocked,
   };
   const grids = buildGrids(partial, pricedMeta);
-  const summary = schema.ok ? composeSummary({ ...partial, ...grids }) : `表结构未通过：${schema.issues.join("；")}`;
+  const scope = sheetDeptFromQuery(query);
+  const summary = schema.ok
+    ? `${scope ? `只看${scope}。` : ""}${composeSummary({ ...partial, ...grids })}`
+    : `表结构未通过：${schema.issues.join("；")}`;
   return { ...partial, ...grids, summary };
 }
 

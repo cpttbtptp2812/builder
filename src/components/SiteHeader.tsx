@@ -7,6 +7,7 @@ export function SiteHeader() {
   const loc = useLocation();
   const onHome = loc.pathname === "/";
   const onResume = loc.pathname === "/resume";
+  const onLab = loc.pathname === "/lab";
   const [gateOpen, setGateOpen] = useState(false);
 
   return (
@@ -24,6 +25,9 @@ export function SiteHeader() {
             </Link>
             <Link to="/resume" className={onResume ? "on" : ""}>
               个人履历
+            </Link>
+            <Link to="/lab" className={onLab ? "on" : ""}>
+              实验室
             </Link>
           </nav>
           <SecretStarButton onOpen={() => setGateOpen(true)} />

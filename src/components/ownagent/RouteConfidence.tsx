@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  coverageBand,
   getConformalRouter,
   getRouteAlpha,
+  type ClassCoverage,
   readRouteFeedback,
   ROUTER_EVENT,
   semanticStatus,
@@ -54,11 +56,14 @@ export function RouteConfidencePanel() {
   }, [open]);
 
   const [stats, setStats] = useState<RouterStats | null>(null);
+  const [classes, setClasses] = useState<ClassCoverage[]>([]);
   useEffect(() => {
     if (!router) return;
     let cancel = false;
     const run = () => {
-      if (!cancel) setStats(router.stats(alpha));
+      if (cancel) return;
+      setStats(router.stats(alpha));
+      setClasses(router.classCoverage(alpha));
     };
     const idle = window.requestIdleCallback?.(run, { timeout: 800 });
     const timer = idle == null ? window.setTimeout(run, 0) : 0;
@@ -187,6 +192,39 @@ export function RouteConfidencePanel() {
             {pct(stats.naiveConfidentAccuracy)}；只选最高分则做对 {pct(stats.top1Accuracy)}。数据：{stats.n} 句校准
             {feedbackN ? ` · 其中 ${feedbackN} 句来自用户在反问里的选择` : ""}，随机切分 200 次取平均。
           </p>
+
+          {(() => {
+            const band = coverageBand(stats.n, alpha);
+            const thin = classes.filter((c) => !c.enough);
+            return (
+              <div className="own-rc-honest">
+                <p>
+                  {band.lo < 1
+                    ? `只用这 ${stats.n} 句校准一次，真实覆盖率有 90% 的可能落在 ${pct(band.lo)}–${pct(band.hi)} 之间（平均 ${pct(band.expected)}）；句子越多区间越窄。`
+                    : `校准句少于 ${band.minUseful} 句，候选会包含全部去向——保证成立但没有用处。`}
+                </p>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>去向</th>
+                      <th>校准句</th>
+                      <th>实测覆盖</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {classes.map((c) => (
+                      <tr key={c.id} className={c.enough ? "" : "is-thin"}>
+                        <td>{c.label}</td>
+                        <td>{c.n}</td>
+                        <td>{c.coverage == null ? "—" : pct(c.coverage)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                {thin.length ? <small>{thin.length} 个去向校准句少于 {band.minUseful} 句：整体覆盖率有保证，但单看这些去向没有保证。</small> : null}
+              </div>
+            );
+          })()}
 
           <div className="own-rc-try">
             <input value={probe} onChange={(e) => setProbe(e.target.value)} placeholder="试一句，看看会交给谁" />

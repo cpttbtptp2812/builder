@@ -45,12 +45,12 @@ export function ComposeModelBar({
   }, [config]);
 
   if (productMode) {
-    const label = live ? config.model.trim() : "未连接";
+    const label = live ? config.model.trim() : "模型未接入";
     return (
       <button
         type="button"
         className={`oc-status ${live ? "ok" : "idle"} oc-product-settings-link`}
-        title={live ? `已连通 ${config.model}` : "还没有测通模型，点此去接入配置"}
+        title={live ? `已连通 ${config.model}` : "办事不依赖大模型。点此去接入，接入后由模型写办结说明"}
         onClick={() =>
           window.dispatchEvent(new CustomEvent("ownagent:go", { detail: { view: "connect" } }))
         }

@@ -2,15 +2,10 @@
 
 import { gateQueryWithSampleData } from "../src/lib/productSkillInputs.ts";
 import { mustRunServerProcessSkill } from "../src/lib/customerSkillKernel.ts";
-import { matchTrace, type SkillTraceCase } from "../src/lib/provingGround.ts";
+import { expectStepsForCase, matchCase, type SkillTraceCase } from "../src/lib/provingGround.ts";
 import type { SkillManifest } from "../src/lib/skillMarkdown.ts";
 import type { MockGateResult } from "../src/lib/mockGateRunner.ts";
 import { runSkillManifestOnServer, type SkillTraceStep } from "./skills.ts";
-
-function expectStepsForCase(skill: SkillManifest, traceCase: SkillTraceCase) {
-  if (traceCase.expect.steps.length) return traceCase.expect.steps;
-  return skill.steps.map((s) => ({ stepId: s.id, tool: s.tool, ok: true }));
-}
 
 async function runLiveTrace(skill: SkillManifest, traceCase: SkillTraceCase): Promise<SkillTraceStep[]> {
   const q = gateQueryWithSampleData(skill.id, traceCase.query);
@@ -52,7 +47,7 @@ export async function runLiveGateComparisonOnServer(
       runLiveTrace(baseline, traceCase),
       runLiveTrace(candidate, traceCase),
     ]);
-    const match = matchTrace(candidateTrace, expect);
+    const match = matchCase(candidateTrace, expect, traceCase);
     if (match.pass) tracePass += 1;
     else failedCases.push({ id: traceCase.id, query: traceCase.query, detail: match.detail });
     if (baselineTrace.every((t) => t.ok)) baselinePassCount += 1;
