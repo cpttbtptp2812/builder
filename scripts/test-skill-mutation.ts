@@ -15,6 +15,7 @@ if (existsSync(path.join(process.cwd(), ".ownagent", "policy.yml"))) {
   cpSync(path.join(process.cwd(), ".ownagent", "policy.yml"), path.join(configDir, "policy.yml"));
 }
 process.env.OWNAGENT_CONFIG_DIR = configDir;
+process.env.OWNAGENT_Z3_ISOLATE = "1";
 
 const { runMutationSuite } = await import("../server/skillMutation.ts");
 const { appendGateCases, loadGateCases } = await import("../server/skillGate.ts");

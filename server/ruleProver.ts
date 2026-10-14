@@ -157,27 +157,31 @@ async function findWitness(
   const tiers: B[][] = [[...ordinary(v, scale), ...wholeYuan(v, scale)], wholeYuan(v, scale), []];
   for (const [i, extra] of tiers.entries()) {
     const last = i === tiers.length - 1;
-    const opt = new ctx.Optimize();
-    opt.set("timeout", QUERY_TIMEOUT_MS);
-    opt.add(...domain(ctx, v, scale), ...goal, ...extra);
-    opt.minimize(absExpr(ctx, v.tax));
-    opt.minimize(absExpr(ctx, v.gross));
-    opt.minimize(absExpr(ctx, v.gross.sub(v.invoice)));
-    const result = await opt.check();
-    if (result === "sat" || last) recordSmt(stats, title, scale, opt.assertions());
-    if (result === "sat") {
-      const model = opt.model();
-      return {
-        status: "sat",
-        witness: {
-          gross: intOf(model, v.gross),
-          tax: intOf(model, v.tax),
-          invoice: intOf(model, v.invoice),
-          hasInvoice: boolOf(ctx, model, v.hasInvoice),
-        },
-      };
+    try {
+      const opt = new ctx.Optimize();
+      opt.set("timeout", QUERY_TIMEOUT_MS);
+      opt.add(...domain(ctx, v, scale), ...goal, ...extra);
+      opt.minimize(absExpr(ctx, v.tax));
+      opt.minimize(absExpr(ctx, v.gross));
+      opt.minimize(absExpr(ctx, v.gross.sub(v.invoice)));
+      const result = await opt.check();
+      if (result === "sat" || last) recordSmt(stats, title, scale, opt.assertions());
+      if (result === "sat") {
+        const model = opt.model();
+        return {
+          status: "sat",
+          witness: {
+            gross: intOf(model, v.gross),
+            tax: intOf(model, v.tax),
+            invoice: intOf(model, v.invoice),
+            hasInvoice: boolOf(ctx, model, v.hasInvoice),
+          },
+        };
+      }
+      if (result === "unknown") return { status: "unknown" };
+    } catch {
+      if (last) return { status: "unknown" };
     }
-    if (result === "unknown") return { status: "unknown" };
   }
   return { status: "unsat" };
 }

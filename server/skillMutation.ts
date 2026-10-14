@@ -16,7 +16,7 @@ import type { GateVerdict } from "../src/lib/ownagentProtocol.ts";
 import { runLiveGateComparisonOnServer } from "./liveGateRunner.ts";
 import { runSkillManifestOnServer } from "./skills.ts";
 import { appendGateCases, loadGateCases, loadGatePolicy, teamAccess, writeAudit } from "./skillGate.ts";
-import { proveLedgerRules } from "./ruleProver.ts";
+import { proveLedgerRulesMaybeIsolated as proveLedgerRules } from "./ruleProverIsolate.ts";
 import { currentSkillRaw } from "./labSession.ts";
 
 export type MutantOutcome = {

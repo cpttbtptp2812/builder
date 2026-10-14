@@ -37,10 +37,10 @@ export const profile = {
 };
 
 export const advantages = [
-  "9 年+ 前端经验，React / TypeScript 熟练，有 Next.js、GraphQL、微前端 qiankun 生产实践；近年深入 AI 应用（SSE 流式对话、Agent Loop、RAG）与浏览器侧能力（DOM 回放、Chrome MV3 扩展）。",
-  "曾参与 iMean AI 自动化平台：任务调度、跨窗口 PostMessage、React Flow 编排、回放多策略定位；有可量化结果（定位 90%+、包体积 -30%）。",
-  "个人实现 OwnAgent：React + Hono + SQLite 全栈、Docker 部署。客户导入 CSV / Excel / PDF，服务端按 SKILL.md 办理报销对账、工单和排班，数字由引擎锁定；发版用客户原话对比两版，单步干预后确定性重放。底层自研 Agent Loop、MCP、Hybrid RAG 与技能路由。",
-  "有前端组长经验（招行 4 人、民生 5 人），熟悉大型系统重构、虚拟滚动性能优化、E2E 与代码规范；Java 后端出身，能独立交付前后端联调与部署。",
+  "9年+开发经验，深耕 React/Vue/Java/TypeScript 与复杂 Web 工程化，熟悉 qiankun 微前端、虚拟滚动性能优化与 Playwright E2E。",
+  "近两年聚焦 AI 应用，将 SSE 流式对话、Agent 编排（自研 Loop、MCP/JSON-RPC 工具调用）与浏览器自动化落到可上线、可回归的产品。曾参与 iMean 自动化平台（TaskQueue/PostMessage 调度、React Flow 编排、DOM 回放，定位与包体积有可量化优化）。",
+  "独立实现 OwnAgent（React、Hono、SQLite、Docker）：主线是企业 SKILL 发版治理——草稿与线上分离，改技能前用真实问法做双版本回放、变异测试与 check:skills/GitHub Action 同源门禁，通过后再替换；办事链路由服务端引擎处理 Excel/PDF/CSV 并锁数，发版评审侧接入 Z3 规则证明与 HiGHS 排班求解。",
+  "有阿里、银行项目与前端组长经历，Java 出身，可独立前后端联调与全栈部署。",
 ];
 
 export const expectedJobs = [

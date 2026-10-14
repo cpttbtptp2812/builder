@@ -7,7 +7,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-const { proveLedgerRules, engineSide } = await import("../server/ruleProver.ts");
+const { engineSide } = await import("../server/ruleProver.ts");
+const { proveLedgerRulesIsolated: proveLedgerRules } = await import("../server/ruleProverIsolate.ts");
 const { concreteAlgebra, ledgerStepRules, ruleParams, rowOutcome, QUEUE_CODES, RECON_CODES } = await import(
   "../src/lib/ledgerRuleModel.ts"
 );
