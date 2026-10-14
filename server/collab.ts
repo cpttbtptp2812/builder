@@ -1,7 +1,8 @@
 /** 技能草稿协同：Yjs 更新追加进 SQLite，并转给同一技能房间里的其他人。 */
 
 import * as Y from "yjs";
-import type { Server } from "node:http";
+import { Server } from "node:http";
+import type { ServerType } from "@hono/node-server";
 import { WebSocketServer, type WebSocket } from "ws";
 import { dbAll, dbGet, dbRun, nowIso } from "./db.ts";
 import { teamAccess } from "./skillGate.ts";
@@ -10,7 +11,8 @@ type Room = { doc: Y.Doc; sockets: Set<WebSocket> };
 
 const rooms = new Map<string, Room>();
 
-export function attachCollab(server: Server) {
+export function attachCollab(server: ServerType) {
+  if (!(server instanceof Server)) return;
   const wss = new WebSocketServer({ noServer: true });
   server.on("upgrade", (req, socket, head) => {
     const url = new URL(req.url ?? "/", "http://localhost");

@@ -5,7 +5,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dbAll, dbRun, nowIso } from "./db.ts";
 import { callExternalTool, externalTool } from "./externalTools.ts";
-import { invokeThroughGateway, productGrant } from "./toolGateway.ts";
+import { invokeThroughGateway, productGrant, type GatewayMeta } from "./toolGateway.ts";
 import {
   FAQ_MATCH_THRESHOLD,
   faqAnswerMarkdown,
@@ -57,6 +57,7 @@ export type SkillTraceStep = {
   ms: number;
   ok: boolean;
   result?: unknown;
+  gateway?: GatewayMeta;
 };
 
 export type AgentSkill = SkillManifest;

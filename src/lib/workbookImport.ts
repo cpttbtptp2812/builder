@@ -99,10 +99,12 @@ export async function pdfBufferToTable(buf: Uint8Array, filename: string): Promi
   } catch {
     return { error: "PDF 解析组件没有装好。请改用 Excel 或 CSV。" };
   }
-  let doc: Awaited<ReturnType<typeof pdfjs.getDocument>["promise"]>;
+  const task = pdfjs.getDocument({ data: buf, useSystemFonts: true });
+  let doc: Awaited<typeof task.promise>;
   try {
-    doc = await pdfjs.getDocument({ data: buf, disableWorker: true, isEvalSupported: false, useSystemFonts: true }).promise;
+    doc = await task.promise;
   } catch {
+    await task.destroy().catch(() => undefined);
     return { error: "这份 PDF 打不开。请改用 Excel 或 CSV，识别不准的内容不会入账。" };
   }
   const items: PdfItem[] = [];
@@ -117,7 +119,7 @@ export async function pdfBufferToTable(buf: Uint8Array, filename: string): Promi
       items.push({ str: item.str.trim(), x, y });
     }
   }
-  await doc.destroy();
+  await task.destroy();
   const lines = clusterLines(items);
   if (lines.length < 2) return { error: "这份 PDF 没能识别成表格。请改用 Excel 或 CSV，识别不准的内容不会入账。" };
   const headers = lines[0]!;
