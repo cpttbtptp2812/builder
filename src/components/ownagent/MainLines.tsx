@@ -122,7 +122,7 @@ export function SkillLine({ view, onPick }: { view: string; onPick: (id: string)
   if (view === "compare" || VERSION_VIEWS.has(view)) {
     return (
       <div className="oa-skill-home">
-        <div className="oa-skill-section">
+        <div className="oa-skill-section oa-skill-section--tabs">
           <SkillSectionTabs current={view === "compare" ? "skill" : "version"} onPick={onPick} />
         </div>
         {view === "compare" ? <SkillComparePanel /> : null}

@@ -68,7 +68,7 @@ export function AgentConfigBar({ onChange, compact }: { onChange?: (cfg: LlmConf
 
           {!config.enabled && (
             <p className="agent-config-lead">
-              当前模式：<strong>内置 Agent</strong> — 你输入什么就检索 / 探活 / 看当前页，不必点固定演示。接入模型后走完整 Tool Call。
+              当前模式：<strong>内置 Agent</strong> — 你输入什么就检索 / 探活 / 看当前页。接入模型后走完整 Tool Call。
             </p>
           )}
 

@@ -1,7 +1,9 @@
 /** 客户可配置知识库 — localStorage，检索与欢迎问句同源 */
 
 import {
+  faqAnswerMarkdown,
   faqKnowledgeDocs,
+  matchFaq,
   normalizeQuestion,
   parseQaSections,
   questionSimilarity,
@@ -32,7 +34,7 @@ const SEED: Omit<KnowledgeDoc, "updatedAt">[] = [
     id: "kb-ownagent",
     title: "OwnAgent 对话与 Agent Loop",
     body:
-      "OwnAgent 是浏览器内可运行的 Agent：意图路由 → MCP 工具 → 检索带 chunkId → 能力锁。无后端时走 Guest Runtime，有服务时走 Hono + SQLite。技能用 SKILL.md 声明触发词与步骤，路由按词打分取 Top-1。",
+      "OwnAgent 是浏览器内可运行的 Agent：意图路由 → MCP 工具 → 检索带 chunkId → 能力锁。无后端时走 Guest Runtime，有服务时走 Hono + SQLite。技能用 SKILL.md 声明触发词与步骤，路由按词打分取 Top-1。\n\n问：OwnAgent 的 Agent Loop 怎么跑\n答：一轮 Agent Loop 的流程是：① 路由决定走办事技能、知识说明还是开放工具；② 若需模型，SSE 流式接收 assistant 消息，累积 tool_call 片段后 JSON 解析；③ 经进程内 MCP 调用工具（检索、探活等），把 tool 结果按 tool_call_id 写回对话；④ 重复直到模型给出最终文本或达到轮次上限。产品办事对话里，上传表格后的对账/工单/排班走服务端 product-run，与这条 Loop 共用同一套技能目录与 MCP 接口。",
     prompts: ["OwnAgent 是做什么的", "OwnAgent 的 Agent Loop 怎么跑"],
   },
   {
@@ -195,6 +197,19 @@ export type PresetMatch = {
   answer: string;
   score: number;
 };
+
+/** 预制问句 / FAQ / 资料库问答段 — 产品对话与 Hub 共用 */
+export function resolveExplainAnswer(
+  query: string,
+): { answer: string; title: string; source: "preset" | "faq" | "section" } | null {
+  const preset = matchPresetQuery(query);
+  if (preset) return { answer: preset.answer, title: preset.doc.title, source: "preset" };
+  const faq = matchFaq(query);
+  if (faq) return { answer: faqAnswerMarkdown(faq.entry), title: faq.entry.q, source: "faq" };
+  const sec = matchKnowledgeSection(query);
+  if (sec) return { answer: sec.section.a, title: sec.doc.title, source: "section" };
+  return null;
+}
 
 export function matchPresetQuery(query: string): PresetMatch | null {
   const q = normPrompt(query);

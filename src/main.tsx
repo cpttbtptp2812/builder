@@ -4,6 +4,8 @@ import App from "./App";
 import { ensureDemoReady } from "./lib/demoSeed";
 import "./styles.css";
 import "./styles/ownagent-product-chat.css";
+import "./styles/ownagent-premium.css";
+import "./styles/ownagent-skill-page.css";
 
 ensureDemoReady();
 

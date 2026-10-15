@@ -15,6 +15,7 @@ const PUBLIC_PATHS = new Set([
 export function customerApiOpen(path: string, method: string): boolean {
   if (method === "POST" && (path === "/api/llm/probe" || path === "/api/llm/byok/chat")) return true;
   if (path === "/api/product-run" || path.startsWith("/api/product-run/")) return true;
+  if (method === "GET" && path === "/api/runtime/config") return true;
   if (method === "GET" && (path === "/api/skills/live" || path.startsWith("/api/skills/live/"))) return true;
   return false;
 }

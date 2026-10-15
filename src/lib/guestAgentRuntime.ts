@@ -17,7 +17,8 @@ import type { AgentChatMessage, AgentStreamEvent, AgentToolTrace, AgentTurnTrace
 import { buildSpansFromAgentRun, saveTraceSession } from "./agentTraceStore";
 import { ingestProductionTrace } from "./skillGateClient";
 import { getTicket, type TicketDraft } from "./policyDesk";
-import { ABOUT_SITE_INTENT, HEALTH_INTENT, routeQuery, skillLabel, URL_RE } from "./skillRouter";
+import { resolveExplainAnswer } from "./ownKnowledge";
+import { ABOUT_SITE_INTENT, HEALTH_INTENT, isProductExplainQuery, routeQuery, skillLabel, URL_RE } from "./skillRouter";
 import { logRoutedQuery, logSkillHandled } from "./skillQueryLog";
 import { parseReleaseInspectRequest, releaseReportMarkdown, runReleaseInspect } from "./releaseInspect";
 import type { PolicyTrustView, RouteScoreView } from "./chatFrontier";
@@ -675,7 +676,21 @@ export async function runGuestAgentTurn(
   const pick = pickSkill(working, ctx.pinSkillId, routableCatalog, ctx.creditFlow);
 
   if (pick.kind === "about-site" || pick.kind === "knowledge" || pick.kind === "open") {
-    if (ctx.productWorkbench && !ctx.force) {
+    const explain = resolveExplainAnswer(query);
+    if (explain) {
+      await streamReasoning(`知识说明 · ${explain.title}`, onEvent);
+      await streamText(explain.answer, onEvent);
+      return wrap(explain.answer, [], "local", {
+        route: {
+          skillId: "knowledge-preset",
+          skillName: explain.title,
+          score: 10,
+          hits: [explain.source],
+          path: "knowledge",
+        },
+      });
+    }
+    if (ctx.productWorkbench && !ctx.force && pick.kind === "open" && !isProductExplainQuery(query)) {
       const hints = allRunnableSkills()
         .filter((s) => isCustomerSkill(s.id) && s.steps.length > 0)
         .slice(0, 6)

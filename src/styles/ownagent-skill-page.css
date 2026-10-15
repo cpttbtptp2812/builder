@@ -1,0 +1,927 @@
+/* OwnAgent · 技能 / 版本页视觉层（产品壳内） */
+
+.own-app.own-app--product .oa-skill-home {
+  min-height: 0;
+  flex: 1;
+  width: 100%;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
+.own-app.own-app--product .own-app-stage.is-page > .oa-skill-home {
+  width: 100%;
+  max-width: none;
+}
+
+.own-app.own-app--product .oa-skill-section {
+  padding: 0.65rem 1.15rem 0;
+  max-width: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.own-app.own-app--product .oa-skill-section--tabs {
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+  padding-bottom: 0.15rem;
+}
+
+.own-app.own-app--product .oa-skill-section--tabs .oa-skill-section-tabs {
+  border-bottom: 0;
+  padding-bottom: 0.35rem;
+}
+
+/* 技能 / 版本 主切换 — 高对比胶囊，避免灰字看不清 */
+.own-app.own-app--product .oa-skill-section-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.55rem 1.15rem 0.85rem;
+  border-bottom: 1px solid rgba(203, 213, 225, 0.9);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.6));
+}
+
+.own-app.own-app--product .oa-skill-section-tabs button {
+  margin: 0;
+  padding: 0.48rem 1.05rem;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #334155;
+  box-shadow: none;
+  transition:
+    background 0.18s ease,
+    color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.own-app.own-app--product .oa-skill-section-tabs button:hover:not(.on) {
+  background: #f1f5f9;
+  color: #0f172a;
+  border-color: #e2e8f0;
+}
+
+.own-app.own-app--product .oa-skill-section-tabs button.on {
+  color: #fff;
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  border-color: rgba(67, 56, 202, 0.5);
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.35);
+}
+
+.own-app.own-app--product .oa-skill-section-tabs button.on::after {
+  display: none;
+}
+
+.own-app.own-app--product .oa-skill-home .oa-ui,
+.own-app.own-app--product .oa-skill-home > .oa-page {
+  flex: 1;
+  padding: 1rem 1.15rem 2rem;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.own-app.own-app--product .oa-skill-product-hero {
+  position: relative;
+  margin: 0 0 1.15rem;
+  padding: 1rem 1.15rem;
+  border-radius: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(255, 255, 255, 0.92) 42%, rgba(248, 250, 252, 0.98) 100%);
+  border: 1px solid rgba(199, 210, 254, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.7) inset,
+    0 12px 32px rgba(79, 70, 229, 0.08);
+}
+
+.own-app.own-app--product .oa-skill-product-hero::before {
+  content: "";
+  position: absolute;
+  top: -40%;
+  right: -8%;
+  width: 12rem;
+  height: 12rem;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.15), transparent 70%);
+  pointer-events: none;
+}
+
+.own-app.own-app--product .oa-skill-product-lead {
+  position: relative;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: #475569;
+}
+
+.own-app.own-app--product .oa-skill-product-lead strong {
+  color: #1e1b4b;
+  font-weight: 700;
+}
+
+.own-app.own-app--product .oa-skill-lead {
+  margin: 0.65rem 0 0;
+  padding: 0.4rem 0.65rem;
+  border-radius: 8px;
+  background: rgba(254, 243, 199, 0.65);
+  border: 1px solid rgba(251, 191, 36, 0.35);
+  color: #92400e;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.own-app.own-app--product .oa-skill-toolbar {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 1.1rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.88);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.own-app.own-app--product .oa-skill-tools {
+  gap: 0.45rem;
+}
+
+.own-app.own-app--product .oa-skill-toolbar .own-skm-search {
+  max-width: 320px;
+  border: 1px solid rgba(199, 210, 254, 0.8);
+  border-radius: 10px;
+  background: #fff;
+  padding-left: 0.75rem;
+  font-size: 0.82rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.own-app.own-app--product .oa-skill-toolbar .own-skm-search:focus {
+  outline: none;
+  border-color: #818cf8;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.own-app.own-app--product .oa-skill-toolbar .oa-bar-btn,
+.own-app.own-app--product .oa-skill-toolbar .own-skm-batch-btn {
+  border-color: rgba(226, 232, 240, 0.95);
+  color: #475569;
+  font-weight: 600;
+  border-radius: 9px;
+}
+
+.own-app.own-app--product .oa-skill-toolbar .oa-bar-btn:hover:not(:disabled),
+.own-app.own-app--product .oa-skill-toolbar .own-skm-batch-btn:hover:not(:disabled) {
+  border-color: #c7d2fe;
+  background: #f5f3ff;
+  color: #4338ca;
+}
+
+.own-app.own-app--product .oa-skill-toolbar .oa-skill-create {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+  border-radius: 10px;
+  font-weight: 650;
+  box-shadow: 0 4px 14px rgba(79, 70, 229, 0.28);
+}
+
+.own-app.own-app--product .oa-skill-toolbar .oa-skill-create:hover {
+  background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+}
+
+.own-app.own-app--product .oa-m-import {
+  margin-bottom: 1rem;
+  padding: 1.25rem 1rem;
+  border-radius: 16px;
+  border: 2px dashed rgba(129, 140, 248, 0.45);
+  background: linear-gradient(180deg, rgba(238, 242, 255, 0.5), rgba(255, 255, 255, 0.9));
+  text-align: center;
+}
+
+.own-app.own-app--product .oa-m-import p {
+  margin: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: #64748b;
+}
+
+.own-app.own-app--product .own-skill-ver-grid {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16.5rem), 1fr)) !important;
+  gap: 0.9rem !important;
+  width: 100%;
+}
+
+.own-app.own-app--product .own-skill-ver-item {
+  border-radius: 16px !important;
+  border: 1px solid rgba(203, 213, 225, 0.95) !important;
+  background: linear-gradient(165deg, #ffffff 0%, #f8fafc 100%) !important;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 10px 28px -6px rgba(99, 102, 241, 0.1) !important;
+  overflow: hidden !important;
+}
+
+.own-app.own-app--product .own-skill-ver-item::before {
+  top: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  bottom: auto !important;
+  width: 100% !important;
+  height: 4px !important;
+  border-radius: 16px 16px 0 0 !important;
+  background: linear-gradient(90deg, #6366f1, #38bdf8) !important;
+  opacity: 0.92 !important;
+}
+
+.own-app.own-app--product .own-skill-ver-item:has(.own-skill-ver-card--draft)::before {
+  background: linear-gradient(90deg, #f59e0b, #fbbf24) !important;
+}
+
+.own-app.own-app--product .own-skill-ver-item:hover {
+  border-color: #a5b4fc !important;
+  box-shadow:
+    0 4px 12px rgba(15, 23, 42, 0.06),
+    0 16px 40px -8px rgba(79, 70, 229, 0.18) !important;
+  transform: translateY(-3px) !important;
+}
+
+.own-app.own-app--product .own-skill-ver-item--on,
+.own-app.own-app--product .oa-version-hub .oa-vtile.is-live {
+  border-color: #818cf8 !important;
+  box-shadow:
+    0 0 0 1px rgba(99, 102, 241, 0.22),
+    0 14px 36px -10px rgba(79, 70, 229, 0.28) !important;
+}
+
+.own-app.own-app--product .own-skill-ver-card {
+  padding: 1.05rem 1.1rem 1rem 0.85rem !important;
+}
+
+.own-app.own-app--product .own-skill-ver-card header strong {
+  font-size: 1rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.025em !important;
+  color: #0f172a !important;
+}
+
+.own-app.own-app--product .own-skill-ver-tag {
+  background: #eef2ff !important;
+  color: #3730a3 !important;
+  border: 1px solid #c7d2fe !important;
+  font-weight: 700 !important;
+}
+
+.own-app.own-app--product .own-skill-ver-tag--flow {
+  background: #ecfeff !important;
+  color: #0e7490 !important;
+  border-color: #a5f3fc !important;
+}
+
+.own-app.own-app--product .own-skill-ver-tag--import {
+  background: #f0fdf4 !important;
+  color: #15803d !important;
+  border-color: #bbf7d0 !important;
+}
+
+.own-app.own-app--product .own-skill-ver-desc {
+  color: #475569 !important;
+  font-size: 0.84rem !important;
+  line-height: 1.55 !important;
+}
+
+.own-app.own-app--product .own-skill-ver-pipe-line {
+  color: #334155 !important;
+  background: rgba(241, 245, 249, 0.9) !important;
+  border-color: #e2e8f0 !important;
+}
+
+.own-app.own-app--product .own-skill-ver-card footer {
+  color: #64748b !important;
+  font-size: 0.76rem !important;
+  border-top: 1px dashed rgba(226, 232, 240, 0.95);
+  padding-top: 0.55rem !important;
+  margin-top: 0.35rem !important;
+}
+
+.own-app.own-app--product .own-skill-ver-ok {
+  padding: 0.18rem 0.55rem !important;
+  border-radius: 999px !important;
+  background: #ecfdf5 !important;
+  color: #047857 !important;
+  font-weight: 700 !important;
+  font-size: 0.72rem !important;
+}
+
+.own-app.own-app--product .own-skill-ver-steps-more {
+  background: #eef2ff !important;
+  border-color: #c7d2fe !important;
+  color: #4338ca !important;
+  font-weight: 650;
+}
+
+.own-app.own-app--product .own-skill-ver-steps-more::before {
+  display: none;
+}
+
+.own-app.own-app--product .own-skill-ver-detail {
+  padding: 0.85rem 1.15rem 2rem;
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.own-app.own-app--product .sk-work-bar {
+  margin-bottom: 1rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+}
+
+.own-app.own-app--product .own-skill-ver-back {
+  color: #4338ca;
+  font-weight: 650;
+}
+
+.own-app.own-app--product .sk-work {
+  gap: 1rem;
+}
+
+.own-app.own-app--product .sk-col {
+  border-radius: 16px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.05);
+  overflow: hidden;
+}
+
+.own-app.own-app--product .sk-col-h {
+  background: linear-gradient(180deg, #f8fafc, #fff);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+}
+
+.own-app.own-app--product .sk-col-h-tag {
+  color: #4338ca;
+  font-weight: 700;
+}
+
+.own-app.own-app--product .own-compare-secondary-btn,
+.own-app.own-app--product .own-skill-inline-btn {
+  border-color: rgba(199, 210, 254, 0.9);
+  color: #4338ca;
+  border-radius: 9px;
+}
+
+.own-app.own-app--product .own-compare-secondary-btn:hover:not(:disabled) {
+  background: #eef2ff;
+  border-color: #a5b4fc;
+}
+
+.own-app.own-app--product .sk-check-trigger-btn,
+.own-app.own-app--product .oa-skill-create {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%) !important;
+  color: #fff !important;
+  border: 0 !important;
+}
+
+.own-app.own-app--product .oa-version-hub.oa-page {
+  max-width: none;
+  margin: 0;
+  width: 100%;
+  padding: 1rem 1.15rem 2rem;
+  box-sizing: border-box;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-skill-toolbar {
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  margin-bottom: 1.1rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 14px;
+  border: 1px solid rgba(226, 232, 240, 0.95);
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 4px 18px rgba(15, 23, 42, 0.04);
+}
+
+.own-app.own-app--product .oa-version-hub .oa-skill-tools {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 11px !important;
+  background: #f1f5f9 !important;
+  padding: 4px !important;
+  min-width: 12rem;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-seg-thumb {
+  background: linear-gradient(135deg, #4f46e5, #4338ca) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.35);
+}
+
+.own-app.own-app--product .oa-version-hub .oa-bar-btn {
+  color: #64748b !important;
+  font-weight: 650 !important;
+  font-size: 0.84rem !important;
+  min-height: 2rem;
+  padding: 0 0.85rem !important;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-bar-btn:not(.is-on):hover {
+  color: #0f172a !important;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-bar-btn.is-on {
+  color: #fff !important;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.1);
+}
+
+.own-app.own-app--product .oa-version-hub .own-skm-batch-btn {
+  color: #334155 !important;
+  font-weight: 650 !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #fff !important;
+  border-radius: 9px !important;
+}
+
+.own-app.own-app--product .oa-version-hub .own-skm-batch-btn:hover {
+  border-color: #c7d2fe !important;
+  color: #4338ca !important;
+  background: #f5f3ff !important;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-ver-more > button {
+  border-color: #c7d2fe !important;
+  background: #fff !important;
+  color: #4338ca !important;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-ver-empty {
+  border-radius: 16px;
+  border: 1px dashed #c7d2fe;
+  background: linear-gradient(180deg, #f8fafc, #fff);
+  padding: 2rem 1.25rem;
+  text-align: center;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-ver-empty strong {
+  font-size: 1rem;
+  color: #0f172a;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-vtile::before {
+  opacity: 1 !important;
+}
+
+.own-app.own-app--product .oa-skill-advanced-env {
+  margin-top: 1.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  border: 1px solid rgba(226, 232, 240, 0.9);
+  background: rgba(248, 250, 252, 0.8);
+}
+
+.own-app.own-app--product .own-skm-toast {
+  border-radius: 10px;
+  border: 1px solid rgba(167, 243, 208, 0.8);
+  background: #ecfdf5;
+  color: #065f46;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.12);
+}
+
+/* ── 排版：页头 / 工具栏 / 卡片信息区 ── */
+.own-app.own-app--product .oa-skill-page-intro {
+  margin: 0 0 1rem;
+  padding: 0 0 0.85rem;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.95);
+}
+
+.own-app.own-app--product .oa-skill-page-intro--compact {
+  margin-bottom: 0.85rem;
+  padding-bottom: 0.65rem;
+}
+
+.own-app.own-app--product .oa-skill-page-title {
+  margin: 0 0 0.35rem;
+  font-size: 1.32rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.25;
+  color: #0f172a;
+}
+
+.own-app.own-app--product .oa-skill-page-desc {
+  margin: 0;
+  max-width: 40rem;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: #64748b;
+}
+
+.own-app.own-app--product .oa-skill-page-desc strong {
+  color: #334155;
+  font-weight: 650;
+}
+
+.own-app.own-app--product .oa-skill-page-intro .oa-skill-lead {
+  margin-top: 0.55rem;
+}
+
+.own-app.own-app--product .oa-skill-toolbar--split {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 0.65rem 0.75rem;
+}
+
+.own-app.own-app--product .oa-skill-toolbar-primary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.own-app.own-app--product .oa-skill-toolbar-primary .own-skm-search {
+  flex: 1;
+  min-width: 0;
+  max-width: none;
+}
+
+.own-app.own-app--product .oa-skill-toolbar-secondary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.55rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(241, 245, 249, 0.95);
+}
+
+.own-app.own-app--product .oa-version-hub-toolbar {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.own-app.own-app--product .oa-version-hub-toolbar .oa-skill-tools {
+  flex: 0 1 auto;
+}
+
+.own-app.own-app--product .oa-version-hub-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
+.own-app.own-app--product .oa-skill-card-shell {
+  display: grid !important;
+  grid-template-columns: auto minmax(0, 1fr) !important;
+  align-items: stretch !important;
+}
+
+.own-app.own-app--product .oa-skill-card-shell--solo {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.own-app.own-app--product .oa-skill-card-shell--solo .oa-skill-card {
+  padding-left: 1rem !important;
+  padding-right: 2.35rem !important;
+}
+
+.own-app.own-app--product .own-skill-ver-item.oa-skill-tile {
+  position: relative;
+  overflow: visible !important;
+  z-index: 0;
+}
+
+.own-app.own-app--product .own-skill-ver-grid .oa-skill-tile:hover,
+.own-app.own-app--product .own-skill-ver-grid .oa-skill-tile:has(.oa-ver-more--hover:hover) {
+  z-index: 2;
+}
+
+.own-app.own-app--product .own-skill-ver-grid .oa-skill-tile .oa-ver-more {
+  top: 0.65rem;
+  right: 0.55rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.own-app.own-app--product .own-skill-ver-grid .oa-skill-tile:hover .oa-ver-more,
+.own-app.own-app--product .own-skill-ver-grid .oa-skill-tile:has(.oa-ver-more--hover:hover) .oa-ver-more {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.own-app.own-app--product .oa-ver-more--hover {
+  position: absolute;
+  z-index: 3;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-more-trigger {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid #c7d2fe;
+  border-radius: 10px;
+  background: #fff;
+  color: #4338ca;
+  cursor: default;
+  pointer-events: none;
+}
+
+.own-app.own-app--product .oa-skill-tile:hover .oa-ver-more--hover .oa-ver-more-trigger,
+.own-app.own-app--product .oa-ver-more--hover:hover .oa-ver-more-trigger {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.own-app.own-app--product .oa-ver-more--hover:hover .oa-ver-more-trigger,
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-more-trigger:hover {
+  background: #eef2ff;
+  border-color: #a5b4fc;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 7.25rem;
+  padding: 4px;
+  border: 1px solid rgba(199, 210, 254, 0.85);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 12px 28px -16px rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.1s ease, visibility 0.1s ease;
+}
+
+.own-app.own-app--product .oa-ver-more--hover:hover .oa-ver-hover-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu button {
+  display: block;
+  width: 100%;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #0f172a;
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu button:hover {
+  background: #f5f7ff;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu button.is-danger {
+  color: #b91c1c;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu button.is-danger:hover {
+  background: #fef2f2;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu button.is-danger.is-muted {
+  color: #94a3b8;
+}
+
+.own-app.own-app--product .oa-ver-more--hover .oa-ver-hover-menu button.is-danger.is-muted:hover {
+  background: #f8fafc;
+  color: #64748b;
+}
+
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item .oa-ver-more {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item:hover .oa-ver-more,
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item:focus-within .oa-ver-more {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item .oa-ver-more.is-open {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item:hover .oa-ver-more.is-open,
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item:focus-within .oa-ver-more.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.own-app.own-app--product .oa-skill-card-check {
+  padding: 1rem 0.25rem 1rem 0.75rem !important;
+  align-self: start !important;
+}
+
+.own-app.own-app--product .oa-skill-card {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.4rem !important;
+  min-height: 10.5rem !important;
+  padding: 0.95rem 1rem 0.85rem 0.5rem !important;
+}
+
+.own-app.own-app--product .oa-skill-card-head {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 0.4rem !important;
+  margin-bottom: 0 !important;
+}
+
+.own-app.own-app--product .oa-skill-card-title {
+  display: block;
+  font-size: 1.02rem !important;
+  line-height: 1.32 !important;
+}
+
+.own-app.own-app--product .oa-skill-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.own-app.own-app--product .oa-skill-card-desc {
+  margin: 0 !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.own-app.own-app--product .oa-skill-card-kv {
+  display: grid;
+  grid-template-columns: 2.35rem minmax(0, 1fr);
+  gap: 0.15rem 0.55rem;
+  margin: 0;
+  align-items: baseline;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.own-app.own-app--product .oa-skill-card-kv > span {
+  color: #94a3b8;
+  font-weight: 700;
+  font-size: 0.65rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.own-app.own-app--product .oa-skill-card-kv em {
+  font-style: normal;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.own-app.own-app--product .oa-skill-card-kv--muted em {
+  color: #64748b;
+}
+
+.own-app.own-app--product .oa-skill-card-foot {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between !important;
+  gap: 0.5rem !important;
+  margin-top: auto !important;
+  padding-top: 0.55rem !important;
+  border-top: 1px dashed rgba(226, 232, 240, 0.95) !important;
+  font-size: 0.72rem !important;
+  color: #64748b !important;
+}
+
+.own-app.own-app--product .oa-skill-card-stat {
+  color: #64748b;
+  font-variant-numeric: tabular-nums;
+}
+
+.own-app.own-app--product .oa-ver-card-shell {
+  display: block !important;
+  height: 100%;
+}
+
+.own-app.own-app--product .oa-ver-card {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.45rem !important;
+  min-height: 9.75rem !important;
+  height: 100%;
+  padding: 1rem 2.25rem 0.9rem 1rem !important;
+  box-sizing: border-box;
+}
+
+.own-app.own-app--product .oa-ver-card-head {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0.45rem !important;
+  margin-bottom: 0 !important;
+}
+
+.own-app.own-app--product .oa-ver-card-title {
+  font-size: 1.05rem !important;
+  line-height: 1.35 !important;
+  letter-spacing: -0.025em !important;
+}
+
+.own-app.own-app--product .oa-ver-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.own-app.own-app--product .own-skill-ver-tag--draft {
+  background: #fffbeb !important;
+  color: #b45309 !important;
+  border-color: #fde68a !important;
+}
+
+.own-app.own-app--product .oa-ver-card-note {
+  flex: 1;
+  margin: 0 !important;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.own-app.own-app--product .oa-ver-card-foot {
+  margin-top: auto !important;
+  padding-top: 0.55rem !important;
+  border-top: 1px dashed rgba(226, 232, 240, 0.95) !important;
+  font-size: 0.74rem !important;
+  color: #64748b !important;
+}
+
+.own-app.own-app--product .oa-version-hub .own-skill-ver-item.oa-vtile {
+  position: relative;
+}
+
+.own-app.own-app--product .oa-version-hub .oa-ver-more {
+  top: 0.65rem;
+  right: 0.55rem;
+}
+
+@media (max-width: 720px) {
+  .own-app.own-app--product .oa-skill-toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .own-app.own-app--product .oa-skill-toolbar .oa-skill-create {
+    width: 100%;
+  }
+
+  .own-app.own-app--product .oa-skill-toolbar .own-skm-search {
+    max-width: none;
+  }
+
+  .own-app.own-app--product .oa-skill-toolbar-primary {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .own-app.own-app--product .oa-version-hub-toolbar-actions {
+    width: 100%;
+    margin-left: 0;
+    justify-content: stretch;
+  }
+
+  .own-app.own-app--product .oa-version-hub-toolbar-actions .oa-skill-create {
+    flex: 1;
+  }
+}

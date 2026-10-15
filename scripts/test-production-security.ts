@@ -54,6 +54,7 @@ for (const [method, path, open] of [
   ["POST", "/api/llm/byok/chat", true],
   ["POST", "/api/product-run/stream", true],
   ["GET", "/api/skills/live", true],
+  ["GET", "/api/runtime/config", true],
   ["GET", "/api/admin/knowledge", false],
   ["POST", "/api/skill-gate/publish", false],
   ["GET", "/api/internal/metrics", false],

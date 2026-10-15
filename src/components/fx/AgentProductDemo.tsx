@@ -22,8 +22,8 @@ import { ArtifactPanel } from "./agent/ArtifactPanel";
 import { ResultLocator } from "./agent/ResultLocator";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
 import { allRunnableSkills, explainDiscovery, type AgentSkill } from "../../lib/agentSkills";
-import { resolveProductSkillFirstRoute } from "../../lib/skillRouter";
-import { listFollowUpPrompts, listKnowledgePrompts, matchPresetQuery } from "../../lib/ownKnowledge";
+import { isProductExplainQuery, resolveProductSkillFirstRoute } from "../../lib/skillRouter";
+import { listFollowUpPrompts, listKnowledgePrompts, matchPresetQuery, resolveExplainAnswer } from "../../lib/ownKnowledge";
 import { AGENT_QUICK_PROMPTS } from "../../lib/agentRuntime";
 import {
   loadOrchestrationMode,
@@ -666,14 +666,13 @@ export function AgentProductDemo({
       if (out.length) return out;
     }
 
-    if (!hubMode) {
-      if (emptyMessage) return out;
-    }
-
     if (emptyMessage) {
-      for (const p of listKnowledgePrompts(6)) push(p.label, p.text, p.hint);
-      for (const p of AGENT_QUICK_PROMPTS) push(p.label, p.text, "内置能力");
-      return out.slice(0, 8);
+      if (hubMode) {
+        for (const p of listKnowledgePrompts(6)) push(p.label, p.text, p.hint);
+        for (const p of AGENT_QUICK_PROMPTS) push(p.label, p.text, "内置能力");
+        return out.slice(0, 8);
+      }
+      return out;
     }
 
     const fromLast = normalizeFollowUps(lastAsst?.followUps);
@@ -681,8 +680,15 @@ export function AgentProductDemo({
       for (const p of fromLast.slice(0, 4)) push(p.text, p.text, p.hint);
       return out;
     }
-    for (const t of listFollowUpPrompts(messages.map((m) => m.content), 5)) push(t, t);
-    return out.slice(0, 5);
+    const exclude = messages.map((m) => m.content);
+    if (!hubMode) {
+      for (const p of listKnowledgePrompts(5)) {
+        if (out.length >= 3) break;
+        push(p.label, p.text, p.hint);
+      }
+    }
+    for (const t of listFollowUpPrompts(exclude, hubMode ? 5 : 3)) push(t, t);
+    return out.slice(0, hubMode ? 5 : 4);
   }, [running, emptyMessage, lastAsst, messages, kbRev, hubMode, creditFlow]);
 
   const threadSearchNorm = threadSearch.trim().toLowerCase();
@@ -1321,6 +1327,40 @@ export function AgentProductDemo({
           }
         }
 
+        if (!hubMode && !parsed.force && !parsed.evalKind && !pinSkillId && isProductExplainQuery(q)) {
+          const explain = resolveExplainAnswer(q);
+          if (explain) {
+            mode = "guest";
+            route = {
+              skillId: "knowledge-preset",
+              skillName: explain.title,
+              score: 10,
+              hits: [explain.source],
+              path: "knowledge",
+            };
+            jChip("route", `知识说明 · ${explain.title}`);
+            jActivate("fetch");
+            journalRef.current = setFlowEvidence(journalRef.current, "fetch", [
+              {
+                id: `explain-${explain.source}`,
+                kind: "hit",
+                title: explain.title,
+                excerpt: explain.answer.trim().slice(0, 240),
+                score: 1,
+                meta: explain.source === "faq" ? "产品 FAQ" : "资料库",
+              },
+            ]);
+            syncJournal();
+            jActivate("write");
+            for (let i = 0; i < explain.answer.length; i += 2) {
+              handleEvent({ type: "text-delta", text: explain.answer.slice(i, i + 2) }, toolsAcc);
+              await sleep(8);
+            }
+            finish(explain.answer, "知识说明 · 预制问句");
+            return;
+          }
+        }
+
         if (!hubMode && !parsed.force && !parsed.evalKind && !pinSkillId) {
           const routable = catalog?.length ? catalog : allRunnableSkills();
           const productRoute = resolveProductSkillFirstRoute(q, routable, {
@@ -1334,7 +1374,7 @@ export function AgentProductDemo({
           }
         }
 
-        if (!hubMode && useLlm && !pinSkillId && !parsed.force && !parsed.evalKind && isLlmConfigured(llmConfig)) {
+        if (!hubMode && useLlm && !pinSkillId && !parsed.force && !parsed.evalKind && !isProductExplainQuery(q) && isLlmConfigured(llmConfig)) {
           try {
             jChip("route", `大模型选技能 · ${llmConfig.model}`);
             jActivate("fetch");

@@ -490,8 +490,13 @@ export function WorkOwnAgent() {
     <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}`}>
       <header className="own-app-bar">
         <div className="own-app-brand">
-          <strong>OwnAgent</strong>
-          <span className="own-app-tagline">办事 · 技能治理 · 回归门禁</span>
+          <span className="own-app-mark" aria-hidden="true">
+            OA
+          </span>
+          <div className="own-app-brand-text">
+            <strong>OwnAgent</strong>
+            <span className="own-app-tagline">企业办事运行时 · 技能治理</span>
+          </div>
         </div>
         <div className="own-app-actions">
           <BackendStatusBar compact quiet />

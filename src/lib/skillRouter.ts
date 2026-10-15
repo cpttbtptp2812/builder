@@ -12,7 +12,7 @@ import { classifyCapability } from "./policyDesk";
 import { isSheetOperationQuery } from "./showcaseContinuation";
 import { matchCreditFlowSkillId } from "./creditFlowCatalog";
 import { creditFlowSkillId } from "./creditFlowUi";
-import { matchKnowledgeSection } from "./ownKnowledge";
+import { matchKnowledgeSection, matchPresetQuery } from "./ownKnowledge";
 import { matchFaq, matchFaqLoose } from "../data/productFaq";
 import { DESK_METAS } from "./deskProgramMeta";
 
@@ -28,6 +28,19 @@ export const HEALTH_INTENT = /检查|正不正常|正常吗|能不能打开|打�
 export const ABOUT_SITE_INTENT =
   /是干嘛|干嘛的|这是什么网站|这个网站是|看一下这个网站|看下这个网站|看一下这个站|本站是干嘛|这个站是/i;
 export const KNOWLEDGE_INTENT = /介绍|讲讲|说说|了解一下|做过|简历|经历|背景|技术栈|项目|知识库|imean|ownagent|剑池|难点|挑战|架构/i;
+
+const PRODUCT_EXPLAIN_EXTRA =
+  /agent\s*loop|skillforge|技能运行时|怎么路由|mcp\s*流水线|怎么跑|如何跑|路由技能|内置技能/i;
+
+/** 产品办事对话里应走说明/FAQ，不要误进办事技能或「未命中技能」 */
+export function isProductExplainQuery(query: string): boolean {
+  if (matchPresetQuery(query.trim())) return true;
+  if (matchFaq(query)) return true;
+  if (matchKnowledgeSection(query)) return true;
+  if (KNOWLEDGE_INTENT.test(query)) return true;
+  if (PRODUCT_EXPLAIN_EXTRA.test(query)) return true;
+  return false;
+}
 export const URL_RE = /https?:\/\/[^\s)）"'<>]+/i;
 
 /** 一步办完的办事技能：触发词命中即办，优先于多轮流程 */
@@ -224,6 +237,7 @@ export function resolveProductSkillFirstRoute(
   catalog: AgentSkill[] = allRunnableSkills(),
   opts?: RouteQueryOpts,
 ): RouteDecision | null {
+  if (isProductExplainQuery(query)) return null;
   const d = routeQuery(query, catalog, opts);
   if (d.kind !== "skill" || !d.skill || d.score < 2) return null;
   if (d.skill.id === ANSWER_LAYER_SKILL_ID || d.skill.id === "product-faq") return null;

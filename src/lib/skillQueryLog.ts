@@ -98,6 +98,22 @@ export function skillQueryStats(skillId: string, days = 7) {
   return { total: recent.length, handled: mine.length, latest: mine.slice(-5).reverse() };
 }
 
+/** 一次读日志，批量统计近 N 天接手次数（技能列表用，避免每卡片各读一遍 localStorage） */
+export function skillQueryHandledCounts(skillIds: string[], days = 7): Map<string, number> {
+  const since = Date.now() - days * 86_400_000;
+  const recent = read().filter((e) => Date.parse(e.at) >= since);
+  const idSet = new Set(skillIds);
+  const counts = new Map<string, number>();
+  for (const id of skillIds) counts.set(id, 0);
+  for (const e of recent) {
+    const hit = new Set<string>();
+    if (e.route && idSet.has(e.route)) hit.add(e.route);
+    if (e.handledSkillId && idSet.has(e.handledSkillId)) hit.add(e.handledSkillId);
+    for (const id of hit) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
+}
+
 function looksLikeReleaseInspectQuery(q: string): boolean {
   const t = q.trim();
   if (/^\/inspect\b/i.test(t)) return true;

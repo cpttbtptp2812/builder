@@ -40,11 +40,19 @@ export function apiUrl(path: string): string {
   return p.startsWith("/api") ? p : `/api${p}`;
 }
 
+const DEFAULT_FETCH_MS = 12_000;
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
   try {
     const token = getTeamToken();
+    const signal =
+      init?.signal ??
+      (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
+        ? AbortSignal.timeout(DEFAULT_FETCH_MS)
+        : undefined);
     const res = await fetch(apiUrl(path), {
       ...init,
+      signal,
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),

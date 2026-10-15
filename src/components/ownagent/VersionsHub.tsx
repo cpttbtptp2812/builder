@@ -221,7 +221,13 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
   return (
     <div className="oa-ui oa-page oa-version-hub">
       {toast ? <div className="own-skm-toast" role="status">{toast}</div> : null}
-      <div className="oa-skill-toolbar">
+      <header className="oa-skill-page-intro oa-skill-page-intro--compact">
+        <div className="oa-skill-page-intro-text">
+          <h2 className="oa-skill-page-title">版本快照</h2>
+          <p className="oa-skill-page-desc">保存某一时刻的技能组合，可切换、对比或导出报告。</p>
+        </div>
+      </header>
+      <div className="oa-skill-toolbar oa-skill-toolbar--split oa-version-hub-toolbar">
         <div ref={toolsRef} className={thumbReady ? "oa-skill-tools is-ready" : "oa-skill-tools"} role="tablist" aria-label="版本和草稿">
           <span className="oa-seg-thumb" aria-hidden="true" />
           <button ref={savedTabRef} type="button" role="tab" aria-selected={show === "saved"} className={show === "saved" ? "oa-bar-btn is-on" : "oa-bar-btn"} onClick={() => { closeMenu(); moveThumb("saved"); setShow("saved"); }}>
@@ -231,8 +237,12 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
             草稿 {drafts.length}
           </button>
         </div>
-        <RouteConfidencePanel />
-        <button type="button" className="oa-skill-create" onClick={() => openProductView("savever")}>保存当前版本</button>
+        <div className="oa-version-hub-toolbar-actions">
+          <RouteConfidencePanel />
+          <button type="button" className="oa-skill-create" onClick={() => openProductView("savever")}>
+            保存当前版本
+          </button>
+        </div>
       </div>
 
       {rows.length ? (
@@ -241,17 +251,19 @@ export function VersionsHub({ pane = "saved" }: { pane?: "saved" | "drafts" }) {
             const current = show === "saved" && set.id === currentId;
             return (
               <li key={set.id} className={current ? "own-skill-ver-item oa-vtile is-live" : "own-skill-ver-item oa-vtile"}>
-                <div className="own-skill-ver-card-inner">
-                  <button type="button" className="own-skill-ver-card" onClick={() => openSet(set)}>
-                    <header>
-                      <strong>{set.name}</strong>
-                      <span className="own-skill-ver-tag">{set.skills.length} 个技能</span>
-                      {show === "drafts" ? <span className="own-skill-ver-tag">草稿</span> : null}
+                <div className="own-skill-ver-card-inner oa-ver-card-shell">
+                  <button type="button" className="own-skill-ver-card oa-ver-card" onClick={() => openSet(set)}>
+                    <header className="oa-ver-card-head">
+                      <strong className="oa-ver-card-title">{set.name}</strong>
+                      <div className="oa-ver-card-badges">
+                        <span className="own-skill-ver-tag">{set.skills.length} 个技能</span>
+                        {show === "drafts" ? <span className="own-skill-ver-tag own-skill-ver-tag--draft">草稿</span> : null}
+                        {current ? <span className="own-skill-ver-ok">正在用</span> : null}
+                      </div>
                     </header>
-                    {set.note ? <p className="own-skill-ver-desc">{set.note}</p> : null}
-                    <footer>
-                      <span>{formatSavedAt(set.savedAt)}</span>
-                      {current ? <span className="own-skill-ver-ok">正在用</span> : null}
+                    {set.note ? <p className="own-skill-ver-desc oa-ver-card-note">{set.note}</p> : null}
+                    <footer className="oa-ver-card-foot">
+                      <time dateTime={new Date(set.savedAt).toISOString()}>{formatSavedAt(set.savedAt)}</time>
                     </footer>
                   </button>
                 </div>

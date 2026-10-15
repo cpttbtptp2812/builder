@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { previewClause, renderSkillHost, type SkillClause } from "../../lib/skillHost";
 import {
   AGENT_SKILLS,
@@ -80,18 +80,15 @@ import {
   skillDisplayTitle,
   skillSubtitle,
   deskRuleSummaryForSkill,
-  stepNamesText,
   stepPipelineText,
   stepShortLabel,
 } from "./skillVerUi";
 import {
   batchInstallSkills,
-  buildSkillsExportBundle,
   downloadText,
   loadImportedSkills,
   readSkillImportFiles,
   removeImportedSkill,
-  type SkillExportRecord,
 } from "../../lib/importedSkills";
 import { buildZip, downloadBlob } from "../../lib/zipStore";
 import { apiFetch } from "../../lib/apiClient";
@@ -114,7 +111,7 @@ import {
   useSkillImpact,
 } from "./SkillInsights";
 import type { SkillImpact } from "../../lib/skillImpact";
-import { skillQueryStats } from "../../lib/skillQueryLog";
+import { skillQueryHandledCounts } from "../../lib/skillQueryLog";
 
 type Tab = "overview" | "edit" | "cases" | "check" | "history";
 
@@ -204,7 +201,6 @@ export function SkillComparePanel({ initialTab }: { initialTab?: Tab } = {}) {
 
 function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => void }) {
   const [q, setQ] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(() => new Set());
   const [importOpen, setImportOpen] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const toast = useToast();
@@ -250,45 +246,64 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   }, [skills, q]);
 
   const pendingCount = skills.filter((s) => newestDraftForSkill(s.id)).length;
-  const selectedRows = rows.filter((s) => selected.has(s.id));
-  const exportTargets = selectedRows.length ? selectedRows : rows;
+  const exportTargets = rows;
 
-  function toggle(id: string) {
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const cardMetaById = useMemo(() => {
+    const handled = skillQueryHandledCounts(rows.map((r) => r.id));
+    const map = new Map<
+      string,
+      {
+        ver: string;
+        hasDraft: boolean;
+        appliedAt?: string;
+        stepLine: string;
+        rule: string | null;
+        samples: string[];
+        handled7d: number;
+      }
+    >();
+    for (const s of rows) {
+      const applied = getAppliedSkill(s.id);
+      map.set(s.id, {
+        ver: getPublishedVersion(s.id),
+        hasDraft: Boolean(newestDraftForSkill(s.id)),
+        appliedAt: applied?.appliedAt,
+        stepLine: stepPipelineText(s.steps, s.id),
+        rule: deskRuleSummaryForSkill(s),
+        samples: sampleTriggers(s.triggers),
+        handled7d: handled.get(s.id) ?? 0,
+      });
+    }
+    return map;
+  }, [rows, tick]);
+
+  function exportMarkdownBulk(list: AgentSkill[]) {
+    for (const s of list) downloadText(`${s.id}.SKILL.md`, s.manifest);
+    toast.show(`已导出 ${list.length} 份 SKILL.md`);
   }
 
-  function toggleAll() {
-    if (selectedRows.length === rows.length && rows.length > 0) setSelected(new Set());
-    else setSelected(new Set(rows.map((s) => s.id)));
-  }
+  const exportOneSkill = useCallback((s: AgentSkill) => {
+    downloadText(`${s.id}.SKILL.md`, s.manifest);
+    toast.show(`已导出「${skillDisplayTitle(s)}」`);
+  }, [toast]);
 
-  function exportRecords(list: AgentSkill[]): SkillExportRecord[] {
-    return list.map((s) => ({
-      id: s.id,
-      raw: s.manifest,
-      source: importedIds.has(s.id) ? "imported" : getAppliedSkill(s.id) ? "published" : "builtin",
-    }));
-  }
-
-  function exportJson() {
-    const name = exportTargets.length === skills.length ? "ownagent-skills.json" : "ownagent-skills-selected.json";
-    downloadText(name, buildSkillsExportBundle(exportRecords(exportTargets)), "application/json;charset=utf-8");
-    toast.show(`已导出 ${exportTargets.length} 个技能`);
-  }
-
-  function exportMarkdown() {
-    for (const s of exportTargets) downloadText(`${s.id}.SKILL.md`, s.manifest);
-    toast.show(`已导出 ${exportTargets.length} 份 SKILL.md`);
-  }
+  const removeOneImportedSkill = useCallback(
+    (s: AgentSkill) => {
+      if (!importedIds.has(s.id)) {
+        toast.show("内置技能不能删除，只能删导入的");
+        return;
+      }
+      if (!window.confirm(`删除导入技能「${skillDisplayTitle(s)}」？内置出厂版不受影响。`)) return;
+      removeImportedSkill(s.id);
+      window.dispatchEvent(new CustomEvent(SKILL_PUBLISH_EVENT));
+      toast.show(`已删除「${skillDisplayTitle(s)}」`);
+    },
+    [importedIds, toast],
+  );
 
   const factoryManifest = useMemo(() => new Map(AGENT_SKILLS.map((s) => [s.id, s.manifest])), []);
   const changedRows = skills.filter((s) => importedIds.has(s.id) || factoryManifest.get(s.id) !== s.manifest);
-  const repoTargets = selectedRows.length ? selectedRows : changedRows;
+  const repoTargets = changedRows;
 
   function exportToRepo() {
     if (!repoTargets.length) {
@@ -314,19 +329,6 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     ]);
     downloadBlob("ownagent-skills-repo.zip", zip);
     toast.show(`已打包 ${repoTargets.length} 个技能，解压到 src/ 后提交即可上线`);
-  }
-
-  function removeSelectedImported() {
-    const ids = selectedRows.filter((s) => importedIds.has(s.id)).map((s) => s.id);
-    if (!ids.length) {
-      toast.show("所选里没有可删除的导入技能（内置技能不能删）");
-      return;
-    }
-    if (!window.confirm(`删除 ${ids.length} 个导入技能？不影响内置出厂版。`)) return;
-    for (const id of ids) removeImportedSkill(id);
-    setSelected(new Set());
-    window.dispatchEvent(new CustomEvent(SKILL_PUBLISH_EVENT));
-    toast.show(`已删除 ${ids.length} 个导入技能`);
   }
 
   async function onImportFiles(files: FileList | null) {
@@ -361,44 +363,40 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   return (
     <OaPage title="技能" hideHead>
       {toast.node}
-      <p className="oa-skill-product-lead">
-        在这里维护对账、审合同、流程等事项的<strong>办理规则</strong>：客户怎么说会接上、接到后按哪几步处理。改完先做发版检查，再到对话里用您自己的表格或材料试一遍。
-      </p>
-      {lead ? <p className="oa-skill-lead">{lead}</p> : null}
-      <div className="oa-skill-toolbar">
-        <div className="oa-skill-tools">
+      <header className="oa-skill-page-intro">
+        <div className="oa-skill-page-intro-text">
+          <h2 className="oa-skill-page-title">办事技能</h2>
+          <p className="oa-skill-page-desc">
+            维护对账、审合同、流程等<strong>办理规则</strong>。改完先做发版检查，再到对话里用您自己的材料试一单。
+          </p>
+          {lead ? <p className="oa-skill-lead">{lead}</p> : null}
+        </div>
+      </header>
+      <div className="oa-skill-toolbar oa-skill-toolbar--split">
+        <div className="oa-skill-toolbar-primary">
           <input
             className="own-skm-search"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="搜索技能或说法"
+            placeholder="搜索技能或触发说法"
             aria-label="搜索技能"
           />
-          <button type="button" className="oa-bar-btn" onClick={toggleAll} disabled={!rows.length}>
-            {selectedRows.length === rows.length && rows.length ? "取消全选" : "全选"}
+          <button
+            type="button"
+            className="oa-skill-create"
+            aria-expanded={importOpen}
+            onClick={() => setImportOpen((v) => !v)}
+          >
+            {importOpen ? "收起导入" : "导入技能"}
           </button>
-          <button type="button" className="oa-bar-btn" onClick={exportJson} disabled={!exportTargets.length}>
-            导出
-          </button>
+        </div>
+        <div className="oa-skill-toolbar-secondary" aria-label="工具">
           <button type="button" className="oa-bar-btn" onClick={exportToRepo} disabled={!repoTargets.length}>
             同步仓库
           </button>
           <BatchCheckBar skills={skills} onToast={toast.show} />
           <SkillEvolutionPanel onToast={toast.show} onOpenSkill={onOpen} />
-          {selectedRows.some((s) => importedIds.has(s.id)) ? (
-            <button type="button" className="oa-bar-btn is-danger" onClick={removeSelectedImported}>
-              删除
-            </button>
-          ) : null}
         </div>
-        <button
-          type="button"
-          className="oa-skill-create"
-          aria-expanded={importOpen}
-          onClick={() => setImportOpen((v) => !v)}
-        >
-          {importOpen ? "收起导入" : "导入技能"}
-        </button>
       </div>
       {importOpen ? (
         <div
@@ -411,7 +409,7 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
         >
           <p>拖入 SKILL.md、JSON 或文件夹</p>
           <div className="oa-m-actions">
-            <button type="button" className="oa-bar-btn" onClick={exportMarkdown} disabled={!exportTargets.length}>
+            <button type="button" className="oa-bar-btn" onClick={() => exportMarkdownBulk(exportTargets)} disabled={!exportTargets.length}>
               另存为 MD
             </button>
             <button type="button" className="oa-skill-create" onClick={() => fileRef.current?.click()}>
@@ -437,16 +435,22 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
       ) : (
         <>
           <ul className="own-skill-ver-grid">
-            {rows.map((s) => (
-              <SkillListCard
-                key={s.id}
-                skill={s}
-                checked={selected.has(s.id)}
-                imported={importedIds.has(s.id)}
-                onToggle={() => toggle(s.id)}
-                onOpen={() => onOpen(s.id)}
-              />
-            ))}
+            {rows.map((s) => {
+              const meta = cardMetaById.get(s.id);
+              if (!meta) return null;
+              return (
+                <SkillListCard
+                  key={s.id}
+                  skill={s}
+                  meta={meta}
+                  imported={importedIds.has(s.id)}
+                  onOpen={onOpen}
+                  onExport={() => exportOneSkill(s)}
+                  onDelete={() => removeOneImportedSkill(s)}
+                  canDelete={importedIds.has(s.id)}
+                />
+              );
+            })}
           </ul>
           <details className="oa-skill-advanced-env">
             <summary>发版环境标记（管理员，非办事员视图）</summary>
@@ -461,76 +465,117 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
   );
 }
 
-function SkillListCard({
+type SkillListCardMeta = {
+  ver: string;
+  hasDraft: boolean;
+  appliedAt?: string;
+  stepLine: string;
+  rule: string | null;
+  samples: string[];
+  handled7d: number;
+};
+
+const SkillListCard = memo(function SkillListCard({
   skill,
-  checked,
+  meta,
   imported,
-  onToggle,
   onOpen,
+  onExport,
+  onDelete,
+  canDelete,
 }: {
   skill: AgentSkill;
-  checked: boolean;
+  meta: SkillListCardMeta;
   imported: boolean;
-  onToggle: () => void;
-  onOpen: () => void;
+  onOpen: (id: string) => void;
+  onExport: () => void;
+  onDelete: () => void;
+  canDelete: boolean;
 }) {
-  const ver = getPublishedVersion(skill.id);
-  const draft = newestDraftForSkill(skill.id);
-  const applied = getAppliedSkill(skill.id);
-  const samples = sampleTriggers(skill.triggers);
-  const usage = skillQueryStats(skill.id);
-  const stepNames = stepNamesText(skill.steps, skill.id);
-
   return (
-    <li className={checked ? "own-skill-ver-item own-skill-ver-item--on" : "own-skill-ver-item"}>
-      <div className="own-skill-ver-card-inner">
-        <label
-          className="own-skill-ver-check"
-          title={`选择 ${skillDisplayTitle(skill)}`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <input
-            type="checkbox"
-            checked={checked}
-            onChange={onToggle}
-            aria-label={`选择 ${skillDisplayTitle(skill)}`}
-          />
-        </label>
+    <li className="own-skill-ver-item oa-skill-tile">
+      <div className="own-skill-ver-card-inner oa-skill-card-shell oa-skill-card-shell--solo">
         <button
           type="button"
-          className={draft ? "own-skill-ver-card own-skill-ver-card--draft" : "own-skill-ver-card"}
-          onClick={onOpen}
+          className={
+            meta.hasDraft
+              ? "own-skill-ver-card own-skill-ver-card--draft oa-skill-card"
+              : "own-skill-ver-card oa-skill-card"
+          }
+          onClick={() => onOpen(skill.id)}
         >
-          <header>
-            <strong>{skillDisplayTitle(skill)}</strong>
-            <span className="own-skill-ver-tag">v{ver}</span>
-            {skill.id.endsWith("-flow-desk") ? (
-              <span className="own-skill-ver-tag own-skill-ver-tag--flow">多轮</span>
-            ) : null}
-            {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
+          <header className="oa-skill-card-head">
+            <strong className="oa-skill-card-title">{skillDisplayTitle(skill)}</strong>
+            <div className="oa-skill-card-badges">
+              <span className="own-skill-ver-tag">v{meta.ver}</span>
+              {skill.id.endsWith("-flow-desk") ? (
+                <span className="own-skill-ver-tag own-skill-ver-tag--flow">多轮</span>
+              ) : null}
+              {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
+              {meta.hasDraft ? (
+                <em className="own-skill-ver-pending">待检查</em>
+              ) : (
+                <span className="own-skill-ver-ok">正在用</span>
+              )}
+            </div>
           </header>
-          <p className="own-skill-ver-desc">{skillSubtitle(skill)}</p>
-          {deskRuleSummaryForSkill(skill) ? (
-            <p className="own-skill-ver-pipe-line">规则：{deskRuleSummaryForSkill(skill)}</p>
+          <p className="own-skill-ver-desc oa-skill-card-desc">{skillSubtitle(skill)}</p>
+          {meta.rule ? <p className="oa-skill-card-kv"><span>规则</span>{meta.rule}</p> : null}
+          <p className="oa-skill-card-kv oa-skill-card-kv--steps">
+            <span>步骤</span>
+            <em title={meta.stepLine}>{meta.stepLine}</em>
+          </p>
+          {meta.samples.length ? (
+            <p className="oa-skill-card-kv oa-skill-card-kv--muted">
+              <span>说法</span>
+              <em title={meta.samples.join("、")}>
+                {meta.samples.slice(0, 2).join(" · ")}
+                {meta.samples.length > 2 ? ` 等 ${meta.samples.length} 条` : ""}
+              </em>
+            </p>
           ) : null}
-          <ol className="own-skill-ver-steps" aria-label={`${stepNames.length} 个步骤`}>
-            {stepNames.map((name, i) => (
-              <li key={`${i}-${name}`}>{name}</li>
-            ))}
-          </ol>
-          {samples.length ? (
-            <p className="own-skill-ver-samples own-skill-ver-samples--muted">识别用说法：{samples.join("、")}</p>
-          ) : null}
-          <footer>
-            <span>{fmtUpdatedAt(applied?.appliedAt)}</span>
-            {usage.handled ? <span>近 7 天接手 {usage.handled} 句</span> : null}
-            {draft ? <em className="own-skill-ver-pending">改过了，还没看能不能发</em> : <span className="own-skill-ver-ok">正在用</span>}
+          <footer className="oa-skill-card-foot">
+            <span>{fmtUpdatedAt(meta.appliedAt)}</span>
+            {meta.handled7d ? <span className="oa-skill-card-stat">近 7 天 {meta.handled7d} 句</span> : null}
           </footer>
         </button>
       </div>
+      <div className="oa-ver-more oa-ver-more--hover">
+        <button type="button" className="oa-ver-more-trigger" aria-label="更多" aria-haspopup="menu" tabIndex={-1}>
+          <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+            <circle cx="3" cy="7" r="1.15" fill="currentColor" />
+            <circle cx="7" cy="7" r="1.15" fill="currentColor" />
+            <circle cx="11" cy="7" r="1.15" fill="currentColor" />
+          </svg>
+        </button>
+        <div className="oa-ver-hover-menu" role="menu">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={(event) => {
+              event.stopPropagation();
+              onExport();
+            }}
+          >
+            导出
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className={canDelete ? "is-danger" : "is-danger is-muted"}
+            title={canDelete ? "删除导入的副本" : "内置技能不能从这里删，只能删「导入」的"}
+            onClick={(event) => {
+              event.stopPropagation();
+              onDelete();
+            }}
+          >
+            删除
+          </button>
+        </div>
+      </div>
     </li>
   );
-}
+});
 
 function SkillDetail({
   skillId,
