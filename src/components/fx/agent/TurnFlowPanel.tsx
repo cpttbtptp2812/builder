@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   flowJournalStats,
   isProductGateJournal,
@@ -12,6 +12,29 @@ import { FlowPulseCanvas } from "./FlowPulseCanvas";
 
 const ORDER: FlowJournalId[] = ["read", "route", "fetch", "write"];
 
+function ThoughtStream({ text, streaming }: { text: string; streaming?: boolean }) {
+  const bodyRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [text]);
+  if (!text && !streaming) return null;
+  return (
+    <section className="ua-flow-model-thought" aria-live="polite">
+      <strong>{streaming ? <span className="agent-text-shimmer">思考中…</span> : "思考"}</strong>
+      {text ? (
+        <div className="ua-flow-model-thought-body" ref={bodyRef}>
+          <p>
+            {text}
+            {streaming ? <span className="ua-caret" /> : null}
+          </p>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 /** 右侧动态思考图 — 证据卡片 + 脉冲连线 + 步骤回放 */
 export function TurnFlowPanel({
   journal,
@@ -19,6 +42,8 @@ export function TurnFlowPanel({
   turnStartedAt,
   runtime,
   ragRuntime,
+  thought = "",
+  thoughtStreaming = false,
   onEvidenceClick,
   onClose,
 }: {
@@ -27,6 +52,9 @@ export function TurnFlowPanel({
   turnStartedAt?: number | null;
   runtime?: "server" | "local";
   ragRuntime?: "server" | "local";
+  /** 模型思考原文，流式写在进度里，不进回复气泡 */
+  thought?: string;
+  thoughtStreaming?: boolean;
   onEvidenceClick?: (ev: FlowEvidence) => void;
   onClose?: () => void;
 }) {
@@ -106,6 +134,7 @@ export function TurnFlowPanel({
             </button>
           )}
         </header>
+        <ThoughtStream text={thought} streaming={thoughtStreaming} />
       </aside>
     );
   }
@@ -140,6 +169,8 @@ export function TurnFlowPanel({
           </button>
         )}
       </header>
+
+      <ThoughtStream text={thought} streaming={thoughtStreaming} />
 
       <div className="ua-flow-metrics">
         <div className="ua-flow-metric">

@@ -1,6 +1,7 @@
 /** LLM 连接配置 — localStorage + 可选 .env.local（仅本地开发） */
 
 import { apiUrl, checkBackendHealth, getTeamToken } from "./apiClient";
+import { probeVerdict } from "./llmWire";
 
 export type LlmPresetId = "deepseek" | "openai" | "ollama" | "ollama-cloud" | "webllm" | "custom";
 
@@ -269,17 +270,23 @@ export async function probeLlmConnection(
       ),
     });
     const ms = Math.round(performance.now() - t0);
+    const raw = await res.text().catch(() => "");
+    if (!local) {
+      let body: { ok?: boolean; detail?: string } | null = null;
+      try {
+        body = JSON.parse(raw) as { ok?: boolean; detail?: string };
+      } catch {
+        body = null;
+      }
+      const verdict = probeVerdict(res.ok, body, res.status);
+      return { ok: verdict.ok, ms, detail: verdict.detail || `已连通 ${config.model} · ${ms}ms` };
+    }
     if (!res.ok) {
-      const errText = await res.text().catch(() => "");
       return {
         ok: false,
         ms,
-        detail: `HTTP ${res.status} · ${target}: ${errText.slice(0, 120) || res.statusText}`,
+        detail: `HTTP ${res.status} · ${target}: ${raw.slice(0, 120) || res.statusText}`,
       };
-    }
-    if (!local) {
-      const data = (await res.json()) as { detail?: string };
-      return { ok: true, ms, detail: data.detail ?? `已连通 ${config.model} · ${ms}ms` };
     }
     return { ok: true, ms, detail: `已连通 ${config.model} · ${target} · ${ms}ms` };
   } catch (err) {

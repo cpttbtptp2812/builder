@@ -5,9 +5,8 @@ import { loadOrchestrationMode, type OrchestrationMode } from "../fx/agent/OwnSe
 import {
   LLM_PRESETS,
   clearStoredLlmKey,
-  getEnvApiKey,
-  hasEnvApiKey,
   isLlmConfigured,
+  isLlmProbeLive,
   loadLlmConfig,
   probeLlmConnection,
   saveLlmConfig,
@@ -29,6 +28,7 @@ import {
 } from "../../lib/agentPromptRuntime";
 import { listPromptTemplates, PROMPT_CATEGORY_LABEL } from "../../lib/promptTemplates";
 import { apiFetch, getTeamToken, setTeamToken } from "../../lib/apiClient";
+import { listByokModels } from "../../lib/byokLlm";
 import { McpToolsPanel } from "./McpToolsPanel";
 import {
   OaBadge,
@@ -49,7 +49,7 @@ function saveMcpEnabled(names: string[]) {
 
 /** 接入配置 — 大模型 + MCP + 高级能力（客户可用，非 Demo） */
 export function ConnectPanel() {
-  const [tab, setTab] = useState<"access" | "llm" | "mcp" | "advanced">("access");
+  const [tab, setTab] = useState<"access" | "llm" | "mcp" | "advanced">("llm");
   const [accessToken, setAccessToken] = useState(() => getTeamToken() ?? "");
   const [accessState, setAccessState] = useState<"idle" | "checking" | "ok" | "error">("idle");
   const [llm, setLlm] = useState<LlmConfig>(() => loadLlmConfig());
@@ -58,6 +58,7 @@ export function ConnectPanel() {
   const [caps, setCaps] = useState<AgentCapabilities>(() => loadAgentCapabilities());
   const [activePrompt, setActivePrompt] = useState<string | null>(() => getActivePromptId());
   const [probe, setProbe] = useState<{ running: boolean; ok?: boolean; detail?: string }>({ running: false });
+  const [modelList, setModelList] = useState<{ running: boolean; ids: string[]; detail?: string }>({ running: false, ids: [] });
   const [saved, setSaved] = useState(false);
 
   const llmReady = isLlmConfigured(llm);
@@ -79,6 +80,7 @@ export function ConnectPanel() {
       return;
     }
     const p = LLM_PRESETS[id];
+    setModelList({ running: false, ids: [] });
     setLlm((c) => ({ ...c, preset: id, baseUrl: p.baseUrl, model: p.model }));
   }
 
@@ -110,6 +112,25 @@ export function ConnectPanel() {
     flashSaved();
   }
 
+  async function runModelList() {
+    setModelList({ running: true, ids: [] });
+    try {
+      const ids = await listByokModels(llm);
+      setModelList({
+        running: false,
+        ids,
+        detail: `列出 ${ids.length} 个模型名。名单不校验 Key，测试连接通过才算连上你的模型。`,
+      });
+      if (ids.length && !ids.includes(llm.model)) setLlm((c) => ({ ...c, model: ids[0]! }));
+    } catch (err) {
+      setModelList({
+        running: false,
+        ids: [],
+        detail: err instanceof Error ? err.message : "拉取模型失败",
+      });
+    }
+  }
+
   async function runProbe() {
     setProbe({ running: true });
     const res = await probeLlmConnection(llm);
@@ -127,7 +148,7 @@ export function ConnectPanel() {
   return (
     <OaPage
       title="接入配置"
-      desc="配置大模型与 MCP 工具后，对话会真实调用 API 与工具链。保存后立即生效。"
+      desc="这里连的是你自己的模型。填上你的 Key，测试连接会用这把 Key 发一句真实请求，通过后才算连上。线上也是每位客户自己连。"
     >
       {saved && (
         <p className="oa-connect-saved">
@@ -177,17 +198,11 @@ export function ConnectPanel() {
 
       {tab === "llm" && (
         <OaStack>
-          <OaField label="启用 LLM API">
+          <OaField label="启用我的模型">
             <OaCheck
               checked={llm.enabled}
-              onChange={(enabled) =>
-                setLlm((c) => ({
-                  ...c,
-                  enabled,
-                  apiKey: enabled && !c.apiKey.trim() ? getEnvApiKey() : c.apiKey,
-                }))
-              }
-              label="启用我的大模型（关闭则使用内置 Guest Agent + 广场优先）"
+              onChange={(enabled) => setLlm((c) => ({ ...c, enabled }))}
+              label="用我填的 Key 连接模型"
             />
           </OaField>
 
@@ -213,15 +228,32 @@ export function ConnectPanel() {
                 <input
                   className="oa-input"
                   value={llm.baseUrl}
-                  onChange={(e) => setLlm((c) => ({ ...c, baseUrl: e.target.value, preset: "custom" }))}
+                  onChange={(e) => {
+                    setModelList({ running: false, ids: [] });
+                    setLlm((c) => ({ ...c, baseUrl: e.target.value, preset: "custom" }));
+                  }}
                 />
               </OaField>
               <OaField label="Model">
-                <input
-                  className="oa-input"
-                  value={llm.model}
-                  onChange={(e) => setLlm((c) => ({ ...c, model: e.target.value }))}
-                />
+                {modelList.ids.length > 0 ? (
+                  <select
+                    className="oa-input"
+                    value={llm.model}
+                    onChange={(e) => setLlm((c) => ({ ...c, model: e.target.value }))}
+                  >
+                    {modelList.ids.map((id) => (
+                      <option key={id} value={id}>
+                        {id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    className="oa-input"
+                    value={llm.model}
+                    onChange={(e) => setLlm((c) => ({ ...c, model: e.target.value }))}
+                  />
+                )}
               </OaField>
               <OaField label="API Key">
                 <input
@@ -233,7 +265,7 @@ export function ConnectPanel() {
                 />
               </OaField>
               <p className="oa-toolbar-lead">
-                Key 只保存在当前浏览器；办理或测试时通过 HTTPS 临时交给办事服务调用模型，不写入业务数据库或运行记录。
+                Key 由你自己填写。测试连接和对话都用这一把 Key 去叫你的模型，平台没有另一把代连的 Key。线上每位客户同样自己填。
               </p>
               <OaBtn
                 variant="ghost"
@@ -248,14 +280,23 @@ export function ConnectPanel() {
               {llm.preset !== "custom" && LLM_PRESETS[llm.preset as Exclude<LlmPresetId, "custom">] && (
                 <p className="oa-toolbar-lead">
                   {LLM_PRESETS[llm.preset as Exclude<LlmPresetId, "custom">].hint}
-                  {hasEnvApiKey() ? " · 已检测到 .env.local Key" : ""}
                 </p>
               )}
-              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+                <OaBtn
+                  variant="ghost"
+                  onClick={() => void runModelList()}
+                  disabled={modelList.running || (llm.preset !== "ollama" && !llm.apiKey.trim())}
+                >
+                  {modelList.running ? "拉取中…" : "拉取模型"}
+                </OaBtn>
                 <OaBtn onClick={() => void runProbe()} disabled={probe.running || !llmReady}>
                   {probe.running ? "测试中…" : "测试连接"}
                 </OaBtn>
-                <OaBadge tone={llmReady ? "ok" : undefined}>{llmReady ? llm.model : "未就绪"}</OaBadge>
+                <OaBadge tone={isLlmProbeLive(llm) ? "ok" : undefined}>
+                  {isLlmProbeLive(llm) ? `已连接 ${llm.model}` : "未连接"}
+                </OaBadge>
+                {modelList.detail ? <OaBadge tone={modelList.ids.length ? undefined : "danger"}>{modelList.detail}</OaBadge> : null}
                 {probe.detail && (
                   <OaBadge tone={probe.ok ? "ok" : "danger"}>{probe.detail}</OaBadge>
                 )}

@@ -50,6 +50,15 @@ import { attachCollab } from "./collab.ts";
 import { createAdminSession, initializeAdminCredential, isAdminSession, revokeAdminSession } from "./adminAuth.ts";
 import { assertSafeExternalUrl, fetchExternal, productionApiGuard, rateLimit, readResponseTextLimited, requestSizeLimit } from "./security.ts";
 import { metricsSnapshot, recordLlmError, safeLog } from "./observability.ts";
+import { listByokModels, openByokChatStream, readByokMessages, readByokTarget } from "./llmByok.ts";
+
+function hostOf(raw: string): string {
+  try {
+    return new URL(raw).hostname;
+  } catch {
+    return "";
+  }
+}
 
 const app = new Hono();
 
@@ -106,6 +115,7 @@ app.post("/api/llm/probe", async (c) => {
     return c.json({ ok: false, ms: 0, detail: error instanceof Error ? error.message : "Base URL 无效" }, 400);
   }
   if (!model) return c.json({ ok: false, ms: 0, detail: "缺少模型名" }, 400);
+  if (!apiKey) return c.json({ ok: false, ms: 0, detail: "请填写你自己的 API Key" }, 400);
 
   const t0 = Date.now();
   const headers: Record<string, string> = { "Content-Type": "application/json" };
@@ -128,7 +138,7 @@ app.post("/api/llm/probe", async (c) => {
         ok: false,
         ms,
         detail: `HTTP ${res.status} · ${host}: ${errText.slice(0, 160) || res.statusText}`,
-      });
+      }, 502);
     }
     return c.json({ ok: true, ms, detail: `已连通 ${model} · ${host} · ${ms}ms` });
   } catch (err) {
@@ -180,6 +190,71 @@ app.post("/api/llm/byok/chat", async (c) => {
   } catch (error) {
     recordLlmError();
     safeLog("llm.error", { reason: error instanceof Error ? error.message : "request_failed" });
+    return c.json({ error: error instanceof Error ? error.message : "模型请求失败" }, 502);
+  }
+});
+
+/** 用当次请求里的 Key 拉模型列表，不入库。 */
+app.post("/api/llm/models", async (c) => {
+  const body = await c.req.json<{ baseUrl?: string; apiKey?: string }>();
+  const { baseUrl, apiKey } = readByokTarget(body);
+  if (!baseUrl) return c.json({ error: "缺少模型地址" }, 400);
+  try {
+    assertSafeExternalUrl(baseUrl);
+    const models = await listByokModels(baseUrl, apiKey);
+    return c.json({ models });
+  } catch (error) {
+    recordLlmError();
+    safeLog("llm.error", { reason: "models", host: hostOf(baseUrl) });
+    return c.json({ error: error instanceof Error ? error.message : "拉取模型失败" }, 502);
+  }
+});
+
+/** 普通对话流式代理。Key 只用于这一次请求。 */
+app.post("/api/llm/byok/stream", async (c) => {
+  const body = await c.req.json<{
+    baseUrl?: string;
+    model?: string;
+    apiKey?: string;
+    messages?: unknown;
+    temperature?: number;
+    maxTokens?: number;
+  }>();
+  const { baseUrl, model, apiKey } = readByokTarget(body);
+  if (!baseUrl || !model || !apiKey) return c.json({ error: "模型地址、模型与 Key 不能为空" }, 400);
+  let messages;
+  try {
+    assertSafeExternalUrl(baseUrl);
+    messages = readByokMessages(body.messages);
+  } catch (error) {
+    return c.json({ error: error instanceof Error ? error.message : "请求无效" }, 400);
+  }
+  try {
+    const res = await openByokChatStream({
+      baseUrl,
+      model,
+      apiKey,
+      messages,
+      temperature: body.temperature,
+      maxTokens: body.maxTokens,
+      signal: c.req.raw.signal,
+    });
+    if (!res.ok || !res.body) {
+      const errText = await res.text().catch(() => "");
+      recordLlmError();
+      safeLog("llm.error", { status: res.status, providerHost: hostOf(baseUrl) });
+      return c.json({ error: `模型服务返回 HTTP ${res.status}: ${errText.slice(0, 160)}` }, 502);
+    }
+    return new Response(res.body, {
+      headers: {
+        "Content-Type": "text/event-stream; charset=utf-8",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  } catch (error) {
+    recordLlmError();
+    safeLog("llm.error", { reason: "stream", host: hostOf(baseUrl) });
     return c.json({ error: error instanceof Error ? error.message : "模型请求失败" }, 502);
   }
 });

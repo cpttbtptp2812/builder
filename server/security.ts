@@ -13,7 +13,15 @@ const PUBLIC_PATHS = new Set([
 
 /** 客户办事：模型测试、个人 Key 代理、办理流程、已发布技能只读。管理与发版不在此列。 */
 export function customerApiOpen(path: string, method: string): boolean {
-  if (method === "POST" && (path === "/api/llm/probe" || path === "/api/llm/byok/chat")) return true;
+  if (
+    method === "POST" &&
+    (path === "/api/llm/probe" ||
+      path === "/api/llm/models" ||
+      path === "/api/llm/byok/chat" ||
+      path === "/api/llm/byok/stream")
+  ) {
+    return true;
+  }
   if (path === "/api/product-run" || path.startsWith("/api/product-run/")) return true;
   if (method === "GET" && path === "/api/runtime/config") return true;
   if (method === "GET" && (path === "/api/skills/live" || path.startsWith("/api/skills/live/"))) return true;

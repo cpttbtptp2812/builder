@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { AgentLiveTrace } from "./AgentLiveTrace";
 import { AgentMarkdown } from "./agent/AgentMarkdown";
-import { AgentThink } from "./agent/AgentThink";
 import { AgentReasoningBlock } from "./agent/AgentReasoningBlock";
 import { UserMessageBubble } from "./agent/UserMessageBubble";
 import { formatThreadDateLabel, isSameMsgDay } from "../../lib/formatMsgTime";
@@ -11,6 +10,7 @@ import { AgentWelcome } from "./agent/AgentWelcome";
 import { ProductSkillHome } from "./agent/ProductSkillHome";
 import { ProductRunParts } from "./agent/ProductRunParts";
 import { llmPickSkillId } from "../../lib/productLlmRoute";
+import { streamByokChat } from "../../lib/byokLlm";
 import { logChatSession, markQueryPublished } from "../../lib/analyticsLog";
 import { formatThreadAsPlaza, matchPlaza, publishPlaza, type PlazaItem } from "../../lib/plazaFeed";
 import { checkBackendHealth } from "../../lib/apiClient";
@@ -297,6 +297,8 @@ export function AgentProductDemo({
   const [iteration, setIteration] = useState(0);
   const [streamReasoning, setStreamReasoning] = useState("");
   const [streamText, setStreamText] = useState("");
+  const [modelThought, setModelThought] = useState("");
+  const [thoughtStreaming, setThoughtStreaming] = useState(false);
   const [liveTools, setLiveTools] = useState<ToolChipState[]>([]);
   const [flowJournal, setFlowJournal] = useState<FlowJournalNode[]>([]);
   const [flowTurnStartedAt, setFlowTurnStartedAt] = useState<number | null>(null);
@@ -917,6 +919,8 @@ export function AgentProductDemo({
       setIteration(0);
       setStreamReasoning("");
       setStreamText("");
+      setModelThought("");
+      setThoughtStreaming(false);
       setLiveTools([]);
       setLiveProductRun(null);
       window.setTimeout(() => onFlowActive?.("router"), 240);
@@ -1361,19 +1365,6 @@ export function AgentProductDemo({
           }
         }
 
-        if (!hubMode && !parsed.force && !parsed.evalKind && !pinSkillId) {
-          const routable = catalog?.length ? catalog : allRunnableSkills();
-          const productRoute = resolveProductSkillFirstRoute(q, routable, {
-            creditFlowActive: Boolean(flowState?.flowId),
-            activeFlowId: flowState?.flowId ?? null,
-          });
-          if (productRoute?.skillId) {
-            pinSkillId = productRoute.skillId;
-            mode = "guest";
-            jChip("route", `办事技能 · ${productRoute.label}`);
-          }
-        }
-
         if (!hubMode && useLlm && !pinSkillId && !parsed.force && !parsed.evalKind && !isProductExplainQuery(q) && isLlmConfigured(llmConfig)) {
           try {
             jChip("route", `大模型选技能 · ${llmConfig.model}`);
@@ -1384,16 +1375,29 @@ export function AgentProductDemo({
             });
             if (pickedId) {
               pinSkillId = pickedId;
-              mode = "guest";
+              mode = "llm";
               const sk = (catalog?.length ? catalog : allRunnableSkills()).find((s) => s.id === pickedId);
               jChip("route", `办事技能 · ${sk?.name ?? pickedId}`);
             }
           } catch (err) {
             if ((err as Error).name === "AbortError") return;
             if (isAuthError(err)) {
-              finish("LLM Key 无效。请在「接入配置」检查 API Key，或关闭 LLM 仅用关键词路由。");
+              finish("模型 Key 无效。请在「接入配置」检查 API Key。");
               return;
             }
+          }
+        }
+
+        if (!hubMode && !parsed.force && !parsed.evalKind && !pinSkillId) {
+          const routable = catalog?.length ? catalog : allRunnableSkills();
+          const productRoute = resolveProductSkillFirstRoute(q, routable, {
+            creditFlowActive: Boolean(flowState?.flowId),
+            activeFlowId: flowState?.flowId ?? null,
+          });
+          if (productRoute?.skillId) {
+            pinSkillId = productRoute.skillId;
+            mode = useLlm ? "llm" : "guest";
+            jChip("route", `办事技能 · ${productRoute.label}`);
           }
         }
 
@@ -1641,6 +1645,54 @@ export function AgentProductDemo({
           return;
         }
 
+        if (!hubMode && useLlm && isLlmConfigured(llmConfig) && !pinSkillId && !parsed.force && !parsed.evalKind) {
+          jChip("route", `普通对话 · ${llmConfig.model}`);
+          jActivate("write");
+          const prior = historyRef.current
+            .filter((m) => (m.role === "user" || m.role === "assistant") && m.content.trim())
+            .slice(-8)
+            .map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+          setThoughtStreaming(true);
+          setFlowOpen(true);
+          const streamed = await streamByokChat(
+            llmConfig,
+            [
+              {
+                role: "system",
+                content:
+                  "你是办事台旁的助手。只用中文回答。这一轮不办理报销、工单或排班。不要编造表格里的金额、人数或行数。",
+              },
+              ...prior,
+              { role: "user", content: q.slice(0, 4000) },
+            ],
+            {
+              signal: ac.signal,
+              onReasoning: (delta) => {
+                fullReasoning += delta;
+                setModelThought((s) => s + delta);
+              },
+            },
+          );
+          const text = streamed.content || "模型没有给出正文。";
+          mode = "llm";
+          route = {
+            skillId: "llm-chat",
+            skillName: llmConfig.model,
+            score: 1,
+            hits: ["对话"],
+            path: "llm",
+          };
+          const nextHistory: AgentChatMessage[] = [
+            ...historyRef.current.filter((m) => m.role === "user" || m.role === "assistant"),
+            { role: "user", content: q },
+            { role: "assistant", content: text },
+          ].slice(-24);
+          historyRef.current = nextHistory;
+          setHistory(nextHistory);
+          finish(text, fullReasoning.trim() || undefined);
+          return;
+        }
+
         jActivate("fetch");
         const guest = await runGuestAgentTurn(
           q,
@@ -1722,6 +1774,7 @@ export function AgentProductDemo({
         finish(`请求失败：${err instanceof Error ? err.message : "未知错误"}`);
       } finally {
         sendLockRef.current = false;
+        setThoughtStreaming(false);
         setRunning(false);
         setStreamReasoning("");
         setStreamText("");
@@ -2025,6 +2078,12 @@ export function AgentProductDemo({
 
   const toolCount = traces.reduce((n, t) => n + t.tools.length, 0);
 
+  const panelThought = thoughtStreaming || modelThought
+    ? modelThought
+    : !running
+      ? (lastAsst?.reasoning ?? "")
+      : "";
+
   const displayJournal = useMemo(() => {
     const raw =
       running && flowJournal.length
@@ -2195,6 +2254,9 @@ export function AgentProductDemo({
                       <UserMessageBubble text={m.content} />
                     ) : (
                       <>
+                        {(inspector || !hubMode) && m.reasoning?.trim() ? (
+                          <AgentReasoningBlock text={m.reasoning} />
+                        ) : null}
                         {hubMode && m.plazaSource && (
                           <PlazaRouteCard
                             source={m.plazaSource}
@@ -2244,17 +2306,11 @@ export function AgentProductDemo({
                                 setFlowOpen(true);
                                 liveProductRunRef.current = next.run;
                                 setLiveProductRun(next.run);
-                                if (!liveProductRunRef.current?.parts.some((p) => p.kind === "process")) {
-                                  setStreamReasoning("");
-                                }
                                 setFlowTurnStartedAt((t) => t ?? Date.now());
                                 const steps = next.run.parts
                                   .filter((p) => p.kind === "process")
                                   .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
                                 if (steps.length) {
-                                  setStreamReasoning(
-                                    steps.map((s) => `${s.label}：${s.detail}`.replace(/\s+/g, " ").trim()).join("\n"),
-                                  );
                                   setFlowJournal((prev) =>
                                     applyProductRunProcessJournal(prev, steps, undefined, "running"),
                                   );
@@ -2264,7 +2320,6 @@ export function AgentProductDemo({
                                 setRunning(false);
                                 setLiveProductRun(null);
                                 liveProductRunRef.current = null;
-                                setStreamReasoning("");
                                 setFlowTurnStartedAt(null);
                                 const steps = next.run.parts
                                   .filter((p) => p.kind === "process")
@@ -2454,9 +2509,6 @@ export function AgentProductDemo({
                         ))}
                       </div>
                     )}
-                    {inspector && m.role === "assistant" && m.reasoning && (
-                      <AgentReasoningBlock text={m.reasoning} thinking={false} defaultOpen={false} />
-                    )}
                     <div className="ua-msg-actions">
                       <button type="button" className="ua-msg-act" title="复制" onClick={() => void copyMsg(m)}>
                         {copiedId === m.id ? "✓" : "⎘"}
@@ -2488,7 +2540,7 @@ export function AgentProductDemo({
                 </div>
               ))}
 
-              {running && !hubMode && (
+              {running && !hubMode && (streamText || streamReasoning.trim() || liveTools.length > 0) && (
                 <div className="ua-row assistant live-turn group/message" data-msg-id="__live__">
                   <div className="ua-avatar ua-avatar-agent live" aria-hidden>
                     OA
@@ -2508,20 +2560,12 @@ export function AgentProductDemo({
                         ))}
                       </div>
                     )}
-                    {streamReasoning ? (
-                      <AgentReasoningBlock
-                        text={streamReasoning.trim()}
-                        thinking={!streamText}
-                        defaultOpen={!streamText}
-                      />
-                    ) : null}
+                    <AgentReasoningBlock text={streamReasoning} thinking={!streamText} />
                     {streamText ? (
                       <div className="ua-bubble assistant streaming ink">
                         <AgentMarkdown text={streamText} />
                         <span className="ua-caret" />
                       </div>
-                    ) : !streamReasoning ? (
-                      <AgentThink />
                     ) : null}
                   </div>
                 </div>
@@ -2780,6 +2824,8 @@ export function AgentProductDemo({
                   turnStartedAt={flowTurnStartedAt}
                   runtime={turnRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.runtime}
                   ragRuntime={turnRagRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.ragRuntime}
+                  thought={panelThought}
+                  thoughtStreaming={thoughtStreaming}
                   onEvidenceClick={handleEvidenceClick}
                 />
               </>
@@ -2826,6 +2872,8 @@ export function AgentProductDemo({
                     turnStartedAt={flowTurnStartedAt}
                     runtime={turnRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.runtime}
                     ragRuntime={turnRagRuntime ?? messages.filter((m) => m.role === "assistant").at(-1)?.ragRuntime}
+                    thought={panelThought}
+                    thoughtStreaming={thoughtStreaming}
                     onEvidenceClick={handleEvidenceClick}
                   />
                 )}
