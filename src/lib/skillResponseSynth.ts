@@ -109,6 +109,8 @@ export function synthesizeResponse(skill: AgentSkill, result: SkillResult, query
       return result.markdown ?? "制度值班已完成。";
     case "knowledge-lookup":
       return result.markdown ?? synthesizeGeneric(result);
+    case "agent-copilot":
+      return result.markdown ?? synthesizeGeneric(result);
     default:
       return synthesizeGeneric(result);
   }

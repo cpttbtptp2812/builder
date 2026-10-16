@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "../../lib/apiClient";
 import { OaBtn, OaField, OaStack } from "./OaUi";
 
-type Tool = { name: string; title: string; endpoint: string; capability: string; timeoutMs: number };
+type Tool = { name: string; title: string; endpoint: string; capability: string; timeoutMs: number; consented?: boolean };
 
 export function ExternalToolBox() {
   const [tools, setTools] = useState<Tool[]>([]);
@@ -27,8 +27,23 @@ export function ExternalToolBox() {
     <OaStack>
       <p className="oa-toolbar-lead">登记一个外部地址。办理走到同名步骤时，只按这里写的权限和超时去访问，不会在本机执行对方的代码。</p>
       {tools.map((tool) => (
-        <p key={tool.name} className="oa-toolbar-lead">
-          {tool.title} · {tool.name} · {tool.capability} · {Math.round(tool.timeoutMs / 1000)} 秒
+        <div key={tool.name} className="oa-ext-tool-row">
+          <p className="oa-toolbar-lead">
+            {tool.title} · {tool.name} · {tool.capability} · {Math.round(tool.timeoutMs / 1000)} 秒
+          </p>
+          <label className="oa-ext-tool-consent">
+            <input
+              type="checkbox"
+              checked={Boolean(tool.consented)}
+              onChange={(e) => {
+                void apiFetch("/api/tools/external/consent", {
+                  method: "POST",
+                  body: JSON.stringify({ name: tool.name, granted: e.target.checked }),
+                }).then(() => load());
+              }}
+            />
+            允许办事时调用
+          </label>
           <OaBtn
             variant="ghost"
             onClick={() => {
@@ -37,7 +52,7 @@ export function ExternalToolBox() {
           >
             移除
           </OaBtn>
-        </p>
+        </div>
       ))}
       <OaField label="工具名">
         <input className="oa-input" value={name} placeholder="lookup" onChange={(e) => setName(e.target.value)} />

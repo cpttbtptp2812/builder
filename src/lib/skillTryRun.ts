@@ -3,6 +3,8 @@
 import { apiUrl, getTeamToken } from "./apiClient";
 import type { ProductLlmConfig } from "./llmProductBrief";
 import type { ProductDataSlot } from "./productDataStore";
+import { productHeaders } from "./productRun/client";
+import { uploadProductSlotFile } from "./uploadProductFile";
 
 export type TryMaterial = { slot: ProductDataSlot; title: string; csv: string };
 
@@ -123,6 +125,43 @@ export async function uploadTryMaterial(
   const d = out.data as { ok?: boolean; rows?: number; title?: string; error?: string };
   if (!d?.ok) return { ok: false, error: d?.error ?? "材料没存上" };
   return { ok: true, rows: Number(d.rows ?? 0), title: String(d.title ?? m.title) };
+}
+
+function rowsToCsv(columns: string[], rows: string[][]): string {
+  const esc = (v: string) => (/[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  return [columns.map(esc).join(","), ...rows.map((r) => r.map((c) => esc(String(c ?? ""))).join(","))].join("\n");
+}
+
+async function fetchSlotCsv(sessionId: string, skillId: string, slot: ProductDataSlot): Promise<string | null> {
+  const q = new URLSearchParams({ sessionId, skillId });
+  let res: Response;
+  try {
+    res = await fetch(apiUrl(`/product-run/materials?${q}`), { headers: productHeaders() });
+  } catch {
+    return null;
+  }
+  const data = (await res.json()) as { materials?: { slot: string; columns: string[]; rows: string[][] }[] };
+  const mat = data.materials?.find((m) => m.slot === slot);
+  if (!mat?.columns?.length) return null;
+  return rowsToCsv(mat.columns, mat.rows ?? []);
+}
+
+/** CSV / XLSX / PDF — 与 product-run 门闩同一套上传 */
+export async function uploadTryMaterialFile(
+  sessionId: string,
+  skillId: string,
+  slot: ProductDataSlot,
+  file: File,
+): Promise<{ ok: true; rows: number; title: string; csv: string } | { ok: false; error: string }> {
+  const up = await uploadProductSlotFile({ sessionId, slot, file });
+  if (!up.ok) return { ok: false, error: up.error ?? "导入失败" };
+  if (up.schemaOk === false) {
+    return { ok: false, error: up.error ?? (up.schemaIssues ?? []).join("；") ?? "表头或数据未通过校验" };
+  }
+  let csv = up.csv?.trim() ?? "";
+  if (!csv) csv = (await fetchSlotCsv(sessionId, skillId, slot)) ?? "";
+  if (!csv) return { ok: false, error: "文件已上传但未能读出表格，请换 CSV 或检查 Excel 表头" };
+  return { ok: true, rows: Number(up.rows ?? 0), title: String(up.title ?? file.name), csv };
 }
 
 type RawTrace = { stepId: string; tool: string; ok: boolean; ms: number; label?: string; result?: unknown };

@@ -284,6 +284,20 @@ runMigration(3, "product archive and run token", () => {
   }
 });
 
+runMigration(5, "external tool consent", () => {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS external_tool_consents (
+      tool_name TEXT PRIMARY KEY,
+      granted INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL
+    );
+  `);
+  db.exec(`
+    INSERT OR IGNORE INTO external_tool_consents (tool_name, granted, updated_at)
+    SELECT name, 0, created_at FROM external_tools;
+  `);
+});
+
 export function nowIso() {
   return new Date().toISOString();
 }

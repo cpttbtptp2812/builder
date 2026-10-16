@@ -2,12 +2,13 @@ import { useCallback, useEffect, useState } from "react";
 import { downloadText } from "../../../lib/importedSkills";
 import {
   datasetRowCount,
-  decodeUploadCsvText,
-  parseCsvText,
   saveProductDataset,
+  parseCsvText,
   type ProductDataSlot,
 } from "../../../lib/productDataStore";
+import { apiFetchDeskTemplate } from "../../../lib/productRun/client";
 import { missingDataForSkill, type SkillDataRequirement } from "../../../lib/productSkillInputs";
+import { PRODUCT_FILE_ACCEPT, uploadProductSlotFile } from "../../../lib/uploadProductFile";
 
 function slotReady(slot: ProductDataSlot): boolean {
   return datasetRowCount(slot) > 0;
@@ -24,6 +25,7 @@ export function ProductDataGateInline({
   onContinue: (query: string, skillId: string) => void;
 }) {
   const [rev, setRev] = useState(0);
+  const [fileBusy, setFileBusy] = useState(false);
 
   useEffect(() => {
     sessionStorage.setItem("ownagent-product-continue-query", gate.query);
@@ -35,16 +37,34 @@ export function ProductDataGateInline({
     return () => window.removeEventListener("ownagent:product-data", onData);
   }, []);
 
-  const onFile = useCallback(async (req: SkillDataRequirement, file: File) => {
-    const text = decodeUploadCsvText(await file.arrayBuffer());
-    const parsed = parseCsvText(text, file.name.replace(/\.[^.]+$/, ""), req.slot);
-    if ("error" in parsed) {
-      window.alert(parsed.error);
-      return;
-    }
-    saveProductDataset(parsed);
-    setRev((n) => n + 1);
-  }, []);
+  const onFile = useCallback(
+    async (req: SkillDataRequirement, file: File) => {
+      setFileBusy(true);
+      try {
+        const up = await uploadProductSlotFile({
+          sessionId: gate.sessionId,
+          slot: req.slot,
+          file,
+        });
+        if (!up.ok) {
+          window.alert(up.error ?? "导入失败");
+          return;
+        }
+        if (up.schemaOk === false || !up.rows) {
+          window.alert(up.error ?? (up.schemaIssues ?? []).join("；") ?? "表头或数据未通过校验");
+          return;
+        }
+        if (up.csv) {
+          const parsed = parseCsvText(up.csv, up.title ?? file.name.replace(/\.[^.]+$/, ""), req.slot);
+          if (!("error" in parsed)) saveProductDataset(parsed);
+        }
+        setRev((n) => n + 1);
+      } finally {
+        setFileBusy(false);
+      }
+    },
+    [gate.sessionId],
+  );
 
   void rev;
 
@@ -68,19 +88,24 @@ export function ProductDataGateInline({
                     <button
                       type="button"
                       className="oa-product-data-gate-btn"
-                      disabled={disabled}
+                      disabled={disabled || fileBusy}
                       onClick={() =>
-                        downloadText(req.filename, `\uFEFF${req.templateCsv}`, "text/csv;charset=utf-8")
+                        void (async () => {
+                          const t = await apiFetchDeskTemplate(gate.skillId, req.slot);
+                          const csv = t.ok && t.csv ? t.csv : req.templateCsv;
+                          const name = t.ok && t.filename ? t.filename : req.filename;
+                          downloadText(name, `\uFEFF${csv}`, "text/csv;charset=utf-8");
+                        })()
                       }
                     >
                       下载模板
                     </button>
                     <label className="oa-product-data-gate-btn primary">
-                      导入 CSV
+                      导入文件
                       <input
                         type="file"
-                        accept=".csv,.txt,text/csv"
-                        disabled={disabled}
+                        accept={PRODUCT_FILE_ACCEPT}
+                        disabled={disabled || fileBusy}
                         hidden
                         onChange={(e) => {
                           const f = e.target.files?.[0];
@@ -99,7 +124,7 @@ export function ProductDataGateInline({
       <button
         type="button"
         className="oa-product-data-gate-retry"
-        disabled={disabled || !canContinue}
+        disabled={disabled || !canContinue || fileBusy}
         onClick={() => onContinue(gate.query, gate.skillId)}
       >
         继续执行

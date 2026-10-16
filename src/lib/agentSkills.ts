@@ -18,10 +18,13 @@ import { composeReleaseReportTraced, isSameOriginUrl, releaseReportMarkdown } fr
 import { matchKnowledgeSection } from "./ownKnowledge";
 import { faqAnswerMarkdown, faqFallbackMarkdown, matchFaq } from "../data/productFaq";
 import { composeStepsMarkdown } from "./composeSteps";
+import { composeAgentCopilot } from "./agentCopilotCompose";
 import { runSheetTool } from "./sheetDeskProgram";
 import { runFlowTool } from "./flowEngine";
 import { runDataTool } from "./dataDeskProgram";
 import { runContractTool } from "./contractDeskProgram";
+import { productSkillUsesUserData } from "./productSkillInputs";
+import { isCreditFlowSkillId } from "./creditFlowUi";
 import { runImageTool } from "./imageDeskProgram";
 import { processCreditFlowTurn, type CreditFlowState } from "./creditFlowEngine";
 
@@ -100,13 +103,27 @@ const PROBE_URL =
 
 export const CUSTOMER_SKILL_IDS = ["ledger-desk", "ticket-desk", "shift-desk"] as const;
 
+/** 仓库仍保留 SKILL，但产品办事链不接入（无真 OCR，易误解为假办事） */
+export const PRODUCT_RETIRED_SKILL_IDS = ["image-desk"] as const;
+
+/** 办事技能页：对客户可见的三条 desk */
+export const OWNAGENT_SKILL_PAGE_IDS = [...CUSTOMER_SKILL_IDS] as const;
+
+/** 不走 product-run 门闩、技能页可直跑 MCP 流水线（当前无内置项，保留扩展位） */
+export const INLINE_RUNTIME_SKILL_IDS = [] as const;
+
+export function isInlineRuntimeSkill(id: string): boolean {
+  return (INLINE_RUNTIME_SKILL_IDS as readonly string[]).includes(id);
+}
+
 export function isCreditFlowDeskSkill(id: string): boolean {
   return id.endsWith("-flow-desk");
 }
 
 export function isCustomerSkill(id: string): boolean {
-  if ((CUSTOMER_SKILL_IDS as readonly string[]).includes(id)) return true;
-  return isCreditFlowDeskSkill(id);
+  if ((PRODUCT_RETIRED_SKILL_IDS as readonly string[]).includes(id)) return false;
+  if (isCreditFlowDeskSkill(id)) return true;
+  return productSkillUsesUserData(id);
 }
 
 /** 技能页展示：13 套信贷多轮流程 */
@@ -149,6 +166,7 @@ const SKILL_ORDER = [
   "industry-flow-desk",
   "expense_flow-flow-desk",
   "release-inspector",
+  "agent-copilot",
   "site-analyzer",
   "dom-probe",
   "workflow-orchestrator",
@@ -222,7 +240,6 @@ export const ROUTER_EXAMPLES = [
   { label: "额度测算", query: "测算这笔授信额度" },
   { label: "合同审查", query: "审查这份借款合同" },
   { label: "流程推进", query: "市场部9600报销单现在走到哪" },
-  { label: "影像识表", query: "识别这份借款凭证影像" },
 ] as const;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -557,6 +574,9 @@ async function runInternalTool(name: string, args: Record<string, unknown>): Pro
       };
     }
 
+    case "__compose_agent_copilot__":
+      return { content: composeAgentCopilot(args) };
+
     default:
       return { content: { error: `unknown: ${name}` }, isError: true };
   }
@@ -608,8 +628,7 @@ export async function runSkillFromIndex(
     injectAt?: Record<number, unknown>;
   },
 ): Promise<{ trace: SkillTraceStep[]; output: unknown; result: SkillResult }> {
-  const isProductDesk = (CUSTOMER_SKILL_IDS as readonly string[]).includes(skill.id);
-  if (isProductDesk && !opts?.allowLabSample) {
+  if (productSkillUsesUserData(skill.id) && !isCreditFlowSkillId(skill.id) && !opts?.allowLabSample) {
     throw new Error(
       `${skill.id} 须走服务端 product-run（导入 → 继续执行），禁止浏览器 runSkill 内置/本地样例路径。`,
     );

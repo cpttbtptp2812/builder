@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
 import { downloadText } from "../../lib/importedSkills";
 import { isLlmConfigured, isLlmProbeLive, loadLlmConfig, toProductLlmConfig } from "../../lib/llmConfig";
-import { decodeUploadCsvText } from "../../lib/productDataStore";
+import { isInlineRuntimeSkill } from "../../lib/agentSkills";
 import { requirementsForSkill, type SkillDataRequirement } from "../../lib/productSkillInputs";
+import { PRODUCT_FILE_ACCEPT } from "../../lib/uploadProductFile";
 import {
   clearTryMaterial,
   compareTryRuns,
@@ -11,6 +12,7 @@ import {
   saveTryMaterial,
   tryRunSessionId,
   uploadTryMaterial,
+  uploadTryMaterialFile,
   type TryMaterial,
   type TryRunSummary,
   type TryStep,
@@ -78,6 +80,7 @@ export function SkillTryRun({
   defaultQuery: string;
 }) {
   const reqs = useMemo(() => requirementsForSkill(skillId), [skillId]);
+  const inlineRun = isInlineRuntimeSkill(skillId);
   const needsMaterial = reqs.length > 0;
   const [materials, setMaterials] = useState<Record<string, TryMaterial | null>>(() =>
     Object.fromEntries(reqs.map((r) => [r.slot, loadTryMaterial(skillId, r.slot)])),
@@ -99,14 +102,14 @@ export function SkillTryRun({
     setBusy("file");
     setError(null);
     setNote(null);
+    const sessionId = tryRunSessionId(skillId);
     try {
-      const csv = decodeUploadCsvText(await file.arrayBuffer());
-      const m: TryMaterial = { slot: req.slot, title: file.name, csv };
-      const up = await uploadTryMaterial(tryRunSessionId(skillId), m);
+      const up = await uploadTryMaterialFile(sessionId, skillId, req.slot, file);
       if (!up.ok) {
         setError(`「${file.name}」没导进去：${up.error}`);
         return;
       }
+      const m: TryMaterial = { slot: req.slot, title: up.title, csv: up.csv };
       const kept = saveTryMaterial(skillId, m);
       setMaterials((prev) => ({ ...prev, [req.slot]: m }));
       setResult(null);
@@ -171,7 +174,7 @@ export function SkillTryRun({
       <header className="sk-col-h">
         <div className="sk-col-h-title">
           <span className="sk-col-h-tag">试跑</span>
-          <h2>用一份真实材料跑一遍</h2>
+          <h2>{inlineRun ? "输入问句，跑一遍 MCP 流水线" : "用一份真实材料跑一遍"}</h2>
         </div>
         <span className="sk-col-h-badge">
           {hasChanges ? `线上 v${liveVersion} 和草稿 v${draftVersion} 各跑一次` : `跑线上 v${liveVersion}`}
@@ -179,7 +182,9 @@ export function SkillTryRun({
       </header>
       <div className="sk-try-body">
         <p className="sk-try-lead">
-          试跑和对话里办事用的是同一套计算，只是不会改动正在用的版本，也不会进客户的办理记录。
+          {inlineRun
+            ? "不需要导入表格。走服务端 run-inline，逐步调用知识检索、探活、DOM、性能与 workflow 入队，和出厂 SKILL 步骤一致。"
+            : "试跑和对话里办事用的是同一套计算，只是不会改动正在用的版本，也不会进客户的办理记录。"}
         </p>
 
         {needsMaterial ? (
@@ -212,14 +217,14 @@ export function SkillTryRun({
                       disabled={busy !== ""}
                       onClick={() => fileRefs.current[r.slot]?.click()}
                     >
-                      {busy === "file" ? "读取中…" : m ? "换一份" : "选择 CSV 文件"}
+                      {busy === "file" ? "读取中…" : m ? "换一份" : "选择 CSV / Excel / PDF"}
                     </button>
                     <input
                       ref={(el) => {
                         fileRefs.current[r.slot] = el;
                       }}
                       type="file"
-                      accept=".csv,.txt,text/csv"
+                      accept={PRODUCT_FILE_ACCEPT}
                       hidden
                       aria-hidden
                       onChange={(e) => {
@@ -236,8 +241,14 @@ export function SkillTryRun({
         ) : null}
 
         <label className="sk-try-query">
-          <span>这次办什么</span>
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="例如：按部门汇总，发票对不上的拦下来" />
+          <span>{inlineRun ? "这次问什么" : "这次办什么"}</span>
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={
+              inlineRun ? "例如：综合诊断本站和 OwnAgent 项目知识" : "例如：按部门汇总，发票对不上的拦下来"
+            }
+          />
         </label>
 
         <p className={`sk-try-llm is-${model.tone}`}>{model.text}</p>

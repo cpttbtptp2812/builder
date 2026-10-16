@@ -133,9 +133,14 @@ const catalogGraph = buildSkillDependencyGraph(catalog);
 assert.deepEqual(
   catalogGraph.edges.map((edge) => `${edge.from}->${edge.to}`),
   [
+    "agent-copilot->dom-probe",
+    "agent-copilot->knowledge-lookup",
+    "agent-copilot->site-analyzer",
+    "agent-copilot->workflow-orchestrator",
     "release-inspector->dom-probe",
     "release-inspector->knowledge-lookup",
     "site-analyzer->dom-probe",
+    "skill-router->agent-copilot",
     "skill-router->dom-probe",
     "skill-router->knowledge-lookup",
     "skill-router->policy-desk",
@@ -148,7 +153,7 @@ assert.deepEqual(
 const domImpact = propagateReverseImpact(catalogGraph, ["dom-probe"]);
 assert.deepEqual(
   domImpact.impacted.filter((row) => row.distance === 1).map((row) => row.skillId),
-  ["release-inspector", "site-analyzer", "skill-router", "workflow-orchestrator"],
+  ["agent-copilot", "release-inspector", "site-analyzer", "skill-router", "workflow-orchestrator"],
 );
 
 console.log(`skillGovernance: dependency, ambiguity, and reverse-impact checks passed (${catalogGraph.edges.length} catalog edges)`);

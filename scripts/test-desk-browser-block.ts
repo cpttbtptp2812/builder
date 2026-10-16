@@ -3,16 +3,28 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { enrichSkillCatalog, hydrateSkill } from "../src/lib/skillMarkdown.ts";
-import { CUSTOMER_SKILL_IDS, runSkill, type AgentSkill } from "../src/lib/agentSkills.ts";
+import { PRODUCT_RETIRED_SKILL_IDS, runSkill, type AgentSkill } from "../src/lib/agentSkills.ts";
+import { productSkillUsesUserData } from "../src/lib/productSkillInputs.ts";
+import { isCreditFlowSkillId } from "../src/lib/creditFlowUi.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILLS_DIR = path.join(__dirname, "..", "src", "skills");
 
 function loadDeskSkills(): AgentSkill[] {
-  return CUSTOMER_SKILL_IDS.map((id) => {
-    const raw = fs.readFileSync(path.join(SKILLS_DIR, id, "SKILL.md"), "utf8");
-    return hydrateSkill(raw, { id, skillPath: `src/skills/${id}/SKILL.md` });
-  }) as AgentSkill[];
+  return fs
+    .readdirSync(SKILLS_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory() && fs.existsSync(path.join(SKILLS_DIR, d.name, "SKILL.md")))
+    .map((d) => {
+      const id = d.name;
+      const raw = fs.readFileSync(path.join(SKILLS_DIR, id, "SKILL.md"), "utf8");
+      return hydrateSkill(raw, { id, skillPath: `src/skills/${id}/SKILL.md` });
+    })
+    .filter(
+      (s) =>
+        productSkillUsesUserData(s.id) &&
+        !isCreditFlowSkillId(s.id) &&
+        !(PRODUCT_RETIRED_SKILL_IDS as readonly string[]).includes(s.id),
+    ) as AgentSkill[];
 }
 
 async function main() {

@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { enrichSkillCatalog, hydrateSkill } from "../src/lib/skillMarkdown.ts";
-import { isCustomerSkill } from "../src/lib/agentSkills.ts";
+import { CUSTOMER_SKILL_IDS } from "../src/lib/agentSkills.ts";
 import { routeQuery } from "../src/lib/skillRouter.ts";
 import type { AgentSkill } from "../src/lib/agentSkills.ts";
 
@@ -19,7 +19,10 @@ function loadCustomerCatalog(): AgentSkill[] {
       return hydrateSkill(raw, { id: d.name, skillPath: `src/skills/${d.name}/SKILL.md` });
     });
   return enrichSkillCatalog(cores, "server").filter(
-    (s) => s.runnable && s.steps.length > 0 && isCustomerSkill(s.id),
+    (s) =>
+      s.runnable &&
+      s.steps.length > 0 &&
+      (CUSTOMER_SKILL_IDS as readonly string[]).includes(s.id as (typeof CUSTOMER_SKILL_IDS)[number]),
   ) as AgentSkill[];
 }
 
@@ -60,4 +63,5 @@ for (const { q, want } of GATE_QUERIES) {
 }
 
 if (failed) process.exit(1);
+
 console.log("OK  test-product-route");

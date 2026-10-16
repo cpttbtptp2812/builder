@@ -11,6 +11,7 @@ import { getSkill, runSkillOnServer } from "../server/skills.ts";
 import { mustRunServerProcessSkill } from "../src/lib/customerSkillKernel.ts";
 
 const CASES: { skillId: string; query: string; minOkSteps?: number }[] = [
+  { skillId: "agent-copilot", query: "Agent Copilot 综合诊断本站", minOkSteps: 5 },
   { skillId: "policy-desk", query: "满一年年假有几天" },
   { skillId: "knowledge-lookup", query: "OwnAgent 是什么" },
   { skillId: "site-analyzer", query: "检查本站能不能打开" },

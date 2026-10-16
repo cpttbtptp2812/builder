@@ -4,7 +4,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { dbAll, dbRun, nowIso } from "./db.ts";
-import { callExternalTool, externalTool } from "./externalTools.ts";
+import { callExternalTool, externalTool, isExternalToolConsented } from "./externalTools.ts";
 import { invokeThroughGateway, productGrant, type GatewayMeta } from "./toolGateway.ts";
 import {
   FAQ_MATCH_THRESHOLD,
@@ -25,6 +25,7 @@ import {
 } from "../src/lib/skillMarkdown.ts";
 import { applyStepVarWrites, stepVarWrites } from "../src/lib/skillVarBindings.ts";
 import { composeStepsMarkdown } from "../src/lib/composeSteps.ts";
+import { composeAgentCopilot } from "../src/lib/agentCopilotCompose.ts";
 import { runContractTool } from "../src/lib/contractDeskProgram.ts";
 import { runDataTool } from "../src/lib/dataDeskProgram.ts";
 import { runFlowTool } from "../src/lib/flowEngine.ts";
@@ -66,6 +67,7 @@ const DEFAULT_PROBE_URL = process.env.PROBE_URL ?? "https://cpttbtptp2812.github
 
 const SKILL_ORDER = [
   "release-inspector",
+  "agent-copilot",
   "site-analyzer",
   "dom-probe",
   "workflow-orchestrator",
@@ -386,6 +388,19 @@ async function callTool(
         },
       };
     }
+    case "__compose_agent_copilot__": {
+      const merged = {
+        ...args,
+        knowledge: args.knowledge ?? ctx.vars.searchResult,
+        probe: args.probe ?? ctx.vars.probeResult,
+        snapshot: args.snapshot ?? ctx.vars.snapshotResult,
+        dom: args.dom ?? ctx.vars.domResult,
+        perf: args.perf ?? ctx.vars.perfResult,
+        workflow: args.workflow ?? ctx.vars.workflowResult,
+        query: args.query ?? ctx.vars.query,
+      };
+      return { content: composeAgentCopilot(merged as Record<string, unknown>) };
+    }
     case "__compose_release_report__": {
       const probe = (args.probe ?? ctx.vars.probeResult) as Record<string, unknown>;
       const targetUrl = String(args.targetUrl ?? probe?.url ?? ctx.probeUrl ?? DEFAULT_PROBE_URL);
@@ -581,7 +596,21 @@ export async function runSkillManifestOnServer(
       grant: clientCtx.productWorkbench ? productGrant(registered ? [registered.capability] : []) : ["read", "write", "network", "model"],
       declaredCapability: registered?.capability,
       timeoutMs: registered?.timeoutMs,
-      run: () => (registered ? callExternalTool(registered, args) : callTool(step.tool, args, ctx)),
+      run: () => {
+        if (registered) {
+          if (!isExternalToolConsented(registered.name)) {
+            return Promise.resolve({
+              content: {
+                error: `外部工具「${registered.title}」尚未确认授权。请在「规则 → 接入配置 → 外部工具」里勾选「允许办事时调用」。`,
+                code: "TOOL_CONSENT",
+              },
+              isError: true,
+            });
+          }
+          return callExternalTool(registered, args);
+        }
+        return callTool(step.tool, args, ctx);
+      },
     });
 
     applyStepVarWrites(ctx.vars, step.id, step.tool, out.content);

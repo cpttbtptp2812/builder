@@ -1,28 +1,18 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 import { downloadText } from "../../../lib/importedSkills";
 import { requirementsForSkill } from "../../../lib/productSkillInputs";
-import { decodeUploadCsvText, type ProductDataSlot } from "../../../lib/productDataStore";
+import { type ProductDataSlot } from "../../../lib/productDataStore";
 import { getSessionId } from "../../../lib/sessionId";
 import {
   apiContinueProductRun,
   apiFetchDeskTemplate,
   apiRerunProductRun,
-  apiUploadProductDataset,
 } from "../../../lib/productRun/client";
+import { PRODUCT_FILE_ACCEPT, uploadProductSlotFile } from "../../../lib/uploadProductFile";
 import type { ProductRunImportPart, ProductRunView } from "../../../lib/productRun/types";
 import { ProductRunInsights } from "../../platform/ProductRunInsights";
 import { loadLlmConfig } from "../../../lib/llmConfig";
 import { LocalModelBox } from "../../ownagent/LocalModelBox";
-
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
-  const bytes = new Uint8Array(buffer);
-  let binary = "";
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
 
 function importPartsForRun(run: ProductRunView): ProductRunImportPart[] {
   const fromRun = run.parts.filter((p): p is ProductRunImportPart => p.kind === "import");
@@ -116,7 +106,7 @@ function MaterialGatePanel({
                     fileRefs.current[part.slot] = el;
                   }}
                   type="file"
-                  accept=".csv,.txt,.xlsx,.pdf,text/csv,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  accept={PRODUCT_FILE_ACCEPT}
                   disabled={fileBusy}
                   hidden
                   aria-hidden
@@ -164,18 +154,12 @@ export function ProductRunParts({
 
   const onFile = useCallback(
     async (part: ProductRunImportPart, file: File) => {
-      const buf = await file.arrayBuffer();
-      const lower = file.name.toLowerCase();
-      const workbook = lower.endsWith(".xlsx") || lower.endsWith(".xls") || lower.endsWith(".pdf");
       setBusy(true);
       try {
-        const up = await apiUploadProductDataset({
+        const up = await uploadProductSlotFile({
           sessionId: part.sessionId,
           slot: part.slot as ProductDataSlot,
-          csv: workbook ? undefined : decodeUploadCsvText(buf),
-          workbookBase64: workbook ? arrayBufferToBase64(buf) : undefined,
-          filename: file.name,
-          title: file.name.replace(/\.[^.]+$/, ""),
+          file,
         });
         if (!up.ok) {
           window.alert(up.error ?? "导入失败");

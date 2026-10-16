@@ -2,6 +2,8 @@
   .ua-thread-content,
   .ua-row,
   .ua-turn-wrap,
+  .ua-compose-dock,
+  .oc-shortcuts--follow,
   .ua-compose-wrap,
   .ua-compose-pro,
   .ua-footer
@@ -516,12 +518,36 @@
 }
 
 .own-app--product .oc-shortcuts--follow {
-  margin: 0 auto 0.4rem;
-  max-width: 52rem;
+  box-sizing: border-box;
+  margin: 0 0 0.4rem;
   padding: 0.35rem 0.55rem;
   border: 1px solid #e2e8f0;
   border-radius: 12px;
   background: #fff;
+}
+
+.own-app--product .oc-shortcuts--follow .chat-quick-prompts {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.5rem;
+  width: 100%;
+  margin-bottom: 0;
+}
+
+.own-app--product .oc-shortcuts--follow .chat-quick-prompts-label {
+  flex: 0 0 auto;
+  margin: 0;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.own-app--product .oc-shortcuts--follow .chat-quick-prompts-list {
+  flex: 1 1 12rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  min-width: 0;
 }
 
 .own-app--product .own-skill-ver-steps {

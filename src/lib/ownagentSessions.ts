@@ -80,6 +80,13 @@ export type OwnChatMessage = {
   creditFlowCheckpoint?: import("./creditFlowEngine").CreditFlowState | null;
   /** 产品：服务端 process run（import / 步骤 / finish） */
   productRun?: import("./productRun/types").ProductRunView;
+  /** 轻量门闩：缺材料时在气泡内导入（与 product-run 同一 upload 接口） */
+  productDataGate?: {
+    sessionId: string;
+    skillId: string;
+    query: string;
+    missing: import("./productSkillInputs").SkillDataRequirement[];
+  };
 };
 
 export type OwnSession = {

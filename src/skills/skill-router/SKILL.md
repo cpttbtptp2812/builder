@@ -9,6 +9,7 @@ triggers:
   - 路由
 tools: []
 depends:
+  - agent-copilot
   - release-inspector
   - site-analyzer
   - dom-probe

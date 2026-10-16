@@ -10,6 +10,7 @@ export function stepVarWrites(stepId: string, tool: string): string[] {
   if (tool === "workflow_run") keys.add("workflowResult");
   if (tool === "__perf_metrics__") keys.add("perfResult");
   if (tool === "knowledge_search") keys.add("searchResult");
+  if (tool === "__analyze_dom_tree__") keys.add("domResult");
   return [...keys];
 }
 

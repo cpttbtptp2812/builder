@@ -12,20 +12,42 @@ export type ExternalTool = {
   endpoint: string;
   capability: ToolCapability;
   timeoutMs: number;
+  consented: boolean;
 };
 
 export function listExternalTools(): ExternalTool[] {
-  return dbAll<{ name: string; title: string; endpoint: string; capability: string; timeout_ms: number }>(
-    `SELECT name, title, endpoint, capability, timeout_ms FROM external_tools ORDER BY name`,
-  ).map(toTool);
+  return dbAll<{ name: string; title: string; endpoint: string; capability: string; timeout_ms: number; granted: number | null }>(
+    `SELECT t.name, t.title, t.endpoint, t.capability, t.timeout_ms, c.granted
+     FROM external_tools t
+     LEFT JOIN external_tool_consents c ON c.tool_name = t.name
+     ORDER BY t.name`,
+  ).map((row) => ({ ...toTool(row), consented: row.granted === 1 }));
+}
+
+export function isExternalToolConsented(name: string): boolean {
+  const row = dbGet<{ granted: number }>(`SELECT granted FROM external_tool_consents WHERE tool_name = ?`, [name]);
+  return row?.granted === 1;
+}
+
+export function setExternalToolConsent(name: string, granted: boolean) {
+  if (!externalTool(name)) return false;
+  dbRun(
+    `INSERT INTO external_tool_consents (tool_name, granted, updated_at) VALUES (?, ?, ?)
+     ON CONFLICT(tool_name) DO UPDATE SET granted = excluded.granted, updated_at = excluded.updated_at`,
+    [name, granted ? 1 : 0, nowIso()],
+  );
+  return true;
 }
 
 export function externalTool(name: string): ExternalTool | null {
-  const row = dbGet<{ name: string; title: string; endpoint: string; capability: string; timeout_ms: number }>(
-    `SELECT name, title, endpoint, capability, timeout_ms FROM external_tools WHERE name = ?`,
+  const row = dbGet<{ name: string; title: string; endpoint: string; capability: string; timeout_ms: number; granted: number | null }>(
+    `SELECT t.name, t.title, t.endpoint, t.capability, t.timeout_ms, c.granted
+     FROM external_tools t
+     LEFT JOIN external_tool_consents c ON c.tool_name = t.name
+     WHERE t.name = ?`,
     [name],
   );
-  return row ? toTool(row) : null;
+  return row ? { ...toTool(row), consented: row.granted === 1 } : null;
 }
 
 function toTool(row: { name: string; title: string; endpoint: string; capability: string; timeout_ms: number }): ExternalTool {
@@ -66,18 +88,35 @@ export function registerExternalTools(app: Hono) {
     if (!endpoint) return c.json({ error: "要填写工具地址" }, 400);
     const capability = body?.capability === "read" || body?.capability === "write" || body?.capability === "model" ? body.capability : "network";
     const timeoutMs = Math.min(60_000, Math.max(1_000, Number(body?.timeoutMs) || 15_000));
+    const ts = nowIso();
     dbRun(
       `INSERT INTO external_tools (name, title, endpoint, capability, timeout_ms, created_at)
        VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT(name) DO UPDATE SET title = excluded.title, endpoint = excluded.endpoint, capability = excluded.capability, timeout_ms = excluded.timeout_ms`,
-      [name, body?.title?.trim() || name, endpoint, capability, timeoutMs, nowIso()],
+      [name, body?.title?.trim() || name, endpoint, capability, timeoutMs, ts],
     );
+    dbRun(
+      `INSERT INTO external_tool_consents (tool_name, granted, updated_at) VALUES (?, 0, ?)
+       ON CONFLICT(tool_name) DO NOTHING`,
+      [name, ts],
+    );
+    return c.json({ ok: true, tool: externalTool(name) });
+  });
+  app.post("/api/tools/external/consent", async (c) => {
+    const access = allow(c);
+    if (!access.ok) return c.json({ error: access.error }, access.status);
+    const body = await c.req.json<{ name?: string; granted?: boolean }>().catch(() => null);
+    const name = body?.name?.trim() ?? "";
+    if (!name) return c.json({ error: "缺少工具名" }, 400);
+    if (!setExternalToolConsent(name, Boolean(body?.granted))) return c.json({ error: "工具不存在" }, 404);
     return c.json({ ok: true, tool: externalTool(name) });
   });
   app.delete("/api/tools/external/:name", (c) => {
     const access = allow(c);
     if (!access.ok) return c.json({ error: access.error }, access.status);
-    dbRun(`DELETE FROM external_tools WHERE name = ?`, [c.req.param("name")]);
+    const name = c.req.param("name");
+    dbRun(`DELETE FROM external_tools WHERE name = ?`, [name]);
+    dbRun(`DELETE FROM external_tool_consents WHERE tool_name = ?`, [name]);
     return c.json({ ok: true });
   });
 }

@@ -115,6 +115,19 @@ export const MOCK_PROFILES: Record<string, Record<string, (args: Record<string, 
     browser_snapshot: () => ({ nodeCount: 0, nodes: [] }),
     __compose_workflow_trace__: () => ({ dashboard: {}, meta: { skill: "workflow-orchestrator" } }),
   },
+  "agent-copilot": {
+    knowledge_search: () => ({ hits: [{ title: "OwnAgent", chunkId: "ownagent:desc-0", score: 0.82 }] }),
+    http_probe: () => ({ ok: true, status: 200, latencyMs: 11, url: "https://example.com" }),
+    browser_snapshot: () => ({ nodeCount: 12, nodes: [{ role: "link", name: "x", tag: "a" }] }),
+    __analyze_dom_tree__: () => ({ dashboard: { domProbe: { totalNodes: 12, interactive: 4, density: 33 } } }),
+    __perf_metrics__: () => ({ ttfbMs: 42, loadMs: 900, resourceCount: 18 }),
+    workflow_run: () => ({ runId: "mock-copilot-run", workflowId: "execute", status: "queued", steps: [{ id: "s1" }] }),
+    __compose_agent_copilot__: () => ({
+      dashboard: { agentCopilot: { score: 88, toolCount: 5 } },
+      markdown: "## Agent Copilot",
+      meta: { skill: "agent-copilot" },
+    }),
+  },
 };
 
 export const SKILL_TRACE_CASES: SkillTraceCase[] = [
@@ -170,6 +183,23 @@ export const SKILL_TRACE_CASES: SkillTraceCase[] = [
         { stepId: "search", tool: "knowledge_search" },
         { stepId: "compose", tool: "__compose_knowledge__" },
       ],
+    },
+  },
+  {
+    id: "ac-t1",
+    skillId: "agent-copilot",
+    query: "Agent Copilot 综合诊断",
+    expect: {
+      steps: [
+        { stepId: "search", tool: "knowledge_search" },
+        { stepId: "probe", tool: "http_probe" },
+        { stepId: "snapshot", tool: "browser_snapshot" },
+        { stepId: "dom", tool: "__analyze_dom_tree__" },
+        { stepId: "perf", tool: "__perf_metrics__" },
+        { stepId: "workflow", tool: "workflow_run" },
+        { stepId: "report", tool: "__compose_agent_copilot__" },
+      ],
+      effectBound: "read_remote",
     },
   },
   {

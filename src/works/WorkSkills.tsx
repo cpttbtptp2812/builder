@@ -9,7 +9,7 @@ import { getWork } from "../data/works";
 /** SkillForge — Skill Runtime Lab */
 export function WorkSkills() {
   const [params] = useSearchParams();
-  const trySkillId = params.get("try") ?? params.get("skill");
+  const trySkillId = params.get("try") ?? params.get("skill") ?? "ledger-desk";
   const platform = getWork("platform");
 
   useEffect(() => {

@@ -13699,6 +13699,158 @@ input.replay-typing {
   font-weight: 600;
 }
 
+.skill-dashboard--copilot {
+  gap: 1rem;
+}
+
+.skill-copilot-hero {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 1rem;
+  align-items: center;
+  padding: 1rem 1.1rem;
+  border-radius: 0.65rem;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 55%, #334155 100%);
+  color: #f8fafc;
+}
+
+.skill-copilot-score {
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  border: 3px solid rgba(251, 191, 36, 0.55);
+  background: rgba(15, 23, 42, 0.65);
+}
+
+.skill-copilot-score[data-tone="high"] {
+  border-color: rgba(52, 211, 153, 0.75);
+}
+
+.skill-copilot-score[data-tone="low"] {
+  border-color: rgba(248, 113, 113, 0.65);
+}
+
+.skill-copilot-score strong {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.skill-copilot-score span {
+  font-size: 0.58rem;
+  opacity: 0.85;
+  margin-top: 0.15rem;
+}
+
+.skill-copilot-hero-copy h4 {
+  margin: 0 0 0.35rem;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.skill-copilot-hero-copy p {
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #cbd5e1;
+}
+
+.skill-copilot-hero-copy em {
+  display: block;
+  margin-top: 0.45rem;
+  font-size: 0.68rem;
+  font-style: normal;
+  color: #94a3b8;
+}
+
+.skill-copilot-pillars {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+@media (max-width: 960px) {
+  .skill-copilot-pillars {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.skill-copilot-pillar {
+  padding: 0.55rem 0.6rem;
+  border-radius: 0.45rem;
+  border: 1px solid #e2e8f0;
+  background: #fff;
+}
+
+.skill-copilot-pillar.ok {
+  border-color: rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.skill-copilot-pillar.warn {
+  border-color: rgba(251, 191, 36, 0.45);
+  background: rgba(254, 243, 199, 0.35);
+}
+
+.skill-copilot-pillar header {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  margin-bottom: 0.35rem;
+}
+
+.skill-copilot-pillar header strong {
+  font-size: 0.68rem;
+  color: #0f172a;
+}
+
+.skill-copilot-pillar header span {
+  font-size: 0.58rem;
+  color: #94a3b8;
+}
+
+.skill-copilot-pillar p {
+  margin: 0;
+  font-size: 0.65rem;
+  color: #475569;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.skill-copilot-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.skill-copilot-hits li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 1fr auto;
+  gap: 0.5rem;
+  align-items: baseline;
+  font-size: 0.68rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 0.35rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.skill-copilot-hits code {
+  color: #b45309;
+  font-size: 0.62rem;
+}
+
+.skill-copilot-hits em {
+  font-style: normal;
+  color: #64748b;
+}
+
 .skill-mcp-embed {
   padding: 0.5rem;
 }
@@ -25840,6 +25992,40 @@ input.replay-typing {
   color: #64748b;
   font-size: 0.7rem;
   font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}
+.sk-draft-proposal {
+  flex: 1 1 100%;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 0.78rem;
+  color: #334155;
+}
+.sk-draft-proposal strong {
+  margin-right: 0.45rem;
+  font-weight: 600;
+}
+.sk-draft-proposal-list {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  color: #475569;
+  font-size: 0.74rem;
+}
+.oa-ext-tool-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.65rem;
+}
+.oa-ext-tool-consent {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.82rem;
+  color: #334155;
 }
 .sk-history-btn {
   font-size: 0.78rem !important;

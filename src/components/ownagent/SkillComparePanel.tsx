@@ -3,6 +3,8 @@ import { previewClause, renderSkillHost, type SkillClause } from "../../lib/skil
 import {
   AGENT_SKILLS,
   CUSTOMER_SKILL_IDS,
+  isInlineRuntimeSkill,
+  OWNAGENT_SKILL_PAGE_IDS,
   getBuiltinSkill,
   getLiveCatalog,
   getSkill,
@@ -36,6 +38,7 @@ import { CompareSideColumn, downloadFullReportMd, FullCompareReport } from "./re
 import { ScmAttributionPanel } from "./ScmAttributionPanel";
 import { gateLead, customerReason } from "./ScmVisuals";
 import { RuleProofPanel } from "./RuleProofPanel";
+import { SkillDraftProposalStrip } from "./SkillDraftProposalStrip";
 import { SkillCollab } from "./SkillCollab";
 import { SkillTwinPanel } from "../platform/SkillTwinPanel";
 import { mustRunServerProcessSkill } from "../../lib/customerSkillKernel";
@@ -219,7 +222,7 @@ function SkillList({ tick, onOpen }: { tick: number; onOpen: (id: string) => voi
     const live = new Map(getLiveCatalog().map((s) => [s.id, s]));
     const seen = new Set<string>();
     const out: AgentSkill[] = [];
-    for (const id of CUSTOMER_SKILL_IDS) {
+    for (const id of OWNAGENT_SKILL_PAGE_IDS) {
       const s = live.get(id) ?? AGENT_SKILLS.find((b) => b.id === id);
       if (!s || seen.has(id)) continue;
       seen.add(id);
@@ -510,6 +513,9 @@ const SkillListCard = memo(function SkillListCard({
               <span className="own-skill-ver-tag">v{meta.ver}</span>
               {skill.id.endsWith("-flow-desk") ? (
                 <span className="own-skill-ver-tag own-skill-ver-tag--flow">多轮</span>
+              ) : null}
+              {isInlineRuntimeSkill(skill.id) ? (
+                <span className="own-skill-ver-tag own-skill-ver-tag--flow">运行型</span>
               ) : null}
               {imported ? <span className="own-skill-ver-tag own-skill-ver-tag--import">导入</span> : null}
               {meta.hasDraft ? (
@@ -977,6 +983,7 @@ function SkillDetail({
               {" · "}
               {sentenceCount} 句用来检查
             </span>
+            <SkillDraftProposalStrip online={onlineParsed} draft={draftParsed} hasChanges={hasChanges} />
           </div>
           <div className="sk-work-actions">
             <button

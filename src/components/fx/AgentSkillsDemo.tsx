@@ -15,10 +15,12 @@ import {
 import { explainDiscoveryAsync, runSkillAsync } from "../../lib/backendBridge";
 import { AgentFlowDiagram } from "./AgentFlowDiagram";
 import { McpBridgeDemo } from "./McpBridgeDemo";
+import { defaultSampleQuery } from "../ownagent/skillVerUi";
 
 type LabTab = "router" | (typeof AGENT_SKILLS)[number]["id"] | "mcp";
 
 const SKILL_LABELS: Record<string, string> = {
+  "agent-copilot": "Agent Copilot",
   "site-analyzer": "Site Audit",
   "dom-probe": "DOM Probe",
   "workflow-orchestrator": "Workflow",
@@ -168,6 +170,109 @@ function DomProbeDashboard({ dashboard }: { dashboard: Record<string, unknown> }
   );
 }
 
+type CopilotPillar = { ok?: boolean; hitCount?: number; topChunk?: string | null; status?: number; latencyMs?: number; a11yNodes?: number; totalNodes?: number; interactive?: number; ttfbMs?: number | null; runId?: string; workflowId?: string; steps?: number };
+
+function AgentCopilotDashboard({ dashboard }: { dashboard: Record<string, unknown> }) {
+  const cop = dashboard.agentCopilot as {
+    score?: number;
+    toolCount?: number;
+    headline?: string;
+    query?: string;
+    pillars?: {
+      knowledge?: CopilotPillar;
+      probe?: CopilotPillar;
+      dom?: CopilotPillar;
+      perf?: CopilotPillar;
+      workflow?: CopilotPillar;
+    };
+    hits?: { chunkId?: string; title?: string; score?: number }[];
+  } | undefined;
+  const score = cop?.score ?? 0;
+  const pillars = cop?.pillars;
+
+  const cards: { key: string; title: string; sub: string; ok: boolean; detail: string }[] = [
+    {
+      key: "rag",
+      title: "Hybrid RAG",
+      sub: "knowledge_search",
+      ok: Boolean(pillars?.knowledge?.ok),
+      detail: `${pillars?.knowledge?.hitCount ?? 0} 块 · ${pillars?.knowledge?.topChunk ?? "—"}`,
+    },
+    {
+      key: "probe",
+      title: "http_probe",
+      sub: "真实 fetch",
+      ok: Boolean(pillars?.probe?.ok),
+      detail: `${pillars?.probe?.status ?? "—"} · ${pillars?.probe?.latencyMs ?? "—"}ms`,
+    },
+    {
+      key: "dom",
+      title: "DOM / Locator",
+      sub: "browser_snapshot",
+      ok: Boolean(pillars?.dom?.ok),
+      detail: `${pillars?.dom?.totalNodes ?? pillars?.dom?.a11yNodes ?? "—"} 节点 · 可交互 ${pillars?.dom?.interactive ?? "—"}`,
+    },
+    {
+      key: "perf",
+      title: "Performance",
+      sub: "Navigation Timing",
+      ok: Boolean(pillars?.perf?.ok),
+      detail: `TTFB ${pillars?.perf?.ttfbMs ?? "—"}ms`,
+    },
+    {
+      key: "wf",
+      title: "TaskQueue",
+      sub: "workflow_run",
+      ok: Boolean(pillars?.workflow?.ok),
+      detail: pillars?.workflow?.runId ? `${pillars.workflow.workflowId ?? "execute"} · ${pillars.workflow.status ?? "—"}` : "未入队（可选步）",
+    },
+  ];
+
+  return (
+    <div className="skill-dashboard skill-dashboard--copilot">
+      <div className="skill-copilot-hero">
+        <div className="skill-copilot-score" data-tone={score >= 80 ? "high" : score >= 50 ? "mid" : "low"}>
+          <strong>{score}</strong>
+          <span>就绪度</span>
+        </div>
+        <div className="skill-copilot-hero-copy">
+          <h4>Agent Copilot · {cop?.toolCount ?? 5} 路 MCP 总线</h4>
+          <p>{cop?.headline ?? "联合指挥面板"}</p>
+          {cop?.query ? <em>「{cop.query.length > 48 ? `${cop.query.slice(0, 48)}…` : cop.query}」</em> : null}
+        </div>
+      </div>
+      <div className="skill-copilot-pillars">
+        {cards.map((c) => (
+          <div key={c.key} className={`skill-copilot-pillar ${c.ok ? "ok" : "warn"}`}>
+            <header>
+              <strong>{c.title}</strong>
+              <span>{c.sub}</span>
+            </header>
+            <p>{c.detail}</p>
+          </div>
+        ))}
+      </div>
+      {cop?.hits && cop.hits.length > 0 && (
+        <div className="skill-dashboard-section">
+          <header>
+            <strong>语料命中</strong>
+            <span>chunkId 可回指</span>
+          </header>
+          <ul className="skill-copilot-hits">
+            {cop.hits.map((h, i) => (
+              <li key={`${h.chunkId ?? i}`}>
+                <code>{h.chunkId ?? "—"}</code>
+                <span>{h.title ?? "hit"}</span>
+                <em>{h.score != null ? h.score.toFixed(2) : "—"}</em>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function WorkflowDashboard({ dashboard, meta }: { dashboard: Record<string, unknown>; meta?: Record<string, unknown> }) {
   const wf = dashboard.workflow as { runId?: string; workflowId?: string; status?: string; replaySteps?: number } | undefined;
   const surface = dashboard.executionSurface as { interactiveNodes?: number } | undefined;
@@ -211,7 +316,8 @@ function SkillRuntimePanel({
     setTrace([]);
     setResult(null);
     setExpanded(null);
-    const out = await runSkillAsync(skill, skill.description, {
+    const query = defaultSampleQuery(skill.id, skill.triggers);
+    const out = await runSkillAsync(skill, query, {
       snapshotRoot,
       onStep: (step) => setTrace((prev) => [...prev, step]),
     });
@@ -243,6 +349,7 @@ function SkillRuntimePanel({
 
       <PipelineTrace trace={trace} expanded={expanded} onToggle={setExpanded} />
 
+      {dashboard && skill.id === "agent-copilot" && <AgentCopilotDashboard dashboard={dashboard} />}
       {dashboard && skill.id === "site-analyzer" && <SiteAuditDashboard dashboard={dashboard} />}
       {dashboard && skill.id === "dom-probe" && <DomProbeDashboard dashboard={dashboard} />}
       {dashboard && skill.id === "workflow-orchestrator" && (
@@ -427,7 +534,7 @@ export function AgentSkillsDemo({
         flowEdge={tab === "mcp" ? { from: "ctrl", to: "mcp" } : { from: "plan", to: "browser" }}
         caption="能力层：浏览器 / 协议 / 知识，不是理解页"
         onSelect={(id) => {
-          if (id === "browser") selectFlowNode("site-analyzer");
+          if (id === "browser") selectFlowNode("agent-copilot");
           else if (id === "entity") selectFlowNode("dom-probe");
           else if (id === "pattern" || id === "manage" || id === "dsl" || id === "plan") selectFlowNode("workflow-orchestrator");
           else if (id === "mcp" || id === "mech") selectFlowNode("mcp");

@@ -136,7 +136,7 @@ export const PROJECT_DETAILS: ProjectDetail[] = [
     narrative:
       "SkillForge 是王旭个人站内置的 Agent Skills 运行时。\n\n" +
       "技能目录从 src/skills/*/SKILL.md 解析 frontmatter 与 steps AST；访客对照原文、试解析、再 Run Skill 跑 MCP 流水线。\n\n" +
-      "内置 site-analyzer、dom-probe、workflow-orchestrator、policy-desk、knowledge-lookup；skill-router 仅解析不执行。Router 可见 explainDiscovery 打分。制度值班走能力信封，改权限只预演工单。",
+      "内置 agent-copilot（五路 MCP 总线 + 联合指挥面板）、site-analyzer、dom-probe、workflow-orchestrator、policy-desk、knowledge-lookup；skill-router 仅解析不执行。Router 可见 explainDiscovery 打分。制度值班走能力信封，改权限只预演工单。",
     aspects: {
       架构: "Registry → Discover → runSkill → mcpServer.callTool · Trace 可观测。",
       路由: "trigger 词加权打分；可扩展 embedding retrieval。",
