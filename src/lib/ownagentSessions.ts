@@ -100,7 +100,14 @@ export type OwnSession = {
 };
 
 const KEY = "ownagent-sessions-v1";
+const USER_KEY = "ownagent-user-sessions-v1";
 const LEGACY = "ownagent-chat-v1";
+
+export type SessionScope = "admin" | "user";
+
+function storageKey(scope: SessionScope = "admin") {
+  return scope === "user" ? USER_KEY : KEY;
+}
 
 function uid() {
   return `s-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
@@ -138,9 +145,9 @@ function migrateLegacy(): Store | null {
   }
 }
 
-function readStore(): Store {
+function readStore(scope: SessionScope = "admin"): Store {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(storageKey(scope));
     if (raw) {
       const parsed = JSON.parse(raw) as Store;
       if (parsed.sessions?.length) return parsed;
@@ -148,18 +155,20 @@ function readStore(): Store {
   } catch {
     /* ignore */
   }
-  const migrated = migrateLegacy();
-  if (migrated) {
-    writeStore(migrated);
-    return migrated;
+  if (scope === "admin") {
+    const migrated = migrateLegacy();
+    if (migrated) {
+      writeStore(migrated, "admin");
+      return migrated;
+    }
   }
   const fresh = emptySession();
   return { activeId: fresh.id, sessions: [fresh] };
 }
 
-function writeStore(store: Store) {
+function writeStore(store: Store, scope: SessionScope = "admin") {
   try {
-    localStorage.setItem(KEY, JSON.stringify({
+    localStorage.setItem(storageKey(scope), JSON.stringify({
       activeId: store.activeId,
       sessions: store.sessions.slice(0, 24).map((s) => ({
         ...s,
@@ -172,12 +181,12 @@ function writeStore(store: Store) {
   }
 }
 
-export function loadSessionStore(): Store {
-  return readStore();
+export function loadSessionStore(scope: SessionScope = "admin"): Store {
+  return readStore(scope);
 }
 
-export function persistSessionStore(store: Store) {
-  writeStore(store);
+export function persistSessionStore(store: Store, scope: SessionScope = "admin") {
+  writeStore(store, scope);
 }
 
 export function upsertActive(store: Store, patch: Partial<OwnSession>): Store {

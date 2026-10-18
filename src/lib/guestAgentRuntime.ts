@@ -797,7 +797,7 @@ export async function runGuestAgentTurn(
 
   if (isCustomerSkill(skill.id) && !isCreditFlowSkillId(skill.id)) {
     const sessionId = ctx.sessionId?.trim() || "anon";
-    await streamReasoning(`正在办理 · ${skill.name}`, onEvent);
+    await streamReasoning(`正在办理 · ${skillLabel(skill)}`, onEvent);
     onEvent({ type: "iteration", n: 1 });
     let liveRun: ProductRunView | null = null;
     const syncRun = (patch: Partial<ProductRunView> & { processId: string; skillId: string; query: string }) => {

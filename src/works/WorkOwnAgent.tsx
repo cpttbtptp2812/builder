@@ -6,9 +6,11 @@ import { AgentProductDemo } from "../components/fx/AgentProductDemo";
 import { AgentWorkbenchPanel } from "../components/ownagent/AgentWorkbenchPanel";
 import { MaterialsLine, RulesLine, SkillLine, lineOf } from "../components/ownagent/MainLines";
 import { PageToolHost } from "../components/ownagent/PageToolHost";
+import { SkillUserClient } from "../components/ownagent/SkillUserClient";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 type ViewId =
   | "chat"
+  | "user"
   | "guide"
   | "feed"
   | "skills"
@@ -300,6 +302,7 @@ const LINE_NAV: {
 
 function resolveView(panel: string | null, view: string | null): ViewId {
   const raw = view || panel;
+  if (raw === "user") return "user";
   if (raw === "check") return "evalops";
   if (raw === "skills" || raw === "codrive") return "skills";
   if (raw === "versions") return "versions";
@@ -485,6 +488,7 @@ export function WorkOwnAgent() {
   }, [params, setParams]);
 
   if (view === "lab") return <Navigate to="/lab" replace />;
+  if (view === "user") return <SkillUserClient onAdmin={() => go("chat")} />;
 
   return (
     <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}`}>
@@ -500,6 +504,9 @@ export function WorkOwnAgent() {
         </div>
         <div className="own-app-actions">
           <BackendStatusBar compact quiet />
+          <button type="button" className="own-cmd" onClick={() => go("user")}>
+            用户端
+          </button>
           <button type="button" className="own-cmd" onClick={() => window.dispatchEvent(new Event("ownagent:palette"))}>
             搜索
           </button>

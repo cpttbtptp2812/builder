@@ -1,7 +1,7 @@
 /** 已上线 Skill 整包 — 覆盖内置目录，供运行时与开发者试跑 */
 
 import type { AgentSkill } from "./agentSkills";
-import { getAppliedSkill } from "./skillCompareStore";
+import { getAppliedSkill, getPublishedVersion } from "./skillCompareStore";
 import { enrichSkillCatalog, hydrateSkill, type SkillManifestCore } from "./skillMarkdown";
 import { apiFetch } from "./apiClient";
 
@@ -53,6 +53,13 @@ export function overlayPublishedCatalog(builtins: AgentSkill[]): AgentSkill[] {
 
 export function publishedVersionLabel(skillId: string): string | null {
   return getAppliedSkill(skillId)?.version ?? null;
+}
+
+/** 用户端看到的版本：服务端已上线优先，否则是已批准版本，没有单独发过就是出厂版。 */
+export function liveVersionLabel(skillId: string): string {
+  const server = serverLiveMap()[skillId];
+  if (server?.version) return server.version;
+  return getPublishedVersion(skillId);
 }
 
 export function publishedAppliedAt(skillId: string): string | null {

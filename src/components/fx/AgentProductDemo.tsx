@@ -14,6 +14,7 @@ import { streamByokChat } from "../../lib/byokLlm";
 import { logChatSession, markQueryPublished } from "../../lib/analyticsLog";
 import { formatThreadAsPlaza, matchPlaza, publishPlaza, type PlazaItem } from "../../lib/plazaFeed";
 import { checkBackendHealth } from "../../lib/apiClient";
+import { takeUserDeskRun } from "../../lib/userDeskBridge";
 import { getSessionId } from "../../lib/sessionId";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
@@ -107,6 +108,7 @@ import {
   emptySession,
   loadSessionStore,
   persistSessionStore,
+  type SessionScope,
   sessionToJson,
   sessionToMarkdown,
   upsertActive,
@@ -242,10 +244,16 @@ export function AgentProductDemo({
   autoStart: _autoStart = false,
   hubMode = false,
   onFlowActive,
+  listenUserRun = false,
+  sessionScope = "admin",
 }: {
   autoStart?: boolean;
   hubMode?: boolean;
   onFlowActive?: (nodeId: string) => void;
+  /** 用户端：把一句话放进输入框 */
+  listenUserRun?: boolean;
+  /** 用户端单独记会话，不带出管理端里已经办过的记录 */
+  sessionScope?: SessionScope;
 }) {
   const rootRef = useRef<HTMLDivElement>(null);
   const footerRef = useRef<HTMLDivElement>(null);
@@ -262,7 +270,7 @@ export function AgentProductDemo({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsTab, setSettingsTab] = useState<"knowledge" | "runtime">("runtime");
   const [kbRev, setKbRev] = useState(0);
-  const boot = useRef(loadSessionStore());
+  const boot = useRef(loadSessionStore(sessionScope));
   const [store, setStore] = useState(boot.current);
   const active = store.sessions.find((s) => s.id === store.activeId) ?? store.sessions[0]!;
   const [messages, setMessages] = useState<OwnChatMessage[]>(() => active.messages);
@@ -278,8 +286,13 @@ export function AgentProductDemo({
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const [input, setInput] = useState("");
+  const [draftHint, setDraftHint] = useState("");
   const [composeFocused, setComposeFocused] = useState(false);
   const composeRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (!draftHint) return;
+    composeRef.current?.focus();
+  }, [draftHint, input]);
   const [running, setRunning] = useState(false);
   const precheck = usePrecheck(hubMode ? input : "", running);
 
@@ -383,7 +396,9 @@ export function AgentProductDemo({
   );
 
   useEffect(() => {
-    void getRuntimeConfig();
+    void checkBackendHealth().then((health) => {
+      if (health?.ok) void getRuntimeConfig();
+    });
   }, []);
 
   useEffect(() => {
@@ -683,7 +698,7 @@ export function AgentProductDemo({
       return out;
     }
     const exclude = messages.map((m) => m.content);
-    if (!hubMode) {
+    if (!hubMode && sessionScope !== "user") {
       for (const p of listKnowledgePrompts(5)) {
         if (out.length >= 3) break;
         push(p.label, p.text, p.hint);
@@ -691,7 +706,7 @@ export function AgentProductDemo({
     }
     for (const t of listFollowUpPrompts(exclude, hubMode ? 5 : 3)) push(t, t);
     return out.slice(0, hubMode ? 5 : 4);
-  }, [running, emptyMessage, lastAsst, messages, kbRev, hubMode, creditFlow]);
+  }, [running, emptyMessage, lastAsst, messages, kbRev, hubMode, creditFlow, sessionScope]);
 
   const threadSearchNorm = threadSearch.trim().toLowerCase();
   const threadMatchCount = useMemo(() => {
@@ -706,10 +721,10 @@ export function AgentProductDemo({
         return prev;
       }
       const next = upsertActive(prev, { messages, history, creditFlow });
-      persistSessionStore(next);
+      persistSessionStore(next, sessionScope);
       return next;
     });
-  }, [messages, history, creditFlow]);
+  }, [messages, history, creditFlow, sessionScope]);
 
   useEffect(() => {
     const el = footerRef.current;
@@ -763,6 +778,7 @@ export function AgentProductDemo({
     ) => {
       const parsed = parseSlash(text);
       if (!parsed.query.trim() || running || sendLockRef.current) return;
+      setDraftHint("");
       if (!hubMode && parsed.matched) {
         sendLockRef.current = false;
         setMessages((prev) => [
@@ -1215,7 +1231,6 @@ export function AgentProductDemo({
           return;
         }
 
-        const cfg = await getRuntimeConfig();
         const promptAddon = getActiveSystemAddon();
         jChip("read", q.length > 48 ? `${q.slice(0, 48)}…` : q);
         if (promptAddon) jChip("read", `Prompt · ${activePromptLabel() ?? "模板"}`);
@@ -1316,12 +1331,15 @@ export function AgentProductDemo({
           !inspectPreview &&
           parsed.query.trim() !== "/eval"
         ) {
-          const health = await checkBackendHealth(true);
+          jChip("route", "正在连接办事服务…");
+          const health = await checkBackendHealth();
           if (!health?.ok) {
             finish("办事服务未连接，暂时无法受理。请联系管理员确认服务已启动。");
             return;
           }
         }
+
+        const cfg = await getRuntimeConfig();
 
         if (!parsed.force && !parsed.evalKind && hubFlowBind) {
           const bindFlowId = flowState?.flowId ?? matchedFlowId;
@@ -1891,6 +1909,18 @@ export function AgentProductDemo({
     return () => window.clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    if (!listenUserRun) return;
+    const fire = () => {
+      const job = takeUserDeskRun();
+      if (!job?.text) return;
+      setInput(job.text);
+      setDraftHint("这句话已放进输入框。可以改，回车就发送。没有你的表时，会先请你上传。");
+    };
+    window.addEventListener("ownagent:user-desk-run", fire);
+    return () => window.removeEventListener("ownagent:user-desk-run", fire);
+  }, [listenUserRun]);
+
   function stop() {
     abortRef.current?.abort();
     setRunning(false);
@@ -1915,7 +1945,7 @@ export function AgentProductDemo({
     historyRef.current = next.history;
     setTraces([]);
     setStore({ activeId: next.id, sessions: all });
-    persistSessionStore({ activeId: next.id, sessions: all });
+    persistSessionStore({ activeId: next.id, sessions: all }, sessionScope);
     setSessionsOpen(false);
   }
 
@@ -2589,7 +2619,18 @@ export function AgentProductDemo({
                   }
                 />
               ) : (
-                <ProductSkillHome onRun={(t) => void send(t)} disabled={running} />
+                <ProductSkillHome
+                  trial={sessionScope === "user"}
+                  disabled={running}
+                  onRun={(t) => {
+                    if (sessionScope === "user") {
+                      setInput(t);
+                      setDraftHint("这句话已放进输入框。可以改，回车就发送。没有你的表时，会先请你上传。");
+                      return;
+                    }
+                    void send(t);
+                  }}
+                />
               )}
             </div>
           )}
@@ -2679,7 +2720,7 @@ export function AgentProductDemo({
               {!running && quickPromptItems.length > 0 && (
                 <div className="oc-shortcuts oc-shortcuts--follow">
                   <ChatQuickPrompts
-                    label={hubMode ? "信贷场景" : "试试这些"}
+                    label={hubMode ? "信贷场景" : sessionScope === "user" ? "还可以这样问" : "试试这些"}
                     items={quickPromptItems}
                     disabled={running}
                     onPick={(t) =>
@@ -2694,6 +2735,11 @@ export function AgentProductDemo({
                 </div>
               )}
 
+            {sessionScope === "user" && draftHint ? (
+              <p className="uc-draft-hint" role="status">
+                {draftHint}
+              </p>
+            ) : null}
             <div className="ua-compose-wrap">
               <div className="oc-above">
                 <InputSuggestPopup

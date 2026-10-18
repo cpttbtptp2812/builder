@@ -41,22 +41,29 @@ export function apiUrl(path: string): string {
 }
 
 const DEFAULT_FETCH_MS = 12_000;
+/** 线上服务睡醒常常超过 12 秒。在这段时间里反复问 /health，醒了再继续。 */
+const HEALTH_WAKE_MS = 60_000;
+const HEALTH_ATTEMPT_MS = 25_000;
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T | null> {
+type ApiFetchInit = RequestInit & { timeoutMs?: number };
+
+export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T | null> {
   try {
+    const timeoutMs = init?.timeoutMs ?? DEFAULT_FETCH_MS;
+    const { timeoutMs: _timeoutMs, ...rest } = init ?? {};
     const token = getTeamToken();
     const signal =
-      init?.signal ??
+      rest.signal ??
       (typeof AbortSignal !== "undefined" && "timeout" in AbortSignal
-        ? AbortSignal.timeout(DEFAULT_FETCH_MS)
+        ? AbortSignal.timeout(timeoutMs)
         : undefined);
     const res = await fetch(apiUrl(path), {
-      ...init,
+      ...rest,
       signal,
       headers: {
         "Content-Type": "application/json",
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        ...init?.headers,
+        ...rest.headers,
       },
     });
     if (!res.ok) return null;
@@ -66,18 +73,37 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T |
   }
 }
 
+let healthInflight: Promise<BackendHealth | null> | null = null;
+
+async function wakeBackend(): Promise<BackendHealth | null> {
+  const deadline = Date.now() + HEALTH_WAKE_MS;
+  while (Date.now() < deadline) {
+    const remain = deadline - Date.now();
+    const health = await apiFetch<BackendHealth>("/health", {
+      timeoutMs: Math.min(HEALTH_ATTEMPT_MS, remain),
+    });
+    if (health?.ok) {
+      cachedHealth = health;
+      healthCheckedAt = Date.now();
+      return health;
+    }
+    cachedHealth = null;
+    const pause = Math.min(1500, deadline - Date.now());
+    if (pause <= 0) break;
+    await new Promise((resolve) => setTimeout(resolve, pause));
+  }
+  return null;
+}
+
 export async function checkBackendHealth(force = false): Promise<BackendHealth | null> {
-  if (!force && cachedHealth && Date.now() - healthCheckedAt < HEALTH_TTL_MS) {
+  if (!force && cachedHealth?.ok && Date.now() - healthCheckedAt < HEALTH_TTL_MS) {
     return cachedHealth;
   }
-  const health = await apiFetch<BackendHealth>("/health");
-  if (health?.ok) {
-    cachedHealth = health;
-    healthCheckedAt = Date.now();
-  } else {
-    cachedHealth = null;
-  }
-  return health;
+  if (healthInflight) return healthInflight;
+  healthInflight = wakeBackend().finally(() => {
+    healthInflight = null;
+  });
+  return healthInflight;
 }
 
 export function isBackendOnline(): boolean {
