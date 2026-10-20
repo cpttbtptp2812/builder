@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
-import { apiUrl, checkBackendHealth } from "../../../lib/apiClient";
+import { apiUrl, probeBackendOnce } from "../../../lib/apiClient";
 
 /** 客户可见：按业务场景入口，不出现技能 ID / 技术名词 */
 const SCENARIOS = [
@@ -53,14 +53,14 @@ export function ProductSkillHome({
 
   const refresh = useCallback(() => {
     setReady(null);
-    void checkBackendHealth(true).then((h) => setReady(Boolean(h?.ok)));
+    void probeBackendOnce().then((h) => setReady(Boolean(h?.ok)));
   }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  const blocked = disabled || ready !== true;
+  const blocked = Boolean(disabled);
 
   return (
     <div className="aw-root aw-product-home">
@@ -105,16 +105,16 @@ export function ProductSkillHome({
 
       {ready === null ? (
         <p className="aw-product-api-hint" aria-live="polite">
-          {trial ? "正在连接…连上之后才能点。" : "正在连接办事服务…第一次打开会稍等，连上后才能开始办理。"}
+          {trial ? "正在确认办事服务，可以先点。" : "正在确认办事服务，可以先选一项。"}
         </p>
       ) : null}
       {ready === false ? (
         <p className="aw-product-api-warn" role="alert">
           {trial ? (
-            "暂时连不上，先不能点。这和你的模型密钥不是一回事。"
+            "刚才没连上。句子可以先放进输入框，发送时会再试。这和模型密钥不是一回事。"
           ) : (
             <>
-              办事服务未连通，入口已停用。检测地址 <code>{healthUrl}</code>
+              办事服务暂时没连上，入口仍可点，发送时会再等它醒来。检测地址 <code>{healthUrl}</code>
               。这与接入配置中的大模型 Key 无关。
             </>
           )}

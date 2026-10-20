@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AgentProductDemo } from "../fx/AgentProductDemo";
-import { checkBackendHealth } from "../../lib/apiClient";
+import { probeBackendOnce } from "../../lib/apiClient";
 import { allRunnableSkills, CUSTOMER_SKILL_IDS, type AgentSkill } from "../../lib/agentSkills";
 import { downloadText } from "../../lib/importedSkills";
 import { isLlmProbeLive, loadLlmConfig } from "../../lib/llmConfig";
@@ -36,7 +36,7 @@ export function SkillUserClient({ onAdmin }: { onAdmin: () => void }) {
     window.addEventListener(SKILL_PUBLISH_EVENT, refresh);
     window.addEventListener("ownagent:live-skills-updated", refresh);
     void syncServerLiveSkills().finally(refresh);
-    void checkBackendHealth().then((h) => setService(Boolean(h?.ok)));
+    void probeBackendOnce().then((h) => setService(Boolean(h?.ok)));
     return () => {
       window.removeEventListener(SKILL_PUBLISH_EVENT, refresh);
       window.removeEventListener("ownagent:live-skills-updated", refresh);

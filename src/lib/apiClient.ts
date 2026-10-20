@@ -95,6 +95,18 @@ async function wakeBackend(): Promise<BackendHealth | null> {
   return null;
 }
 
+/** 进页面用：只问一次，失败就返回，不把入口卡住等服务睡醒。 */
+export async function probeBackendOnce(timeoutMs = 8_000): Promise<BackendHealth | null> {
+  if (cachedHealth?.ok && Date.now() - healthCheckedAt < HEALTH_TTL_MS) return cachedHealth;
+  const health = await apiFetch<BackendHealth>("/health", { timeoutMs });
+  if (health?.ok) {
+    cachedHealth = health;
+    healthCheckedAt = Date.now();
+    return health;
+  }
+  return null;
+}
+
 export async function checkBackendHealth(force = false): Promise<BackendHealth | null> {
   if (!force && cachedHealth?.ok && Date.now() - healthCheckedAt < HEALTH_TTL_MS) {
     return cachedHealth;

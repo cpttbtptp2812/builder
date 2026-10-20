@@ -13,7 +13,7 @@ import { llmPickSkillId } from "../../lib/productLlmRoute";
 import { streamByokChat } from "../../lib/byokLlm";
 import { logChatSession, markQueryPublished } from "../../lib/analyticsLog";
 import { formatThreadAsPlaza, matchPlaza, publishPlaza, type PlazaItem } from "../../lib/plazaFeed";
-import { checkBackendHealth } from "../../lib/apiClient";
+import { checkBackendHealth, probeBackendOnce } from "../../lib/apiClient";
 import { takeUserDeskRun } from "../../lib/userDeskBridge";
 import { getSessionId } from "../../lib/sessionId";
 import { HitlTicketCard } from "./agent/HitlTicketCard";
@@ -408,7 +408,7 @@ export function AgentProductDemo({
   );
 
   useEffect(() => {
-    void checkBackendHealth().then((health) => {
+    void probeBackendOnce().then((health) => {
       if (health?.ok) void getRuntimeConfig();
     });
   }, []);
