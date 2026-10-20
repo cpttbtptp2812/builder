@@ -1,6 +1,8 @@
+import { lazy, Suspense } from "react";
 import { parseMarkdownTables, stripMarkdownTables } from "../../../lib/chatArtifacts";
-import { StreamMarkdown } from "../../ownagent/StreamMarkdown";
 import { ArtifactPanel } from "./ArtifactPanel";
+
+const StreamMarkdown = lazy(() => import("../../ownagent/StreamMarkdown").then((m) => ({ default: m.StreamMarkdown })));
 
 function citeBits(line: string): string[] | null {
   const trimmed = line.trim();
@@ -41,7 +43,17 @@ export function AgentMarkdown({
           ))}
         </div>
       ))}
-      {markdown ? <StreamMarkdown text={markdown} streaming={streaming} /> : null}
+      {markdown ? (
+        <Suspense
+          fallback={
+            <div className="sd-md">
+              <pre>{markdown}</pre>
+            </div>
+          }
+        >
+          <StreamMarkdown text={markdown} streaming={streaming} />
+        </Suspense>
+      ) : null}
       {tables.length > 0 ? <ArtifactPanel artifacts={tables} /> : null}
     </div>
   );

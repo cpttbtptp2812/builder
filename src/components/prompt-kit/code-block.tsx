@@ -2,7 +2,6 @@
 
 import { cn } from "@/lib/utils"
 import React, { useEffect, useState } from "react"
-import { codeToHtml } from "shiki"
 
 export type CodeBlockProps = {
   children?: React.ReactNode
@@ -47,6 +46,7 @@ function CodeBlockCode({
         return
       }
 
+      const { codeToHtml } = await import("shiki/bundle/web")
       const html = await codeToHtml(code, { lang: language, theme })
       setHighlightedHtml(html)
     }

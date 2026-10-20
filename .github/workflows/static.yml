@@ -31,6 +31,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check:production
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
   deploy:
     needs: verify
@@ -55,6 +57,7 @@ jobs:
         env:
           GITHUB_PAGES: "true"
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Setup Pages
         uses: actions/configure-pages@v5

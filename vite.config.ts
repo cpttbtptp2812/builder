@@ -6,12 +6,47 @@ import react from "@vitejs/plugin-react";
 
 const root = path.dirname(fileURLToPath(import.meta.url));
 
+function skipHeavyModules() {
+  return {
+    name: "skip-heavy-modules",
+    enforce: "pre" as const,
+    resolveId(id: string) {
+      if (id === "@huggingface/transformers" || id.startsWith("@huggingface/transformers/")) {
+        return { id, external: true };
+      }
+      return null;
+    },
+  };
+}
+
 /** GitHub Pages 子路径 /builder/；百度 BOS 等根目录托管用 './' */
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   root,
-  plugins: [react(), tailwindcss()],
+  plugins: [skipHeavyModules(), react(), tailwindcss()],
   resolve: {
-    alias: { "@": path.resolve(root, "src") },
+    alias: [
+      { find: "@", replacement: path.resolve(root, "src") },
+      {
+        find: /^lucide-react\/dynamicIconImports(?:\.mjs|\.js)?$/,
+        replacement: path.resolve(root, "src/shims/lucide-dynamic-empty.ts"),
+      },
+      {
+        find: /^lucide-react$/,
+        replacement: path.resolve(root, "node_modules/lucide-react/dist/cjs/lucide-react.js"),
+      },
+      ...(command === "build"
+        ? [
+            {
+              find: /^@openuidev\/react-ui(?:\/.*)?$/,
+              replacement: path.resolve(root, "src/shims/openui-react-ui-empty.ts"),
+            },
+            {
+              find: /^@openuidev\/assistant-ui(?:\/.*)?$/,
+              replacement: path.resolve(root, "src/shims/openui-assistant-empty.ts"),
+            },
+          ]
+        : []),
+    ],
   },
   base: process.env.GITHUB_PAGES === "true" ? "/builder/" : "./",
   assetsInclude: ["**/*.wasm"],
@@ -23,6 +58,10 @@ export default defineConfig({
       "@perspective-dev/server",
       "regular-table",
     ],
+  },
+  build: {
+    cssCodeSplit: true,
+    chunkSizeWarningLimit: 1500,
   },
   server: {
     host: true,
@@ -52,4 +91,4 @@ export default defineConfig({
       },
     },
   },
-});
+}));

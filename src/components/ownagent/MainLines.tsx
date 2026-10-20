@@ -1,10 +1,9 @@
-import type { ReactNode } from "react";
+import { lazy, Suspense, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { KnowledgeFeed } from "../fx/agent/KnowledgeFeed";
 import { EvalLabPanel } from "../fx/EvalLabPanel";
 import { CaseManagementPanel } from "./CaseManagementPanel";
 import { ConnectPanel } from "./ConnectPanel";
-import { CopiedAssistantChat } from "./CopiedAssistantChat";
 import { EvalOpsPanel } from "./EvalOpsPanel";
 import { GuardPanel } from "./GuardPanel";
 import { McpToolsPanel } from "./McpToolsPanel";
@@ -17,6 +16,8 @@ import { VersionsHub } from "./VersionsHub";
 import { VersionsPage } from "./VersionsPage";
 import { SkillPlatformPanel } from "./SkillPlatformPanel";
 import { TracePanel } from "./TracePanel";
+
+const CopiedAssistantChat = lazy(() => import("./CopiedAssistantChat").then((m) => ({ default: m.CopiedAssistantChat })));
 
 type LineId = "talk" | "materials" | "skill" | "rules";
 
@@ -168,7 +169,11 @@ export function RulesLine({ view, onPick }: { view: string; onPick: (id: string)
     >
       {current === "guard" ? <GuardPanel /> : null}
       {current === "connect" ? <ConnectPanel /> : null}
-      {current === "model" ? <CopiedAssistantChat /> : null}
+      {current === "model" ? (
+        <Suspense fallback={<p className="oa-muted">正在打开模型对话…</p>}>
+          <CopiedAssistantChat />
+        </Suspense>
+      ) : null}
     </LineFrame>
   );
 }

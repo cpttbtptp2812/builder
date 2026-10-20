@@ -20,6 +20,8 @@ jobs:
       - run: npm ci
       - run: npx playwright install --with-deps chromium
       - run: npm run check:production
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
 
       - name: Validate private deployment manifest
         run: docker compose --env-file deploy/private/.env.example -f deploy/private/docker-compose.private.yml config --quiet
