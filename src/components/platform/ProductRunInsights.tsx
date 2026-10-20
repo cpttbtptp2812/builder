@@ -24,7 +24,19 @@ const TOOLS: { id: Tool; label: string; hint: string; skills?: string[] }[] = [
 ];
 
 /** 对话里办完的一单：回放、分叉、出证据包、在同一批材料上求解 */
-export function ProductRunInsights({ sessionId, processId, skillId, version }: { sessionId: string; processId: string; skillId: string; version: string }) {
+export function ProductRunInsights({
+  sessionId,
+  processId,
+  skillId,
+  version,
+  placement = "inline",
+}: {
+  sessionId: string;
+  processId: string;
+  skillId: string;
+  version: string;
+  placement?: "inline" | "drawer";
+}) {
   const api = useMemo(() => productRunApi(sessionId), [sessionId]);
   const [runId, setRunId] = useState<string | null>(null);
   const [lookup, setLookup] = useState<string | null>(null);
@@ -51,7 +63,7 @@ export function ProductRunInsights({ sessionId, processId, skillId, version }: {
   const needsRun = (t: Tool) => t === "replay" || t === "evidence" || t === "review";
 
   return (
-    <div className="pl-root pl-embed pi-dock">
+    <div className={placement === "drawer" ? "pl-root pl-embed pi-dock is-drawer" : "pl-root pl-embed pi-dock"}>
       <div className="pi-head">
         <span>深入这一单</span>
         {tools.map((t) => (

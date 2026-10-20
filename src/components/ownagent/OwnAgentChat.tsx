@@ -355,7 +355,7 @@ export function OwnAgentChat() {
           <div className="oa-hub-row assistant" data-msg-id="__live__">
             {streamText ? (
               <div className="oa-hub-answer streaming">
-                <AgentMarkdown text={streamText} />
+                <AgentMarkdown text={streamText} streaming />
                 <span className="oa-hub-caret" />
               </div>
             ) : (

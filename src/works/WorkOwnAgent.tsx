@@ -29,6 +29,7 @@ type ViewId =
   | "prompts"
   | "mcp"
   | "connect"
+  | "model"
   | "lab"
   | "jd";
 
@@ -303,6 +304,7 @@ const LINE_NAV: {
 function resolveView(panel: string | null, view: string | null): ViewId {
   const raw = view || panel;
   if (raw === "user") return "user";
+  if (raw === "model") return "model";
   if (raw === "check") return "evalops";
   if (raw === "skills" || raw === "codrive") return "skills";
   if (raw === "versions") return "versions";

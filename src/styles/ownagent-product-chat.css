@@ -368,6 +368,235 @@
   padding: 0.35rem 0;
 }
 
+.oa-reply-lead.ua-bubble.assistant {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 2px 2px 8px !important;
+}
+
+.oa-reply-lead.ua-bubble.assistant:hover {
+  box-shadow: none !important;
+}
+
+.oa-reply {
+  margin: 8px 0 4px;
+  border: 0;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.oa-reply-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.oa-reply-ico {
+  width: 18px;
+  height: 18px;
+  color: #0f6e6a;
+  grid-row: 1 / span 2;
+}
+
+.oa-reply-attachments .psp-entry,
+.oa-reply-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 8px;
+  width: 200px;
+  min-height: 56px;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid #e3eaf1;
+  border-radius: 12px;
+  background: #fff;
+  color: #1a2332;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.oa-reply-attachments .psp-entry-icon {
+  grid-row: 1 / span 2;
+}
+
+.oa-reply-attachments .psp-entry-name,
+.oa-reply-row > span {
+  grid-column: 2;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.oa-reply-attachments .psp-entry-count,
+.oa-reply-row > em {
+  grid-column: 2;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 500;
+  color: #5e6b7c;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oa-reply-attachments .psp-entry-go,
+.oa-reply-row > b {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.oa-reply-row:hover,
+.oa-reply-row.is-open,
+.oa-reply-attachments .psp-entry:hover,
+.oa-reply-attachments .psp-entry.is-open {
+  border-color: #c5ddd9;
+  background: #f8fbfb;
+}
+
+.oa-reply .jr-surface {
+  width: min(100%, 420px);
+  margin: 0;
+  padding: 0;
+  border: 1px solid #e3eaf1;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.oa-reply .jr-stack {
+  gap: 0;
+}
+
+.oa-reply .jr-trace-toggle {
+  position: relative;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+  padding: 8px 10px !important;
+  font-weight: 600;
+}
+
+.oa-reply .jr-trace.is-row .jr-trace-toggle b {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.oa-reply .jr-trace.is-row .jr-trace-toggle::after {
+  content: "";
+  width: 7px;
+  height: 7px;
+  margin-left: 8px;
+  border-right: 1.5px solid #5e6b7c;
+  border-bottom: 1.5px solid #5e6b7c;
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.oa-reply .jr-trace.is-row .jr-trace-toggle[aria-expanded="true"]::after {
+  transform: rotate(-135deg) translateY(-2px);
+}
+
+.oa-reply .jr-trace ol {
+  margin: 0;
+  padding: 4px 12px 10px;
+}
+
+.oa-reply-foot {
+  width: 100%;
+  background: transparent;
+}
+
+.oa-reply-file {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.oa-reply-file > span {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.oa-reply-file strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1a2332;
+}
+
+.oa-reply-file em {
+  font-style: normal;
+  color: #5e6b7c;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.oa-reply-file em.is-bad {
+  color: #9f2d2d;
+}
+
+.oa-reply-file button {
+  border: 1px solid #c5ddd9;
+  background: #fff;
+  color: #0f6e6a;
+  border-radius: 8px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.oa-reply-file button.is-go {
+  background: #0f6e6a;
+  color: #fff;
+  border-color: #0f6e6a;
+}
+
+.oa-reply-file button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.pi-dock.is-drawer {
+  margin: 12px 14px 16px;
+  padding-top: 12px;
+}
+
+.pi-dock.is-drawer .pi-head {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.pi-dock.is-drawer .pi-chip {
+  border-radius: 8px;
+  justify-content: space-between;
+}
+
 .oa-product-data-gate-lead {
   margin: 0 0 10px;
   font-size: 13px;

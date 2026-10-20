@@ -50,6 +50,7 @@ import { attachCollab } from "./collab.ts";
 import { createAdminSession, initializeAdminCredential, isAdminSession, revokeAdminSession } from "./adminAuth.ts";
 import { assertSafeExternalUrl, fetchExternal, productionApiGuard, rateLimit, readResponseTextLimited, requestSizeLimit } from "./security.ts";
 import { metricsSnapshot, recordLlmError, safeLog } from "./observability.ts";
+import { handleAssistantChat } from "./assistantChat.ts";
 import { listByokModels, openByokChatStream, readByokMessages, readByokTarget } from "./llmByok.ts";
 
 function hostOf(raw: string): string {
@@ -258,6 +259,9 @@ app.post("/api/llm/byok/stream", async (c) => {
     return c.json({ error: error instanceof Error ? error.message : "模型请求失败" }, 502);
   }
 });
+
+/** assistant-ui 的对话流。协议来自 Vercel AI SDK，Key 仍由当次请求带上。 */
+app.post("/api/llm/assistant/chat", (c) => handleAssistantChat(c));
 
 app.get("/api/health", (c) => {
   const skillRuns = dbGet<{ c: number }>("SELECT COUNT(*) as c FROM skill_runs");

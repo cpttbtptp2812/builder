@@ -8,6 +8,12 @@ import { downloadText } from "../../lib/importedSkills";
 import { paperDrawerTitle, paperExportGrid } from "../../lib/workPaper";
 import { WorkPaperView } from "./WorkPaper";
 import type { ProductDataSlot } from "../../lib/productDataStore";
+import { ProductRunInsights } from "../platform/ProductRunInsights";
+import { getSessionId } from "../../lib/sessionId";
+import { PerspectiveSheet } from "../fx/agent/PerspectiveSheet";
+import { DeskSurface } from "../fx/agent/deskSurface";
+import type { ProductRunView } from "../../lib/productRun/types";
+import type { ArtifactTable } from "../../lib/chatArtifacts";
 
 export function WorkPaperDrawer({
   paper,
@@ -20,6 +26,9 @@ export function WorkPaperDrawer({
   deliverySealed,
   interactive = true,
   ledgerInvoiceOverridesRef,
+  insight,
+  table = null,
+  run = null,
 }: {
   paper: WorkPaper | null;
   open: boolean;
@@ -32,6 +41,9 @@ export function WorkPaperDrawer({
   deliverySealed?: boolean;
   interactive?: boolean;
   ledgerInvoiceOverridesRef?: MutableRefObject<LedgerInvoiceOverride>;
+  insight?: { processId: string; skillId: string; version: string } | null;
+  table?: ArtifactTable | null;
+  run?: ProductRunView | null;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -42,58 +54,79 @@ export function WorkPaperDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open || !paper) return null;
+  if (!open || (!paper && !table && !run)) return null;
+
+  const subtitle = paper ? paperDrawerTitle(paper) : table?.title?.trim() || "";
+  const grid = paper ? paperExportGrid(paper) : null;
+  const downloadCsv = () => {
+    if (!paper || !grid) return;
+    downloadText(
+      `${paperDrawerTitle(paper).replace(/[\\/:*?"<>|]/g, " ")}.csv`,
+      gridToCsv(grid.columns, grid.rows),
+      "text/csv;charset=utf-8",
+    );
+  };
 
   return createPortal(
     <div className="oa-work-drawer-back" onClick={onClose} role="presentation">
       <aside
-        className={paper.kind === "tables" ? "oa-work-drawer is-desk-tables" : "oa-work-drawer"}
+        className={table ? "oa-work-drawer is-detail" : paper?.kind === "tables" ? "oa-work-drawer is-desk-tables" : "oa-work-drawer"}
         onClick={(ev) => ev.stopPropagation()}
-        aria-label={paperDrawerTitle(paper)}
+        aria-label="详情"
       >
         <header className="oa-work-drawer-head">
           <div>
-            <strong>{paperDrawerTitle(paper)}</strong>
-            <p>左侧继续对话，这里看完整文书和明细</p>
+            <strong>详情</strong>
+            {subtitle ? <p>{subtitle}</p> : null}
           </div>
           <div className="oa-work-drawer-actions">
-            {(() => {
-              const grid = paperExportGrid(paper);
-              if (!grid) return null;
-              return (
-                <button
-                  type="button"
-                  className="oa-work-drawer-dl"
-                  onClick={() =>
-                    downloadText(
-                      `${paperDrawerTitle(paper).replace(/[\\/:*?"<>|]/g, " ")}.csv`,
-                      gridToCsv(grid.columns, grid.rows),
-                      "text/csv;charset=utf-8",
-                    )
-                  }
-                >
-                  {paper.kind === "tables" ? "下载当前交付表 CSV" : "下载对账表 CSV"}
-                </button>
-              );
-            })()}
+            {grid ? (
+              <button type="button" className="oa-work-drawer-dl" onClick={downloadCsv}>
+                下载 CSV
+              </button>
+            ) : null}
             <button type="button" className="oa-work-drawer-close" onClick={onClose} aria-label="关闭">
               ×
             </button>
           </div>
         </header>
         <div className="oa-work-drawer-body">
-          <WorkPaperView
-            paper={paper}
-            layout="drawer"
-            interactive={interactive}
-            onAsk={onAsk}
-            onApplyFix={onApplyFix}
-            onReplaceMaterial={onReplaceMaterial}
-            onSealDeliverable={onSealDeliverable}
-            deliverySealed={deliverySealed}
-            ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
-          />
+          {table ? <PerspectiveSheet table={table} embedded /> : null}
+          {run ? (
+            <div className="oa-detail-trace">
+              <DeskSurface run={run} mode="trace" />
+            </div>
+          ) : null}
+          {paper ? (
+            <WorkPaperView
+              paper={paper}
+              layout="drawer"
+              interactive={interactive}
+              onAsk={onAsk}
+              onApplyFix={onApplyFix}
+              onReplaceMaterial={onReplaceMaterial}
+              onSealDeliverable={onSealDeliverable}
+              deliverySealed={deliverySealed}
+              ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
+            />
+          ) : null}
+          {insight ? (
+            <ProductRunInsights
+              placement="drawer"
+              sessionId={getSessionId()}
+              processId={insight.processId}
+              skillId={insight.skillId}
+              version={insight.version}
+            />
+          ) : null}
         </div>
+        {grid ? (
+          <footer className="oa-work-drawer-foot">
+            <button type="button" className="oa-work-drawer-dl" onClick={downloadCsv}>
+              下载 CSV
+            </button>
+          </footer>
+        ) : null}
       </aside>
     </div>,
     document.body,

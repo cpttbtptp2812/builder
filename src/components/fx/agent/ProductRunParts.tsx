@@ -40,6 +40,7 @@ function MaterialGatePanel({
   onPrimary,
   primaryDisabled,
   onPickFile,
+  dock = false,
 }: {
   run: ProductRunView;
   imports: ProductRunImportPart[];
@@ -49,8 +50,76 @@ function MaterialGatePanel({
   onPrimary: () => void;
   primaryDisabled: boolean;
   onPickFile: (part: ProductRunImportPart, file: File) => void;
+  dock?: boolean;
 }) {
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({});
+
+  const downloadTemplate = (part: ProductRunImportPart) => {
+    void (async () => {
+      const t = await apiFetchDeskTemplate(run.skillId, part.slot as ProductDataSlot);
+      const csv = t.ok && t.csv ? t.csv : part.templateCsv;
+      const name = t.ok && t.filename ? t.filename : part.filename;
+      downloadText(name, `\uFEFF${csv}`, "text/csv;charset=utf-8");
+    })();
+  };
+
+  if (dock) {
+    return (
+      <div className="oa-reply-foot">
+        {imports.map((part) => (
+          <div className="oa-reply-file" key={part.slot}>
+            <span>
+              <strong>{part.label}</strong>
+              {part.ready ? (
+                <em>
+                  {part.materialTitle ? `${part.materialTitle}` : "已导入"}
+                  {part.rowCount != null ? ` · ${part.rowCount} 行` : ""}
+                </em>
+              ) : part.schemaIssues?.length ? (
+                <em className="is-bad">{part.schemaIssues.join("；")}</em>
+              ) : (
+                <em>{part.hint}</em>
+              )}
+            </span>
+            <button type="button" disabled={fileBusy} onClick={() => downloadTemplate(part)}>
+              下载模板
+            </button>
+            <button type="button" disabled={fileBusy} onClick={() => fileRefs.current[part.slot]?.click()}>
+              {part.ready ? "换一份文件" : "导入文件"}
+            </button>
+            {imports.length === 1 ? (
+              <button type="button" className="is-go" disabled={busy || primaryDisabled} onClick={onPrimary}>
+                {primaryLabel}
+              </button>
+            ) : null}
+            <input
+              ref={(el) => {
+                fileRefs.current[part.slot] = el;
+              }}
+              type="file"
+              accept={PRODUCT_FILE_ACCEPT}
+              disabled={fileBusy}
+              hidden
+              aria-hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (f) onPickFile(part, f);
+              }}
+            />
+          </div>
+        ))}
+        {imports.length > 1 ? (
+          <div className="oa-reply-file">
+            <span />
+            <button type="button" className="is-go" disabled={busy || primaryDisabled} onClick={onPrimary}>
+              {primaryLabel}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className="oa-product-data-gate-min">
@@ -82,14 +151,7 @@ function MaterialGatePanel({
                   type="button"
                   className="oa-product-data-gate-btn"
                   disabled={fileBusy}
-                  onClick={() => {
-                    void (async () => {
-                      const t = await apiFetchDeskTemplate(run.skillId, part.slot as ProductDataSlot);
-                      const csv = t.ok && t.csv ? t.csv : part.templateCsv;
-                      const name = t.ok && t.filename ? t.filename : part.filename;
-                      downloadText(name, `\uFEFF${csv}`, "text/csv;charset=utf-8");
-                    })();
-                  }}
+                  onClick={() => downloadTemplate(part)}
                 >
                   下载模板
                 </button>
@@ -136,10 +198,12 @@ function MaterialGatePanel({
 export function ProductRunParts({
   run,
   disabled,
+  layout,
   onRunUpdated,
 }: {
   run: ProductRunView;
   disabled?: boolean;
+  layout?: "dock";
   onRunUpdated: (next: {
     content: string;
     run: ProductRunView;
@@ -305,12 +369,13 @@ export function ProductRunParts({
           primaryDisabled={runLocked || !canContinue}
           onPrimary={() => void executeStream(run.status === "finish" ? "rerun" : "continue")}
           onPickFile={(part, file) => void onFile(part, file)}
+          dock={layout === "dock"}
         />
       ) : null}
       {run.status === "finish" && !busy && loadLlmConfig().enabled && loadLlmConfig().preset === "webllm" ? (
         <LocalModelBox summary={run.parts.find((p) => p.kind === "finish")?.summary} />
       ) : null}
-      {run.status === "finish" && !busy ? (
+      {layout !== "dock" && run.status === "finish" && !busy ? (
         <ProductRunInsights
           sessionId={imports[0]?.sessionId ?? getSessionId()}
           processId={run.processId}

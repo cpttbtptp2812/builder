@@ -123,7 +123,7 @@ function PaperProcessFooter({
       </ol>
       {sealed ? (
         <p className="oa-paper-flow-done">
-          已办结。归档明细请点抽屉右上角 <strong>下载对账表 CSV</strong>，对话里已写入办结结论。
+          已办结。归档明细请点抽屉右下角 <strong>下载 CSV</strong>。
         </p>
       ) : openBad ? (
         <p className="oa-paper-flow-note">仍有拦截项：先点上方「一键修正」或改表后重新办理，再进入人工复核。</p>

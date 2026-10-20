@@ -1,0 +1,41 @@
+@layer theme, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+
+@source ".";
+@source "../ui";
+
+@theme {
+  --color-background: #ffffff;
+  --color-foreground: #1a2332;
+  --color-muted: #f3f6f8;
+  --color-muted-foreground: #5e6b7c;
+  --color-border: #d9e0e8;
+  --color-input: #cfd7e2;
+  --color-primary: #0f6e6a;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f4f7f8;
+  --color-secondary-foreground: #1a2332;
+  --color-accent: #e7f3f1;
+  --color-accent-foreground: #14312e;
+  --color-destructive: #9f2d2d;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1a2332;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a2332;
+  --color-ring: #0f6e6a;
+}
+
+.copied-chat {
+  --foreground: #1a2332;
+  --muted-foreground: #5e6b7c;
+  --primary: #0f6e6a;
+  --background: #ffffff;
+  --border: #d9e0e8;
+}
+
+@keyframes shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}

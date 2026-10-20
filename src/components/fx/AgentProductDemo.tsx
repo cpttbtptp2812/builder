@@ -20,6 +20,8 @@ import { HitlTicketCard } from "./agent/HitlTicketCard";
 import { PolicyTrustCard } from "./agent/PolicyTrustCard";
 import { InlineEvalCard, runInlineEvalAsync } from "./agent/InlineEvalCard";
 import { ArtifactPanel } from "./agent/ArtifactPanel";
+import { PerspectiveSheet } from "./agent/PerspectiveSheet";
+import { DeskSurface } from "./agent/deskSurface";
 import { ResultLocator } from "./agent/ResultLocator";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
 import { allRunnableSkills, explainDiscovery, type AgentSkill } from "../../lib/agentSkills";
@@ -103,7 +105,7 @@ import {
 } from "../../lib/releaseInspect";
 import { saveGapDraft } from "../../lib/knowledgeGapWizard";
 import { SessionInsight } from "./agent/SessionInsight";
-import { buildTurnArtifacts, synthesizeCompareTable, type ChatArtifact } from "../../lib/chatArtifacts";
+import { buildTurnArtifacts, synthesizeCompareTable, type ChatArtifact, type ArtifactTable } from "../../lib/chatArtifacts";
 import {
   emptySession,
   loadSessionStore,
@@ -134,27 +136,37 @@ import { WorkPaperDrawer } from "../ownagent/WorkPaperDrawer";
 import { FlowOperationDrawer } from "../ownagent/FlowOperationDrawer";
 import { HUB_CHAT_PROMPTS } from "../../lib/platformCatalog";
 import { syncServerLiveSkills } from "../../lib/skillPublished";
-import type { WorkPaper } from "../../lib/workPaper";
+import { paperBrief, type WorkPaper } from "../../lib/workPaper";
 import { csvPatchForPaperRerun } from "../../lib/productPaperPatch";
 import { apiArchiveProductRun, apiRerunProductRun, apiUploadProductDataset, viewFromStreamStart } from "../../lib/productRun/client";
 import type { ProductRunView } from "../../lib/productRun/types";
 import type { ProductDataSlot } from "../../lib/productDataStore";
 
 type PaperDrawerCtx = {
-  paper: WorkPaper;
+  paper: WorkPaper | null;
   messageId: string;
   processId?: string;
   skillId?: string;
   query?: string;
+  version?: string;
+  table?: ArtifactTable | null;
+  run?: ProductRunView | null;
 };
 
-function paperDrawerFromMessage(m: OwnChatMessage, paper: WorkPaper): PaperDrawerCtx {
+function paperDrawerFromMessage(
+  m: OwnChatMessage,
+  paper: WorkPaper | null,
+  table?: ArtifactTable | null,
+): PaperDrawerCtx {
   return {
     paper,
     messageId: m.id,
     processId: m.productRun?.processId,
     skillId: m.productRun?.skillId ?? m.route?.skillId,
     query: m.productRun?.query,
+    version: m.productRun?.parts.find((part) => part.kind === "finish")?.summary,
+    table: table ?? null,
+    run: m.productRun ?? null,
   };
 }
 import { ShowcaseFlowBubble } from "../ownagent/ShowcaseFlowBubble";
@@ -425,6 +437,44 @@ export function AgentProductDemo({
     () => [...messages].reverse().find((m) => m.role === "assistant"),
     [messages],
   );
+  const mcpTable = useMemo(() => {
+    if (hubMode) return null;
+    for (let i = messages.length - 1; i >= 0; i -= 1) {
+      const message = messages[i];
+      if (message?.role !== "assistant") continue;
+      const fromArtifact = message.artifacts?.find((item) => item.kind === "table" && item.rows.length > 0);
+      if (fromArtifact && fromArtifact.kind === "table") return { messageId: message.id, table: fromArtifact };
+      const paper = message.workPaper;
+      if (paper?.kind === "tables") {
+        const sheet = paper.tables.find((item) => item.grid.rows.length > 0);
+        if (sheet) {
+          return {
+            messageId: message.id,
+            table: {
+              id: sheet.id,
+              kind: "table" as const,
+              title: sheet.name || paper.title,
+              columns: sheet.grid.columns,
+              rows: sheet.grid.rows,
+            },
+          };
+        }
+      }
+      if (paper?.kind === "ledger" && paper.grid.rows.length > 0) {
+        return {
+          messageId: message.id,
+          table: {
+            id: "ledger-grid",
+            kind: "table" as const,
+            title: paper.title,
+            columns: paper.grid.columns,
+            rows: paper.grid.rows,
+          },
+        };
+      }
+    }
+    return null;
+  }, [hubMode, messages]);
   const lastAsstId = lastAsst?.id;
 
   const [replayMsg, setReplayMsg] = useState<OwnChatMessage | null>(null);
@@ -579,7 +629,7 @@ export function AgentProductDemo({
       window.alert(archived.error ?? "办结归档失败");
       return;
     }
-    const deliverable = ctx.paper.kind === "tables" ? "各交付表可在文书中分别下载 CSV" : "明细可在文书抽屉右上角下载 CSV";
+    const deliverable = "明细可在详情抽屉右下角下载 CSV";
     const sealLine = `\n\n**办结**：人工复核通过，本次办理结果已归档；${deliverable}。`;
     setSealedPaperMessages((prev) => new Set(prev).add(ctx.messageId));
     setMessages((prev) =>
@@ -697,13 +747,8 @@ export function AgentProductDemo({
       for (const p of fromLast.slice(0, 4)) push(p.text, p.text, p.hint);
       return out;
     }
+    if (!hubMode) return [];
     const exclude = messages.map((m) => m.content);
-    if (!hubMode && sessionScope !== "user") {
-      for (const p of listKnowledgePrompts(5)) {
-        if (out.length >= 3) break;
-        push(p.label, p.text, p.hint);
-      }
-    }
     for (const t of listFollowUpPrompts(exclude, hubMode ? 5 : 3)) push(t, t);
     return out.slice(0, hubMode ? 5 : 4);
   }, [running, emptyMessage, lastAsst, messages, kbRev, hubMode, creditFlow, sessionScope]);
@@ -2322,10 +2367,107 @@ export function AgentProductDemo({
                           />
                         ) : null}
                         {!m.showcaseFlow && m.productRun && m.content?.trim() ? (
-                          <div className="oa-product-gate-copy ua-bubble assistant ua-prose">
+                          <div className={`oa-product-gate-copy ua-bubble assistant ua-prose${m.productRun.status === "finish" && !hubMode ? " oa-reply-lead" : ""}`}>
                             <AgentMarkdown text={m.content} promoteTables={hubMode || !m.artifacts?.length} />
                           </div>
                         ) : null}
+                        {!hubMode && !m.showcaseFlow && m.productRun?.status === "finish" ? (
+                          <div className="oa-reply">
+                            <div className="oa-reply-attachments">
+                              <button
+                                type="button"
+                                className={paperDrawer?.messageId === m.id ? "oa-reply-row is-open" : "oa-reply-row"}
+                                onClick={() =>
+                                  setPaperDrawer(
+                                    paperDrawerFromMessage(
+                                      m,
+                                      m.workPaper ?? null,
+                                      mcpTable && m.id === mcpTable.messageId ? mcpTable.table : null,
+                                    ),
+                                  )
+                                }
+                              >
+                                <svg className="oa-reply-ico" viewBox="0 0 18 18" aria-hidden="true">
+                                  <path d="M4 2.5h6.2L14 6.2V15.5H4z" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                                  <path d="M10 2.8V6.4h3.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                                </svg>
+                                <span>详情</span>
+                                <em>{m.workPaper ? paperBrief(m.workPaper).title : "查看结果"}</em>
+                              </button>
+                            </div>
+                            <ProductRunParts
+                              layout="dock"
+                              run={m.productRun}
+                              disabled={running && m.productRun.status === "running"}
+                              onRunUpdated={(next) => {
+                                if (next.run.status === "running") {
+                                  setRunning(true);
+                                  setFlowOpen(true);
+                                  liveProductRunRef.current = next.run;
+                                  setLiveProductRun(next.run);
+                                  setFlowTurnStartedAt((t) => t ?? Date.now());
+                                  const steps = next.run.parts
+                                    .filter((p) => p.kind === "process")
+                                    .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+                                  if (steps.length) {
+                                    setFlowJournal((prev) =>
+                                      applyProductRunProcessJournal(prev, steps, undefined, "running"),
+                                    );
+                                  }
+                                }
+                                if (next.run.status === "finish") {
+                                  setRunning(false);
+                                  setLiveProductRun(null);
+                                  liveProductRunRef.current = null;
+                                  setFlowTurnStartedAt(null);
+                                  const steps = next.run.parts
+                                    .filter((p) => p.kind === "process")
+                                    .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+                                  setFlowJournal((prev) =>
+                                    finishFlowJournal(
+                                      applyProductRunProcessJournal(prev, steps, next.content, "finish"),
+                                    ),
+                                  );
+                                }
+                                setMessages((prev) =>
+                                  prev.map((msg) =>
+                                    msg.id === m.id
+                                      ? {
+                                          ...msg,
+                                          content: next.content || msg.content,
+                                          productRun: next.run,
+                                          workPaper: next.paper ?? msg.workPaper,
+                                          runtime: next.runtime,
+                                          flowJournal:
+                                            next.run.status === "finish"
+                                              ? finishFlowJournal(
+                                                  applyProductRunProcessJournal(
+                                                    msg.flowJournal ?? flowJournal,
+                                                    next.run.parts
+                                                      .filter((p) => p.kind === "process")
+                                                      .map((p) => ({
+                                                        label: p.label,
+                                                        detail: p.detail,
+                                                        ok: p.ok,
+                                                      })),
+                                                    next.content,
+                                                    "finish",
+                                                  ),
+                                                )
+                                              : msg.flowJournal,
+                                        }
+                                      : msg,
+                                  ),
+                                );
+                                if (next.paper) {
+                                  setPaperDrawer(paperDrawerFromMessage({ ...m, productRun: next.run }, next.paper));
+                                }
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <>
+                        {!hubMode && m.productRun ? <DeskSurface run={m.productRun} artifacts={m.artifacts} /> : null}
                         {m.productRun ? (
                           <ProductRunParts
                             run={m.productRun}
@@ -2403,6 +2545,8 @@ export function AgentProductDemo({
                             onOpen={() => setPaperDrawer(paperDrawerFromMessage(m, m.workPaper!))}
                           />
                         ) : null}
+                          </>
+                        )}
                         {!m.showcaseFlow && m.releaseInspect ? (
                           <details className="release-inspect-md-extra">
                             <summary>Markdown 详情</summary>
@@ -2516,6 +2660,7 @@ export function AgentProductDemo({
                     {(!hubMode || inspector) && m.role === "assistant" && m.artifacts && m.artifacts.length > 0 && (
                       <ArtifactPanel artifacts={m.artifacts} />
                     )}
+                    {!hubMode && m.productRun?.status !== "finish" && mcpTable && m.id === mcpTable.messageId ? <PerspectiveSheet table={mcpTable.table} /> : null}
                     {m.role === "assistant" && m.policyTrust && (
                       <PolicyTrustCard trust={m.policyTrust} />
                     )}
@@ -2591,9 +2736,12 @@ export function AgentProductDemo({
                       </div>
                     )}
                     <AgentReasoningBlock text={streamReasoning} thinking={!streamText} />
+                    {!hubMode && liveProductRun && !messages.some((msg) => msg.productRun?.processId === liveProductRun.processId) ? (
+                      <DeskSurface run={liveProductRun} />
+                    ) : null}
                     {streamText ? (
                       <div className="ua-bubble assistant streaming ink">
-                        <AgentMarkdown text={streamText} />
+                        <AgentMarkdown text={streamText} streaming />
                         <span className="ua-caret" />
                       </div>
                     ) : null}
@@ -2717,7 +2865,7 @@ export function AgentProductDemo({
                   </div>
                 </div>
               ) : null}
-              {!running && quickPromptItems.length > 0 && (
+              {hubMode && !running && quickPromptItems.length > 0 && (
                 <div className="oc-shortcuts oc-shortcuts--follow">
                   <ChatQuickPrompts
                     label={hubMode ? "信贷场景" : sessionScope === "user" ? "还可以这样问" : "试试这些"}
@@ -3005,9 +3153,16 @@ export function AgentProductDemo({
           onClose={() => setPaperDrawer(null)}
           ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
           onApplyFix={!hubMode && paperDrawer?.processId ? applyPaperRerun : undefined}
-          onReplaceMaterial={!hubMode && paperDrawer?.processId && paperDrawer.paper.kind === "tables" ? replacePaperMaterial : undefined}
+          onReplaceMaterial={!hubMode && paperDrawer?.processId && paperDrawer.paper?.kind === "tables" ? replacePaperMaterial : undefined}
           onSealDeliverable={!hubMode && (paperDrawer?.paper?.kind === "ledger" || paperDrawer?.paper?.kind === "tables") ? sealPaperDeliverable : undefined}
           deliverySealed={paperDrawer ? sealedPaperMessages.has(paperDrawer.messageId) : false}
+          insight={
+            paperDrawer?.processId && paperDrawer.skillId
+              ? { processId: paperDrawer.processId, skillId: paperDrawer.skillId, version: paperDrawer.version ?? "" }
+              : null
+          }
+          table={paperDrawer?.table ?? null}
+          run={paperDrawer?.run ?? null}
           onAsk={(text) => {
             void send(text);
           }}

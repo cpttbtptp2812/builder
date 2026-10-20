@@ -4,6 +4,7 @@ import { KnowledgeFeed } from "../fx/agent/KnowledgeFeed";
 import { EvalLabPanel } from "../fx/EvalLabPanel";
 import { CaseManagementPanel } from "./CaseManagementPanel";
 import { ConnectPanel } from "./ConnectPanel";
+import { CopiedAssistantChat } from "./CopiedAssistantChat";
 import { EvalOpsPanel } from "./EvalOpsPanel";
 import { GuardPanel } from "./GuardPanel";
 import { McpToolsPanel } from "./McpToolsPanel";
@@ -21,7 +22,7 @@ type LineId = "talk" | "materials" | "skill" | "rules";
 
 const MATERIALS = new Set(["rag", "prompts", "feed"]);
 const SKILL = new Set(["compare", "versions", "savever", "drafts", "editset", "cases", "fork", "mcp", "eval", "evalops", "trace", "skills"]);
-const RULES = new Set(["guard", "connect"]);
+const RULES = new Set(["guard", "connect", "model"]);
 
 export function lineOf(view: string): "talk" | "materials" | "skill" | "rules" | null {
   if (view === "chat") return "talk";
@@ -152,20 +153,22 @@ export function SkillLine({ view, onPick }: { view: string; onPick: (id: string)
 }
 
 export function RulesLine({ view, onPick }: { view: string; onPick: (id: string) => void }) {
-  const current = view === "connect" ? "connect" : "guard";
+  const current = view === "connect" ? "connect" : view === "model" ? "model" : "guard";
   return (
     <LineFrame
       title="规则和接入"
-      desc="回答规则决定能答什么。接入配置决定模型怎么接上，工具也在这里试。"
+      desc="回答规则决定能答什么。接入配置决定模型怎么接上。模型对话用你自己的密钥。"
       current={current}
       onPick={onPick}
       stations={[
         { id: "guard", label: "回答规则" },
         { id: "connect", label: "接入配置" },
+        { id: "model", label: "模型对话" },
       ]}
     >
       {current === "guard" ? <GuardPanel /> : null}
       {current === "connect" ? <ConnectPanel /> : null}
+      {current === "model" ? <CopiedAssistantChat /> : null}
     </LineFrame>
   );
 }

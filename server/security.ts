@@ -18,7 +18,8 @@ export function customerApiOpen(path: string, method: string): boolean {
     (path === "/api/llm/probe" ||
       path === "/api/llm/models" ||
       path === "/api/llm/byok/chat" ||
-      path === "/api/llm/byok/stream")
+      path === "/api/llm/byok/stream" ||
+      path === "/api/llm/assistant/chat")
   ) {
     return true;
   }

@@ -1,0 +1,295 @@
+.psp-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 10px 0 4px;
+  padding: 8px 12px;
+  border: 1px solid #e3eaf1;
+  border-radius: 10px;
+  background: #fff;
+  color: #1a2332;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.psp-entry:hover,
+.psp-entry.is-open {
+  border-color: #c5ddd9;
+  background: #f8fbfb;
+}
+
+.psp-entry-icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: #0f6e6a;
+}
+
+.psp-entry-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.psp-entry-count {
+  color: #0f6e6a;
+  background: #e7f3f1;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.psp-entry-go {
+  margin-left: auto;
+  color: #0f6e6a;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.oa-reply .psp-entry {
+  margin: 0;
+}
+
+.psp-drawer-back {
+  position: fixed;
+  inset: 0;
+  z-index: 130;
+  background: rgba(15, 23, 42, 0.28);
+}
+
+.psp-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(920px, 96vw);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  color: #1a2332;
+  box-shadow: -8px 0 32px rgba(15, 23, 42, 0.12);
+}
+
+.psp-drawer-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e3eaf1;
+  background: #f8fafb;
+}
+
+.psp-drawer-head div {
+  flex: 1;
+  min-width: 0;
+}
+
+.psp-drawer-head strong {
+  display: block;
+  font-size: 15px;
+}
+
+.psp-drawer-head p {
+  margin: 2px 0 0;
+  color: #5e6b7c;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.psp-drawer-close {
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #1a2332;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.psp-drawer-close:hover {
+  background: #e8eef3;
+}
+
+.psp-drawer-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.psp-sheet {
+  margin: 14px 0 8px;
+  border: 1px solid #e3eaf1;
+  border-radius: 14px;
+  background: #fff;
+  color: #1a2332;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(26, 35, 50, 0.04);
+}
+
+.psp-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: #f8fafb;
+  border-bottom: 1px solid #e3eaf1;
+}
+
+.psp-head h3 {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.psp-head span {
+  color: #0f6e6a;
+  background: #e7f3f1;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.psp-head button,
+.psp-ask button {
+  border: 1px solid #c5ddd9;
+  background: #fff;
+  color: #0f6e6a;
+  border-radius: 8px;
+  padding: 6px 10px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.psp-head button:hover,
+.psp-ask button:hover {
+  background: #f3faf8;
+}
+
+.psp-head button:disabled,
+.psp-ask button:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.psp-host {
+  height: 440px;
+  background: #fff;
+}
+
+.psp-host perspective-viewer {
+  display: block;
+  width: 100%;
+  height: 100%;
+  --psp--color: #1a2332;
+  --psp--background-color: #fff;
+  --psp-active--color: #0f6e6a;
+  --psp-active--background: #e7f3f1;
+  --psp-inactive--color: #7d8b9c;
+  --psp-inactive--border-color: #e3eaf1;
+  --psp-sidebar--background: #f7f9fb;
+  --psp-placeholder--background: #eef2f6;
+  --psp-select--background-color: #fff;
+  --psp-dropdown--box-shadow: 0 8px 20px rgba(26, 35, 50, 0.08);
+  --psp-button--font-size: 13px;
+  --psp-button--min-width: 28px;
+  --psp-column-selector--font-size: 12px;
+  --psp-datagrid--row--height: 30px;
+  --psp-datagrid--border-color: #e3eaf1;
+  --psp-datagrid--hover--border-color: #c5ddd9;
+  --psp-datagrid--pos-cell--color: #0f6e6a;
+  --psp-datagrid--neg-cell--color: #9f2d2d;
+  --psp-interface-monospace--font-family: "Segoe UI", "PingFang SC", sans-serif;
+  font-family: "Segoe UI", "PingFang SC", sans-serif;
+}
+
+.psp-note,
+.psp-fault,
+.psp-answer {
+  margin: 0;
+  padding: 8px 14px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.psp-note { color: #5e6b7c; }
+.psp-fault { color: #9f2d2d; }
+.psp-answer { color: #1a2332; white-space: pre-wrap; }
+
+.psp-ask {
+  display: flex;
+  gap: 8px;
+  padding: 0 12px 12px;
+}
+
+.psp-ask input {
+  flex: 1;
+  min-width: 0;
+  border: 1px solid #d9e0e8;
+  border-radius: 8px;
+  padding: 7px 10px;
+  color: #1a2332;
+  background: #fff;
+  font: inherit;
+  font-size: 13px;
+}
+
+.psp-ask input:focus {
+  outline: 2px solid #0f6e6a;
+  border-color: #0f6e6a;
+}
+
+.psp-sheet.in-drawer {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.psp-sheet.in-drawer .psp-head {
+  justify-content: flex-end;
+  padding: 8px 14px;
+}
+
+.psp-sheet.in-detail {
+  height: 480px;
+  margin: 12px 14px;
+  border: 1px solid #e3eaf1;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.psp-sheet.in-detail .psp-host {
+  flex: 1;
+  min-height: 0;
+}
+
+.oa-detail-trace {
+  margin: 0 14px 12px;
+}
+
+.oa-detail-trace .jr-surface {
+  margin: 0;
+  border: 1px solid #e3eaf1;
+  border-radius: 12px;
+  background: #fff;
+  overflow: hidden;
+}
