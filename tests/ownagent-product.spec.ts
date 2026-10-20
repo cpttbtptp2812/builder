@@ -141,9 +141,10 @@ test("reimbursement desk imports, delivers CSV and archives", async ({ page }, t
   await expect(continueBtn).toBeEnabled({ timeout: 30_000 });
   await continueBtn.click();
   await expect(page.getByText(/166503/).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByRole("button", { name: "下载对账表 CSV", exact: true })).toBeVisible();
+  const csvBtn = page.getByRole("button", { name: "下载 CSV", exact: true }).first();
+  await expect(csvBtn).toBeVisible({ timeout: 15_000 });
   const download = page.waitForEvent("download");
-  await page.getByRole("button", { name: "下载对账表 CSV", exact: true }).click();
+  await csvBtn.click();
   await download;
   await page.getByRole("button", { name: "确认无误，办结归档", exact: true }).click();
   await expect(page.getByText(/已办结。归档明细/)).toBeVisible();
