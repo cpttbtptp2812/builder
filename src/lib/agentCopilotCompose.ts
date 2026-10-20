@@ -33,6 +33,8 @@ function domProbeFromStep(raw: unknown): {
 export function composeAgentCopilot(args: Record<string, unknown>): {
   dashboard: Record<string, unknown>;
   markdown: string;
+  summary: string;
+  detail: string;
   meta: Record<string, unknown>;
 } {
   const query = String(args.query ?? "");

@@ -50,7 +50,7 @@ export function externalTool(name: string): ExternalTool | null {
   return row ? { ...toTool(row), consented: row.granted === 1 } : null;
 }
 
-function toTool(row: { name: string; title: string; endpoint: string; capability: string; timeout_ms: number }): ExternalTool {
+function toTool(row: { name: string; title: string; endpoint: string; capability: string; timeout_ms: number }): Omit<ExternalTool, "consented"> {
   const capability = row.capability === "network" || row.capability === "model" || row.capability === "write" ? row.capability : "read";
   return { name: row.name, title: row.title, endpoint: row.endpoint, capability, timeoutMs: row.timeout_ms };
 }
