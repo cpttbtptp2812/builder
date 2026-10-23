@@ -21,42 +21,38 @@ export function AgentReasoningBlock({
   text: string;
   thinking?: boolean;
 }) {
-  const [open, setOpen] = useState(thinking);
+  const [open, setOpen] = useState(false);
   const [seconds, setSeconds] = useState<number | null>(null);
   const startRef = useRef<number | null>(thinking ? Date.now() : null);
-  const streamedRef = useRef(thinking);
   const bodyRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (thinking) {
-      streamedRef.current = true;
       if (startRef.current == null) startRef.current = Date.now();
-      setOpen(true);
       return;
     }
-    if (!streamedRef.current) return;
     if (startRef.current != null) {
       setSeconds(Math.max(1, Math.ceil((Date.now() - startRef.current) / 1000)));
       startRef.current = null;
     }
-    const timer = window.setTimeout(() => setOpen(false), CLOSE_AFTER_MS);
-    return () => window.clearTimeout(timer);
   }, [thinking]);
 
   useEffect(() => {
     const el = bodyRef.current;
-    if (!el || !thinking) return;
+    if (!el || !open) return;
     el.scrollTop = el.scrollHeight;
-  }, [text, thinking]);
+  }, [text, open]);
 
   const shown = chineseThought(text);
   if (!shown && !thinking) return null;
 
   const preview = shown
-    .split("\n")
-    .map((line) => line.trim().replace(/^\*+|\*+$/g, ""))
-    .find(Boolean);
-  const label = thinking ? "思考中…" : seconds != null ? `已思考 ${seconds} 秒` : "思考";
+    ? shown
+        .split("\n")
+        .map((line) => line.trim().replace(/^\*+|\*+$/g, ""))
+        .find(Boolean)
+    : "";
+  const label = thinking ? "正在深度思考…" : seconds != null ? `已深度思考 ${seconds}s` : "深度推理过程";
 
   return (
     <div className={`agent-reasoning-block${open ? " is-open" : ""}${thinking ? " is-thinking" : ""}`}>

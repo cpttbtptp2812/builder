@@ -33,6 +33,7 @@ export function DeskTablesPaper({
   const [active, setActive] = useState(paper.tables[0]?.id ?? "");
   const [shown, setShown] = useState(PAGE);
   const [busySlot, setBusySlot] = useState<ProductDataSlot | null>(null);
+  const [replacedName, setReplacedName] = useState<Partial<Record<ProductDataSlot, string>>>({});
   const table = paper.tables.find((t) => t.id === active) ?? paper.tables[0];
   const requirements = requirementsForSkill(paper.skillId);
 
@@ -159,25 +160,30 @@ export function DeskTablesPaper({
           <p>在原系统修正 CSV，再替换对应材料。系统会写回本次办理并重新执行全部步骤。</p>
           <div className="dtp-revise-actions">
             {requirements.map((req) => (
-              <label key={req.slot} className="dtp-revise-file">
-                {busySlot === req.slot ? "正在重新办理…" : `替换${req.label}`}
-                <input
-                  type="file"
-                  accept=".csv,text/csv"
-                  disabled={Boolean(busySlot)}
-                  onChange={async (event) => {
-                    const file = event.currentTarget.files?.[0];
-                    event.currentTarget.value = "";
-                    if (!file) return;
-                    setBusySlot(req.slot);
-                    try {
-                      await onReplaceMaterial(req.slot, await file.text(), file.name);
-                    } finally {
-                      setBusySlot(null);
-                    }
-                  }}
-                />
-              </label>
+              <span key={req.slot} className="dtp-revise-slot">
+                <label className="dtp-revise-file">
+                  {busySlot === req.slot ? "正在重新办理…" : `替换${req.label}`}
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    disabled={Boolean(busySlot)}
+                    onChange={async (event) => {
+                      const file = event.currentTarget.files?.[0];
+                      event.currentTarget.value = "";
+                      if (!file) return;
+                      const name = file.name.replace(/\.[^.]+$/, "");
+                      setBusySlot(req.slot);
+                      try {
+                        await onReplaceMaterial(req.slot, await file.text(), file.name);
+                        setReplacedName((prev) => ({ ...prev, [req.slot]: name }));
+                      } finally {
+                        setBusySlot(null);
+                      }
+                    }}
+                  />
+                </label>
+                {replacedName[req.slot] ? <em>{replacedName[req.slot]}</em> : null}
+              </span>
             ))}
           </div>
         </section>

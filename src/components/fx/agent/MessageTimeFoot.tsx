@@ -10,9 +10,11 @@ const MODE_LABEL: Record<NonNullable<OwnChatMessage["mode"]>, string> = {
 export function MessageTimeFoot({
   message,
   hubMode,
+  onOpenTrace,
 }: {
   message: OwnChatMessage;
   hubMode?: boolean;
+  onOpenTrace?: () => void;
 }) {
   const ts = message.createdAt;
   const label = formatMsgTime(ts);
@@ -78,6 +80,29 @@ export function MessageTimeFoot({
                 </span>
               );
             })}
+            {message.role === "assistant" && onOpenTrace && (
+              <button
+                type="button"
+                className="ua-msg-foot-tag is-trace-btn"
+                onClick={onOpenTrace}
+                title="打开 Agent 链路追踪与执行瀑布图 (X-Ray)"
+              >
+                <span className="ua-tag-symbol">🔬</span>
+                <span>链路追踪</span>
+              </button>
+            )}
+          </div>
+        ) : message.role === "assistant" && onOpenTrace ? (
+          <div className="ua-msg-foot-tags">
+            <button
+              type="button"
+              className="ua-msg-foot-tag is-trace-btn"
+              onClick={onOpenTrace}
+              title="打开 Agent 链路追踪与执行瀑布图 (X-Ray)"
+            >
+              <span className="ua-tag-symbol">🔬</span>
+              <span>链路追踪</span>
+            </button>
           </div>
         ) : null}
       </div>

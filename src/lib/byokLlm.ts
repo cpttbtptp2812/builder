@@ -157,28 +157,37 @@ export async function streamByokChat(
   let content = "";
   let reasoning = "";
   const splitThink = createThinkSplitter();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const taken = takeSseDataLines(buffer);
-    buffer = taken.rest;
-    for (const raw of taken.data) {
-      const delta = readStreamDelta(raw);
-      if (delta.reasoning) {
-        reasoning += delta.reasoning;
-        opts.onReasoning?.(delta.reasoning);
-      }
-      for (const piece of splitThink(delta.content)) {
-        if (piece.kind === "reasoning") {
-          reasoning += piece.text;
-          opts.onReasoning?.(piece.text);
-        } else {
-          content += piece.text;
-          opts.onDelta?.(piece.text);
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const taken = takeSseDataLines(buffer);
+      buffer = taken.rest;
+      for (const raw of taken.data) {
+        const delta = readStreamDelta(raw);
+        if (delta.reasoning) {
+          reasoning += delta.reasoning;
+          opts.onReasoning?.(delta.reasoning);
+        }
+        for (const piece of splitThink(delta.content)) {
+          if (piece.kind === "reasoning") {
+            reasoning += piece.text;
+            opts.onReasoning?.(piece.text);
+          } else {
+            content += piece.text;
+            opts.onDelta?.(piece.text);
+          }
         }
       }
     }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // 很多本地模型（如 Ollama）或断流时会报 unexpected EOF 或 connection closed，若已有内容则视作流提早收尾
+    if (!content.trim() && !reasoning.trim()) {
+      throw err;
+    }
+    console.warn("LLM Stream closed with partial warning:", msg);
   }
   if (!content.trim() && !reasoning.trim()) throw new Error("模型没有返回内容");
   return { content: content.trim(), reasoning: reasoning.trim() };

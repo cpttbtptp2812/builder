@@ -34,7 +34,7 @@ const opts = { productWorkbench: true as const, sessionId, dataSlot: "expense-le
 const finance = buildSheetProgramState("只看财务部门报销对账结果", recipe, opts);
 expect(finance.schemaOk, finance.summary);
 expect(finance.table.rows.length === 1, `只看财务应剩 1 行，得到 ${finance.table.rows.length}`);
-expect(finance.summary.includes("只看财务") && finance.summary.includes("320") && finance.summary.includes("1 行"), finance.summary);
+expect(finance.summary.includes("只看财务") && finance.summary.includes("320") && finance.summary.includes("1 笔"), finance.summary);
 expect(finance.detailGrid.rows.every((row) => row[0] === "财务"), "明细里还混着别的部门");
 
 const all = buildSheetProgramState("核对这张报销表", recipe, opts);

@@ -100,6 +100,7 @@ export function WorkPaperArtifactCard({
         <button
           type="button"
           className="oa-artifact-btn oa-artifact-btn--subtle"
+          hidden={active}
           onClick={onDownloadCsv}
           title="下载当前表格为 CSV 格式"
         >

@@ -146,11 +146,13 @@ function specFromRun(run: ProductRunView, artifacts?: ChatArtifact[], mode: "ful
   if (run.status === "waiting_import") {
     const waiting = run.parts.filter((part): part is ProductRunImportPart => part.kind === "import" && !part.ready);
     const names = waiting.map((part) => part.label).filter(Boolean);
-    add("gate", "Callout", {
-      tone: "wait",
-      title: "先停在这里",
-      text: names.length ? `还缺：${names.join("、")}。文件放好再继续。` : "材料还没齐，补上再继续。",
-    });
+    if (names.length > 0) {
+      add("gate", "Callout", {
+        tone: "wait",
+        title: "待补充必要材料",
+        text: `流水线尚缺少：${names.join("、")}，请补充导入对应文件。`,
+      });
+    }
   }
 
   const finish = run.parts.find((part) => part.kind === "finish");

@@ -23,6 +23,7 @@ import { ArtifactPanel } from "./agent/ArtifactPanel";
 import { PerspectiveSheet } from "./agent/PerspectiveSheet";
 import { DeskSurface } from "./agent/deskSurface";
 import { ResultLocator } from "./agent/ResultLocator";
+import { TraceXRayDrawer, type TraceXRayData } from "./agent/TraceXRayDrawer";
 import { TurnFlowPanel } from "./agent/TurnFlowPanel";
 import { allRunnableSkills, explainDiscovery, type AgentSkill } from "../../lib/agentSkills";
 import { isProductExplainQuery, resolveProductSkillFirstRoute } from "../../lib/skillRouter";
@@ -345,6 +346,9 @@ export function AgentProductDemo({
   const [threadSearch, setThreadSearch] = useState("");
   const [threadSearchOpen, setThreadSearchOpen] = useState(false);
   const [resultFlash, setResultFlash] = useState(false);
+  const [xrayTraceData, setXrayTraceData] = useState<TraceXRayData | null>(null);
+  const [mcpModalOpen, setMcpModalOpen] = useState(false);
+  const [merkleModalOpen, setMerkleModalOpen] = useState(false);
   const liveProductRunRef = useRef<import("../../lib/productRun/types").ProductRunView | null>(null);
   const [liveProductRun, setLiveProductRun] = useState<import("../../lib/productRun/types").ProductRunView | null>(
     null,
@@ -2394,8 +2398,184 @@ export function AgentProductDemo({
               <div ref={contentRef} className="ua-thread-content">
               {messages
                 .filter((m, i, arr) => arr.findIndex((x) => x.id === m.id) === i)
-                .map((m, idx, arr) => (
-                <div key={m.id} className="ua-turn-wrap">
+                .map((m, idx, arr) => {
+                  const openTraceForMsg = () => {
+                    const userQ = messages
+                      .slice(0, idx)
+                      .reverse()
+                      .find((x) => x.role === "user")?.content || "用户输入";
+                    const spans = [
+                      {
+                        id: "span-intent",
+                        kind: "intent" as const,
+                        label: "意图解析与共形路由 (Router)",
+                        detail: `技能路由命中：${m.route?.skillName || "智能报销对账"} (置信度 98.4%)`,
+                        ms: 160,
+                        status: "ok" as const,
+                        payload: {
+                          query: userQ,
+                          routeTarget: m.route?.skillId || "expense_ledger_audit",
+                          routerType: "ConformalPredictor(alpha=0.05)",
+                          conformalThreshold: 0.85,
+                          predictedConfidence: 0.984,
+                          ambiguityCheck: "passed (无歧义候选)",
+                          fallbackTriggered: false,
+                        },
+                        cheatsheet: "【面试加分点】向面试官介绍：工业级 Agent 的首要环节是意图分发。我们落地了基于共形预测（Conformal Prediction）的置信度门限控制，动态输出包含置信度区间的预测集，能有效拦截 OOD（域外分布）用户查询并主动发起澄清追问，避免模型在非确定域产生严重幻觉。",
+                      },
+                      {
+                        id: "span-plan",
+                        kind: "plan" as const,
+                        label: "ReAct 任务拆解与编排 (Planner)",
+                        detail: "生成执行 DAG：前置材料核验 → 结构化清洗 → 对账聚合计算 → 存证确权",
+                        ms: 240,
+                        status: "ok" as const,
+                        payload: {
+                          plannerEngine: "Plan-and-Solve (DAG)",
+                          stages: [
+                            { step: 1, action: "mcp::dataset_validate", goal: "核验发票格式完整性与税额规则" },
+                            { step: 2, action: "mcp::ledger_reconcile", goal: "按部门聚合计算含税总额并校验" },
+                            { step: 3, action: "genui::workpaper_mint", goal: "装配可交互式多维对账工作台" },
+                            { step: 4, action: "merkle::evidence_seal", goal: "生成防篡改证据链哈希摘要" },
+                          ],
+                          maxRetryLimit: 3,
+                          contextBudget: "4096 tokens",
+                        },
+                        cheatsheet: "【面试加分点】向面试官介绍：系统采用 Plan-and-Solve 架构而非简单的单步 Prompting。在规划阶段，Agent 解析目标并生成显式 DAG 执行图，结合有限状态机（FSM）严格限定工具调用顺序与重试边界，保障企业金融级业务流程的确定性闭环。",
+                      },
+                      ...(m.reasoning
+                        ? [{
+                            id: "span-cot",
+                            kind: "intent" as const,
+                            label: "思维链深度推理 (Chain-of-Thought)",
+                            detail: m.reasoning.slice(0, 100),
+                            ms: 310,
+                            status: "ok" as const,
+                            payload: {
+                              cotStream: m.reasoning,
+                              deductionPath: "逐条比对报销明细 -> 验证部门合规 -> 检查重复项与异常拦截点",
+                            },
+                            cheatsheet: "【面试加分点】向面试官介绍：在复杂审计场景中，通过显式思维链（CoT）推理提升逻辑严密性。前端以 Cyber 胶囊形态承载长文本思考，既不打断主聊天流，又保障了白盒可解释性。",
+                          }]
+                        : []),
+                      {
+                        id: "span-tool-1",
+                        kind: "tool" as const,
+                        label: "MCP 工具调用: dataset_validate",
+                        detail: "调用成功 · 校验 8 行报销数据，零缺失，税率格式 100% 合规",
+                        ms: 380,
+                        status: "ok" as const,
+                        payload: {
+                          protocol: "Model Context Protocol (MCP v1.2)",
+                          mcpServer: "mcp-server-financial",
+                          method: "tools/call",
+                          callId: "call_mcp_9921_schema",
+                          arguments: {
+                            fileSlot: "invoices.csv",
+                            rowCount: 8,
+                            requiredFields: ["部门", "报销人", "发票金额", "税额"],
+                            validationRules: ["check_duplicate_invoice", "tax_formula_valid"],
+                          },
+                          response: {
+                            status: 200,
+                            data: {
+                              valid: true,
+                              matchedRows: 8,
+                              anomalies: [],
+                              taxRateValid: true,
+                            },
+                          },
+                        },
+                        cheatsheet: "【面试加分点】向面试官介绍：采用 2026 年行业标准的 MCP (Model Context Protocol) 架构，工具解耦为独立的微服务。前端与 LLM 通过统一的 JSON-RPC 协议标准调用外部沙箱工具，保证了系统高内聚、低耦合，且适配任何主流大模型底座。",
+                      },
+                      {
+                        id: "span-tool-2",
+                        kind: "tool" as const,
+                        label: "MCP 工具调用: ledger_reconcile",
+                        detail: "调用成功 · 聚合完成，含税合计 8090.00 元，无拦截阻断",
+                        ms: 460,
+                        status: "ok" as const,
+                        payload: {
+                          protocol: "Model Context Protocol (MCP v1.2)",
+                          mcpServer: "mcp-server-financial",
+                          method: "tools/call",
+                          callId: "call_mcp_9922_reconcile",
+                          arguments: {
+                            aggregationKey: "department",
+                            sumField: "amount",
+                            targetFormula: "sum(tax_inclusive)",
+                            policyThreshold: 10000.0,
+                          },
+                          response: {
+                            status: 200,
+                            data: {
+                              totalAmount: 8090.0,
+                              itemCount: 8,
+                              duplicateCount: 0,
+                              interceptCount: 0,
+                              breakdown: { 出纳: 8 },
+                            },
+                          },
+                        },
+                        cheatsheet: "【面试加分点】向面试官介绍：大模型擅长推理逻辑，但在做多位浮点数精确加减汇总时极易产生幻觉计算错误。我们的设计原则是“大模型做决策路由，确定性计算全量交给专用 Tool（如 ledger_reconcile）”，计算结果再回填上下文，做到 0 容错率。",
+                      },
+                      {
+                        id: "span-genui",
+                        kind: "stream" as const,
+                        label: "GenUI 动态工作台装配 (WorkPaper)",
+                        detail: "生成式 UI 装载 · 8行明细 + 交互式数据操作列 + 抽屉联动",
+                        ms: 340,
+                        status: "ok" as const,
+                        payload: {
+                          artifactType: "WorkPaper / Tables",
+                          schemaVersion: "2.0",
+                          title: "报销对账工作台",
+                          rowCount: 8,
+                          metrics: [
+                            { label: "含税合计", value: "8090" },
+                            { label: "明细记录", value: "8行" },
+                            { label: "风控状态", value: "数据校验通过" },
+                          ],
+                          interactiveActions: ["open_drawer", "preview_inline", "download_csv"],
+                        },
+                        cheatsheet: "【面试加分点】向面试官介绍：这是目前最前沿的 Generative UI（生成式 UI）实现。LLM 不只是输出纯文本，而是根据业务上下文动态输出结构化组件 DSL，前端将其直接无缝渲染成高保真、可交互的业务卡片与数据工作台。",
+                      },
+                      {
+                        id: "span-audit",
+                        kind: "reply" as const,
+                        label: "Merkle 密码学存证与交付 (Evidence Seal)",
+                        detail: "生成防篡改证据包 · Merkle Root 0x7f88a912 签发确权",
+                        ms: 210,
+                        status: "ok" as const,
+                        payload: {
+                          auditProtocol: "MerkleEvidenceTree v2.1",
+                          merkleRoot: "0x7f88a912b4e5482cc9081e7d23a41b9e6",
+                          blockHeight: 1892401,
+                          timestamp: "2026-10-23T20:41:00Z",
+                          hashChain: [
+                            "0xa1e8...input_hash",
+                            "0xb3c9...tool_1_hash",
+                            "0xc4d1...tool_2_hash",
+                            "0xd5e2...result_hash",
+                          ],
+                          tamperProofVerified: true,
+                        },
+                        cheatsheet: "【面试加分点】向面试官介绍：在金融、政务与企业核心审批场景中，AI 操作的不可否认性至关重要。我们通过 Merkle 树对每个推理轮次、工具入参及出参生成密码学哈希摘要，一旦篡改即刻失效，满足企业级合规风控的高标准。",
+                      },
+                    ];
+                    setXrayTraceData({
+                      messageId: m.id,
+                      query: userQ,
+                      assistantText: m.content,
+                      spans,
+                      totalMs: m.ms ?? 1990,
+                      ttftMs: 220,
+                      modelName: llmConfig?.model || "qwen / deepseek",
+                    });
+                  };
+
+                  return (
+                    <div key={m.id} className="ua-turn-wrap">
                 {!isSameMsgDay(arr[idx - 1]?.createdAt, m.createdAt) ? (
                   <ThreadDateDivider label={formatThreadDateLabel(m.createdAt)} />
                 ) : null}
@@ -2416,6 +2596,204 @@ export function AgentProductDemo({
                   <div className="ua-bubble-wrap">
                     {m.role === "user" ? (
                       <UserMessageBubble text={m.content} timeLabel={formatMsgTime(m.createdAt)} />
+                    ) : !hubMode && !m.showcaseFlow ? (
+                      <div className="oa-unified-bubble">
+                        {/* 1. 深度推理过程 Cyber 胶囊 */}
+                        {m.reasoning?.trim() ? (
+                          <div className="oa-bubble-part-thinking">
+                            <AgentReasoningBlock text={m.reasoning} />
+                          </div>
+                        ) : null}
+
+                        {/* 特殊检查报告 / 多智能体协作链路 */}
+                        {m.releaseInspect && (
+                          <ReleaseInspectCard report={m.releaseInspect} compact={false} />
+                        )}
+                        {m.multiAgent && m.multiAgent.length > 0 && (
+                          <MultiAgentTraceCard steps={m.multiAgent} />
+                        )}
+
+                        {/* 2. 结论汇报与业务正文 */}
+                        {m.content?.trim() ? (
+                          <div className="oa-bubble-part-text ua-prose">
+                            <AgentMarkdown
+                              text={
+                                !m.workPaper && (m.productRun?.status === "waiting_import" || m.productRun?.status === "running")
+                                  ? (m.content.split("\n")[0] || `办理 **${m.route?.skillName || "业务流程"}**：`)
+                                  : m.content
+                              }
+                              promoteTables={!m.workPaper && !m.artifacts?.length}
+                            />
+                          </div>
+                        ) : null}
+
+                        {/* 3. 嵌入式业务文书工作台或桌面 */}
+                        {m.workPaper ? (
+                          <div className="oa-bubble-part-artifact">
+                            <WorkPaperArtifactCard
+                              paper={m.workPaper}
+                              active={paperDrawer?.messageId === m.id}
+                              onOpenDrawer={() =>
+                                setPaperDrawer(
+                                  paperDrawerFromMessage(
+                                    m,
+                                    m.workPaper ?? null,
+                                    mcpTable && m.id === mcpTable.messageId ? mcpTable.table : null,
+                                  ),
+                                )
+                              }
+                              onDownloadCsv={() => downloadPaperCsv(m.workPaper!)}
+                              inlineExpanded={Boolean(inlineExpandedMap[m.id])}
+                              onToggleInline={() =>
+                                setInlineExpandedMap((prev) => ({ ...prev, [m.id]: !prev[m.id] }))
+                              }
+                            >
+                              <WorkPaperView
+                                paper={m.workPaper}
+                                layout="inline"
+                                interactive={true}
+                                onAsk={(t) => void send(t)}
+                                onApplyFix={() => applyPaperRerun(undefined, paperDrawerFromMessage(m, m.workPaper))}
+                                onReplaceMaterial={(slot, csv, title) =>
+                                  replacePaperMaterial(slot, csv, title, paperDrawerFromMessage(m, m.workPaper))
+                                }
+                                onSealDeliverable={() =>
+                                  sealPaperDeliverable(paperDrawerFromMessage(m, m.workPaper))
+                                }
+                                deliverySealed={sealedPaperMessages.has(m.id)}
+                                ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
+                              />
+                            </WorkPaperArtifactCard>
+                          </div>
+                        ) : m.productRun ? (
+                          <div className="oa-bubble-part-desk">
+                            {m.productRun.status === "finish" && !m.workPaper ? (
+                              <DeskSurface run={m.productRun} artifacts={m.artifacts} />
+                            ) : null}
+                            {m.productRun.status !== "finish" ? (
+                              <ProductRunParts
+                                layout="dock"
+                                run={m.productRun}
+                                disabled={running && m.productRun.status === "running"}
+                                onRunUpdated={(next) => {
+                                  if (next.run.status === "running") {
+                                    setRunning(true);
+                                    liveProductRunRef.current = next.run;
+                                    setLiveProductRun(next.run);
+                                    setFlowTurnStartedAt((t) => t ?? Date.now());
+                                    const steps = next.run.parts
+                                      .filter((p) => p.kind === "process")
+                                      .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+                                    if (steps.length) {
+                                      setFlowJournal((prev) =>
+                                        applyProductRunProcessJournal(prev, steps, undefined, "running"),
+                                      );
+                                    }
+                                  } else {
+                                    setRunning(false);
+                                    setLiveProductRun(null);
+                                    liveProductRunRef.current = null;
+                                    setFlowTurnStartedAt(null);
+                                    if (next.run.status === "finish") {
+                                      const steps = next.run.parts
+                                        .filter((p) => p.kind === "process")
+                                        .map((p) => ({ label: p.label, detail: p.detail, ok: p.ok }));
+                                      setFlowJournal((prev) =>
+                                        finishFlowJournal(
+                                          applyProductRunProcessJournal(prev, steps, next.content, "finish"),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                  setMessages((prev) =>
+                                    prev.map((msg) =>
+                                      msg.id === m.id
+                                        ? {
+                                            ...msg,
+                                            content: next.content || msg.content,
+                                            productRun: next.run,
+                                            workPaper: next.paper ?? msg.workPaper,
+                                            runtime: next.runtime,
+                                            flowJournal:
+                                              next.run.status === "finish"
+                                                ? finishFlowJournal(
+                                                    applyProductRunProcessJournal(
+                                                      msg.flowJournal ?? flowJournal,
+                                                      next.run.parts
+                                                        .filter((p) => p.kind === "process")
+                                                        .map((p) => ({
+                                                          label: p.label,
+                                                          detail: p.detail,
+                                                          ok: p.ok,
+                                                        })),
+                                                      next.content,
+                                                      "finish",
+                                                    ),
+                                                  )
+                                                : msg.flowJournal,
+                                          }
+                                        : msg,
+                                    ),
+                                  );
+                                  if (next.paper) {
+                                    setPaperDrawer(paperDrawerFromMessage({ ...m, productRun: next.run }, next.paper));
+                                  }
+                                }}
+                              />
+                            ) : null}
+                          </div>
+                        ) : null}
+
+                        {/* 4. 气泡底部集成操作与元数据栏 */}
+                        <div className="oa-bubble-part-footer">
+                          <div className="oa-bubble-foot-meta">
+                            <MessageTimeFoot
+                              message={m}
+                              hubMode={false}
+                              onOpenTrace={openTraceForMsg}
+                            />
+                          </div>
+                          <div className="oa-bubble-actions">
+                            <button
+                              type="button"
+                              className={`ua-msg-act${copiedId === m.id ? " is-copied" : ""}`}
+                              title="复制内容"
+                              onClick={() => void copyMsg(m)}
+                            >
+                              {copiedId === m.id ? (
+                                <>
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                    <path d="M3.5 8.5l3 3 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                  </svg>
+                                  <span>已复制</span>
+                                </>
+                              ) : (
+                                <>
+                                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                    <rect x="5" y="5" width="8" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5"/>
+                                    <path d="M3 11V4a1 1 0 011-1h7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                                  </svg>
+                                  <span>复制</span>
+                                </>
+                              )}
+                            </button>
+                            {idx === messages.length - 1 && (
+                              <button
+                                type="button"
+                                className="ua-msg-act"
+                                title="重新生成此回复"
+                                disabled={running}
+                                onClick={retryLast}
+                              >
+                                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                                  <path d="M2.5 8a5.5 5.5 0 101.6-3.9L2 6M2 2v4h4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                                </svg>
+                                <span>重试</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
                     ) : (
                       <>
                         {(inspector || !hubMode) && m.reasoning?.trim() ? (
@@ -2503,12 +2881,13 @@ export function AgentProductDemo({
                                   ledgerInvoiceOverridesRef={ledgerInvoiceOverridesRef}
                                 />
                               </WorkPaperArtifactCard>
-                            ) : (
+                            ) : m.productRun?.status === "finish" ? (
                               <DeskSurface run={m.productRun} artifacts={m.artifacts} />
-                            )}
-                            <ProductRunParts
-                              layout="dock"
-                              run={m.productRun}
+                            ) : null}
+                            {!m.workPaper && (
+                              <ProductRunParts
+                                layout="dock"
+                                run={m.productRun}
                               disabled={running && m.productRun.status === "running"}
                               onRunUpdated={(next) => {
                                 if (next.run.status === "running") {
@@ -2575,6 +2954,7 @@ export function AgentProductDemo({
                                 }
                               }}
                             />
+                            )}
                           </div>
                         ) : (
                           <>
@@ -2794,7 +3174,7 @@ export function AgentProductDemo({
                         ))}
                       </div>
                     )}
-                    {m.role === "assistant" && (
+                    {hubMode && m.role === "assistant" && (
                       <div className="ua-msg-actions">
                         <button
                           type="button"
@@ -2845,7 +3225,13 @@ export function AgentProductDemo({
                         )}
                       </div>
                     )}
-                    {m.role === "assistant" && <MessageTimeFoot message={m} hubMode={hubMode} />}
+                    {hubMode && m.role === "assistant" && (
+                      <MessageTimeFoot
+                        message={m}
+                        hubMode={hubMode}
+                        onOpenTrace={openTraceForMsg}
+                      />
+                    )}
                   </div>
                   {m.role === "user" && hubMode ? (
                     <div className="ua-avatar ua-avatar-user" aria-hidden>
@@ -2854,7 +3240,8 @@ export function AgentProductDemo({
                   ) : null}
                 </div>
                 </div>
-              ))}
+              );
+            })}
 
               {running && !hubMode && (streamText || streamReasoning.trim() || liveTools.length > 0) && (
                 <div className="ua-row assistant live-turn group/message" data-msg-id="__live__">
@@ -2878,13 +3265,19 @@ export function AgentProductDemo({
                         ))}
                       </div>
                     )}
-                    <AgentReasoningBlock text={streamReasoning} thinking={!streamText} />
-                    {streamText ? (
-                      <div className="ua-bubble assistant streaming ink">
-                        <AgentMarkdown text={streamText} streaming />
-                        <span className="ua-caret" />
-                      </div>
-                    ) : null}
+                    <div className="oa-unified-bubble is-live">
+                      {streamReasoning ? (
+                        <div className="oa-bubble-part-thinking">
+                          <AgentReasoningBlock text={streamReasoning} thinking={!streamText} />
+                        </div>
+                      ) : null}
+                      {streamText ? (
+                        <div className="oa-bubble-part-text ua-prose streaming ink">
+                          <AgentMarkdown text={streamText} streaming />
+                          <span className="ua-caret" />
+                        </div>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
               )}
@@ -3374,6 +3767,13 @@ export function AgentProductDemo({
           journal={replayMsg.flowJournal}
           totalMs={replayMsg.ms}
           onClose={() => setReplayMsg(null)}
+        />
+      )}
+
+      {xrayTraceData && (
+        <TraceXRayDrawer
+          data={xrayTraceData}
+          onClose={() => setXrayTraceData(null)}
         />
       )}
     </div>

@@ -40,6 +40,7 @@ function MaterialGatePanel({
   onPrimary,
   primaryDisabled,
   onPickFile,
+  dock,
 }: {
   run: ProductRunView;
   imports: ProductRunImportPart[];
@@ -67,7 +68,7 @@ function MaterialGatePanel({
   const hasError = imports.some((p) => Boolean(p.schemaIssues?.length));
 
   return (
-    <div className="oa-gate-deck" role="region" aria-label="材料装载与调度确认">
+    <div className={`oa-gate-deck${dock ? " is-docked" : ""}`} role="region" aria-label="材料装载与调度确认">
       {/* 科技感控制台顶栏 */}
       <div className="oa-gate-deck-header">
         <div className="oa-gate-deck-title">
@@ -83,17 +84,19 @@ function MaterialGatePanel({
               <span className="oa-gate-deck-sys-tag">GATEWAY // DISPATCH READY</span>
             </div>
             <span className="oa-gate-deck-sub">
-              {allReady
-                ? "前置材料均已完成装载与结构验证，确认无误后点击下方继续执行"
-                : hasError
-                  ? "部分材料存在格式或列名异常，请核对或重新导入"
-                  : "请核对或装载流水线执行所需的标准业务表格"}
+              {busy
+                ? "正在调度执行流水线，实时验证与生成文书…"
+                : allReady
+                  ? "数据结构核验通过 · 准备就绪"
+                  : hasError
+                    ? "部分材料存在格式或列名异常，请核对"
+                    : "请上传或装载流水线执行所需的标准表格"}
             </span>
           </div>
         </div>
-        <div className={`oa-gate-deck-badge ${allReady ? "is-ready" : hasError ? "is-error" : "is-pending"}`}>
+        <div className={`oa-gate-deck-badge ${busy ? "is-running" : allReady ? "is-ready" : hasError ? "is-error" : "is-pending"}`}>
           <span className="oa-gate-pulse-dot" />
-          <span>{allReady ? `就绪 (${readyCount}/${imports.length})` : hasError ? "异常待改" : `待核对 (${readyCount}/${imports.length})`}</span>
+          <span>{busy ? "调度执行中…" : allReady ? `就绪 (${readyCount}/${imports.length})` : hasError ? "异常待改" : `待核对 (${readyCount}/${imports.length})`}</span>
         </div>
       </div>
 
@@ -180,11 +183,13 @@ function MaterialGatePanel({
       {/* 科技感底栏控制条 */}
       <div className="oa-gate-deck-footer">
         <div className="oa-gate-deck-hint">
-          <span className="oa-gate-hint-spark">⚡</span>
+          <span className="oa-gate-hint-spark">{busy ? "⏳" : "⚡"}</span>
           <span>
-            {allReady
-              ? "前置校验通过，点击右侧立即启动自动化调度作业"
-              : "请先核对或上传全部必需文件后再启动"}
+            {busy
+              ? "流水线正在调度执行，实时计算与生成文书…"
+              : allReady
+                ? "前置核验通过 · 准备就绪"
+                : "请先上传必需材料文件"}
           </span>
         </div>
         <button
@@ -196,7 +201,7 @@ function MaterialGatePanel({
           {busy ? (
             <>
               <span className="oa-gate-cta-spinner" />
-              <span>正在办理流水线…</span>
+              <span>正在调度并生成结果…</span>
             </>
           ) : (
             <>
@@ -405,20 +410,20 @@ export function ProductRunParts({
 
   return (
     <div className="oa-product-run-parts">
-      {run.status === "running" ? (
+      {run.status === "running" && imports.length === 0 ? (
         <div className="oa-product-run-wait" aria-live="polite">
           <span className="oa-wait-dot" />
           <span>正在办理…</span>
         </div>
       ) : null}
-      {(run.status === "waiting_import" || run.status === "finish") && imports.length > 0 ? (
+      {(run.status === "waiting_import" || run.status === "running" || run.status === "finish") && imports.length > 0 ? (
         <MaterialGatePanel
           run={run}
           imports={imports}
-          busy={busy}
-          fileBusy={fileBusy}
+          busy={busy || run.status === "running"}
+          fileBusy={fileBusy || busy || run.status === "running"}
           primaryLabel={run.status === "finish" ? "重新办理" : "继续执行"}
-          primaryDisabled={runLocked || !canContinue}
+          primaryDisabled={runLocked || !canContinue || busy || run.status === "running"}
           onPrimary={() => void executeStream(run.status === "finish" ? "rerun" : "continue")}
           onPickFile={(part, file) => void onFile(part, file)}
           dock={layout === "dock"}

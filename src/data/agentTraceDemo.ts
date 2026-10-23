@@ -17,6 +17,7 @@ export type TraceSpan = {
   ms: number;
   status: "ok" | "warn" | "err";
   payload?: Record<string, unknown>;
+  cheatsheet?: string;
 };
 
 export type TraceSession = {

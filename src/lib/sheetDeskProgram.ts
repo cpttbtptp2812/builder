@@ -304,14 +304,14 @@ function composeSummary(state: Omit<SheetProgramState, "summary">): string {
   for (const e of state.escalations) queues.set(e.queue, (queues.get(e.queue) ?? 0) + 1);
   const queueText = [...queues.entries()].map(([q, n]) => `${q}${n}单`).join("、") || "无";
   return [
-    `${taxLabel}合计 ${money(total)}，${state.table.rows.length} 行。`,
+    `${taxLabel}合计 ¥${money(total)} · 共 ${state.table.rows.length} 笔`,
     dup,
-    blocked.length ? `拦截 ${blocked.length} 条` : "无拦截",
+    blocked.length ? `拦截 ${blocked.length} 条` : "合规无拦截",
     warned.length ? `警告 ${warned.length} 条` : "",
-    `升级分布：${queueText}。`,
+    `审批流向：${queueText}`,
   ]
     .filter(Boolean)
-    .join(" ");
+    .join(" · ");
 }
 
 function failedSheetState(table: SheetTable, recipe: SheetProgramRecipe, issue: string): SheetProgramState {

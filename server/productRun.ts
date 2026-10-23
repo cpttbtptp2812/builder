@@ -141,13 +141,12 @@ function datasetBlockMessage(sessionId: string, skillId: string): string | null 
 }
 
 function gateMessage(skillName: string, missing: SkillDataRequirement[]): string {
-  return [
-    `办理 **${skillName}** 还需要您提供下面${missing.length > 1 ? ` ${missing.length} 份` : "这份"}材料：`,
-    "",
-    ...missing.map((m) => `- **${m.label}** — ${m.hint}`),
-    "",
-    "请在**下方**点 **下载模板** 或 **导入 CSV**，出现 **已导入 · N 行** 后再点 **继续执行**。",
-  ].join("\n");
+  const missingNames = missing.map((m) => m.label).join("、");
+  const lead =
+    missing.length === 1
+      ? "还需要您提供下面这份材料"
+      : `还需要您提供下面 ${missing.length} 份材料`;
+  return `办理${skillName}。${lead}：${missingNames}。`;
 }
 
 function gateReadyMessage(skillName: string, parts: ProductRunImportPart[]): string {
