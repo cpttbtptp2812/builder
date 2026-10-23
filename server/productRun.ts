@@ -102,22 +102,23 @@ function importParts(sessionId: string, processId: string, skillId: string): Pro
     const validation =
       rowCount > 0 ? validateDatasetForSlot(req.slot, ds!.columns, ds!.rows) : { ok: true as const };
     const ready = rowCount > 0 && validation.ok;
-    return {
-      kind: "import" as const,
-      sessionId,
-      processId,
-      slot: req.slot,
-      label: req.label,
-      hint: req.hint,
-      templateCsv: req.templateCsv,
-      filename: req.filename,
-      ready,
-      materialTitle: rowCount > 0 ? ds!.title : undefined,
-      rowCount: rowCount > 0 ? rowCount : undefined,
-      schemaIssues: !validation.ok ? validation.issues : undefined,
-    };
-  });
-}
+      const displayTitle = (ds?.title && ds.title !== req.slot) ? ds.title : req.label;
+      return {
+        kind: "import" as const,
+        sessionId,
+        processId,
+        slot: req.slot,
+        label: req.label,
+        hint: req.hint,
+        templateCsv: req.templateCsv,
+        filename: req.filename,
+        ready,
+        materialTitle: rowCount > 0 ? displayTitle : undefined,
+        rowCount: rowCount > 0 ? rowCount : undefined,
+        schemaIssues: !validation.ok ? validation.issues : undefined,
+      };
+    });
+  }
 
 /** 新开 process 门闩：清掉 session 里无法解析的旧 CSV，避免一进来就红字 */
 function purgeInvalidDatasetsForSkill(sessionId: string, skillId: string) {
@@ -153,7 +154,7 @@ function gateReadyMessage(skillName: string, parts: ProductRunImportPart[]): str
   const ready = parts.filter((p) => p.ready);
   const lines = [`办理 **${skillName}**：`];
   for (const p of ready) {
-    const name = p.materialTitle?.trim() || p.label;
+    const name = (p.materialTitle?.trim() && p.materialTitle !== p.slot) ? p.materialTitle.trim() : p.label;
     lines.push(`- 已有材料 **${name}** · ${p.rowCount ?? "—"} 行`);
   }
   lines.push(

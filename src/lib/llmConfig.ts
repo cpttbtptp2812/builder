@@ -51,8 +51,8 @@ export const LLM_PRESETS: Record<
   "ollama-cloud": {
     label: "Ollama Cloud",
     baseUrl: "https://ollama.com/v1",
-    model: "gpt-oss:120b",
-    hint: "ollama.com 控制台 Create API key · 开发可走 /ollama-cloud-proxy",
+    model: "llama3.3",
+    hint: "ollama.com 控制台 API Key · 常用模型：llama3.3、qwen2.5、deepseek-r1",
     keyUrl: "https://ollama.com/settings/keys",
     keySteps: "登录 ollama.com → Keys → Create API key",
   },
@@ -242,16 +242,34 @@ export function resolveLlmBaseUrl(baseUrl: string): string {
 export async function probeLlmConnection(
   config: LlmConfig,
 ): Promise<{ ok: boolean; ms: number; detail: string }> {
-  if (!isLlmConfigured(config)) {
+  let activeConfig = { ...config };
+  // 智能适配：如果选了本地 Ollama 但填了云端 API Key，自动切换至 Ollama Cloud
+  if (
+    activeConfig.preset === "ollama" &&
+    activeConfig.apiKey.trim().length > 10 &&
+    (activeConfig.baseUrl.includes("localhost") || activeConfig.baseUrl.includes("127.0.0.1"))
+  ) {
+    activeConfig = {
+      ...activeConfig,
+      preset: "ollama-cloud",
+      baseUrl: "https://ollama.com/v1",
+      model: activeConfig.model === "qwen2.5:7b" ? "llama3.3" : activeConfig.model,
+    };
+  }
+
+  if (!isLlmConfigured(activeConfig)) {
     return { ok: false, ms: 0, detail: "请先启用并填写 Base URL、Model 与 API Key" };
   }
   const t0 = performance.now();
-  const baseUrl = resolveLlmBaseUrl(config.baseUrl);
-  const local = config.preset === "ollama" || /localhost|127\.0\.0\.1/.test(baseUrl);
+  const baseUrl = resolveLlmBaseUrl(activeConfig.baseUrl);
+  const local =
+    activeConfig.preset === "ollama" ||
+    /localhost|127\.0\.0\.1/.test(baseUrl) ||
+    baseUrl.startsWith("/");
   const target = local ? `${baseUrl}/chat/completions` : apiUrl("/llm/probe");
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const teamToken = getTeamToken();
-  if (local && config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
+  if (local && activeConfig.apiKey.trim()) headers.Authorization = `Bearer ${activeConfig.apiKey.trim()}`;
   if (!local && teamToken) headers.Authorization = `Bearer ${teamToken}`;
 
   try {
@@ -261,12 +279,12 @@ export async function probeLlmConnection(
       body: JSON.stringify(
         local
           ? {
-              model: config.model,
+              model: activeConfig.model,
               messages: [{ role: "user", content: "ping" }],
               max_tokens: 5,
               stream: false,
             }
-          : { baseUrl: config.baseUrl, model: config.model, apiKey: config.apiKey },
+          : { baseUrl: activeConfig.baseUrl, model: activeConfig.model, apiKey: activeConfig.apiKey },
       ),
     });
     const ms = Math.round(performance.now() - t0);
@@ -279,21 +297,33 @@ export async function probeLlmConnection(
         body = null;
       }
       const verdict = probeVerdict(res.ok, body, res.status);
-      return { ok: verdict.ok, ms, detail: verdict.detail || `已连通 ${config.model} · ${ms}ms` };
+      let detail = verdict.detail;
+      if (!res.ok && res.status === 500 && (!body || !body.detail)) {
+        detail = "HTTP 500 · 后端服务未就绪。请确认是否已执行 npm run dev:server 或 npm run dev:full";
+      }
+      return { ok: verdict.ok, ms, detail: detail || `已连通 ${activeConfig.model} · ${ms}ms` };
     }
     if (!res.ok) {
+      let errDetail = raw.slice(0, 160) || res.statusText;
+      try {
+        const parsed = JSON.parse(raw) as { error?: string | { message?: string } };
+        if (typeof parsed.error === "string") errDetail = parsed.error;
+        else if (parsed.error?.message) errDetail = parsed.error.message;
+      } catch {
+        /* ignore */
+      }
       return {
         ok: false,
         ms,
-        detail: `HTTP ${res.status} · ${target}: ${raw.slice(0, 120) || res.statusText}`,
+        detail: `HTTP ${res.status} · ${activeConfig.model}: ${errDetail}`,
       };
     }
-    return { ok: true, ms, detail: `已连通 ${config.model} · ${target} · ${ms}ms` };
+    return { ok: true, ms, detail: `已连通 ${activeConfig.model} · ${ms}ms` };
   } catch (err) {
     const msg = err instanceof Error ? err.message : "网络错误";
     const hint = local
-      ? "请求打到本机 Ollama，不会使用 ollama.com 的 Key。本机需已启动 ollama serve。"
-      : "浏览器没有连上该地址。云端 Key 请把预设选成 Ollama Cloud，Base URL 用 https://ollama.com/v1。";
+      ? "请求发送失败。若是本地 Ollama 请确认本地服务已启动；若是云端请检查网络或代理是否通畅。"
+      : "无法连接模型服务。请检查 API Key 是否有效，或检查网络连接。";
     return { ok: false, ms: Math.round(performance.now() - t0), detail: `${msg} · ${target}。${hint}` };
   }
 }

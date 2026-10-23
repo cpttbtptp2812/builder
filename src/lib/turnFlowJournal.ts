@@ -134,25 +134,31 @@ export function isProductGateJournal(journal: FlowJournalNode[]): boolean {
 /** 办事 process 步骤进 Trace「取材料」，不在对话正文堆明细 */
 export function applyProductRunProcessJournal(
   journal: FlowJournalNode[],
-  steps: { label: string; detail: string; ok?: boolean }[],
+  steps: { label?: string; detail?: string; ok?: boolean }[],
   answerPreview?: string,
   phase: "running" | "finish" = "running",
 ): FlowJournalNode[] {
-  const fetchEvidence: FlowEvidence[] = steps.slice(-12).map((s, i) => ({
-    id: `proc-${i}-${s.label.slice(0, 24)}`,
-    kind: "tool" as const,
-    title: s.label,
-    excerpt: s.detail.replace(/\s+/g, " ").trim().slice(0, 160),
-    meta: s.ok === false ? "未通过" : "已执行",
-  }));
+  if (!Array.isArray(steps) || !steps.length) return journal;
+  const safeJournal = Array.isArray(journal) ? journal : [];
+  const fetchEvidence: FlowEvidence[] = steps.slice(-12).map((s, i) => {
+    const rawLabel = String(s?.label ?? `步骤 ${i + 1}`);
+    const rawDetail = String(s?.detail ?? rawLabel);
+    return {
+      id: `proc-${i}-${rawLabel.slice(0, 24)}`,
+      kind: "tool" as const,
+      title: rawLabel,
+      excerpt: rawDetail.replace(/\s+/g, " ").trim().slice(0, 160),
+      meta: s?.ok === false ? "未通过" : "已执行",
+    };
+  });
 
-  return journal.map((n) => {
+  return safeJournal.map((n) => {
     if (n.id === "read" || n.id === "route") return { ...n, status: "done" as const };
     if (n.id === "fetch") {
       return { ...patchNode(n, fetchEvidence.length ? fetchEvidence : n.evidence), status: "done" as const };
     }
     if (n.id === "write") {
-      if (phase === "finish" && answerPreview?.trim()) {
+      if (phase === "finish" && typeof answerPreview === "string" && answerPreview.trim()) {
         const preview = answerPreview.replace(/\s+/g, " ").trim();
         return {
           ...patchNode(n, [

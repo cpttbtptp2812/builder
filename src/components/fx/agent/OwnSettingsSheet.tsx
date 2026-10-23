@@ -224,8 +224,21 @@ export function OwnSettingsSheet({
                 <input
                   type="password"
                   value={config.apiKey}
-                  onChange={(e) => setConfig((c) => ({ ...c, apiKey: e.target.value }))}
-                  placeholder="sk-…"
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    if (config.preset === "ollama" && key.trim().length > 6) {
+                      setConfig((c) => ({
+                        ...c,
+                        apiKey: key,
+                        preset: "ollama-cloud",
+                        baseUrl: "https://ollama.com/v1",
+                        model: c.model === "qwen2.5:7b" ? "llama3.3" : c.model,
+                      }));
+                    } else {
+                      setConfig((c) => ({ ...c, apiKey: key }));
+                    }
+                  }}
+                  placeholder="sk-… 或 ollama.com API Key"
                 />
               </label>
             </div>

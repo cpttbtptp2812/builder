@@ -248,11 +248,39 @@ export function ConnectPanel() {
                     ))}
                   </select>
                 ) : (
-                  <input
-                    className="oa-input"
-                    value={llm.model}
-                    onChange={(e) => setLlm((c) => ({ ...c, model: e.target.value }))}
-                  />
+                  <>
+                    <input
+                      className="oa-input"
+                      value={llm.model}
+                      onChange={(e) => setLlm((c) => ({ ...c, model: e.target.value }))}
+                      placeholder={llm.preset === "ollama-cloud" ? "如 llama3.3, qwen2.5, deepseek-r1" : undefined}
+                    />
+                    {llm.preset === "ollama-cloud" && (
+                      <div style={{ display: "flex", gap: "0.4rem", marginTop: "0.35rem", flexWrap: "wrap", alignItems: "center" }}>
+                        <span style={{ fontSize: "0.78rem", opacity: 0.7 }}>推荐模型：</span>
+                        {["llama3.3", "qwen2.5", "deepseek-r1", "qwen2.5-coder"].map((m) => (
+                          <button
+                            key={m}
+                            type="button"
+                            className="oa-btn oa-btn-ghost"
+                            style={{
+                              fontSize: "0.78rem",
+                              padding: "2px 8px",
+                              lineHeight: "1.3",
+                              borderRadius: "4px",
+                              border: llm.model === m ? "1px solid #6366f1" : "1px solid var(--oa-border, #d1d5db)",
+                              background: llm.model === m ? "#e0e7ff" : "transparent",
+                              color: llm.model === m ? "#3730a3" : "inherit",
+                              cursor: "pointer",
+                            }}
+                            onClick={() => setLlm((c) => ({ ...c, model: m }))}
+                          >
+                            {m}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </OaField>
               <OaField label="API Key">
@@ -260,8 +288,21 @@ export function ConnectPanel() {
                   className="oa-input"
                   type="password"
                   value={llm.apiKey}
-                  onChange={(e) => setLlm((c) => ({ ...c, apiKey: e.target.value }))}
-                  placeholder="sk-…"
+                  onChange={(e) => {
+                    const key = e.target.value;
+                    if (llm.preset === "ollama" && key.trim().length > 6) {
+                      setLlm((c) => ({
+                        ...c,
+                        apiKey: key,
+                        preset: "ollama-cloud",
+                        baseUrl: "https://ollama.com/v1",
+                        model: c.model === "qwen2.5:7b" ? "llama3.3" : c.model,
+                      }));
+                    } else {
+                      setLlm((c) => ({ ...c, apiKey: key }));
+                    }
+                  }}
+                  placeholder="sk-… 或 ollama.com API Key"
                 />
               </OaField>
               <p className="oa-toolbar-lead">

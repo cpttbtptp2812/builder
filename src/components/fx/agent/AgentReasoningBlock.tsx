@@ -59,20 +59,73 @@ export function AgentReasoningBlock({
   const label = thinking ? "思考中…" : seconds != null ? `已思考 ${seconds} 秒` : "思考";
 
   return (
-    <div className="agent-reasoning-block">
-      <button type="button" className="agent-reasoning-toggle" onClick={() => setOpen((value) => !value)}>
-        <span className="agent-reasoning-title">
-          {thinking ? <span className="agent-text-shimmer">{label}</span> : <span>{label}</span>}
-          {!open && preview ? <em className="agent-reasoning-preview">{preview}</em> : null}
-        </span>
-        <em aria-hidden>{open ? "▾" : "▸"}</em>
-      </button>
+    <div className={`agent-reasoning-block${open ? " is-open" : ""}${thinking ? " is-thinking" : ""}`}>
+      {open ? (
+        <div className="agent-reasoning-terminal-head">
+          <div className="agent-terminal-dots" aria-hidden="true">
+            <span className="agent-terminal-dot is-cyan" />
+            <span className="agent-terminal-dot is-indigo" />
+            <span className="agent-terminal-dot is-emerald" />
+          </div>
+          <div className="agent-terminal-title">
+            <svg className="agent-reasoning-spark" width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1v14M1 8h14M3 3l10 10M3 13L13 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+            </svg>
+            <span>NEURAL REASONING // 思考链路</span>
+            {seconds != null ? <span className="agent-terminal-time">{seconds}s</span> : null}
+          </div>
+          <button
+            type="button"
+            className="agent-terminal-toggle-btn"
+            onClick={() => setOpen(false)}
+            title="收起推理过程"
+          >
+            <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+              <path d="M4 10l4-4 4 4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>收起</span>
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="agent-reasoning-toggle"
+          onClick={() => setOpen((value) => !value)}
+          title="展开查看模型深度推理链路"
+        >
+          <span className="agent-reasoning-title">
+            <svg className="agent-reasoning-spark" width="13" height="13" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1v14M1 8h14M3 3l10 10M3 13L13 3" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.9" />
+            </svg>
+            {thinking ? (
+              <span className="agent-text-shimmer">{label}</span>
+            ) : (
+              <span className="agent-reasoning-label-badge">{label}</span>
+            )}
+            {preview ? <em className="agent-reasoning-preview">{preview}</em> : null}
+          </span>
+          <svg
+            className="agent-reasoning-chevron"
+            width="12"
+            height="12"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M4 6l4 4 4-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+
       {open && shown ? (
         <div className="agent-reasoning-body" ref={bodyRef}>
-          <p>
-            {shown}
-            {thinking ? <span className="ua-caret" /> : null}
-          </p>
+          <div className="agent-reasoning-code">
+            <span className="agent-reasoning-line-accent" aria-hidden="true" />
+            <p>
+              {shown}
+              {thinking ? <span className="ua-caret" /> : null}
+            </p>
+          </div>
         </div>
       ) : null}
     </div>

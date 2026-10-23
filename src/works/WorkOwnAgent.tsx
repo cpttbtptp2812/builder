@@ -7,6 +7,7 @@ import { AgentWorkbenchPanel } from "../components/ownagent/AgentWorkbenchPanel"
 import { MaterialsLine, RulesLine, SkillLine, lineOf } from "../components/ownagent/MainLines";
 import { PageToolHost } from "../components/ownagent/PageToolHost";
 import { SkillUserClient } from "../components/ownagent/SkillUserClient";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { OaBtn, OaCard, OaCheck, OaPage, OaStack } from "../components/ownagent/OaUi";
 type ViewId =
   | "chat"
@@ -425,22 +426,24 @@ function NavButton({
   item,
   active,
   onClick,
+  collapsed = false,
 }: {
   item: NavItem;
   active: boolean;
   onClick: () => void;
+  collapsed?: boolean;
 }) {
   return (
     <button
       type="button"
-      className={`own-nav-item${active ? " on" : ""}${item.primary ? " own-nav-item--primary" : ""}`}
+      className={`own-nav-item${active ? " on" : ""}${item.primary ? " own-nav-item--primary" : ""}${collapsed ? " is-collapsed" : ""}`}
       onClick={onClick}
-      title={item.desc}
+      title={item.label + (item.desc ? ` · ${item.desc}` : "")}
       aria-current={active ? "page" : undefined}
     >
       <span className="own-nav-icon">{item.icon}</span>
-      <span className="own-nav-label">{item.label}</span>
-      <span className="own-nav-tip">{item.desc}</span>
+      {!collapsed && <span className="own-nav-label">{item.label}</span>}
+      {!collapsed && <span className="own-nav-tip">{item.desc}</span>}
     </button>
   );
 }
@@ -448,6 +451,25 @@ function NavButton({
 export function WorkOwnAgent() {
   const [params, setParams] = useSearchParams();
   const view = resolveView(params.get("panel"), params.get("view"));
+  const [sideCollapsed, setSideCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("oa_side_collapsed") === "1";
+    } catch {
+      return false;
+    }
+  });
+  const [topSearchOpen, setTopSearchOpen] = useState(false);
+  const [topSearchText, setTopSearchText] = useState("");
+
+  const toggleSidebar = () => {
+    setSideCollapsed((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem("oa_side_collapsed", next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  };
 
   function go(nextView?: ViewId) {
     const next = new URLSearchParams();
@@ -493,7 +515,7 @@ export function WorkOwnAgent() {
   if (view === "user") return <SkillUserClient onAdmin={() => go("chat")} />;
 
   return (
-    <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}`}>
+    <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}${sideCollapsed ? " side-collapsed" : ""}`}>
       <header className="own-app-bar">
         <div className="own-app-brand">
           <span className="own-app-mark" aria-hidden="true">
@@ -509,9 +531,45 @@ export function WorkOwnAgent() {
           <button type="button" className="own-cmd" onClick={() => go("user")}>
             用户端
           </button>
-          <button type="button" className="own-cmd" onClick={() => window.dispatchEvent(new Event("ownagent:palette"))}>
-            搜索
-          </button>
+          {topSearchOpen ? (
+            <div className="own-top-search-wrap">
+              <input
+                type="text"
+                className="own-top-search-input"
+                placeholder="搜索技能、资料、会话…"
+                value={topSearchText}
+                autoFocus
+                onChange={(e) => setTopSearchText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Escape") {
+                    setTopSearchOpen(false);
+                  } else if (e.key === "Enter") {
+                    window.dispatchEvent(new Event("ownagent:palette"));
+                    setTopSearchOpen(false);
+                  }
+                }}
+              />
+              <button
+                type="button"
+                className="own-top-search-close"
+                onClick={() => setTopSearchOpen(false)}
+                title="关闭搜索"
+                aria-label="关闭搜索"
+              >
+                ×
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="own-cmd"
+              onClick={() => {
+                setTopSearchOpen(true);
+              }}
+            >
+              搜索
+            </button>
+          )}
           <Link to="/" className="own-exit" title="返回主页" aria-label="返回主页">
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path
@@ -528,11 +586,33 @@ export function WorkOwnAgent() {
       </header>
 
       <>
-          <aside className="own-app-side">
+          <aside className={`own-app-side${sideCollapsed ? " is-collapsed" : ""}`}>
+            <div className="own-nav-collapse-row">
+              <button
+                type="button"
+                className="own-nav-side-btn"
+                onClick={toggleSidebar}
+                title={sideCollapsed ? "展开侧栏" : "收起侧栏"}
+                aria-label={sideCollapsed ? "展开侧栏" : "收起侧栏"}
+              >
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  className={`own-collapse-arrow${sideCollapsed ? " is-flipped" : ""}`}
+                >
+                  <path d="M10 12L6 8L10 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                {!sideCollapsed && <span>收起侧栏</span>}
+              </button>
+            </div>
+
             <div className="own-nav-section">
               {LINE_NAV.map((item) => (
                 <NavButton
                   key={item.line}
+                  collapsed={sideCollapsed}
                   item={{
                     id: item.home,
                     label: item.label,
@@ -544,26 +624,34 @@ export function WorkOwnAgent() {
                 />
               ))}
             </div>
-            <div className="own-nav-group-label">了解</div>
+            {!sideCollapsed && <div className="own-nav-group-label">了解</div>}
             <div className="own-nav-section">
               {[
                 ...MORE_VIEWS.filter((v) => v.id === "guide"),
                 ...ADVANCED_VIEWS.filter((v) => v.id === "jd"),
               ].map((v) => (
-                <NavButton key={v.id} item={v} active={view === v.id} onClick={() => go(v.id)} />
+                <NavButton
+                  key={v.id}
+                  collapsed={sideCollapsed}
+                  item={v}
+                  active={view === v.id}
+                  onClick={() => go(v.id)}
+                />
               ))}
             </div>
           </aside>
 
-          <div className={`own-app-stage${view === "chat" ? " is-chat" : " is-page"}`}>
-            {view === "chat" ? <AgentProductDemo /> : null}
-            {lineOf(view) === "skill" ? <SkillLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
-            {lineOf(view) === "materials" ? <MaterialsLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
-            {lineOf(view) === "rules" ? <RulesLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
-            {view === "guide" ? <QuickStartGuide onGo={(v) => go(v)} /> : null}
-            {view === "jd" ? (
-              <AgentWorkbenchPanel onGo={(v) => go(v)} onGoProduct={() => go("compare")} />
-            ) : null}
+          <div key={view} className={`own-app-stage${view === "chat" ? " is-chat" : " is-page"}`}>
+            <ErrorBoundary fallbackTitle="工作台视图渲染异常">
+              {view === "chat" ? <AgentProductDemo /> : null}
+              {lineOf(view) === "skill" ? <SkillLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
+              {lineOf(view) === "materials" ? <MaterialsLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
+              {lineOf(view) === "rules" ? <RulesLine view={view} onPick={(id) => go(id as ViewId)} /> : null}
+              {view === "guide" ? <QuickStartGuide onGo={(v) => go(v)} /> : null}
+              {view === "jd" ? (
+                <AgentWorkbenchPanel onGo={(v) => go(v)} onGoProduct={() => go("compare")} />
+              ) : null}
+            </ErrorBoundary>
           </div>
       </>
       <PageToolHost />

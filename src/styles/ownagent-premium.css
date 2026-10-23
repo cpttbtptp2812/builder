@@ -203,14 +203,18 @@
 }
 
 .own-app.own-app--product .ua-row.user .ua-bubble {
-  background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
-  border-color: rgba(199, 210, 254, 0.85);
+  background: linear-gradient(135deg, #1e1b4b 0%, #312e81 42%, #1e3a8a 100%) !important;
+  color: #f8fafc !important;
+  border: 1px solid rgba(129, 140, 248, 0.32) !important;
+  box-shadow: 0 4px 18px rgba(49, 46, 129, 0.22), 0 1px 2px rgba(0, 0, 0, 0.08) !important;
+  border-radius: 18px 18px 4px 18px !important;
 }
 
 .own-app.own-app--product .ua-row.assistant .ua-bubble {
-  background: rgba(255, 255, 255, 0.96);
-  border-color: rgba(226, 232, 240, 0.95);
-  box-shadow: 0 4px 20px rgba(15, 23, 42, 0.05);
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  color: #1e293b !important;
 }
 
 .own-app.own-app--product .ua-right-panel {

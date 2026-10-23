@@ -103,13 +103,16 @@ export function LedgerTableDesk({
     onAsk?.(text);
   }
 
+  const handleDownloadCsv = () => {
+    downloadText(
+      `${paper.title.replace(/[\\/:*?"<>|]/g, " ")}.csv`,
+      gridToCsv(paper.grid.columns, paper.grid.rows),
+      "text/csv;charset=utf-8",
+    );
+  };
+
   return (
     <div className="oa-paper oa-paper-ledger-desk">
-      <header className="oa-paper-title">
-        <h3>报销对账工作台</h3>
-        <p>{paper.title}</p>
-      </header>
-
       <div className="oa-ledger-meta">
         <span>{taxLabel}</span>
         <span>容差 {paper.recipe.tolerance}</span>
@@ -118,13 +121,14 @@ export function LedgerTableDesk({
         {openCount > 0 ? <span className="is-bad">{openCount} 行待处理</span> : <span className="is-ok">全部通过</span>}
       </div>
 
-      <div className="oa-ledger-totals">
+      <div className="oa-ledger-totals" role="region" aria-label="部门合计">
         {paper.deptTotals.map((item) => (
           <button
             key={item.dept}
             type="button"
             className={deptFilter === item.dept ? "is-on" : ""}
             onClick={() => setDeptFilter(deptFilter === item.dept ? "全部" : item.dept)}
+            title={deptFilter === item.dept ? "点击取消过滤" : `按 ${item.dept} 过滤`}
           >
             <em>{item.dept}</em>
             <b>{item.amount}</b>
@@ -179,7 +183,7 @@ export function LedgerTableDesk({
                 ]
                   .filter(Boolean)
                   .join(" ")}
-                onClick={() => setSelected(row.index)}
+                onClick={() => setSelected((prev) => (prev === row.index ? null : row.index))}
               >
                 <td>{row.dept}</td>
                 <td>{row.person}</td>
@@ -209,7 +213,10 @@ export function LedgerTableDesk({
           </tbody>
         </table>
         <footer className="oa-ledger-table-foot">
-          显示 {filtered.length} / {rows.length} 行
+          <span className="oa-table-count">显示 {filtered.length} 行，一共 {rows.length} 行</span>
+          <button type="button" className="oa-table-foot-dl" onClick={handleDownloadCsv}>
+            下载 CSV
+          </button>
         </footer>
       </div>
 

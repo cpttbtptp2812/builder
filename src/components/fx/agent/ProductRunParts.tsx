@@ -40,7 +40,6 @@ function MaterialGatePanel({
   onPrimary,
   primaryDisabled,
   onPickFile,
-  dock = false,
 }: {
   run: ProductRunView;
   imports: ProductRunImportPart[];
@@ -63,35 +62,101 @@ function MaterialGatePanel({
     })();
   };
 
-  if (dock) {
-    return (
-      <div className="oa-reply-foot">
-        {imports.map((part) => (
-          <div className="oa-reply-file" key={part.slot}>
-            <span>
-              <strong>{part.label}</strong>
-              {part.ready ? (
-                <em>
-                  {part.materialTitle ? `${part.materialTitle}` : "已导入"}
-                  {part.rowCount != null ? ` · ${part.rowCount} 行` : ""}
-                </em>
-              ) : part.schemaIssues?.length ? (
-                <em className="is-bad">{part.schemaIssues.join("；")}</em>
-              ) : (
-                <em>{part.hint}</em>
-              )}
+  const readyCount = imports.filter((p) => p.ready).length;
+  const allReady = imports.length > 0 && readyCount === imports.length;
+  const hasError = imports.some((p) => Boolean(p.schemaIssues?.length));
+
+  return (
+    <div className="oa-gate-deck" role="region" aria-label="材料装载与调度确认">
+      {/* 科技感控制台顶栏 */}
+      <div className="oa-gate-deck-header">
+        <div className="oa-gate-deck-title">
+          <div className="oa-gate-deck-icon" aria-hidden="true">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M8 1.5L2 4v4.5c0 3.8 2.6 7.4 6 8.5 3.4-1.1 6-4.7 6-8.5V4L8 1.5z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M5.5 8l1.8 1.8 3.2-3.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <div className="oa-gate-deck-headings">
+            <div className="oa-gate-deck-label-row">
+              <strong className="oa-gate-deck-label">材料装载与前置核对</strong>
+              <span className="oa-gate-deck-sys-tag">GATEWAY // DISPATCH READY</span>
+            </div>
+            <span className="oa-gate-deck-sub">
+              {allReady
+                ? "前置材料均已完成装载与结构验证，确认无误后点击下方继续执行"
+                : hasError
+                  ? "部分材料存在格式或列名异常，请核对或重新导入"
+                  : "请核对或装载流水线执行所需的标准业务表格"}
             </span>
-            <button type="button" disabled={fileBusy} onClick={() => downloadTemplate(part)}>
-              下载模板
-            </button>
-            <button type="button" disabled={fileBusy} onClick={() => fileRefs.current[part.slot]?.click()}>
-              {part.ready ? "换一份文件" : "导入文件"}
-            </button>
-            {imports.length === 1 ? (
-              <button type="button" className="is-go" disabled={busy || primaryDisabled} onClick={onPrimary}>
-                {primaryLabel}
+          </div>
+        </div>
+        <div className={`oa-gate-deck-badge ${allReady ? "is-ready" : hasError ? "is-error" : "is-pending"}`}>
+          <span className="oa-gate-pulse-dot" />
+          <span>{allReady ? `就绪 (${readyCount}/${imports.length})` : hasError ? "异常待改" : `待核对 (${readyCount}/${imports.length})`}</span>
+        </div>
+      </div>
+
+      {/* 槽位卡片阵列 */}
+      <div className="oa-gate-deck-slots">
+        {imports.map((part, idx) => (
+          <div className={`oa-gate-slot-card ${part.ready ? "is-ready" : part.schemaIssues?.length ? "is-bad" : "is-pending"}`} key={part.slot}>
+            <div className="oa-gate-slot-left">
+              <span className="oa-gate-slot-index">SLOT 0{idx + 1}</span>
+              <div className="oa-gate-slot-info">
+                <strong className="oa-gate-slot-name">{part.label}</strong>
+                {part.ready ? (
+                  <span className="oa-gate-slot-pill is-ok">
+                    <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                      <path d="M3.5 8.5l3 3 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                    <span className="oa-gate-pill-text">
+                      {part.materialTitle &&
+                      part.materialTitle !== part.slot &&
+                      part.materialTitle !== "expense-ledger" &&
+                      part.materialTitle !== part.label
+                        ? part.materialTitle
+                        : "已装载"}
+                      {part.rowCount != null ? ` · ${part.rowCount} 行` : ""}
+                    </span>
+                  </span>
+                ) : part.schemaIssues?.length ? (
+                  <span className="oa-gate-slot-pill is-bad" title={part.schemaIssues.join("；")}>
+                    ⚠️ {part.schemaIssues.join("；")}
+                  </span>
+                ) : (
+                  <span className="oa-gate-slot-pill is-hint">{part.hint || "等待导入数据"}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="oa-gate-slot-actions">
+              <button
+                type="button"
+                className="oa-gate-slot-btn oa-gate-slot-btn--subtle"
+                disabled={fileBusy}
+                onClick={() => downloadTemplate(part)}
+                title="下载标准 CSV 模板"
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M8 2v8m0 0l-2.5-2.5M8 10l2.5-2.5M3 13h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>下载模板</span>
               </button>
-            ) : null}
+              <button
+                type="button"
+                className="oa-gate-slot-btn oa-gate-slot-btn--action"
+                disabled={fileBusy}
+                onClick={() => fileRefs.current[part.slot]?.click()}
+                title={part.ready ? "更换当前文件" : "导入本地文件"}
+              >
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
+                  <path d="M2.5 8a5.5 5.5 0 1 1 1.6 3.9L2.5 13.5v-3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                <span>{part.ready ? "换一份文件" : "导入文件"}</span>
+              </button>
+            </div>
+
             <input
               ref={(el) => {
                 fileRefs.current[part.slot] = el;
@@ -109,88 +174,40 @@ function MaterialGatePanel({
             />
           </div>
         ))}
-        {imports.length > 1 ? (
-          <div className="oa-reply-file">
-            <span />
-            <button type="button" className="is-go" disabled={busy || primaryDisabled} onClick={onPrimary}>
-              {primaryLabel}
-            </button>
-          </div>
-        ) : null}
       </div>
-    );
-  }
 
-  return (
-    <div className="oa-product-data-gate-min">
-      <p className="oa-product-data-gate-lead">
-        {run.status === "finish"
-          ? "要换材料请点「换一份文件」，再点「重新办理」。"
-          : "导入后仍可「换一份文件」，确认无误再点「继续执行」。"}
-      </p>
-      <ul className="oa-product-data-gate-list">
-        {imports.map((part) => (
-          <li key={part.slot}>
-            <div className="oa-product-data-gate-item">
-              <span className="oa-product-data-gate-label">
-                {part.label}
-                {part.ready ? (
-                  <em className="is-ok">
-                    已导入
-                    {part.materialTitle ? ` · ${part.materialTitle}` : ""}
-                    {part.rowCount != null ? ` · ${part.rowCount} 行` : ""}
-                  </em>
-                ) : part.schemaIssues?.length ? (
-                  <em className="is-bad">{part.schemaIssues.join("；")}</em>
-                ) : (
-                  <em className="is-muted">{part.hint}</em>
-                )}
-              </span>
-              <div className="oa-product-data-gate-actions">
-                <button
-                  type="button"
-                  className="oa-product-data-gate-btn"
-                  disabled={fileBusy}
-                  onClick={() => downloadTemplate(part)}
-                >
-                  下载模板
-                </button>
-                <button
-                  type="button"
-                  className="oa-product-data-gate-btn primary"
-                  disabled={fileBusy}
-                  onClick={() => fileRefs.current[part.slot]?.click()}
-                >
-                  {part.ready ? "换一份文件" : "导入文件"}
-                </button>
-                <input
-                  ref={(el) => {
-                    fileRefs.current[part.slot] = el;
-                  }}
-                  type="file"
-                  accept={PRODUCT_FILE_ACCEPT}
-                  disabled={fileBusy}
-                  hidden
-                  aria-hidden
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    e.target.value = "";
-                    if (f) onPickFile(part, f);
-                  }}
-                />
-              </div>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <button
-        type="button"
-        className="oa-product-data-gate-retry"
-        disabled={busy || primaryDisabled}
-        onClick={onPrimary}
-      >
-        {primaryLabel}
-      </button>
+      {/* 科技感底栏控制条 */}
+      <div className="oa-gate-deck-footer">
+        <div className="oa-gate-deck-hint">
+          <span className="oa-gate-hint-spark">⚡</span>
+          <span>
+            {allReady
+              ? "前置校验通过，点击右侧立即启动自动化调度作业"
+              : "请先核对或上传全部必需文件后再启动"}
+          </span>
+        </div>
+        <button
+          type="button"
+          className={`oa-gate-cta-btn${primaryDisabled ? " is-disabled" : ""}${busy ? " is-busy" : ""}`}
+          disabled={busy || primaryDisabled}
+          onClick={onPrimary}
+        >
+          {busy ? (
+            <>
+              <span className="oa-gate-cta-spinner" />
+              <span>正在办理流水线…</span>
+            </>
+          ) : (
+            <>
+              <span className="oa-gate-cta-glow" />
+              <span className="oa-gate-cta-text">{primaryLabel}</span>
+              <svg className="oa-gate-cta-arrow" width="13" height="13" viewBox="0 0 16 16" fill="none">
+                <path d="M3 8h10m0 0L9 4m4 4L9 12" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </>
+          )}
+        </button>
+      </div>
     </div>
   );
 }
@@ -284,7 +301,7 @@ export function ProductRunParts({
 
   const executeStream = useCallback(
     async (action: "continue" | "rerun") => {
-      const sessionId = imports[0]?.sessionId;
+      const sessionId = imports[0]?.sessionId || getSessionId();
       if (!sessionId) return;
       setBusy(true);
       let live: ProductRunView = {
@@ -292,6 +309,9 @@ export function ProductRunParts({
         status: "running",
         parts: [...imports],
       };
+      // Immediately notify parent so the UI shows active running state without delay
+      onRunUpdated({ content: "", run: live, runtime: "server" });
+
       const stream = action === "continue" ? apiContinueProductRun : apiRerunProductRun;
       try {
         const { loadLlmConfig, isLlmConfigured, toProductLlmConfig } = await import("../../../lib/llmConfig");
@@ -301,6 +321,10 @@ export function ProductRunParts({
           run.processId,
           sessionId,
           {
+            onRunning: () => {
+              live = { ...live, status: "running" };
+              onRunUpdated({ content: "", run: live, runtime: "server" });
+            },
             onStep: (part) => {
               live = {
                 ...live,
@@ -323,7 +347,19 @@ export function ProductRunParts({
           llmConfig,
         );
         if (!res.ok) {
-          window.alert(res.error);
+          const errMsg = res.error || "办理服务未连接（端口 8787 未启动）";
+          onRunUpdated({
+            content: "",
+            run: {
+              ...run,
+              status: run.status === "finish" ? "finish" : "waiting_import",
+              parts: [
+                ...run.parts.filter((p) => p.kind !== "finish"),
+                { kind: "finish", processId: run.processId, summary: `⚠️ 办理中断：${errMsg}` },
+              ],
+            },
+            runtime: "server",
+          });
           return;
         }
         const finishSummary =
@@ -345,6 +381,20 @@ export function ProductRunParts({
           paper: res.status === "finish" ? res.paper ?? null : null,
           runtime: "server",
         });
+      } catch (err) {
+        const errMsg = err instanceof Error ? err.message : "连接失败";
+        onRunUpdated({
+          content: "",
+          run: {
+            ...run,
+            status: run.status === "finish" ? "finish" : "waiting_import",
+            parts: [
+              ...run.parts.filter((p) => p.kind !== "finish"),
+              { kind: "finish", processId: run.processId, summary: `⚠️ 异常中断：${errMsg}` },
+            ],
+          },
+          runtime: "server",
+        });
       } finally {
         setBusy(false);
       }
@@ -355,9 +405,10 @@ export function ProductRunParts({
   return (
     <div className="oa-product-run-parts">
       {run.status === "running" ? (
-        <p className="oa-product-run-wait" aria-live="polite">
-          正在办理… 步骤见右侧「办理进度」。
-        </p>
+        <div className="oa-product-run-wait" aria-live="polite">
+          <span className="oa-wait-dot" />
+          <span>正在办理…</span>
+        </div>
       ) : null}
       {(run.status === "waiting_import" || run.status === "finish") && imports.length > 0 ? (
         <MaterialGatePanel

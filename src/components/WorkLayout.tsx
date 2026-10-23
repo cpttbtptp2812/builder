@@ -3,6 +3,7 @@ import { Link, Outlet, useParams } from "react-router-dom";
 import { SiteAmbient } from "./SiteAmbient";
 import { CursorParticles } from "./CursorParticles";
 import { SiteHeader } from "./SiteHeader";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { getWork } from "../data/works";
 
 export function WorkLayout() {
@@ -39,7 +40,9 @@ export function WorkLayout() {
           </>
         )}
         <main className="work-body">
-          <Outlet />
+          <ErrorBoundary fallbackTitle="页面加载遇到异常">
+            <Outlet />
+          </ErrorBoundary>
         </main>
       </div>
     </div>

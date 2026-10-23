@@ -8,6 +8,37 @@ export async function callByokLlm(
   messages: { role: string; content: string }[],
   opts: { temperature?: number; maxTokens?: number } = {},
 ): Promise<string> {
+  if (isDirectLlm(config)) {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
+    const res = await fetch(`${resolveLlmBaseUrl(config.baseUrl)}/chat/completions`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        model: config.model,
+        messages,
+        temperature: opts.temperature ?? 0,
+        max_tokens: opts.maxTokens ?? 120,
+        stream: false,
+      }),
+    });
+    const text = await res.text();
+    if (!res.ok) {
+      let errDetail = text.slice(0, 160);
+      try {
+        const parsed = JSON.parse(text) as { error?: string | { message?: string } };
+        if (typeof parsed.error === "string") errDetail = parsed.error;
+        else if (parsed.error?.message) errDetail = parsed.error.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(`HTTP ${res.status}: ${errDetail}`);
+    }
+    const parsed = JSON.parse(text) as { choices?: Array<{ message?: { content?: string } }> };
+    const content = parsed.choices?.[0]?.message?.content?.trim();
+    if (!content) throw new Error("模型没有返回内容");
+    return content;
+  }
   const res = await fetch(apiUrl("/llm/byok/chat"), {
     method: "POST",
     headers: jsonHeaders(),
@@ -21,7 +52,12 @@ export async function callByokLlm(
     }),
   });
   const data = (await res.json().catch(() => null)) as { content?: string; error?: string } | null;
-  if (!res.ok) throw new Error(data?.error || `LLM HTTP ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 500 && !data?.error) {
+      throw new Error("HTTP 500 · 后端服务未就绪。请确认是否已执行 npm run dev:server");
+    }
+    throw new Error(data?.error || `LLM HTTP ${res.status}`);
+  }
   if (!data?.content?.trim()) throw new Error("模型没有返回内容");
   return data.content.trim();
 }
@@ -32,7 +68,17 @@ export async function listByokModels(config: LlmConfig): Promise<string[]> {
     if (config.apiKey.trim()) headers.Authorization = `Bearer ${config.apiKey.trim()}`;
     const res = await fetch(`${resolveLlmBaseUrl(config.baseUrl)}/models`, { headers });
     const text = await res.text();
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${text.slice(0, 160)}`);
+    if (!res.ok) {
+      let errDetail = text.slice(0, 160);
+      try {
+        const parsed = JSON.parse(text) as { error?: string | { message?: string } };
+        if (typeof parsed.error === "string") errDetail = parsed.error;
+        else if (parsed.error?.message) errDetail = parsed.error.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(`HTTP ${res.status}: ${errDetail}`);
+    }
     const models = parseModelIds(JSON.parse(text) as unknown);
     if (!models.length) throw new Error("模型列表为空");
     return models;
@@ -43,7 +89,12 @@ export async function listByokModels(config: LlmConfig): Promise<string[]> {
     body: JSON.stringify({ baseUrl: config.baseUrl, apiKey: config.apiKey }),
   });
   const data = (await res.json().catch(() => null)) as { models?: string[]; error?: string } | null;
-  if (!res.ok) throw new Error(data?.error || `HTTP ${res.status}`);
+  if (!res.ok) {
+    if (res.status === 500 && !data?.error) {
+      throw new Error("HTTP 500 · 后端服务未就绪。请确认是否已执行 npm run dev:server");
+    }
+    throw new Error(data?.error || `HTTP ${res.status}`);
+  }
   if (!data?.models?.length) throw new Error("模型列表为空");
   return data.models;
 }
@@ -134,7 +185,12 @@ export async function streamByokChat(
 }
 
 function isDirectLlm(config: LlmConfig): boolean {
-  return config.preset === "ollama" || /localhost|127\.0\.0\.1/.test(config.baseUrl);
+  const resolved = resolveLlmBaseUrl(config.baseUrl);
+  return (
+    config.preset === "ollama" ||
+    /localhost|127\.0\.0\.1/.test(config.baseUrl) ||
+    resolved.startsWith("/")
+  );
 }
 
 function jsonHeaders(): Record<string, string> {
