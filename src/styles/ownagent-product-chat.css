@@ -1269,6 +1269,10 @@
   white-space: nowrap;
 }
 
+.oa-gate-slot-pill em {
+  font-style: normal;
+}
+
 .oa-gate-slot-pill {
   display: inline-flex;
   align-items: center;

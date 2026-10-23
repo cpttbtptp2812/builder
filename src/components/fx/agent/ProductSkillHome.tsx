@@ -3,6 +3,8 @@ import { apiUrl, probeBackendOnce } from "../../../lib/apiClient";
 
 type ScenarioSuggestion = {
   id: string;
+  /** 客户入口的按钮名。流水按这个精确名字找，不要改成卡片里的长标题。 */
+  name: string;
   badge: string;
   badgeType: "finance" | "ticket" | "schedule";
   title: string;
@@ -14,6 +16,7 @@ type ScenarioSuggestion = {
 const SCENARIOS: ScenarioSuggestion[] = [
   {
     id: "finance",
+    name: "费用与对账",
     badge: "财务对账 · 自动核算",
     badgeType: "finance",
     title: "部门报销比对与发票核验",
@@ -23,6 +26,7 @@ const SCENARIOS: ScenarioSuggestion[] = [
   },
   {
     id: "ticket",
+    name: "客服工单",
     badge: "工单调度 · SLA预警",
     badgeType: "ticket",
     title: "工单智能分派与超时管控",
@@ -32,6 +36,7 @@ const SCENARIOS: ScenarioSuggestion[] = [
   },
   {
     id: "schedule",
+    name: "门店排班",
     badge: "合规排班 · 规则求解",
     badgeType: "schedule",
     title: "智能员工排班与班次平衡",
@@ -112,6 +117,7 @@ export function ProductSkillHome({
             key={item.id}
             type="button"
             className={`oa-home-card oa-home-card--${item.badgeType}`}
+            aria-label={item.name}
             disabled={blocked}
             onClick={() => onRun(item.query)}
           >

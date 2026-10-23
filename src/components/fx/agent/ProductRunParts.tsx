@@ -110,15 +110,16 @@ function MaterialGatePanel({
                     <svg width="12" height="12" viewBox="0 0 16 16" fill="none">
                       <path d="M3.5 8.5l3 3 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
                     </svg>
-                    <span className="oa-gate-pill-text">
+                    <em className="oa-gate-pill-text">
+                      已导入
                       {part.materialTitle &&
                       part.materialTitle !== part.slot &&
                       part.materialTitle !== "expense-ledger" &&
                       part.materialTitle !== part.label
-                        ? part.materialTitle
-                        : "已装载"}
+                        ? ` · ${part.materialTitle}`
+                        : ""}
                       {part.rowCount != null ? ` · ${part.rowCount} 行` : ""}
-                    </span>
+                    </em>
                   </span>
                 ) : part.schemaIssues?.length ? (
                   <span className="oa-gate-slot-pill is-bad" title={part.schemaIssues.join("；")}>
