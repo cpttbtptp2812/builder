@@ -47,6 +47,13 @@ export type OwnChatMessage = {
   workingSet?: WorkingSet;
   policyTrust?: PolicyTrustView;
   route?: RouteScoreView;
+  conformalVerdict?: import("./conformalRouter").RouteVerdict;
+  tokenUsage?: {
+    promptTokens?: number;
+    completionTokens?: number;
+    totalTokens: number;
+    costYuan?: number;
+  };
   inlineEval?: InlineEvalView;
   followUps?: FollowUpPrompt[] | string[];
   answerInsight?: AnswerInsight;

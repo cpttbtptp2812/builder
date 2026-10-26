@@ -9,6 +9,7 @@ export function WorkPaperArtifactCard({
   onDownloadCsv,
   inlineExpanded,
   onToggleInline,
+  onAuditMerkle,
   children,
 }: {
   paper: WorkPaper;
@@ -17,6 +18,7 @@ export function WorkPaperArtifactCard({
   onDownloadCsv: () => void;
   inlineExpanded: boolean;
   onToggleInline: () => void;
+  onAuditMerkle?: () => void;
   children?: React.ReactNode;
 }) {
   const brief = paperBrief(paper);
@@ -96,6 +98,18 @@ export function WorkPaperArtifactCard({
         >
           <span>{inlineExpanded ? "收起预览 ▴" : "就地预览 ▾"}</span>
         </button>
+
+        {onAuditMerkle && (
+          <button
+            type="button"
+            className="oa-artifact-btn oa-artifact-btn--merkle"
+            onClick={onAuditMerkle}
+            title="打开 Merkle 树密码学证据审计控制台（零信任验真）"
+          >
+            <span className="oa-merkle-shield-icon">🛡️</span>
+            <span>Merkle 存证证明</span>
+          </button>
+        )}
 
         <button
           type="button"

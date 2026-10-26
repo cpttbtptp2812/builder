@@ -67,6 +67,45 @@ function MaterialGatePanel({
   const allReady = imports.length > 0 && readyCount === imports.length;
   const hasError = imports.some((p) => Boolean(p.schemaIssues?.length));
 
+  // 当材料已核验就绪时，收敛为单行精致排版，不霸占大面积卡片
+  if (allReady && !hasError) {
+    const firstPart = imports[0];
+    return (
+      <div className="oa-gate-deck-compact-row" role="region" aria-label="前置数据已就绪">
+        <div className="oa-gate-compact-left">
+          <span className="oa-gate-compact-icon">✓</span>
+          <div className="oa-gate-compact-text">
+            <strong>前置数据材料已就绪</strong>
+            <span className="oa-gate-compact-sub">
+              {firstPart?.label || "报销核算明细"} · {firstPart?.rowCount ?? 8} 行结构校验通过
+            </span>
+          </div>
+        </div>
+        <div className="oa-gate-compact-right">
+          <button
+            type="button"
+            className="oa-gate-compact-cta-btn"
+            disabled={busy || primaryDisabled}
+            onClick={onPrimary}
+            title="启动 Agent 智能流水线调度"
+          >
+            {busy ? (
+              <>
+                <span className="oa-gate-cta-spinner" />
+                <span>正在执行…</span>
+              </>
+            ) : (
+              <>
+                <span>启动 Agent 调度执行</span>
+                <span className="oa-gate-compact-arrow">➔</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`oa-gate-deck${dock ? " is-docked" : ""}`} role="region" aria-label="材料装载与调度确认">
       {/* 科技感控制台顶栏 */}

@@ -68,7 +68,7 @@ export default defineConfig(({ command }) => ({
     port: 5173,
     proxy: {
       "/api": {
-        target: "http://localhost:8787",
+        target: process.env.VITE_BACKEND_URL || "http://localhost:8080",
         changeOrigin: true,
         ws: true,
       },

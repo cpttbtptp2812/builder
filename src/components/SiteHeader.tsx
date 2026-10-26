@@ -2,32 +2,39 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { SecretStarButton, SecretStarModal } from "./SecretStarGate";
 
-/** 全站顶栏 — 品牌标识 + 分段导航 + 隐藏星星 */
+/** 全站顶栏 — OwnAgent 旗舰品牌标识 + 统一全局导航 */
 export function SiteHeader() {
   const loc = useLocation();
   const onHome = loc.pathname === "/";
-  const onResume = loc.pathname === "/resume";
+  const onWorkbench = loc.pathname.startsWith("/work/ownagent");
   const onLab = loc.pathname === "/lab";
+  const onResume = loc.pathname === "/resume";
   const [gateOpen, setGateOpen] = useState(false);
 
   return (
     <>
       <header className="site-header">
-        <Link to="/" className="site-header-mark" aria-label="作品集首页">
-          <span className="site-header-mark-icon" aria-hidden="true" />
-          <span className="site-header-mark-label">Frontend · Automation</span>
+        <Link to="/" className="site-header-mark" aria-label="OwnAgent 官网首页">
+          <span className="site-header-mark-icon" aria-hidden="true" style={{ background: "linear-gradient(135deg, #6366f1, #06b6d4)", borderRadius: "6px" }} />
+          <span className="site-header-mark-label" style={{ fontWeight: 800, letterSpacing: "-0.02em" }}>OwnAgent</span>
+          <span className="site-header-mark-tag" style={{ fontSize: "0.68rem", padding: "1px 6px", borderRadius: "4px", background: "rgba(99, 102, 241, 0.15)", color: "#818cf8", border: "1px solid rgba(99, 102, 241, 0.3)" }}>
+            v2.4
+          </span>
         </Link>
 
         <div className="site-header-actions">
           <nav className="site-header-nav" aria-label="主导航">
             <Link to="/" className={onHome ? "on" : ""}>
-              作品
+              首页
             </Link>
-            <Link to="/resume" className={onResume ? "on" : ""}>
-              个人履历
+            <Link to="/work/ownagent" className={onWorkbench ? "on" : ""}>
+              工作台
             </Link>
             <Link to="/lab" className={onLab ? "on" : ""}>
               实验室
+            </Link>
+            <Link to="/resume" className={onResume ? "on" : ""}>
+              个人履历
             </Link>
           </nav>
           <SecretStarButton onOpen={() => setGateOpen(true)} />
@@ -35,8 +42,8 @@ export function SiteHeader() {
             <Link
               to="/"
               className="site-header-exit"
-              title="退出返回主页"
-              aria-label="退出返回主页"
+              title="返回 OwnAgent 首页"
+              aria-label="返回 OwnAgent 首页"
             >
               <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <path
@@ -47,7 +54,7 @@ export function SiteHeader() {
                   strokeLinejoin="round"
                 />
               </svg>
-              <span>退出</span>
+              <span>主页</span>
             </Link>
           )}
         </div>

@@ -11,17 +11,31 @@ export function MessageTimeFoot({
   message,
   hubMode,
   onOpenTrace,
+  onOpenContextMemory,
+  onOpenMcpSandbox,
 }: {
   message: OwnChatMessage;
   hubMode?: boolean;
   onOpenTrace?: () => void;
+  onOpenContextMemory?: (stats: { promptTokens: number; completionTokens: number; totalTokens: number; costYuan?: number }) => void;
+  onOpenMcpSandbox?: () => void;
 }) {
   const ts = message.createdAt;
   const label = formatMsgTime(ts);
   if (!label) return null;
 
   const tags: string[] = [];
+  let estTokens = 1840;
+  let estCost = "¥0.003";
+
   if (message.role === "assistant") {
+    const textLen = (message.content?.length || 0) + (message.reasoning?.length || 0);
+    const toolsCount = message.tools?.length || (message.productRun ? 3 : 2);
+    estTokens = message.tokenUsage?.totalTokens ?? Math.round(textLen * 1.35 + toolsCount * 220 + 480);
+    estCost = message.tokenUsage?.costYuan != null 
+      ? `¥${message.tokenUsage.costYuan.toFixed(3)}` 
+      : `¥${((estTokens / 1000) * 0.0018).toFixed(3)}`;
+
     if (hubMode && message.showcaseFlow) {
       const si = message.showcaseFlow.stepIndex;
       const st = message.showcaseFlow.stepTotal;
@@ -80,6 +94,40 @@ export function MessageTimeFoot({
                 </span>
               );
             })}
+            {message.role === "assistant" && (
+              <button
+                type="button"
+                className="ua-msg-foot-tag is-token-cost"
+                onClick={() => {
+                  if (onOpenContextMemory) {
+                    onOpenContextMemory({
+                      promptTokens: message.tokenUsage?.promptTokens ?? Math.round(estTokens * 0.6),
+                      completionTokens: message.tokenUsage?.completionTokens ?? Math.round(estTokens * 0.4),
+                      totalTokens: estTokens,
+                      costYuan: message.tokenUsage?.costYuan ?? ((estTokens / 1000) * 0.0018),
+                    });
+                  } else {
+                    onOpenTrace?.();
+                  }
+                }}
+                title={`本次交互消耗 Token: ${estTokens.toLocaleString()} | 估算费用: ${estCost} (点击查看上下文工程与内存预算透视)`}
+              >
+                <span className="ua-tag-symbol">🪙</span>
+                <span>{estTokens.toLocaleString()} tok</span>
+                <span className="ua-tag-cost">{estCost}</span>
+              </button>
+            )}
+            {message.role === "assistant" && onOpenMcpSandbox && (
+              <button
+                type="button"
+                className="ua-msg-foot-tag is-trace-btn"
+                onClick={onOpenMcpSandbox}
+                title="打开 MCP 协议工具沙箱调试控制台 (JSON-RPC 2.0)"
+              >
+                <span className="ua-tag-symbol">🛠️</span>
+                <span>MCP 沙箱</span>
+              </button>
+            )}
             {message.role === "assistant" && onOpenTrace && (
               <button
                 type="button"

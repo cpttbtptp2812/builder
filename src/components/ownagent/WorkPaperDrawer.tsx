@@ -29,6 +29,7 @@ export function WorkPaperDrawer({
   insight,
   table = null,
   run = null,
+  onAuditMerkle,
 }: {
   paper: WorkPaper | null;
   open: boolean;
@@ -44,6 +45,7 @@ export function WorkPaperDrawer({
   insight?: { processId: string; skillId: string; version: string } | null;
   table?: ArtifactTable | null;
   run?: ProductRunView | null;
+  onAuditMerkle?: () => void;
 }) {
   useEffect(() => {
     if (!open) return;
@@ -80,6 +82,17 @@ export function WorkPaperDrawer({
             {subtitle ? <p>{subtitle}</p> : null}
           </div>
           <div className="oa-work-drawer-actions">
+            {onAuditMerkle && (
+              <button
+                type="button"
+                className="oa-work-drawer-dl"
+                style={{ borderColor: "#f59e0b", color: "#d97706", background: "rgba(245, 158, 11, 0.08)" }}
+                onClick={onAuditMerkle}
+                title="查看 Merkle Tree 密码学防篡改审计树与零信任验真"
+              >
+                🛡️ 密码学存证
+              </button>
+            )}
             {grid ? (
               <button type="button" className="oa-work-drawer-dl" onClick={downloadCsv}>
                 下载 CSV

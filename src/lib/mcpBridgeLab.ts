@@ -122,6 +122,51 @@ export const MCP_TOOLS: McpTool[] = [
       required: ["ticketId"],
     },
   },
+  {
+    name: "dataset_validate",
+    labelZh: "数据材料合规性校验",
+    description: "Validate uploaded dataset schema, null rate, and security integrity before processing",
+    descriptionZh: "校验上传数据源表头字段完整性、空值率与防注入特征",
+    inputSchema: {
+      type: "object",
+      properties: {
+        datasetId: { type: "string", description: "数据集唯一凭证 ID" },
+        requiredColumns: { type: "string", description: "必填字段列表（逗号分隔）" },
+        strictNullCheck: { type: "boolean", description: "是否开启零容忍空值拦截" },
+      },
+      required: ["datasetId"],
+    },
+  },
+  {
+    name: "ledger_reconcile",
+    labelZh: "业务金额精确对账聚合",
+    description: "Perform deterministic floating-point financial reconciliation to avoid LLM hallucination",
+    descriptionZh: "基于双精度确定性算法进行财务台账汇总聚合，彻底杜绝大模型浮点数计算幻觉",
+    inputSchema: {
+      type: "object",
+      properties: {
+        aggregationKey: { type: "string", description: "分组字段（如 department / category）" },
+        sumField: { type: "string", description: "核算金额字段（如 amount / tax_inclusive）" },
+        policyThreshold: { type: "number", description: "审批告警阈值上限（元）" },
+      },
+      required: ["aggregationKey", "sumField"],
+    },
+  },
+  {
+    name: "financial_settle_commit",
+    labelZh: "总账落库登记 (双阶段安全写入)",
+    description: "Execute 2-phase commit to official financial database after HITL signature verification",
+    descriptionZh: "在人工审批签名授权后，向底层核心财务数据库提交最终落库事务",
+    inputSchema: {
+      type: "object",
+      properties: {
+        ticketId: { type: "string", description: "人在回路审批工单流水号" },
+        operatorSign: { type: "string", description: "审批操作员数字签名 Hash" },
+        idempotencyKey: { type: "string", description: "防重复重放幂等键" },
+      },
+      required: ["ticketId", "idempotencyKey"],
+    },
+  },
 ];
 
 export function getMcpTool(name: string) {
@@ -147,3 +192,129 @@ export function validateParams(
   }
   return errors.length ? { ok: false, errors } : { ok: true };
 }
+
+/** 模拟/沙箱执行 MCP Tool 调用，返回标准 JSON-RPC 2.0 报文 */
+export async function executeSandboxToolCall(
+  toolName: string,
+  args: Record<string, unknown>,
+): Promise<{
+  rpcResponse: {
+    jsonrpc: "2.0";
+    id: string;
+    result?: Record<string, unknown>;
+    error?: { code: number; message: string; data?: unknown };
+  };
+  durationMs: number;
+  status: "success" | "error";
+}> {
+  const t0 = performance.now();
+  await new Promise((r) => setTimeout(r, 120 + Math.floor(Math.random() * 80)));
+  const tool = getMcpTool(toolName);
+  const rpcId = `req_${Date.now().toString(36)}`;
+
+  if (!tool) {
+    return {
+      rpcResponse: {
+        jsonrpc: "2.0",
+        id: rpcId,
+        error: { code: -32601, message: `Tool "${toolName}" not found in MCP registry` },
+      },
+      durationMs: Math.round(performance.now() - t0),
+      status: "error",
+    };
+  }
+
+  const val = validateParams(tool, args);
+  if (!val.ok) {
+    return {
+      rpcResponse: {
+        jsonrpc: "2.0",
+        id: rpcId,
+        error: {
+          code: -32602,
+          message: "Invalid params for MCP tool",
+          data: { errors: val.errors },
+        },
+      },
+      durationMs: Math.round(performance.now() - t0),
+      status: "error",
+    };
+  }
+
+  // 针对不同工具生成确定性返回
+  let data: Record<string, unknown> = {};
+  if (toolName === "dataset_validate") {
+    data = {
+      valid: true,
+      rowCount: 8,
+      detectedColumns: ["id", "dept", "expense_type", "amount", "tax_inclusive", "receipt_hash"],
+      nullRate: 0.0,
+      formatCompliance: "100%",
+      checksumVerified: true,
+    };
+  } else if (toolName === "ledger_reconcile") {
+    const key = String(args.aggregationKey || "department");
+    data = {
+      reconciliationStatus: "passed",
+      algorithm: "IEEE-754 Precision Float Reconciler",
+      aggregatedTotal: 8090.0,
+      taxTotal: 485.4,
+      netTotal: 7604.6,
+      itemCount: 8,
+      anomalyCount: 0,
+      breakdown: {
+        出纳: 4200.0,
+        市场部: 2390.0,
+        技术部: 1500.0,
+      },
+      policyThresholdAlert: Number(args.policyThreshold || 10000) < 8090 ? "TRIGGERED" : "NORMAL",
+    };
+  } else if (toolName === "financial_settle_commit") {
+    data = {
+      commitPhase: "Phase-2-Applied",
+      settlementTxId: `tx_${Date.now().toString(36)}_fin`,
+      ledgerBlockHeight: 492019,
+      settledAmount: 8090.0,
+      auditTimestamp: new Date().toISOString(),
+      idempotencyLocked: true,
+    };
+  } else if (toolName === "http_probe") {
+    data = {
+      probeUrl: String(args.url || "https://api.internal.corp/health"),
+      status: 200,
+      latencyMs: 38,
+      healthy: true,
+      server: "nginx/1.24.0",
+    };
+  } else if (toolName === "knowledge_search") {
+    data = {
+      query: String(args.query || ""),
+      matchedChunks: 3,
+      topHit: {
+        title: "财务报销审批合规基线 v2026",
+        similarity: 0.942,
+        excerpt: "单笔超过 5000 元需经由二级审批，全部总账落库前须核对电子发票防伪查验码...",
+      },
+    };
+  } else {
+    data = {
+      message: `Tool "${toolName}" executed in sandbox`,
+      timestamp: Date.now(),
+      args,
+    };
+  }
+
+  return {
+    rpcResponse: {
+      jsonrpc: "2.0",
+      id: rpcId,
+      result: {
+        status: 200,
+        data,
+      },
+    },
+    durationMs: Math.round(performance.now() - t0),
+    status: "success",
+  };
+}
+
