@@ -4,7 +4,7 @@
 
 /* 全局平滑切页动画 (Smooth Page Enter Animation) — 解决切页突兀感 */
 .oa-page-enter {
-  animation: oaSmoothPageIn 0.32s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  animation: oaSmoothPageIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
   will-change: opacity, transform;
 }
 
@@ -56,6 +56,7 @@
 }
 
 /* ── 全局顶栏 (SiteHeader Dark Glass) ── */
+.oa-persistent-header,
 .oa-landing-page .site-header,
 .oa-lab-page .site-header {
   height: 56px;
@@ -63,14 +64,14 @@
   align-items: center !important;
   justify-content: space-between !important;
   padding: 0 1.5rem !important;
-  background: rgba(15, 23, 42, 0.85) !important;
+  background: rgba(15, 23, 42, 0.88) !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
   backdrop-filter: blur(20px) !important;
   -webkit-backdrop-filter: blur(20px) !important;
   position: sticky !important;
   top: 0 !important;
   z-index: 100 !important;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35) !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important;
 }
 
 .oa-landing-page .site-header-mark,
@@ -83,90 +84,59 @@
 
 .oa-landing-page .site-header-mark-label,
 .oa-lab-page .site-header-mark-label {
-  font-size: 1.12rem !important;
+  font-size: 1.15rem !important;
   font-weight: 850 !important;
   letter-spacing: -0.025em !important;
   color: #ffffff !important;
 }
 
-.oa-landing-page .site-header-nav,
-.oa-lab-page .site-header-nav {
+/* 三联选项卡导航条（纯按钮，在同一页面无缝切换） */
+.site-header-nav {
   display: flex !important;
   align-items: center !important;
   gap: 0.35rem !important;
-  background: rgba(2, 6, 23, 0.5) !important;
+  background: rgba(2, 6, 23, 0.65) !important;
   padding: 0.25rem 0.35rem !important;
   border-radius: 10px !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
 }
 
-.oa-landing-page .site-header-nav a,
-.oa-lab-page .site-header-nav a {
-  font-size: 0.88rem !important;
+.site-header-nav button,
+.site-header-nav a {
+  font-family: inherit;
+  border: 1px solid transparent;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem !important;
   font-weight: 550 !important;
   color: #94a3b8 !important;
-  padding: 0.35rem 0.95rem !important;
+  padding: 0.38rem 1.05rem !important;
   border-radius: 7px !important;
   text-decoration: none !important;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
   display: inline-flex !important;
   align-items: center !important;
+  outline: none !important;
 }
 
-.oa-landing-page .site-header-nav a:hover,
-.oa-lab-page .site-header-nav a:hover {
+.site-header-nav button:hover,
+.site-header-nav a:hover {
   color: #ffffff !important;
   background: rgba(255, 255, 255, 0.08) !important;
 }
 
-.oa-landing-page .site-header-nav a.on,
-.oa-lab-page .site-header-nav a.on {
+.site-header-nav button.on,
+.site-header-nav a.on {
   color: #ffffff !important;
-  background: rgba(99, 102, 241, 0.3) !important;
-  border: 1px solid rgba(129, 140, 248, 0.5) !important;
-  box-shadow: 0 0 12px rgba(99, 102, 241, 0.3) !important;
-}
-
-/* ── 工作台顶栏常驻导航 (Workspace Persistent Nav) ── */
-.own-app-bar .own-app-global-nav {
-  display: flex !important;
-  align-items: center !important;
-  gap: 0.35rem !important;
-  margin: 0 auto !important;
-  background: rgba(241, 245, 249, 0.85) !important;
-  padding: 0.2rem 0.3rem !important;
-  border-radius: 10px !important;
-  border: 1px solid rgba(203, 213, 225, 0.8) !important;
-}
-
-.own-app-bar .own-app-global-nav a {
-  font-size: 0.85rem !important;
-  font-weight: 550 !important;
-  color: #475569 !important;
-  padding: 0.3rem 0.85rem !important;
-  border-radius: 7px !important;
-  text-decoration: none !important;
-  transition: all 0.2s ease !important;
-  display: inline-flex !important;
-  align-items: center !important;
-}
-
-.own-app-bar .own-app-global-nav a:hover {
-  color: #0f172a !important;
-  background: rgba(255, 255, 255, 0.95) !important;
-}
-
-.own-app-bar .own-app-global-nav a.on {
-  color: #4338ca !important;
-  background: #ffffff !important;
-  border: 1px solid rgba(99, 102, 241, 0.3) !important;
-  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.15) !important;
+  background: rgba(99, 102, 241, 0.35) !important;
+  border: 1px solid rgba(129, 140, 248, 0.55) !important;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.35) !important;
   font-weight: 650 !important;
 }
 
 /* ── 1. Hero 区域 ── */
 .oa-hero {
-  padding: 4.5rem 0 3.5rem;
+  padding: 3.8rem 0 2.8rem;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -181,13 +151,13 @@
   gap: 0.6rem;
   padding: 0.35rem 1rem;
   border-radius: 9999px;
-  background: rgba(99, 102, 241, 0.12);
-  border: 1px solid rgba(129, 140, 248, 0.3);
-  font-size: 0.82rem;
-  font-weight: 500;
+  background: rgba(99, 102, 241, 0.14);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  font-size: 0.84rem;
+  font-weight: 550;
   color: #c7d2fe;
   backdrop-filter: blur(12px);
-  margin-bottom: 1.8rem;
+  margin-bottom: 1.5rem;
   box-shadow: 0 0 20px rgba(99, 102, 241, 0.15);
   animation: oaFloat 4s ease-in-out infinite;
 }
@@ -202,12 +172,12 @@
 }
 
 .oa-hero-title {
-  font-size: clamp(2.4rem, 5.2vw, 4.2rem);
+  font-size: clamp(2.2rem, 4.8vw, 3.8rem);
   font-weight: 850;
   line-height: 1.15;
   letter-spacing: -0.035em;
   color: #ffffff;
-  margin: 0 0 1.4rem;
+  margin: 0 0 1.2rem;
 }
 
 .oa-gradient-text {
@@ -218,91 +188,51 @@
 }
 
 .oa-hero-sub {
-  font-size: clamp(1.05rem, 1.8vw, 1.25rem);
+  font-size: clamp(1rem, 1.6vw, 1.18rem);
   line-height: 1.65;
   color: #cbd5e1;
   max-width: 780px;
-  margin: 0 auto 2.4rem;
+  margin: 0 auto 2rem;
 }
 
-.oa-hero-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1rem;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 2.8rem;
-}
-
-.oa-btn-primary {
+/* 平台模式切换器 (Studio vs Simulator) */
+.oa-mode-switcher {
   display: inline-flex;
   align-items: center;
-  gap: 0.55rem;
-  padding: 0.85rem 1.85rem;
-  border-radius: 12px;
-  font-size: 0.98rem;
+  gap: 0.5rem;
+  padding: 0.35rem 0.45rem;
+  border-radius: 14px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 2rem;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.35);
+}
+
+.oa-mode-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.4rem;
+  border-radius: 10px;
+  font-size: 0.92rem;
   font-weight: 600;
-  color: #ffffff;
-  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 50%, #06b6d4 100%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  box-shadow: 
-    0 4px 20px rgba(79, 70, 229, 0.4),
-    0 0 35px rgba(6, 182, 212, 0.25);
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.25s ease;
-}
-
-.oa-btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 
-    0 8px 30px rgba(79, 70, 229, 0.55),
-    0 0 45px rgba(6, 182, 212, 0.4);
-}
-
-.oa-btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.85rem 1.65rem;
-  border-radius: 12px;
-  font-size: 0.98rem;
-  font-weight: 500;
-  color: #e2e8f0;
-  background: rgba(30, 41, 59, 0.7);
-  border: 1px solid rgba(148, 163, 184, 0.25);
-  backdrop-filter: blur(10px);
-  cursor: pointer;
-  text-decoration: none;
-  transition: all 0.25s ease;
-}
-
-.oa-btn-secondary:hover {
-  background: rgba(51, 65, 85, 0.8);
-  border-color: rgba(148, 163, 184, 0.45);
-  color: #ffffff;
-  transform: translateY(-2px);
-}
-
-.oa-btn-ghost {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  padding: 0.85rem 1.4rem;
-  border-radius: 12px;
-  font-size: 0.95rem;
-  font-weight: 500;
   color: #94a3b8;
   border: 1px solid transparent;
+  background: transparent;
   cursor: pointer;
-  text-decoration: none;
-  transition: all 0.2s ease;
+  transition: all 0.22s ease;
 }
 
-.oa-btn-ghost:hover {
-  color: #38bdf8;
-  background: rgba(14, 165, 233, 0.08);
-  border-color: rgba(14, 165, 233, 0.2);
+.oa-mode-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.oa-mode-btn.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.45);
 }
 
 .oa-hero-stats {
@@ -317,6 +247,7 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   backdrop-filter: blur(16px);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  margin-top: 1rem;
 }
 
 .oa-stat-item {
@@ -345,9 +276,20 @@
   color: #94a3b8;
 }
 
+/* 嵌入式 Studio 容器 */
+.oa-studio-embed-wrap {
+  width: 100%;
+  height: 720px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  margin: 1.5rem 0 4rem;
+}
+
 /* ── 2. Live Interactive Simulator ── */
 .oa-demo-section {
-  margin: 3.5rem 0 5rem;
+  margin: 1.5rem 0 5rem;
 }
 
 .oa-section-head {
@@ -659,20 +601,6 @@
   color: #e2e8f0;
 }
 
-.oa-open-studio-link {
-  color: #818cf8;
-  text-decoration: none;
-  font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  transition: color 0.2s ease;
-}
-
-.oa-open-studio-link:hover {
-  color: #a5b4fc;
-}
-
 /* ── 3. 四大核心技术支柱 ── */
 .oa-features-section {
   margin: 5rem 0;
@@ -888,7 +816,6 @@
 
 /* ==========================================================================
    实验室页面专项优化 (Lab Page Contrast & Readability Upgrade)
-   解决“很多都看不清”的问题：提升所有文字、徽章、Tab与卡片对比度
    ========================================================================== */
 
 .oa-lab-page .lab-header-hero {
@@ -950,7 +877,6 @@
   font-weight: 750;
 }
 
-/* 分类筛选器 Tab — 高对比度与高光激活 */
 .oa-lab-page .lab-category-filter {
   display: flex;
   flex-wrap: wrap;
@@ -998,7 +924,6 @@
   color: #ffffff;
 }
 
-/* 分区标题栏强化 */
 .oa-lab-page .works-section {
   margin: 3.5rem 0;
 }
@@ -1038,7 +963,6 @@
   letter-spacing: 0.02em;
 }
 
-/* 实验室内部 PlatformLab 对比度优化 */
 .oa-lab-page .pl-root {
   border-radius: 20px !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -1077,7 +1001,6 @@
   font-weight: 650 !important;
 }
 
-/* 作品卡片（FeaturedWorkCard）黑曜石高对比度升级 */
 .oa-lab-page .home-featured-card {
   background: rgba(15, 23, 42, 0.82) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
@@ -1140,3 +1063,46 @@
   background: rgba(51, 65, 85, 1) !important;
   color: #ffffff !important;
 }
+
+/* ── 统一单页门户体系（同一页面平滑切换） ── */
+.oa-unified-portal {
+  min-height: 100vh;
+  background-color: #030712;
+  color: #f8fafc;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow-x: hidden;
+}
+
+.oa-persistent-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 100 !important;
+  background: rgba(3, 7, 18, 0.85) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+.oa-portal-stage {
+  flex: 1;
+  width: 100%;
+  position: relative;
+}
+
+.oa-page-enter {
+  animation: oaPageFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes oaPageFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+

@@ -529,10 +529,9 @@ export function WorkOwnAgent() {
           </Link>
         </div>
 
-        {/* 全站常驻导航条：解决跳入工作台导航消失、切页突兀的问题 */}
+        {/* 全站常驻导航条：统一三大板块（合并首页与工作台为 OwnAgent） */}
         <nav className="site-header-nav own-app-global-nav" aria-label="全站导航">
-          <Link to="/">首页</Link>
-          <Link to="/work/ownagent" className="on">工作台</Link>
+          <Link to="/" className="on">OwnAgent</Link>
           <Link to="/lab">实验室</Link>
           <Link to="/resume">个人履历</Link>
         </nav>

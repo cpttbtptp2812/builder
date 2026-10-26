@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { SiteHeader } from "../components/SiteHeader";
-import { SiteFooter } from "../components/SiteFooter";
 import { checkBackendHealth, type BackendHealth } from "../lib/apiClient";
+import { EnterpriseAgentStudio } from "../components/fx/agent/EnterpriseAgentStudio";
 import "../styles/ownagent-landing.css";
 
 interface Scenario {
@@ -79,9 +77,20 @@ const SCENARIOS: Scenario[] = [
   },
 ];
 
-export function HomePage() {
+interface HomePageProps {
+  embedMode?: boolean;
+  onNavigateTab?: (tab: "ownagent" | "lab" | "resume") => void;
+}
+
+/**
+ * OwnAgent 旗舰平台（合并首页与工作台为同一视图）
+ * 包含：Slogan、DAG 画布工作台、交互演练台、核心技术支柱与集群监控
+ */
+export function HomePage({ embedMode = false, onNavigateTab }: HomePageProps) {
+  // 模式切换：工作室（Studio DAG 画布） vs 交互演练台（Simulator）
+  const [activeMode, setActiveMode] = useState<"studio" | "simulator">("studio");
   const [activeScenario, setActiveScenario] = useState<Scenario>(SCENARIOS[0]);
-  const [runningStep, setRunningStep] = useState<number>(SCENARIOS[0].steps.length); // 默认完成态
+  const [runningStep, setRunningStep] = useState<number>(SCENARIOS[0].steps.length);
   const [isRunning, setIsRunning] = useState(false);
   const [visibleLogCount, setVisibleLogCount] = useState<number>(SCENARIOS[0].logs.length);
   const [health, setHealth] = useState<BackendHealth | null>(null);
@@ -91,7 +100,6 @@ export function HomePage() {
     checkBackendHealth().then(setHealth);
   }, []);
 
-  // 切换场景
   function handleSelectScenario(s: Scenario) {
     setActiveScenario(s);
     setRunningStep(s.steps.length);
@@ -99,7 +107,6 @@ export function HomePage() {
     setIsRunning(false);
   }
 
-  // 运行模拟
   function handleRunSimulation() {
     if (isRunning) return;
     setIsRunning(true);
@@ -124,8 +131,6 @@ export function HomePage() {
 
   return (
     <div className="oa-landing-page oa-page-enter">
-      <SiteHeader />
-
       <main className="oa-landing-inner">
         {/* ── 1. Hero 区域 ── */}
         <section className="oa-hero">
@@ -145,24 +150,26 @@ export function HomePage() {
             MCP 开放工具沙盒与企业级持久化存储。从单智能体对话到复杂多智能体协同流水线，OwnAgent 为专业级工程而生。
           </p>
 
-          <div className="oa-hero-actions">
-            <Link to="/work/ownagent" className="oa-btn-primary">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polygon points="5 3 19 12 5 21 5 3" />
-              </svg>
-              <span>立即进入工作台</span>
-            </Link>
-
-            <button type="button" className="oa-btn-secondary" onClick={handleRunSimulation}>
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
-              </svg>
-              <span>在线快速体验</span>
+          {/* 模式切换器：同一页面内切换工作台与演练台 */}
+          <div className="oa-mode-switcher" role="tablist" aria-label="工作台模式切换">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeMode === "studio"}
+              className={`oa-mode-btn ${activeMode === "studio" ? "active" : ""}`}
+              onClick={() => setActiveMode("studio")}
+            >
+              <span>🛠️ 智能体工作室 (DAG 画布)</span>
             </button>
-
-            <Link to="/lab" className="oa-btn-ghost">
-              <span>探索技术实验室 & 作品库 →</span>
-            </Link>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeMode === "simulator"}
+              className={`oa-mode-btn ${activeMode === "simulator" ? "active" : ""}`}
+              onClick={() => setActiveMode("simulator")}
+            >
+              <span>⚡ 交互演练台 (Scenarios)</span>
+            </button>
           </div>
 
           {/* 指标条 */}
@@ -186,135 +193,143 @@ export function HomePage() {
           </div>
         </section>
 
-        {/* ── 2. Live Interactive Simulator ── */}
-        <section className="oa-demo-section" id="live-demo">
-          <div className="oa-section-head">
-            <span className="oa-section-tag">Interactive Preview</span>
-            <h2 className="oa-section-title">实时交互演练台 · 感受调度引擎运作</h2>
-            <p className="oa-section-desc">
-              切换下方不同场景，实时体验 OwnAgent 的意图解析、MCP 工具调用、异步推流与多节点状态收敛。
-            </p>
+        {/* ── 2. 主体区：智能体工作室 (Studio DAG 画布) 或 演练台 (Simulator) ── */}
+        {activeMode === "studio" ? (
+          <div className="oa-studio-embed-wrap oa-page-enter">
+            <EnterpriseAgentStudio
+              onRunScenario={() => {}}
+              onOpenTrace={() => {}}
+              onSignHitl={() => {}}
+            />
           </div>
-
-          <div className="oa-simulator-card">
-            {/* 顶栏控制 */}
-            <div className="oa-sim-bar">
-              <div className="oa-sim-dots">
-                <span className="oa-sim-dot red" />
-                <span className="oa-sim-dot yellow" />
-                <span className="oa-sim-dot green" />
-              </div>
-              <div className="oa-sim-title">
-                OWNAGENT ENGINE :: WORKFLOW DISPATCHER [{activeScenario.badge}]
-              </div>
-              <div className="oa-sim-status">
-                <span className="oa-pulse-dot" />
-                <span>{isRunning ? "EXECUTING..." : "STANDBY · READY"}</span>
-              </div>
+        ) : (
+          <section className="oa-demo-section oa-page-enter" id="live-demo">
+            <div className="oa-section-head">
+              <span className="oa-section-tag">Interactive Preview</span>
+              <h2 className="oa-section-title">实时交互演练台 · 感受调度引擎运作</h2>
+              <p className="oa-section-desc">
+                切换下方不同场景，实时体验 OwnAgent 的意图解析、MCP 工具调用、异步推流与多节点状态收敛。
+              </p>
             </div>
 
-            {/* 场景切换按钮组 */}
-            <div className="oa-scenario-selector">
-              {SCENARIOS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className={`oa-scenario-btn ${activeScenario.id === s.id ? "active" : ""}`}
-                  onClick={() => handleSelectScenario(s)}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-
-            {/* 演练主体 */}
-            <div className="oa-sim-body">
-              {/* 左侧：工作流 DAG 节点 */}
-              <div className="oa-dag-flow-preview">
-                <div>
-                  <div style={{ marginBottom: "1rem" }}>
-                    <p style={{ margin: 0, fontSize: "0.86rem", color: "#94a3b8" }}>{activeScenario.desc}</p>
-                  </div>
-
-                  <div className="oa-dag-steps">
-                    {activeScenario.steps.map((st, idx) => {
-                      const isPast = idx < runningStep;
-                      const isCurrent = idx === runningStep && isRunning;
-                      return (
-                        <div
-                          key={idx}
-                          className={`oa-dag-step-item ${isCurrent ? "active" : ""} ${isPast ? "completed" : ""}`}
-                        >
-                          <div className="oa-step-icon">
-                            {isPast ? "✓" : isCurrent ? "⏳" : idx + 1}
-                          </div>
-                          <div className="oa-step-text">
-                            <h4>{st.title}</h4>
-                            <p>{st.desc}</p>
-                            {st.tool && (
-                              <span style={{ display: "inline-block", marginTop: "4px", fontSize: "0.72rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.1)", padding: "1px 6px", borderRadius: "4px" }}>
-                                驱动工具: {st.tool}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
+            <div className="oa-simulator-card">
+              <div className="oa-sim-bar">
+                <div className="oa-sim-dots">
+                  <span className="oa-sim-dot red" />
+                  <span className="oa-sim-dot yellow" />
+                  <span className="oa-sim-dot green" />
                 </div>
+                <div className="oa-sim-title">
+                  OWNAGENT ENGINE :: WORKFLOW DISPATCHER [{activeScenario.badge}]
+                </div>
+                <div className="oa-sim-status">
+                  <span className="oa-pulse-dot" />
+                  <span>{isRunning ? "EXECUTING..." : "STANDBY · READY"}</span>
+                </div>
+              </div>
 
-                <div className="oa-dag-controls">
+              <div className="oa-scenario-selector">
+                {SCENARIOS.map((s) => (
                   <button
+                    key={s.id}
                     type="button"
-                    className="oa-run-btn"
-                    onClick={handleRunSimulation}
-                    disabled={isRunning}
+                    className={`oa-scenario-btn ${activeScenario.id === s.id ? "active" : ""}`}
+                    onClick={() => handleSelectScenario(s)}
                   >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                      <polygon points="5 3 19 12 5 21 5 3" />
-                    </svg>
-                    <span>{isRunning ? "智能体推流中..." : "触发执行该工作流"}</span>
+                    {s.name}
                   </button>
-
-                  <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
-                    节点状态: <strong style={{ color: isRunning ? "#818cf8" : "#10b981" }}>{isRunning ? `Step ${runningStep + 1} / ${activeScenario.steps.length}` : "已收敛 (Done)"}</strong>
-                  </div>
-                </div>
+                ))}
               </div>
 
-              {/* 右侧：实时终端与 SSE 推流日志 */}
-              <div className="oa-sim-terminal">
-                <div className="oa-terminal-logs">
-                  {activeScenario.logs.slice(0, visibleLogCount).map((l, i) => (
-                    <div key={i} className="oa-log-line">
-                      <span className="oa-log-time">[{l.time}]</span>
-                      <span className={`oa-log-${l.type}`}>{l.text}</span>
+              <div className="oa-sim-body">
+                <div className="oa-dag-flow-preview">
+                  <div>
+                    <div style={{ marginBottom: "1rem" }}>
+                      <p style={{ margin: 0, fontSize: "0.86rem", color: "#94a3b8" }}>{activeScenario.desc}</p>
                     </div>
-                  ))}
-                  {isRunning && (
-                    <div className="oa-log-line" style={{ color: "#38bdf8" }}>
-                      <span className="oa-log-time">[推流中]</span>
-                      <span>▍ Netty SSE 持续监听事件管道...</span>
-                    </div>
-                  )}
-                </div>
 
-                <div className="oa-terminal-footer">
-                  <div className="oa-terminal-metrics">
-                    <span>首包延迟: <strong>{activeScenario.metrics.latency}</strong></span>
-                    <span>吞吐速率: <strong>{activeScenario.metrics.throughput}</strong></span>
-                    <span>内存占用: <strong>{activeScenario.metrics.memory}</strong></span>
+                    <div className="oa-dag-steps">
+                      {activeScenario.steps.map((st, idx) => {
+                        const isPast = idx < runningStep;
+                        const isCurrent = idx === runningStep && isRunning;
+                        return (
+                          <div
+                            key={idx}
+                            className={`oa-dag-step-item ${isCurrent ? "active" : ""} ${isPast ? "completed" : ""}`}
+                          >
+                            <div className="oa-step-icon">
+                              {isPast ? "✓" : isCurrent ? "⏳" : idx + 1}
+                            </div>
+                            <div className="oa-step-text">
+                              <h4>{st.title}</h4>
+                              <p>{st.desc}</p>
+                              {st.tool && (
+                                <span style={{ display: "inline-block", marginTop: "4px", fontSize: "0.72rem", color: "#38bdf8", background: "rgba(56, 189, 248, 0.1)", padding: "1px 6px", borderRadius: "4px" }}>
+                                  驱动工具: {st.tool}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
 
-                  <Link to="/work/ownagent" className="oa-open-studio-link">
-                    <span>在完整工作台中打开</span>
-                    <span>→</span>
-                  </Link>
+                  <div className="oa-dag-controls">
+                    <button
+                      type="button"
+                      className="oa-run-btn"
+                      onClick={handleRunSimulation}
+                      disabled={isRunning}
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                      </svg>
+                      <span>{isRunning ? "智能体推流中..." : "触发执行该工作流"}</span>
+                    </button>
+
+                    <div style={{ fontSize: "0.8rem", color: "#64748b" }}>
+                      节点状态: <strong style={{ color: isRunning ? "#818cf8" : "#10b981" }}>{isRunning ? `Step ${runningStep + 1} / ${activeScenario.steps.length}` : "已收敛 (Done)"}</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="oa-sim-terminal">
+                  <div className="oa-terminal-logs">
+                    {activeScenario.logs.slice(0, visibleLogCount).map((l, i) => (
+                      <div key={i} className="oa-log-line">
+                        <span className="oa-log-time">[{l.time}]</span>
+                        <span className={`oa-log-${l.type}`}>{l.text}</span>
+                      </div>
+                    ))}
+                    {isRunning && (
+                      <div className="oa-log-line" style={{ color: "#38bdf8" }}>
+                        <span className="oa-log-time">[推流中]</span>
+                        <span>▍ Netty SSE 持续监听事件管道...</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="oa-terminal-footer">
+                    <div className="oa-terminal-metrics">
+                      <span>首包延迟: <strong>{activeScenario.metrics.latency}</strong></span>
+                      <span>吞吐速率: <strong>{activeScenario.metrics.throughput}</strong></span>
+                      <span>内存占用: <strong>{activeScenario.metrics.memory}</strong></span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveMode("studio")}
+                      style={{ background: "none", border: "none", color: "#818cf8", fontWeight: 650, cursor: "pointer", fontSize: "0.82rem" }}
+                    >
+                      切换至完整 DAG 画布 →
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        </section>
+          </section>
+        )}
 
         {/* ── 3. 四大核心技术支柱 ── */}
         <section className="oa-features-section">
@@ -420,7 +435,6 @@ export function HomePage() {
             </div>
           </div>
 
-          {/* 实时健康状态挂件 */}
           <div className="oa-cluster-status">
             <div className="oa-status-chips">
               <div className="oa-status-chip">
@@ -436,31 +450,19 @@ export function HomePage() {
             </div>
 
             <div>
-              <Link to="/work/ownagent" style={{ color: "#38bdf8", fontSize: "0.84rem", textDecoration: "none", fontWeight: 600 }}>
-                进入工作台测试实时链路 →
-              </Link>
+              {onNavigateTab && (
+                <button
+                  type="button"
+                  onClick={() => onNavigateTab("lab")}
+                  style={{ background: "none", border: "none", color: "#38bdf8", fontSize: "0.84rem", fontWeight: 600, cursor: "pointer" }}
+                >
+                  探索技术实验室与作品库 →
+                </button>
+              )}
             </div>
           </div>
         </section>
-
-        {/* ── 5. 底部 CTA ── */}
-        <section className="oa-cta-section">
-          <h2>立即构建你的专属自主智能体流水线</h2>
-          <p>
-            告别碎片化的实验代码，在 OwnAgent 中体验真正具备企业级健壮性、可观测性与自由拓展能力的智能体平台。
-          </p>
-          <div style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <Link to="/work/ownagent" className="oa-btn-primary" style={{ padding: "0.95rem 2.2rem", fontSize: "1.05rem" }}>
-              🚀 启动 OwnAgent 工作台
-            </Link>
-            <Link to="/lab" className="oa-btn-secondary" style={{ padding: "0.95rem 1.8rem" }}>
-              🧪 探索创新实验室与全量作品
-            </Link>
-          </div>
-        </section>
       </main>
-
-      <SiteFooter />
     </div>
   );
 }

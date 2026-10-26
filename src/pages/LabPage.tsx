@@ -13,8 +13,12 @@ import { formatWorkTenure, useWorkTenure } from "../lib/workTenure";
 
 type CategoryTab = "all" | "lab" | "platform" | "personal" | "engineering";
 
+interface LabPageProps {
+  embedMode?: boolean;
+}
+
 /** 技术实验室与作品展台（采用深色高对比度玻璃拟态，全站统一视觉） */
-export function LabPage() {
+export function LabPage({ embedMode = false }: LabPageProps) {
   const [briefSlug, setBriefSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CategoryTab>("all");
   const tenure = useWorkTenure(profile.careerStart);
@@ -28,8 +32,8 @@ export function LabPage() {
   ];
 
   return (
-    <div className="oa-landing-page oa-lab-page oa-page-enter">
-      <SiteHeader />
+    <div className={`oa-landing-page oa-lab-page oa-page-enter${embedMode ? " oa-lab-embed" : ""}`}>
+      {!embedMode && <SiteHeader />}
 
       <main className="oa-landing-inner">
         {/* 实验室与作品库顶部介绍卡片 */}
