@@ -123,7 +123,7 @@ export function HomePage() {
   }
 
   return (
-    <div className="oa-landing-page">
+    <div className="oa-landing-page oa-page-enter">
       <SiteHeader />
 
       <main className="oa-landing-inner">

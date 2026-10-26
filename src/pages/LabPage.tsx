@@ -2,7 +2,7 @@ import { useState } from "react";
 import { FeaturedWorkCard } from "../components/home/FeaturedWorkCard";
 import { ExtensionHomeCard } from "../components/home/ExtensionHomeCard";
 import { ToolkitHomeCard } from "../components/home/ToolkitHomeCard";
-import { SiteShell } from "../components/SiteShell";
+import { SiteHeader } from "../components/SiteHeader";
 import { SiteFooter } from "../components/SiteFooter";
 import { WorkBriefModal } from "../components/WorkBriefModal";
 import { PlatformLab } from "../components/platform/PlatformLab";
@@ -13,7 +13,7 @@ import { formatWorkTenure, useWorkTenure } from "../lib/workTenure";
 
 type CategoryTab = "all" | "lab" | "platform" | "personal" | "engineering";
 
-/** 技术实验室与作品展台（原主页全部内容 + 技术实验台） */
+/** 技术实验室与作品展台（采用深色高对比度玻璃拟态，全站统一视觉） */
 export function LabPage() {
   const [briefSlug, setBriefSlug] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<CategoryTab>("all");
@@ -28,10 +28,12 @@ export function LabPage() {
   ];
 
   return (
-    <>
-      <SiteShell pageClass="site-lab site-lab-enhanced" footer={<SiteFooter />}>
-        {/* 实验室与作品库顶部介绍 */}
-        <header className="site-home-hero site-home-hero--compact lab-header-hero">
+    <div className="oa-landing-page oa-lab-page oa-page-enter">
+      <SiteHeader />
+
+      <main className="oa-landing-inner">
+        {/* 实验室与作品库顶部介绍卡片 */}
+        <header className="lab-header-hero">
           <div className="lab-badge-row">
             <span className="lab-status-badge">Innovation Lab & Works</span>
             <span className="lab-tenure-badge">
@@ -45,7 +47,7 @@ export function LabPage() {
             ，{profile.homePitchBody}
           </p>
 
-          {/* 分类筛选器 */}
+          {/* 高对比度分类筛选器 */}
           <div className="lab-category-filter" role="tablist" aria-label="作品分类筛选">
             {tabs.map((tab) => (
               <button
@@ -137,9 +139,10 @@ export function LabPage() {
             </div>
           </section>
         )}
-      </SiteShell>
+      </main>
 
+      <SiteFooter />
       <WorkBriefModal slug={briefSlug} onClose={() => setBriefSlug(null)} />
-    </>
+    </div>
   );
 }

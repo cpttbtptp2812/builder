@@ -515,17 +515,28 @@ export function WorkOwnAgent() {
   if (view === "user") return <SkillUserClient onAdmin={() => go("chat")} />;
 
   return (
-    <div className={`own-app own-app--product product${view === "chat" ? " chat-focus" : ""}${sideCollapsed ? " side-collapsed" : ""}`}>
+    <div className={`own-app own-app--product product oa-page-enter${view === "chat" ? " chat-focus" : ""}${sideCollapsed ? " side-collapsed" : ""}`}>
       <header className="own-app-bar">
         <div className="own-app-brand">
-          <span className="own-app-mark" aria-hidden="true">
-            OA
-          </span>
-          <div className="own-app-brand-text">
-            <strong>OwnAgent</strong>
-            <span className="own-app-tagline">企业办事运行时 · 技能治理</span>
-          </div>
+          <Link to="/" style={{ display: "flex", alignItems: "center", gap: "0.65rem", textDecoration: "none", color: "inherit" }} title="返回 OwnAgent 首页">
+            <span className="own-app-mark" aria-hidden="true">
+              OA
+            </span>
+            <div className="own-app-brand-text">
+              <strong>OwnAgent</strong>
+              <span className="own-app-tagline">工作台 · 智能体调度</span>
+            </div>
+          </Link>
         </div>
+
+        {/* 全站常驻导航条：解决跳入工作台导航消失、切页突兀的问题 */}
+        <nav className="site-header-nav own-app-global-nav" aria-label="全站导航">
+          <Link to="/">首页</Link>
+          <Link to="/work/ownagent" className="on">工作台</Link>
+          <Link to="/lab">实验室</Link>
+          <Link to="/resume">个人履历</Link>
+        </nav>
+
         <div className="own-app-actions">
           <BackendStatusBar compact quiet />
           <button type="button" className="own-cmd" onClick={() => go("user")}>
@@ -580,7 +591,7 @@ export function WorkOwnAgent() {
                 strokeLinejoin="round"
               />
             </svg>
-            <span>退出</span>
+            <span>主页</span>
           </Link>
         </div>
       </header>
