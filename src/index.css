@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* ==============================================================================
+   Design System - UniAgent High-End Theme (参考 E:\tianyangAgent 工业级设计系统)
+   三层架构:
+   1. Primitives (基础原子色阶)
+   2. Semantic Tokens (语义化 Token: 表面、边框、前景色、品牌色)
+   3. Component Tokens (组件级变量)
+   ============================================================================== */
+
+:root {
+  color-scheme: light;
+
+  /* ----- 灰度色阶 (Gray Scale) ----- */
+  --gray-50: hsl(210 40% 98%);
+  --gray-100: hsl(214 32% 93%);
+  --gray-200: hsl(214 32% 88%);
+  --gray-300: hsl(213 27% 84%);
+  --gray-400: hsl(215 14% 60%);
+  --gray-500: hsl(215 16% 47%);
+  --gray-600: hsl(215 19% 35%);
+  --gray-700: hsl(215 25% 27%);
+  --gray-800: hsl(217 33% 17%);
+  --gray-900: hsl(222 47% 11%);
+
+  /* ----- 品牌色 (Brand Blue) ----- */
+  --brand: hsl(221 83% 53%);
+  --brand-hover: hsl(221 83% 45%);
+  --brand-subtle: hsl(221 100% 96%);
+  --brand-muted: hsl(221 100% 91%);
+
+  /* ----- 语义层级 Tokens ----- */
+  --surface-base: hsl(0 0% 100%);
+  --surface-raised: var(--gray-50);
+  --surface-sunken: var(--gray-100);
+  --surface-overlay: hsl(0 0% 100% / 0.85);
+
+  --border-subtle: hsl(214 32% 91%);
+  --border-default: hsl(214 32% 84%);
+  --border-focus: var(--brand);
+
+  --fg-primary: var(--gray-900);
+  --fg-secondary: var(--gray-600);
+  --fg-tertiary: var(--gray-500);
+  --fg-muted: var(--gray-400);
+
+  /* ----- 状态色 ----- */
+  --color-success: hsl(142 72% 40%);
+  --color-success-bg: hsl(142 76% 96%);
+  --color-warning: hsl(38 95% 44%);
+  --color-warning-bg: hsl(38 95% 96%);
+  --color-error: hsl(0 84% 60%);
+  --color-error-bg: hsl(0 86% 97%);
+}
+
+html, body, #root {
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: var(--surface-raised);
+  color: var(--fg-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 隐藏滚动条但保留滚动能力 */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}

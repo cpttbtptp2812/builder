@@ -16,3 +16,7 @@ clip-hub/
 
 # ClipHub 安装包不入库（仅 zip 在 public/downloads/）
 public/downloads/*.exe
+
+# 本地架构设计与私有规划文档不入库
+.docs/
+docs/private/

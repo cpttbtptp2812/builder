@@ -12,6 +12,7 @@ services:
       - "3306:3306"
     volumes:
       - mysql-data:/var/lib/mysql
+      - ./sql/schema.sql:/docker-entrypoint-initdb.d/01_schema.sql:ro
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-authentication-plugin=mysql_native_password
     networks:
       - agent-net
@@ -22,6 +23,8 @@ services:
     container_name: agent-backend
     volumes:
       - ./app.jar:/app/app.jar
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - SPRING_PROFILES_ACTIVE=prod
       - DB_HOST=agent-mysql
@@ -34,6 +37,18 @@ services:
     depends_on:
       - agent-mysql
     command: ["java", "-Djava.security.egd=file:/dev/./urandom", "-jar", "/app/app.jar"]
+    networks:
+      - agent-net
+
+  # 可选容器化 Ollama 节点：开启后在集群内部通过 http://ollama:11434/v1 访问
+  ollama:
+    image: ollama/ollama:latest
+    container_name: agent-ollama
+    restart: always
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
     networks:
       - agent-net
 
@@ -55,6 +70,7 @@ services:
 
 volumes:
   mysql-data:
+  ollama-models:
 
 networks:
   agent-net:

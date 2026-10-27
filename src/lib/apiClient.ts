@@ -2,13 +2,19 @@
 
 export type BackendHealth = {
   ok: boolean;
-  runtime: string;
-  db: string;
-  ragChunks: number;
-  skillRuns: number;
-  workflowRuns: number;
+  status?: string;
+  service?: string;
+  runtime?: string;
+  db?: string;
+  databaseConnected?: boolean;
+  ragChunks?: number;
+  skillRuns?: number;
+  skillsCount?: number;
+  mcpToolsCount?: number;
+  workflowRuns?: number;
   productProcesses?: number;
-  llm: boolean;
+  llm?: boolean;
+  version?: string;
 };
 
 let cachedHealth: BackendHealth | null = null;

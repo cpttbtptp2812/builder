@@ -1,20 +1,24 @@
 import { useLocation, useNavigate } from "react-router-dom";
 
-export type PortalTab = "ownagent" | "lab" | "resume";
+export type PortalTab = "home" | "workbench" | "lab" | "resume";
 
 interface SiteHeaderProps {
   activeTab?: PortalTab;
   onSelectTab?: (tab: PortalTab) => void;
+  onEnterWorkbench?: () => void;
   standalone?: boolean;
 }
 
 /**
- * 全站常驻顶栏 — 极简三大板块选项卡（同一页面内平滑切换）
- * 1. OwnAgent（深度合并首页与工作台为统一旗舰平台）
- * 2. 实验室（技术探索、算法实验台与全量作品库）
- * 3. 个人履历（架构背景、项目履历与联系方式）
+ * 全站常驻顶栏 — 专业 SaaS 门户规范
+ * 左侧：OwnAgent 品牌 Logo
+ * 中间/右侧：[ 首页 ] [ 实验室 ] [ 个人履历 ] + 高亮行动召唤 [ 进入工作台 → ]
  */
-export function SiteHeader({ activeTab: propActiveTab, onSelectTab }: SiteHeaderProps) {
+export function SiteHeader({
+  activeTab: propActiveTab,
+  onSelectTab,
+  onEnterWorkbench,
+}: SiteHeaderProps) {
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -25,13 +29,22 @@ export function SiteHeader({ activeTab: propActiveTab, onSelectTab }: SiteHeader
       ? "lab"
       : location.pathname.startsWith("/resume") || location.pathname === "/about"
       ? "resume"
-      : "ownagent");
+      : location.pathname.startsWith("/work") || location.pathname === "/workbench"
+      ? "workbench"
+      : "home");
 
   const handleTabClick = (tab: PortalTab) => {
     if (onSelectTab) {
       onSelectTab(tab);
     } else {
-      const target = tab === "lab" ? "/lab" : tab === "resume" ? "/resume" : "/";
+      const target =
+        tab === "lab"
+          ? "/lab"
+          : tab === "resume"
+          ? "/resume"
+          : tab === "workbench"
+          ? "/work/ownagent"
+          : "/";
       navigate(target);
     }
   };
@@ -41,8 +54,8 @@ export function SiteHeader({ activeTab: propActiveTab, onSelectTab }: SiteHeader
       <div
         className="site-header-mark"
         style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", gap: "0.65rem" }}
-        onClick={() => handleTabClick("ownagent")}
-        title="切换至 OwnAgent 旗舰平台"
+        onClick={() => handleTabClick("home")}
+        title="返回 OwnAgent 首页"
       >
         <span
           className="site-header-mark-icon"
@@ -70,15 +83,15 @@ export function SiteHeader({ activeTab: propActiveTab, onSelectTab }: SiteHeader
       </div>
 
       <div className="site-header-actions">
-        <nav className="site-header-nav" role="tablist" aria-label="全站三联平滑导航">
+        <nav className="site-header-nav" role="tablist" aria-label="全站导航">
           <button
             type="button"
             role="tab"
-            aria-selected={currentTab === "ownagent"}
-            className={currentTab === "ownagent" ? "on" : ""}
-            onClick={() => handleTabClick("ownagent")}
+            aria-selected={currentTab === "home"}
+            className={currentTab === "home" ? "on" : ""}
+            onClick={() => handleTabClick("home")}
           >
-            OwnAgent
+            首页
           </button>
           <button
             type="button"
