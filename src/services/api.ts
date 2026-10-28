@@ -5,7 +5,15 @@
  * 严禁任何硬编码假数据与模拟定时器
  */
 
-import { AgentItem, AuditLogItem, ToolItem, PipelineItem } from "../types/platform";
+import {
+  AgentItem,
+  AuditLogItem,
+  ToolItem,
+  PipelineItem,
+  WorkflowInstanceData,
+  NodeExecutionData,
+  ApprovalTicketData,
+} from "../types/platform";
 
 export interface ChatStreamPayload {
   sessionId?: string;
@@ -497,24 +505,36 @@ export async function fetchWorkflowsApi(): Promise<PipelineItem[]> {
     const res = await fetch("/api/workflow/definitions");
     if (!res.ok) throw new Error("Failed to fetch workflows");
     const data = await res.json();
-    return data.map((d: any) => ({
-      id: d.id,
-      name: d.name,
-      description: d.description || "",
-      category: d.category || "业务自动化",
-      badge: d.badge || "生产流水线",
-      icon: d.icon || "ShieldCheck",
-      promptTemplate: d.promptTemplate || "",
-      tags: d.tags
-        ? typeof d.tags === "string"
-          ? d.tags.split(",").map((s: string) => s.trim()).filter(Boolean)
-          : d.tags
-        : [],
-      version: d.version || "v1.0.0",
-      enabled: d.enabled !== false,
-      sortOrder: d.sortOrder || 0,
-      updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : "刚刚",
-    }));
+    return data.map((d: any) => {
+      let parsedSteps: any[] = [];
+      if (d.topologyJson) {
+        try {
+          parsedSteps = JSON.parse(d.topologyJson);
+        } catch {
+          parsedSteps = [];
+        }
+      }
+      return {
+        id: d.id,
+        name: d.name,
+        description: d.description || "",
+        category: d.category || "业务自动化",
+        badge: d.badge || "生产流水线",
+        icon: d.icon || "ShieldCheck",
+        promptTemplate: d.promptTemplate || "",
+        tags: d.tags
+          ? typeof d.tags === "string"
+            ? d.tags.split(",").map((s: string) => s.trim()).filter(Boolean)
+            : d.tags
+          : [],
+        version: d.version || "v1.0.0",
+        enabled: d.enabled !== false,
+        sortOrder: d.sortOrder || 0,
+        updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : "刚刚",
+        topologyJson: d.topologyJson || "",
+        steps: parsedSteps,
+      };
+    });
   } catch (err) {
     console.warn("[ownagent] 获取业务流水线失败", err);
     return [];
@@ -534,6 +554,7 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
     version: wf.version || "v1.0.0",
     enabled: wf.enabled !== false,
     sortOrder: wf.sortOrder || 0,
+    topologyJson: wf.topologyJson || (wf.steps ? JSON.stringify(wf.steps) : ""),
   };
   const res = await fetch("/api/workflow/definitions", {
     method: "POST",
@@ -542,6 +563,14 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
   });
   if (!res.ok) throw new Error("Failed to save workflow");
   const d = await res.json();
+  let parsedSteps: any[] = [];
+  if (d.topologyJson) {
+    try {
+      parsedSteps = JSON.parse(d.topologyJson);
+    } catch {
+      parsedSteps = [];
+    }
+  }
   return {
     id: d.id,
     name: d.name,
@@ -558,13 +587,57 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
     version: d.version || "v1.0.0",
     enabled: d.enabled !== false,
     sortOrder: d.sortOrder || 0,
-    updatedAt: "刚刚",
+    updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : "刚刚",
+    topologyJson: d.topologyJson || "",
+    steps: parsedSteps,
   };
 }
 
 export async function deleteWorkflowApi(id: string): Promise<void> {
   const res = await fetch(`/api/workflow/definitions/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete workflow");
+}
+
+export async function runWorkflowApi(params: {
+  workflowId: string;
+  inputParams?: string;
+  triggeredBy?: string;
+}): Promise<{ instanceId: string; status: string; workflowId: string; startedAt: string }> {
+  const res = await fetch("/api/workflow/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  if (!res.ok) throw new Error("Failed to run workflow");
+  return res.json();
+}
+
+export async function fetchWorkflowInstanceApi(instanceId: string): Promise<{
+  instance: WorkflowInstanceData;
+  steps: NodeExecutionData[];
+}> {
+  const res = await fetch(`/api/workflow/instances/${instanceId}`);
+  if (!res.ok) throw new Error("Failed to fetch workflow instance");
+  return res.json();
+}
+
+export async function commitWorkflowApprovalApi(params: {
+  ticketId: string;
+  decision: "APPROVED" | "REJECTED";
+  operatorId?: string;
+  auditReason?: string;
+}): Promise<ApprovalTicketData> {
+  const res = await fetch(`/api/workflow/approvals/${params.ticketId}/commit`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      decision: params.decision,
+      operatorId: params.operatorId || "admin_sec",
+      auditReason: params.auditReason || (params.decision === "APPROVED" ? "安全核验通过，准予放行" : "人工判定存在风控隐患，执行阻断回滚"),
+    }),
+  });
+  if (!res.ok) throw new Error("Failed to commit approval");
+  return res.json();
 }
 
 // ══════════════ 多模型故障转移 (Failover) 断路器与演练 API ══════════════

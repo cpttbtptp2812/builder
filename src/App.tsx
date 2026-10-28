@@ -8,6 +8,7 @@ import AuditLogsPage from "./pages/logs/AuditLogsPage";
 import SettingsPage from "./pages/settings/SettingsPage";
 import WorkflowsListPage from "./pages/workflows/WorkflowsListPage";
 import PipelineConfigModal from "./components/workflow/PipelineConfigModal";
+import { WorkflowWaterfallDrawer } from "./components/workflow/WorkflowWaterfallDrawer";
 import { NavTab, AgentItem, AuditLogItem, PipelineItem } from "./types/platform";
 import {
   fetchAgentsApi,
@@ -17,6 +18,7 @@ import {
   checkBackendHealth,
   fetchWorkflowsApi,
   deleteWorkflowApi,
+  runWorkflowApi,
   fetchKnowledgeChunksApi,
   fetchToolsApi,
 } from "./services/api";
@@ -50,6 +52,10 @@ export default function App() {
   const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<PipelineItem | null>(null);
   const [initialChatPrompt, setInitialChatPrompt] = useState<string | undefined>(undefined);
+  const [activeWaterfall, setActiveWaterfall] = useState<{
+    workflow: PipelineItem;
+    instanceId: string;
+  } | null>(null);
 
   // 类似豆包/元宝的全局设置弹窗模式 (当打开 非chat 页面时，以模态抽屉/弹出层呈现，绝不污染主页纯净大对话框)
   const [activeModal, setActiveModal] = useState<NavTab | null>(null);
@@ -136,8 +142,24 @@ export default function App() {
     }
   };
 
-  // 业务流水线管理动作
-  const handleLaunchWorkflow = (wf: PipelineItem) => {
+  // 业务流水线管理动作：立即启动后端真实 DAG 引擎并唤起动态甘特瀑布
+  const handleLaunchWorkflow = async (wf: PipelineItem, customInput?: string) => {
+    try {
+      const res = await runWorkflowApi({
+        workflowId: wf.id,
+        inputParams: customInput || wf.promptTemplate,
+        triggeredBy: "admin_sec",
+      });
+      setActiveWaterfall({
+        workflow: wf,
+        instanceId: res.instanceId,
+      });
+    } catch (err) {
+      alert("启动流水线失败: " + String(err));
+    }
+  };
+
+  const handleFillPromptToChat = (wf: PipelineItem) => {
     setInitialChatPrompt(wf.promptTemplate);
     setCurrentView("chat");
     setActiveModal(null);
@@ -268,6 +290,7 @@ export default function App() {
             initialPrompt={initialChatPrompt}
             onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
             onOpenCreateWorkflow={handleOpenCreateWorkflow}
+            onRunWorkflow={handleLaunchWorkflow}
           />
         )}
       </main>
@@ -365,6 +388,7 @@ export default function App() {
                 <WorkflowsListPage
                   workflows={workflows}
                   onLaunchWorkflow={handleLaunchWorkflow}
+                  onFillPrompt={handleFillPromptToChat}
                   onOpenCreate={handleOpenCreateWorkflow}
                   onOpenEdit={handleOpenEditWorkflow}
                   onDelete={handleDeleteWorkflow}
@@ -399,6 +423,14 @@ export default function App() {
         onClose={() => setIsWorkflowModalOpen(false)}
         initialPipeline={editingWorkflow}
         onSaved={handleSaveWorkflow}
+      />
+
+      {/* 5. 业务流水线全链路执行瀑布抽屉 */}
+      <WorkflowWaterfallDrawer
+        isOpen={!!activeWaterfall}
+        onClose={() => setActiveWaterfall(null)}
+        workflow={activeWaterfall?.workflow || null}
+        instanceId={activeWaterfall?.instanceId || null}
       />
     </div>
   );

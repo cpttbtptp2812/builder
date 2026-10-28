@@ -87,6 +87,7 @@ interface ChatPlaygroundProps {
   initialPrompt?: string;
   onClearInitialPrompt?: () => void;
   onOpenCreateWorkflow?: () => void;
+  onRunWorkflow?: (wf: PipelineItem) => void;
 }
 
 export default function ChatPlaygroundPage({
@@ -101,6 +102,7 @@ export default function ChatPlaygroundPage({
   initialPrompt,
   onClearInitialPrompt,
   onOpenCreateWorkflow,
+  onRunWorkflow,
 }: ChatPlaygroundProps) {
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
@@ -931,8 +933,7 @@ export default function ChatPlaygroundPage({
                       workflows.slice(0, 3).map((item) => (
                         <div
                           key={item.id}
-                          onClick={() => handleSend(item.promptTemplate)}
-                          className="group relative p-4 rounded-2xl bg-white hover:bg-slate-50/90 border border-slate-200/90 hover:border-blue-400 text-left transition-all cursor-pointer shadow-xs hover:shadow-md flex flex-col justify-between space-y-3"
+                          className="group relative p-4 rounded-2xl bg-white hover:bg-slate-50/90 border border-slate-200/90 hover:border-blue-400 text-left transition-all shadow-xs hover:shadow-md flex flex-col justify-between space-y-3"
                         >
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
@@ -971,9 +972,22 @@ export default function ChatPlaygroundPage({
                               </div>
                             )}
 
-                            <div className="flex items-center justify-between text-[11px] font-bold text-blue-600 pt-0.5">
-                              <span>一键启动流水线</span>
-                              <CornerRightUp className="w-3.5 h-3.5 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+                            <div className="flex items-center justify-between gap-2 pt-0.5">
+                              <button
+                                onClick={() => handleSend(item.promptTemplate)}
+                                className="text-[11px] text-slate-500 hover:text-blue-600 transition cursor-pointer"
+                                title="填入 Prompt 对话"
+                              >
+                                填入对话
+                              </button>
+
+                              <button
+                                onClick={() => onRunWorkflow ? onRunWorkflow(item) : handleSend(item.promptTemplate)}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-[11px] font-bold transition shadow-2xs cursor-pointer"
+                              >
+                                <span>执行瀑布流</span>
+                                <CornerRightUp className="w-3 h-3" />
+                              </button>
                             </div>
                           </div>
                         </div>

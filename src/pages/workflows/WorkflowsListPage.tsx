@@ -16,12 +16,14 @@ import {
   Cpu,
   Database,
   SlidersHorizontal,
+  MessageSquare,
 } from "lucide-react";
 import { PipelineItem } from "../../types/platform";
 
 interface WorkflowsListPageProps {
   workflows: PipelineItem[];
   onLaunchWorkflow: (wf: PipelineItem) => void;
+  onFillPrompt?: (wf: PipelineItem) => void;
   onOpenCreate: () => void;
   onOpenEdit: (wf: PipelineItem) => void;
   onDelete: (id: string) => void;
@@ -30,6 +32,7 @@ interface WorkflowsListPageProps {
 export const WorkflowsListPage: React.FC<WorkflowsListPageProps> = ({
   workflows,
   onLaunchWorkflow,
+  onFillPrompt,
   onOpenCreate,
   onOpenEdit,
   onDelete,
@@ -204,6 +207,30 @@ export const WorkflowsListPage: React.FC<WorkflowsListPageProps> = ({
                   </p>
                 </div>
 
+                {/* 动态步骤执行链简览 */}
+                {wf.steps && wf.steps.length > 0 && (
+                  <div className="p-2 bg-blue-50/50 rounded-xl border border-blue-100/80 space-y-1">
+                    <div className="flex items-center justify-between text-[10px] text-blue-700 font-bold">
+                      <span className="flex items-center gap-1">
+                        <Zap className="w-3 h-3 text-amber-500" />
+                        <span>流水线执行清单 ({wf.steps.length} 个步骤)</span>
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 overflow-x-auto text-[10px] font-sans text-slate-600 scrollbar-hide py-0.5">
+                      {wf.steps.map((st, i) => (
+                        <React.Fragment key={st.id || i}>
+                          <span className="px-1.5 py-0.5 bg-white rounded-md border border-slate-200/90 whitespace-nowrap text-[10px] font-medium text-slate-700 shadow-2xs">
+                            {i + 1}. {st.name}
+                          </span>
+                          {i < wf.steps!.length - 1 && (
+                            <span className="text-slate-300">→</span>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
                 {/* 触发提示词预览 */}
                 <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-100 text-[11px] text-slate-600 font-mono line-clamp-2">
                   <span className="font-bold text-slate-400 select-none">Prompt: </span>
@@ -233,13 +260,26 @@ export const WorkflowsListPage: React.FC<WorkflowsListPageProps> = ({
                   <span>{wf.updatedAt || "刚刚"}</span>
                 </div>
 
-                <button
-                  onClick={() => onLaunchWorkflow(wf)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer"
-                >
-                  <Play className="w-3 h-3 fill-current" />
-                  <span>启动执行</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  {onFillPrompt && (
+                    <button
+                      onClick={() => onFillPrompt(wf)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl font-medium transition cursor-pointer"
+                      title="将 Prompt 填入对话输入框"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>填入对话</span>
+                    </button>
+                  )}
+
+                  <button
+                    onClick={() => onLaunchWorkflow(wf)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold transition shadow-xs cursor-pointer"
+                  >
+                    <Play className="w-3 h-3 fill-current" />
+                    <span>执行瀑布流</span>
+                  </button>
+                </div>
               </div>
             </div>
           ))}

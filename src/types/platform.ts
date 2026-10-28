@@ -2,6 +2,32 @@
 
 export type NavTab = "chat" | "agents" | "knowledge" | "tools" | "logs" | "settings" | "workflows";
 
+export type StepActionType =
+  | "INPUT_EXTRACT"   // 字段映射与数据提取
+  | "RULE_CHECK"      // 规则计算与判断
+  | "HTTP_TOOL"       // 外部 API / 接口调用
+  | "HITL_APPROVAL"   // 2PC 人工安全审批门闩
+  | "LLM_REDUCE";     // 大模型总结与结果输出
+
+export interface PipelineStep {
+  id: string;
+  name: string;
+  type: StepActionType;
+  description?: string;
+  config: {
+    fields?: string;
+    maskSensitive?: boolean;
+    ruleExpr?: string;
+    apiUrl?: string;
+    apiMethod?: "GET" | "POST" | "PUT";
+    apiHeaders?: string;
+    apiBodyTemplate?: string;
+    approverRole?: string;
+    timeoutSeconds?: number;
+    outputFormat?: "STREAM_TEXT" | "JSON" | "TABLE";
+  };
+}
+
 export interface PipelineItem {
   id: string;
   name: string;
@@ -15,6 +41,8 @@ export interface PipelineItem {
   enabled: boolean;
   sortOrder?: number;
   updatedAt?: string;
+  topologyJson?: string;
+  steps?: PipelineStep[];
 }
 
 export interface AgentItem {
@@ -66,3 +94,56 @@ export interface AuditLogItem {
   isRealUsage?: boolean;
   status: "SUCCESS" | "FAILED" | "TIMEOUT" | "ABORTED";
 }
+
+// ══════════════ 工作流运行时与瀑布流类型 ══════════════
+
+export interface WorkflowInstanceData {
+  id: string;
+  workflowId: string;
+  status: "RUNNING" | "SUSPENDED_APPROVAL" | "COMPLETED" | "FAILED" | "REJECTED_ROLLED_BACK";
+  triggeredBy: string;
+  startedAt: string;
+  finishedAt?: string;
+  currentNodeId?: string;
+  inputParams?: string;
+}
+
+export interface NodeExecutionData {
+  id: string;
+  instanceId: string;
+  nodeId: string;
+  nodeName: string;
+  nodeType: string;
+  status: "RUNNING" | "SUCCESS" | "FAILED" | "BLOCKED" | "COMPENSATED";
+  outputPayload?: string;
+  startedAt?: string;
+  endedAt?: string;
+  latencyMs?: number;
+  costTokens?: number;
+}
+
+export interface ApprovalTicketData {
+  id: string;
+  instanceId: string;
+  nodeId: string;
+  policyLevel: string;
+  riskScore: number;
+  operationSummary: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  operatorId?: string;
+  auditReason?: string;
+  signatureHash?: string;
+  decidedAt?: string;
+}
+
+export interface WorkflowEventMessageData {
+  eventType: string;
+  instanceId: string;
+  nodeId?: string;
+  nodeName?: string;
+  nodeType?: string;
+  status?: string;
+  payload?: any;
+  timestamp?: number;
+}
+
