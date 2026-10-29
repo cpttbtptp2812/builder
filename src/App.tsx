@@ -49,6 +49,19 @@ export type ViewMode =
 export default function App() {
   const toast = useToast();
   const [currentView, setCurrentView] = useState<ViewMode>("home");
+  const [isAssetsMenuOpen, setIsAssetsMenuOpen] = useState(false);
+  const assetsMenuRef = React.useRef<HTMLDivElement>(null);
+
+  // 点击外部自动收起底层资产库下拉菜单
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (assetsMenuRef.current && !assetsMenuRef.current.contains(e.target as Node)) {
+        setIsAssetsMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleGlobalClick);
+    return () => document.removeEventListener("mousedown", handleGlobalClick);
+  }, []);
 
   // 全局业务状态 (100% 真实后端持久化)
   const [agents, setAgents] = useState<AgentItem[]>([]);
@@ -244,49 +257,82 @@ export default function App() {
               <span>方案编排中心</span>
             </button>
 
-            {/* 全局底层资产池 (收敛管理，不再让客户误以为要依次跨 4 个 Tab 录入) */}
-            <div className="relative group flex items-center">
+            {/* 全局底层资产池 (增加无缝悬停桥接与点击常开支持，杜绝间隙失焦断触) */}
+            <div
+              ref={assetsMenuRef}
+              className="relative"
+              onMouseEnter={() => setIsAssetsMenuOpen(true)}
+              onMouseLeave={() => setIsAssetsMenuOpen(false)}
+            >
               <button
+                type="button"
+                onClick={() => setIsAssetsMenuOpen((prev) => !prev)}
                 className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                  currentView === "knowledge" || currentView === "agents" || currentView === "tools"
+                  currentView === "knowledge" || currentView === "agents" || currentView === "tools" || isAssetsMenuOpen
                     ? "bg-white text-blue-600 shadow-2xs font-bold"
                     : "text-slate-600 hover:text-slate-900"
                 }`}
               >
                 <Database className="w-3.5 h-3.5" />
                 <span>底层资产库</span>
-                <ChevronDown className="w-3 h-3 text-slate-400 group-hover:rotate-180 transition-transform" />
+                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isAssetsMenuOpen ? "rotate-180 text-blue-600" : ""}`} />
               </button>
 
-              <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 hidden group-hover:block animate-in fade-in z-50">
-                <button
-                  onClick={() => setCurrentView("knowledge")}
-                  className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-xs transition cursor-pointer ${
-                    currentView === "knowledge" ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
-                  }`}
-                >
-                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
-                  <span>企业知识库</span>
-                </button>
-                <button
-                  onClick={() => setCurrentView("agents")}
-                  className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-xs transition cursor-pointer ${
-                    currentView === "agents" ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
-                  }`}
-                >
-                  <Bot className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>智能体角色库</span>
-                </button>
-                <button
-                  onClick={() => setCurrentView("tools")}
-                  className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-xs transition cursor-pointer ${
-                    currentView === "tools" ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
-                  }`}
-                >
-                  <Wrench className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>扩展工具市场</span>
-                </button>
-              </div>
+              {/* 下拉浮层容器：增加 pt-1.5 内边距实现无缝鼠标桥接，彻底杜绝悬浮断触 */}
+              {isAssetsMenuOpen && (
+                <div className="absolute top-full left-0 pt-1.5 w-48 z-50">
+                  <div className="bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentView("knowledge");
+                        setIsAssetsMenuOpen(false);
+                      }}
+                      className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 hover:bg-slate-50 text-xs transition cursor-pointer ${
+                        currentView === "knowledge" ? "font-bold text-blue-600 bg-blue-50/60" : "text-slate-700"
+                      }`}
+                    >
+                      <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+                      <div className="flex flex-col">
+                        <span>企业知识库</span>
+                        <span className="text-[10px] text-slate-400 font-normal">规章制度与合规文档</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentView("agents");
+                        setIsAssetsMenuOpen(false);
+                      }}
+                      className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 hover:bg-slate-50 text-xs transition cursor-pointer ${
+                        currentView === "agents" ? "font-bold text-blue-600 bg-blue-50/60" : "text-slate-700"
+                      }`}
+                    >
+                      <Bot className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <div className="flex flex-col">
+                        <span>智能体角色库</span>
+                        <span className="text-[10px] text-slate-400 font-normal">多智能体协同配置</span>
+                      </div>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrentView("tools");
+                        setIsAssetsMenuOpen(false);
+                      }}
+                      className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 hover:bg-slate-50 text-xs transition cursor-pointer ${
+                        currentView === "tools" ? "font-bold text-blue-600 bg-blue-50/60" : "text-slate-700"
+                      }`}
+                    >
+                      <Wrench className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <div className="flex flex-col">
+                        <span>扩展工具市场</span>
+                        <span className="text-[10px] text-slate-400 font-normal">受控执行与计算工具</span>
+                      </div>
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <button
