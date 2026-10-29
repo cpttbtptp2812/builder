@@ -4,11 +4,9 @@ import ChatPlaygroundPage from "./pages/chat/ChatPlaygroundPage";
 import AgentsListPage from "./pages/agents/AgentsListPage";
 import KnowledgePage from "./pages/knowledge/KnowledgePage";
 import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
-import AuditLogsPage from "./pages/logs/AuditLogsPage";
-import SettingsPage from "./pages/settings/SettingsPage";
 import WorkflowsListPage from "./pages/workflows/WorkflowsListPage";
-import PipelineConfigModal from "./components/workflow/PipelineConfigModal";
-import { WorkflowWaterfallDrawer } from "./components/workflow/WorkflowWaterfallDrawer";
+import WorkflowDesignerPage from "./pages/workflows/WorkflowDesignerPage";
+import SystemSettingsPage from "./pages/settings/SystemSettingsPage";
 import { NavTab, AgentItem, AuditLogItem, PipelineItem } from "./types/platform";
 import {
   fetchAgentsApi,
@@ -18,10 +16,11 @@ import {
   checkBackendHealth,
   fetchWorkflowsApi,
   deleteWorkflowApi,
-  runWorkflowApi,
   fetchKnowledgeChunksApi,
   fetchToolsApi,
 } from "./services/api";
+import { WorkflowExecutionModal } from "./components/workflow/WorkflowExecutionModal";
+import { useToast } from "./context/ToastContext";
 import {
   Bot,
   Database,
@@ -31,36 +30,43 @@ import {
   Sparkles,
   MessageSquare,
   ArrowRight,
-  X,
   Layers,
+  BookOpen,
+  Activity,
+  ChevronDown,
 } from "lucide-react";
 
-export default function App() {
-  const [currentView, setCurrentView] = useState<"home" | "chat">("home");
-  const [currentTab, setCurrentTab] = useState<NavTab>("chat");
+export type ViewMode =
+  | "home"
+  | "chat"
+  | "workflows"
+  | "knowledge"
+  | "agents"
+  | "tools"
+  | "settings"
+  | "designer";
 
-  // 全局业务数据状态 (100% 真实后端持久化)
+export default function App() {
+  const toast = useToast();
+  const [currentView, setCurrentView] = useState<ViewMode>("home");
+
+  // 全局业务状态 (100% 真实后端持久化)
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [currentAgent, setCurrentAgent] = useState<AgentItem | null>(null);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [health, setHealth] = useState<{ ok: boolean; info?: any }>({ ok: false });
 
-  // 业务流水线与指标状态 (100% 数据库持久化)
+  // 业务流水线状态 (纯动态数据库读取)
   const [workflows, setWorkflows] = useState<PipelineItem[]>([]);
   const [knowledgeCount, setKnowledgeCount] = useState<number>(0);
   const [toolsCount, setToolsCount] = useState<number>(0);
-  const [isWorkflowModalOpen, setIsWorkflowModalOpen] = useState(false);
   const [editingWorkflow, setEditingWorkflow] = useState<PipelineItem | null>(null);
-  const [initialChatPrompt, setInitialChatPrompt] = useState<string | undefined>(undefined);
-  const [activeWaterfall, setActiveWaterfall] = useState<{
-    workflow: PipelineItem;
-    instanceId: string;
-  } | null>(null);
+  const [initialChatPrompt, setInitialChatPrompt] = useState<
+    { prompt: string; autoSend?: boolean } | string | undefined
+  >(undefined);
+  const [executingWorkflow, setExecutingWorkflow] = useState<PipelineItem | null>(null);
 
-  // 类似豆包/元宝的全局设置弹窗模式 (当打开 非chat 页面时，以模态抽屉/弹出层呈现，绝不污染主页纯净大对话框)
-  const [activeModal, setActiveModal] = useState<NavTab | null>(null);
-
-  // 1. 页面挂载时从真实后端探活并拉取智能体、业务流水线与审计日志
+  // 1. 初始化探测后端健康度并加载业务数据
   useEffect(() => {
     checkBackendHealth().then((h) => setHealth(h));
 
@@ -75,16 +81,17 @@ export default function App() {
     });
 
     fetchAuditLogsApi().then((logList) => {
-      if (logList && logList.length > 0) {
-        setLogs(logList);
-      }
+      if (logList && logList.length > 0) setLogs(logList);
     });
 
-    fetchWorkflowsApi().then((wfList) => {
-      if (wfList && wfList.length > 0) {
-        setWorkflows(wfList);
-      }
-    });
+    fetchWorkflowsApi()
+      .then((wfList) => {
+        setWorkflows(wfList || []);
+      })
+      .catch((err) => {
+        console.warn("Workflows fetch returned empty or error", err);
+        setWorkflows([]);
+      });
 
     fetchKnowledgeChunksApi().then((chunks) => {
       if (chunks) setKnowledgeCount(chunks.length);
@@ -101,7 +108,7 @@ export default function App() {
 
   const handleOpenChat = (agent: AgentItem) => {
     setCurrentAgent(agent);
-    setActiveModal(null);
+    setCurrentView("chat");
   };
 
   const handleUpdateAgent = async (updated: AgentItem) => {
@@ -116,11 +123,12 @@ export default function App() {
 
   const handleDeleteAgent = async (id: string) => {
     if (agents.length <= 1) {
-      alert("请至少保留一个智能体！");
+      toast.warning("系统至少需保留一个可用智能体！", "无法删除");
       return;
     }
     try {
       await deleteAgentApi(id);
+      toast.success("智能体已从数据库中彻底移除", "删除成功");
     } catch (err) {
       console.warn("Delete API call", err);
     }
@@ -142,37 +150,25 @@ export default function App() {
     }
   };
 
-  // 业务流水线管理动作：立即启动后端真实 DAG 引擎并唤起动态甘特瀑布
-  const handleLaunchWorkflow = async (wf: PipelineItem, customInput?: string) => {
-    try {
-      const res = await runWorkflowApi({
-        workflowId: wf.id,
-        inputParams: customInput || wf.promptTemplate,
-        triggeredBy: "admin_sec",
-      });
-      setActiveWaterfall({
-        workflow: wf,
-        instanceId: res.instanceId,
-      });
-    } catch (err) {
-      alert("启动流水线失败: " + String(err));
-    }
+  // 业务流水线直接在智能工作台左右分屏实时执行
+  const handleLaunchWorkflow = (wf: PipelineItem) => {
+    setInitialChatPrompt({ prompt: wf.promptTemplate, autoSend: true });
+    setCurrentView("chat");
   };
 
   const handleFillPromptToChat = (wf: PipelineItem) => {
-    setInitialChatPrompt(wf.promptTemplate);
+    setInitialChatPrompt({ prompt: wf.promptTemplate, autoSend: false });
     setCurrentView("chat");
-    setActiveModal(null);
   };
 
   const handleOpenCreateWorkflow = () => {
     setEditingWorkflow(null);
-    setIsWorkflowModalOpen(true);
+    setCurrentView("designer");
   };
 
   const handleOpenEditWorkflow = (wf: PipelineItem) => {
     setEditingWorkflow(wf);
-    setIsWorkflowModalOpen(true);
+    setCurrentView("designer");
   };
 
   const handleSaveWorkflow = (saved: PipelineItem) => {
@@ -186,20 +182,22 @@ export default function App() {
     try {
       await deleteWorkflowApi(id);
       setWorkflows((prev) => prev.filter((w) => w.id !== id));
+      toast.success("业务流水线已从数据库中彻底移除", "删除成功");
     } catch (err) {
       console.error("Failed to delete workflow", err);
+      toast.error("删除流水线失败，请检查网络", "删除异常");
     }
   };
 
   return (
     <div className="relative flex flex-col h-screen w-screen bg-[#FAFBFC] text-slate-800 font-sans overflow-hidden select-none">
-      {/* ────────────────── 全站统一 SaaS 顶部导航栏 ────────────────── */}
+      {/* 顶部企业级导航栏 */}
       <header className="h-14 px-6 border-b border-slate-200/80 bg-white/95 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
         <div className="flex items-center gap-6">
           <div
             onClick={() => setCurrentView("home")}
             className="flex items-center gap-2.5 cursor-pointer group"
-            title="返回系统首页门户"
+            title="返回系统首页"
           >
             <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
               <Sparkles className="w-4 h-4" />
@@ -207,7 +205,7 @@ export default function App() {
             <div className="flex items-center gap-1.5">
               <span className="font-black text-slate-900 tracking-tight text-base">OwnAgent</span>
               <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                v2.4
+                企业版
               </span>
             </div>
           </div>
@@ -221,216 +219,212 @@ export default function App() {
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              平台首页
+              首页
             </button>
             <button
               onClick={() => setCurrentView("chat")}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
                 currentView === "chat"
                   ? "bg-white text-blue-600 shadow-2xs font-bold"
                   : "text-slate-600 hover:text-slate-900"
               }`}
             >
-              智能工作台
+              <MessageSquare className="w-3.5 h-3.5" />
+              <span>智能工作台</span>
+            </button>
+            <button
+              onClick={() => setCurrentView("workflows")}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                currentView === "workflows" || currentView === "designer"
+                  ? "bg-white text-blue-600 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Layers className="w-3.5 h-3.5" />
+              <span>方案编排中心</span>
+            </button>
+
+            {/* 全局底层资产池 (收敛管理，不再让客户误以为要依次跨 4 个 Tab 录入) */}
+            <div className="relative group flex items-center">
+              <button
+                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                  currentView === "knowledge" || currentView === "agents" || currentView === "tools"
+                    ? "bg-white text-blue-600 shadow-2xs font-bold"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                <Database className="w-3.5 h-3.5" />
+                <span>底层资产库</span>
+                <ChevronDown className="w-3 h-3 text-slate-400 group-hover:rotate-180 transition-transform" />
+              </button>
+
+              <div className="absolute top-full left-0 mt-1 w-44 bg-white rounded-2xl shadow-xl border border-slate-200 py-1.5 hidden group-hover:block animate-in fade-in z-50">
+                <button
+                  onClick={() => setCurrentView("knowledge")}
+                  className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-xs transition cursor-pointer ${
+                    currentView === "knowledge" ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
+                  }`}
+                >
+                  <BookOpen className="w-3.5 h-3.5 text-blue-600" />
+                  <span>企业知识库</span>
+                </button>
+                <button
+                  onClick={() => setCurrentView("agents")}
+                  className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-xs transition cursor-pointer ${
+                    currentView === "agents" ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
+                  }`}
+                >
+                  <Bot className="w-3.5 h-3.5 text-indigo-600" />
+                  <span>智能体角色库</span>
+                </button>
+                <button
+                  onClick={() => setCurrentView("tools")}
+                  className={`w-full px-3 py-2 text-left flex items-center gap-2 hover:bg-slate-50 text-xs transition cursor-pointer ${
+                    currentView === "tools" ? "font-bold text-blue-600 bg-blue-50/50" : "text-slate-700"
+                  }`}
+                >
+                  <Wrench className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>扩展工具市场</span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setCurrentView("settings")}
+              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
+                currentView === "settings"
+                  ? "bg-white text-blue-600 shadow-2xs font-bold"
+                  : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>系统与审计</span>
             </button>
           </nav>
         </div>
 
         <div className="flex items-center gap-2.5">
-          <button
-            onClick={() => setActiveModal("settings")}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition cursor-pointer"
-            title="打开系统控制中心"
-          >
-            <Settings className="w-3.5 h-3.5 text-slate-500" />
-            <span>系统控制中心</span>
-          </button>
-
-          {currentView === "home" ? (
-            <button
-              onClick={() => setCurrentView("chat")}
-              className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20 transition cursor-pointer"
-            >
-              <span>进入工作台</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
-          ) : null}
+          <span className="text-[11px] font-medium text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200/60 hidden sm:inline-block">
+            <span
+              className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${
+                health.ok ? "bg-emerald-500 animate-pulse" : "bg-amber-400"
+              }`}
+            />
+            {health.ok ? "系统运行正常" : "正在连接后端服务"}
+          </span>
         </div>
       </header>
 
-      {/* ────────────────── 核心主视窗容器 ────────────────── */}
+      {/* 主视图渲染 */}
       <main className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden">
-        {currentView === "home" ? (
+        {currentView === "home" && (
           <HomePage
             onEnterWorkbench={() => setCurrentView("chat")}
-            onOpenModal={(tab) => setActiveModal(tab)}
-            onOpenFinOps={() => {
+            onEnterWorkbenchWithPrompt={(prompt, autoSend = true) => {
+              setInitialChatPrompt({ prompt, autoSend });
               setCurrentView("chat");
             }}
-            workflows={workflows}
             onLaunchWorkflow={handleLaunchWorkflow}
-            onOpenCreateWorkflow={handleOpenCreateWorkflow}
-            onOpenEditWorkflow={handleOpenEditWorkflow}
-            onDeleteWorkflow={handleDeleteWorkflow}
-            agentsCount={agents.length}
-            knowledgeCount={knowledgeCount}
-            toolsCount={toolsCount}
-            logsCount={logs.length}
+            onOpenModal={(tab) => {
+              if (tab === "workflows") setCurrentView("workflows");
+              else if (tab === "knowledge") setCurrentView("knowledge");
+              else if (tab === "agents") setCurrentView("agents");
+              else if (tab === "tools") setCurrentView("tools");
+              else setCurrentView("settings");
+            }}
+            workflows={workflows}
           />
-        ) : (
+        )}
+
+        {currentView === "chat" && (
           <ChatPlaygroundPage
             agents={agents}
             currentAgent={currentAgent}
             onSelectAgent={setCurrentAgent}
             onAddAuditLog={handleAddAuditLog}
-            onNavigateSettings={() => setActiveModal("settings")}
-            onOpenModal={(tab: NavTab) => setActiveModal(tab)}
+            onNavigateSettings={() => setCurrentView("settings")}
+            onOpenModal={(tab: NavTab) => {
+              if (tab === "workflows") setCurrentView("workflows");
+              else if (tab === "knowledge") setCurrentView("knowledge");
+              else if (tab === "agents") setCurrentView("agents");
+              else if (tab === "tools") setCurrentView("tools");
+              else setCurrentView("settings");
+            }}
             onBackHome={() => setCurrentView("home")}
             workflows={workflows}
             initialPrompt={initialChatPrompt}
             onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
             onOpenCreateWorkflow={handleOpenCreateWorkflow}
+            onNavigateStudio={() => setCurrentView("workflows")}
             onRunWorkflow={handleLaunchWorkflow}
+          />
+        )}
+
+        {currentView === "workflows" && (
+          <WorkflowsListPage
+            workflows={workflows}
+            onLaunchWorkflow={handleLaunchWorkflow}
+            onFillPrompt={handleFillPromptToChat}
+            onOpenCreate={handleOpenCreateWorkflow}
+            onOpenEdit={handleOpenEditWorkflow}
+            onDelete={handleDeleteWorkflow}
+            onSaveWorkflow={handleSaveWorkflow}
+          />
+        )}
+
+        {currentView === "knowledge" && (
+          <KnowledgePage />
+        )}
+
+        {currentView === "agents" && (
+          <AgentsListPage
+            agents={agents}
+            onOpenChat={handleOpenChat}
+            onUpdateAgent={handleUpdateAgent}
+            onDeleteAgent={handleDeleteAgent}
+            onCreateAgent={handleCreateAgent}
+          />
+        )}
+
+        {currentView === "tools" && (
+          <ToolsMarketPage />
+        )}
+
+        {currentView === "settings" && (
+          <SystemSettingsPage
+            logs={logs}
+            health={health}
+            onEnterWorkbench={() => setCurrentView("chat")}
+          />
+        )}
+
+        {currentView === "designer" && (
+          <WorkflowDesignerPage
+            workflow={editingWorkflow}
+            agents={agents}
+            onBack={() => setCurrentView("workflows")}
+            onSave={handleSaveWorkflow}
+            onSaveAndLaunch={(saved, prompt) => {
+              handleSaveWorkflow(saved);
+              setCurrentView("chat");
+              if (prompt) {
+                setInitialChatPrompt({ prompt, autoSend: true });
+              }
+            }}
           />
         )}
       </main>
 
-      {/* ────────────────── 3. 模态弹出层 (智能体、知识库、工具、设置全部在弹窗内优雅处理) ────────────────── */}
-      {activeModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm animate-in fade-in duration-200 p-4 sm:p-6 lg:p-10">
-          <div className="relative w-full max-w-5xl h-[85vh] bg-white rounded-3xl border border-slate-200 shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            {/* 弹窗顶栏 */}
-            <div className="h-14 px-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/80 shrink-0">
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-black text-slate-800">控制中心</span>
-
-                {/* 固定位置的选项卡 */}
-                <div className="flex items-center gap-1 bg-slate-200/70 p-1 rounded-xl text-xs font-semibold">
-                  <button
-                    onClick={() => setActiveModal("settings")}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      activeModal === "settings"
-                        ? "bg-white text-blue-600 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    模型接入
-                  </button>
-                  <button
-                    onClick={() => setActiveModal("workflows")}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      activeModal === "workflows"
-                        ? "bg-white text-blue-600 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    业务流水线
-                  </button>
-                  <button
-                    onClick={() => setActiveModal("agents")}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      activeModal === "agents"
-                        ? "bg-white text-blue-600 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    智能体
-                  </button>
-                  <button
-                    onClick={() => setActiveModal("knowledge")}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      activeModal === "knowledge"
-                        ? "bg-white text-blue-600 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    知识库
-                  </button>
-                  <button
-                    onClick={() => setActiveModal("tools")}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      activeModal === "tools"
-                        ? "bg-white text-blue-600 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    工具
-                  </button>
-                  <button
-                    onClick={() => setActiveModal("logs")}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                      activeModal === "logs"
-                        ? "bg-white text-blue-600 shadow-xs font-bold"
-                        : "text-slate-600 hover:text-slate-900"
-                    }`}
-                  >
-                    日志
-                  </button>
-                </div>
-              </div>
-
-              {/* 关闭弹窗返回主页面 */}
-              <button
-                onClick={() => {
-                  setActiveModal(null);
-                  window.dispatchEvent(new Event("system-config-updated"));
-                }}
-                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 hover:text-slate-900 flex items-center justify-center transition cursor-pointer"
-                title="关闭并返回对话"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* 弹窗内容工作区 */}
-            <div className="flex-1 overflow-y-auto">
-              {activeModal === "workflows" && (
-                <WorkflowsListPage
-                  workflows={workflows}
-                  onLaunchWorkflow={handleLaunchWorkflow}
-                  onFillPrompt={handleFillPromptToChat}
-                  onOpenCreate={handleOpenCreateWorkflow}
-                  onOpenEdit={handleOpenEditWorkflow}
-                  onDelete={handleDeleteWorkflow}
-                />
-              )}
-
-              {activeModal === "agents" && (
-                <AgentsListPage
-                  agents={agents}
-                  onOpenChat={handleOpenChat}
-                  onUpdateAgent={handleUpdateAgent}
-                  onDeleteAgent={handleDeleteAgent}
-                  onCreateAgent={handleCreateAgent}
-                />
-              )}
-
-              {activeModal === "knowledge" && <KnowledgePage />}
-
-              {activeModal === "tools" && <ToolsMarketPage />}
-
-              {activeModal === "logs" && <AuditLogsPage logs={logs} />}
-
-              {activeModal === "settings" && <SettingsPage />}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 4. 流水线增改配置弹窗 */}
-      <PipelineConfigModal
-        isOpen={isWorkflowModalOpen}
-        onClose={() => setIsWorkflowModalOpen(false)}
-        initialPipeline={editingWorkflow}
-        onSaved={handleSaveWorkflow}
-      />
-
-      {/* 5. 业务流水线全链路执行瀑布抽屉 */}
-      <WorkflowWaterfallDrawer
-        isOpen={!!activeWaterfall}
-        onClose={() => setActiveWaterfall(null)}
-        workflow={activeWaterfall?.workflow || null}
-        instanceId={activeWaterfall?.instanceId || null}
+      {/* 业务流水线全链路执行弹窗 (支持一键无缝跳转至工作台左右分屏实时执行) */}
+      <WorkflowExecutionModal
+        isOpen={!!executingWorkflow}
+        onClose={() => setExecutingWorkflow(null)}
+        workflow={executingWorkflow}
+        onSwitchToChat={(prompt) => {
+          setInitialChatPrompt({ prompt, autoSend: true });
+          setCurrentView("chat");
+          setExecutingWorkflow(null);
+        }}
       />
     </div>
   );

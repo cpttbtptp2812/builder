@@ -69,6 +69,10 @@ CREATE TABLE IF NOT EXISTS mcp_tool (
     display_name VARCHAR(128) NOT NULL,
     description TEXT,
     category VARCHAR(64) NOT NULL DEFAULT 'BUSINESS',
+    risk_level VARCHAR(32) DEFAULT 'LOW',
+    is_safe BOOLEAN DEFAULT TRUE,
+    timeout_ms INT DEFAULT 5000,
+    parameters_schema LONGTEXT,
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -107,24 +111,34 @@ CREATE TABLE IF NOT EXISTS audit_log (
 CREATE TABLE IF NOT EXISTS workflow_definition (
     id VARCHAR(64) PRIMARY KEY,
     name VARCHAR(128) NOT NULL,
-    description TEXT,
-    dsl_json LONGTEXT,
-    version INT DEFAULT 1,
-    status VARCHAR(32) DEFAULT 'ACTIVE',
+    description VARCHAR(512),
+    version VARCHAR(32) DEFAULT 'v1.0.0',
+    category VARCHAR(64) DEFAULT 'BUSINESS',
+    badge VARCHAR(64),
+    icon VARCHAR(32) DEFAULT 'ShieldCheck',
+    prompt_template LONGTEXT,
+    tags VARCHAR(256),
+    enabled BOOLEAN NOT NULL DEFAULT TRUE,
+    sort_order INT DEFAULT 0,
+    topology_json LONGTEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_wf_enabled_sort (enabled, sort_order)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 10. 工作流运行实例表 (Workflow Instance)
 CREATE TABLE IF NOT EXISTS workflow_instance (
     id VARCHAR(64) PRIMARY KEY,
-    workflow_id VARCHAR(64) NOT NULL,
+    workflow_id VARCHAR(64),
     status VARCHAR(32) NOT NULL DEFAULT 'RUNNING',
-    start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    end_time DATETIME,
-    variables_json LONGTEXT,
-    error_message TEXT,
-    INDEX idx_inst_wf (workflow_id)
+    triggered_by VARCHAR(64),
+    current_node_id VARCHAR(64),
+    input_params LONGTEXT,
+    context_data LONGTEXT,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    finished_at DATETIME,
+    INDEX idx_inst_wf (workflow_id),
+    INDEX idx_inst_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 11. 节点执行明细表 (Node Execution)
@@ -133,12 +147,16 @@ CREATE TABLE IF NOT EXISTS node_execution (
     instance_id VARCHAR(64) NOT NULL,
     node_id VARCHAR(64) NOT NULL,
     node_name VARCHAR(128),
+    node_type VARCHAR(64),
     status VARCHAR(32) NOT NULL,
-    input_json LONGTEXT,
-    output_json LONGTEXT,
-    start_time DATETIME DEFAULT CURRENT_TIMESTAMP,
-    end_time DATETIME,
-    INDEX idx_exec_inst (instance_id)
+    input_payload LONGTEXT,
+    output_payload LONGTEXT,
+    cost_tokens INT DEFAULT 0,
+    latency_ms BIGINT DEFAULT 0,
+    started_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    ended_at DATETIME,
+    INDEX idx_exec_inst (instance_id),
+    INDEX idx_exec_node (node_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 12. 人工介入审批单据表 (Approval Ticket)
@@ -146,13 +164,16 @@ CREATE TABLE IF NOT EXISTS approval_ticket (
     id VARCHAR(64) PRIMARY KEY,
     instance_id VARCHAR(64) NOT NULL,
     node_id VARCHAR(64) NOT NULL,
-    ticket_title VARCHAR(255) NOT NULL,
-    description TEXT,
+    policy_level VARCHAR(32) DEFAULT 'P0_CRITICAL',
+    risk_score DOUBLE DEFAULT 0.85,
+    operation_summary LONGTEXT,
     status VARCHAR(32) NOT NULL DEFAULT 'PENDING',
-    approver VARCHAR(64),
-    comment TEXT,
+    operator_id VARCHAR(64),
+    signature_hash VARCHAR(128),
+    audit_reason VARCHAR(512),
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
     decided_at DATETIME,
+    INDEX idx_ticket_inst (instance_id),
     INDEX idx_ticket_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 

@@ -6,7 +6,7 @@ export type StepActionType =
   | "INPUT_EXTRACT"   // 字段映射与数据提取
   | "RULE_CHECK"      // 规则计算与判断
   | "HTTP_TOOL"       // 外部 API / 接口调用
-  | "HITL_APPROVAL"   // 2PC 人工安全审批门闩
+  | "HITL_APPROVAL"   // 人工安全审批与复核
   | "LLM_REDUCE";     // 大模型总结与结果输出
 
 export interface PipelineStep {
@@ -43,6 +43,7 @@ export interface PipelineItem {
   updatedAt?: string;
   topologyJson?: string;
   steps?: PipelineStep[];
+  agentId?: string;
 }
 
 export interface AgentItem {
@@ -147,3 +148,4 @@ export interface WorkflowEventMessageData {
   timestamp?: number;
 }
 
+export const DEFAULT_ENTERPRISE_WORKFLOWS: PipelineItem[] = [];

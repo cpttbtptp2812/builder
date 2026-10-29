@@ -27,13 +27,23 @@ export interface ChatStreamPayload {
   enableRAG?: boolean;
 }
 
+export interface TraceStepData {
+  step: number;
+  name: string;
+  title: string;
+  status: "RUNNING" | "DONE" | "SKIPPED" | "BLOCKED" | "STREAMING" | "HIT" | "MISS" | string;
+  timestamp: number;
+  [key: string]: any;
+}
+
 export interface StreamEventHandlers {
   onReasoning?: (reasoning: string) => void;
   onToolCall?: (tool: { tool: string; displayName?: string; status?: string; duration?: string; result?: any }) => void;
   onApprovalRequired?: (ticket: { ticketId: string; sql?: string; warning?: string; status: string }) => void;
-  onCitations?: (citations: any[]) => void;
+  onCitations?: (citations: any[], ragStats?: any) => void;
+  onTraceStep?: (step: TraceStepData) => void;
   onDelta?: (chunk: string) => void;
-  onFinish?: (meta: { tokens: number; duration: string }) => void;
+  onFinish?: (meta: any) => void;
   onError?: (err: string) => void;
 }
 
@@ -158,6 +168,10 @@ export async function fetchMessagesApi(sessionId: string): Promise<any[]> {
       content: m.content,
       reasoning: m.reasoning,
       citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
+      traceSteps: m.traceStepsJson ? JSON.parse(m.traceStepsJson) : {},
+      toolCalls: m.toolCallsJson ? JSON.parse(m.toolCallsJson) : undefined,
+      approvalTicket: m.approvalTicketJson ? JSON.parse(m.approvalTicketJson) : undefined,
+      trace: m.traceJson ? JSON.parse(m.traceJson) : undefined,
       tokens: m.tokens,
       duration: m.duration,
       isCached: !!m.isCached,
@@ -215,54 +229,73 @@ export async function streamChatFromBackend(
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      if (signal?.aborted) break;
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n\n");
-    buffer = lines.pop() || "";
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
 
-    for (const block of lines) {
-      if (!block.trim()) continue;
-      const eventMatch = block.match(/event:(.*)/);
-      const dataMatch = block.match(/data:(.*)/);
+      for (const block of lines) {
+        if (!block.trim()) continue;
+        const eventMatch = block.match(/event:(.*)/);
+        const dataMatch = block.match(/data:(.*)/);
 
-      const event = eventMatch ? eventMatch[1].trim() : "message";
-      const data = dataMatch ? dataMatch[1].trim() : "";
+        const event = eventMatch ? eventMatch[1].trim() : "message";
+        const data = dataMatch ? dataMatch[1].trim() : "";
 
-      if (event === "reasoning" && handlers.onReasoning) {
-        handlers.onReasoning(data);
-      } else if (event === "approval_required" && handlers.onApprovalRequired) {
-        try {
-          handlers.onApprovalRequired(JSON.parse(data));
-        } catch {
-          handlers.onApprovalRequired({ ticketId: data, status: "PENDING" });
+        if (event === "trace_step" && handlers.onTraceStep) {
+          try {
+            handlers.onTraceStep(JSON.parse(data));
+          } catch {}
+        } else if (event === "reasoning" && handlers.onReasoning) {
+          handlers.onReasoning(data);
+        } else if (event === "approval_required" && handlers.onApprovalRequired) {
+          try {
+            handlers.onApprovalRequired(JSON.parse(data));
+          } catch {
+            handlers.onApprovalRequired({ ticketId: data, status: "PENDING" });
+          }
+        } else if (event === "citations" && handlers.onCitations) {
+          try {
+            const parsed = JSON.parse(data);
+            if (Array.isArray(parsed)) {
+              handlers.onCitations(parsed);
+            } else if (parsed && Array.isArray(parsed.items)) {
+              handlers.onCitations(parsed.items, parsed);
+            } else {
+              handlers.onCitations([]);
+            }
+          } catch {
+            handlers.onCitations([]);
+          }
+        } else if (event === "tool" && handlers.onToolCall) {
+          try {
+            handlers.onToolCall(JSON.parse(data));
+          } catch {
+            handlers.onToolCall({ tool: data });
+          }
+        } else if (event === "delta" && handlers.onDelta) {
+          handlers.onDelta(data);
+        } else if (event === "finish" && handlers.onFinish) {
+          try {
+            handlers.onFinish(JSON.parse(data));
+          } catch {
+            handlers.onFinish({ tokens: 0, duration: "0s" });
+          }
+        } else if (event === "error" && handlers.onError) {
+          handlers.onError(data);
         }
-      } else if (event === "citations" && handlers.onCitations) {
-        try {
-          handlers.onCitations(JSON.parse(data));
-        } catch {
-          handlers.onCitations([]);
-        }
-      } else if (event === "tool" && handlers.onToolCall) {
-        try {
-          handlers.onToolCall(JSON.parse(data));
-        } catch {
-          handlers.onToolCall({ tool: data });
-        }
-      } else if (event === "delta" && handlers.onDelta) {
-        handlers.onDelta(data);
-      } else if (event === "finish" && handlers.onFinish) {
-        try {
-          handlers.onFinish(JSON.parse(data));
-        } catch {
-          handlers.onFinish({ tokens: 0, duration: "0s" });
-        }
-      } else if (event === "error" && handlers.onError) {
-        handlers.onError(data);
       }
     }
+  } catch (err: any) {
+    if (signal?.aborted || err?.name === "AbortError") {
+      return;
+    }
+    throw err;
   }
 }
 
@@ -303,6 +336,40 @@ export async function testToolApi(toolName: string, payload: any): Promise<any> 
   });
   if (!res.ok) throw new Error("Failed to execute tool");
   return await res.json();
+}
+
+export async function saveToolApi(tool: {
+  id: string;
+  name?: string;
+  displayName?: string;
+  desc?: string;
+  category?: string;
+  isEnabled?: boolean;
+  paramsSchema?: string;
+}): Promise<any> {
+  const payload = {
+    id: tool.id,
+    serverName: "custom-plugin",
+    functionName: tool.name || tool.id,
+    displayName: tool.displayName || tool.name,
+    description: tool.desc || "",
+    category: tool.category || "BUSINESS",
+    enabled: tool.isEnabled !== false,
+    parametersSchema: tool.paramsSchema || "{}",
+  };
+  const res = await fetch("/api/tools", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error("保存工具失败");
+  return await res.json();
+}
+
+export async function deleteToolApi(id: string): Promise<boolean> {
+  const res = await fetch(`/api/tools/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("删除工具失败");
+  return true;
 }
 
 // ==========================================
@@ -370,6 +437,19 @@ export async function deleteKnowledgeChunkApi(id: string): Promise<void> {
   if (!res.ok) throw new Error("Failed to delete knowledge chunk");
 }
 
+export async function updateKnowledgeChunkApi(
+  id: string,
+  data: Partial<KnowledgeChunkItem>
+): Promise<KnowledgeChunkItem> {
+  const res = await fetch(`/api/knowledge/${id}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) throw new Error("Failed to update knowledge chunk");
+  return await res.json();
+}
+
 export async function searchKnowledgeApi(query: string): Promise<RagRecallItem[]> {
   const res = await fetch("/api/knowledge/search", {
     method: "POST",
@@ -435,7 +515,7 @@ export async function decideApprovalApi(
     body: JSON.stringify({
       ticketId,
       action,
-      approver: approver || "合规安全架构师",
+      approver: approver || "系统管理员",
     }),
   });
   if (!res.ok) {
@@ -610,6 +690,16 @@ export async function runWorkflowApi(params: {
   });
   if (!res.ok) throw new Error("Failed to run workflow");
   return res.json();
+}
+
+export async function fetchWorkflowInstancesListApi(): Promise<WorkflowInstanceData[]> {
+  try {
+    const res = await fetch("/api/workflow/instances");
+    if (!res.ok) return [];
+    return await res.json();
+  } catch {
+    return [];
+  }
 }
 
 export async function fetchWorkflowInstanceApi(instanceId: string): Promise<{

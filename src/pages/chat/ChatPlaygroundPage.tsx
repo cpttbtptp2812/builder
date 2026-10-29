@@ -20,6 +20,8 @@ import {
   ExternalLink,
   Coins,
   Zap,
+  Layers,
+  ShieldAlert,
 } from "lucide-react";
 import { AgentItem, AuditLogItem, PipelineItem } from "../../types/platform";
 import {
@@ -31,7 +33,9 @@ import {
   decideApprovalApi,
   SessionItem,
 } from "../../services/api";
+import { useToast } from "@/context/ToastContext";
 import { TraceInspectorDrawer, ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
+import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
 
 export interface CitationItem {
   chunkId: string;
@@ -67,12 +71,27 @@ interface Message {
   isThinking?: boolean;
   activeToolName?: string | null;
   citations?: CitationItem[];
+  ragStats?: {
+    totalDocs?: number;
+    bm25Candidates?: number;
+    noiseFiltered?: number;
+    validCount?: number;
+    mode?: string;
+    isRealVector?: boolean;
+  };
+  traceSteps?: Record<number, any>;
   toolCalls?: ToolCallItem[];
   approvalTicket?: ApprovalTicketItem;
   tokens?: number;
   duration?: string;
   isCached?: boolean;
   trace?: ExecutionTraceData;
+  userPrompt?: string;
+  modelName?: string;
+  sessionId?: string;
+  enableRAG?: boolean;
+  enableThinking?: boolean;
+  enableWebSearch?: boolean;
 }
 
 interface ChatPlaygroundProps {
@@ -84,11 +103,49 @@ interface ChatPlaygroundProps {
   onOpenModal?: (tab: any) => void;
   onBackHome?: () => void;
   workflows?: PipelineItem[];
-  initialPrompt?: string;
+  initialPrompt?: string | { prompt: string; autoSend?: boolean };
   onClearInitialPrompt?: () => void;
   onOpenCreateWorkflow?: () => void;
   onRunWorkflow?: (wf: PipelineItem) => void;
+  onNavigateStudio?: () => void;
 }
+
+// 渲染正文内的引用角标 (支持 [1], [2], [^1] 式真实可点击锚点)
+const renderContentWithCitations = (
+  content: string,
+  citations?: CitationItem[],
+  onCitationClick?: (index: number) => void
+) => {
+  if (!content) return null;
+  const citationRegex = /(\[\^?\d+\])/g;
+  const parts = content.split(citationRegex);
+
+  return (
+    <span>
+      {parts.map((part, index) => {
+        const match = part.match(/\[\^?(\d+)\]/);
+        if (match) {
+          const num = parseInt(match[1], 10);
+          const citation = citations && citations[num - 1];
+          return (
+            <sup
+              key={index}
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onCitationClick) onCitationClick(num - 1);
+              }}
+              className="inline-flex items-center px-1 py-0.2 mx-0.5 rounded text-[10px] font-bold font-mono bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 cursor-pointer transition select-none shadow-2xs"
+              title={citation ? `引用来源 [${num}]: ${citation.docTitle}` : `引用来源 [${num}]`}
+            >
+              [{num}]
+            </sup>
+          );
+        }
+        return <span key={index}>{part}</span>;
+      })}
+    </span>
+  );
+};
 
 export default function ChatPlaygroundPage({
   agents = [],
@@ -103,7 +160,9 @@ export default function ChatPlaygroundPage({
   onClearInitialPrompt,
   onOpenCreateWorkflow,
   onRunWorkflow,
+  onNavigateStudio,
 }: ChatPlaygroundProps) {
+  const toast = useToast();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string>("");
   const [messages, setMessages] = useState<Message[]>([]);
@@ -146,17 +205,42 @@ export default function ChatPlaygroundPage({
     }
   });
 
-  // 全链路执行分析与知识溯源右侧抽屉
+  // 全链路执行分析与知识溯源面板 (支持左右分栏 split 与浮层抽屉 drawer 自由切换)
   const [activeTraceDrawer, setActiveTraceDrawer] = useState<{
     messageId: string;
-    defaultTab: "waterfall" | "knowledge" | "reasoning" | "finops";
+    defaultTab: "lifecycle" | "waterfall" | "knowledge" | "reasoning" | "finops";
+    highlightCitationIndex?: number;
   } | null>(null);
+  const [traceLayoutMode, setTraceLayoutMode] = useState<"split" | "drawer">("split");
+  const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isGeneratingRef = useRef<boolean>(false);
+  const autoSentPromptRef = useRef<string | null>(null);
   const newlyCreatedSessionIdRef = useRef<string | null>(null);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(null);
+
+  // 本地持久化存储富消息缓存（刷新页面或切换会话时，完整保留 traceSteps、toolCalls 与审批工单）
+  const LOCAL_CACHE_KEY = "ownagent_rich_session_cache_v2";
+  const sessionMessagesCacheRef = useRef<Record<string, Message[]>>((() => {
+    try {
+      const raw = localStorage.getItem(LOCAL_CACHE_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  })());
+
+  useEffect(() => {
+    if (currentSessionId && messages.length > 0) {
+      sessionMessagesCacheRef.current[currentSessionId] = messages;
+      try {
+        localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(sessionMessagesCacheRef.current));
+      } catch {}
+    }
+  }, [messages, currentSessionId]);
 
   // 1. 初始化拉取会话列表、系统配置与大模型真实健康探针
   useEffect(() => {
@@ -239,22 +323,37 @@ export default function ChatPlaygroundPage({
     };
   }, []);
 
-  // 2. 切换会话时加载历史消息 (严密防竞态，发消息创建会话期间绝对禁止清空覆盖)
+  // 2. 切换会话时加载历史消息 (严密防竞态与富消息状态保留)
+  const currentSessionIdRef = useRef(currentSessionId);
+  currentSessionIdRef.current = currentSessionId;
+
   useEffect(() => {
-    if (isGenerating) return;
+    if (isGeneratingRef.current) return;
 
     if (currentSessionId) {
-      // 若是刚刚在当前页面由发送消息触发创建的新会话，严禁拉取空历史覆盖当前页面气泡
       if (newlyCreatedSessionIdRef.current === currentSessionId) {
         return;
       }
       fetchMessagesApi(currentSessionId).then((history) => {
-        if (!isGenerating && newlyCreatedSessionIdRef.current !== currentSessionId) {
-          setMessages(history && history.length > 0 ? history : []);
+        // 如果当前正在推流或会话已改变，杜绝异步覆盖
+        if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
+          return;
+        }
+        const cached = sessionMessagesCacheRef.current[currentSessionId];
+        if (cached && cached.length > 0) {
+          const merged = (history && history.length > 0 ? history : cached).map((h) => {
+            const hit = cached.find((c) => c.id === h.id || c.content === h.content);
+            return hit ? { ...h, ...hit } : h;
+          });
+          setMessages(merged);
+        } else if (history && history.length > 0) {
+          setMessages(history);
+        } else {
+          setMessages([]);
         }
       });
     }
-  }, [currentSessionId, isGenerating]);
+  }, [currentSessionId]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -277,13 +376,14 @@ export default function ChatPlaygroundPage({
                 },
                 content:
                   (m.content ? m.content + "\n\n" : "") +
-                  `> ✅ **【人机协同审批通过】** 架构师已批准执行高危写操作。\n> 真实执行结果：变更生效，受影响行数: ${res.affectedRows ?? 1} 行。`,
+                  `> ✅ **【人机协同审批通过】** 审批人已同意执行变更操作。\n> 真实执行结果：变更生效，受影响行数: ${res.affectedRows ?? 1} 行。`,
               }
             : m
         )
       );
+      toast.success(`审批已通过，受影响行数: ${res.affectedRows ?? 1} 行`, "审批放行生效");
     } catch (e: any) {
-      alert("审批执行失败: " + e.message);
+      toast.error(e.message || "审批接口未响应", "审批执行失败");
     }
   };
 
@@ -303,18 +403,24 @@ export default function ChatPlaygroundPage({
                 },
                 content:
                   (m.content ? m.content + "\n\n" : "") +
-                  `> ❌ **【人机协同审批驳回】** 架构师已驳回该高危变更指令，已安全阻断。`,
+                  `> ❌ **【人机协同审批驳回】** 审批人已驳回该变更指令，已安全阻断。`,
               }
             : m
         )
       );
+      toast.warning("已驳回该高危操作，变更未生效并已留痕", "操作阻断成功");
     } catch (e: any) {
-      alert("驳回处理失败: " + e.message);
+      toast.error(e.message || "接口未响应", "驳回处理失败");
     }
   };
 
   // 开启新会话
   const handleCreateNewSession = async () => {
+    if (isGeneratingRef.current) {
+      handleStopGenerating();
+    }
+    isGeneratingRef.current = false;
+    setIsGenerating(false);
     const newTitle = `对话 ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
     try {
       const created = await createSessionApi(newTitle);
@@ -345,8 +451,9 @@ export default function ChatPlaygroundPage({
           setMessages([]);
         }
       }
+      toast.success("会话已彻底删除", "会话删除");
     } catch (err: any) {
-      alert("删除会话失败: " + err.message);
+      toast.error(err.message || "删除会话异常", "删除失败");
     }
   };
 
@@ -356,59 +463,93 @@ export default function ChatPlaygroundPage({
       abortControllerRef.current.abort();
       abortControllerRef.current = null;
     }
+    if (currentSessionId) {
+      fetch(`/api/chat/abort?sessionId=${encodeURIComponent(currentSessionId)}`, { method: "POST" }).catch(() => {});
+    }
+    isGeneratingRef.current = false;
     setIsGenerating(false);
+    setMessages((prev) =>
+      prev.map((m, idx) =>
+        idx === prev.length - 1 && m.role === "assistant" && m.isThinking
+          ? { ...m, isThinking: false, content: (m.content || "") + "\n\n*(已手动停止)*" }
+          : m
+      )
+    );
   };
 
   // 发送消息并流式推流
   const handleSend = async (textToSend?: string) => {
-    const text = textToSend || inputMessage;
-    if (!text.trim() || isGenerating) return;
+    const text = (textToSend !== undefined ? textToSend : inputMessage).trim();
+    if (!text || isGeneratingRef.current) return;
+
+    // 1. 同步获取真实后端 Session ID，从源头杜绝本地与服务端 ID 竞态打架
+    let activeSessionId = currentSessionId;
+    if (!activeSessionId) {
+      const newSessionTitle = text.length > 15 ? text.substring(0, 15) + "..." : text;
+      try {
+        const created = await createSessionApi(newSessionTitle);
+        activeSessionId = created.id;
+        setCurrentSessionId(created.id);
+        newlyCreatedSessionIdRef.current = created.id;
+        setSessions((prev) => [created, ...prev]);
+      } catch {
+        const fallbackId = `s-${Date.now().toString().slice(-6)}`;
+        activeSessionId = fallbackId;
+        setCurrentSessionId(fallbackId);
+        newlyCreatedSessionIdRef.current = fallbackId;
+        setSessions((prev) => [{ id: fallbackId, title: newSessionTitle, time: "刚刚" }, ...prev]);
+      }
+    } else {
+      newlyCreatedSessionIdRef.current = activeSessionId;
+    }
+
+    // 2. 计算生效模型
+    const effectiveModel =
+      currentAgent?.model && currentAgent.model !== "deepseek-chat"
+        ? currentAgent.model
+        : (systemModel || "qwen-plus");
+
+    // 3. 进入推流生成状态
+    isGeneratingRef.current = true;
+    setIsGenerating(true);
 
     const userMsgId = `u-${Date.now()}`;
     const asstMsgId = `a-${Date.now()}`;
 
-    // 立即清空输入并呈现用户气泡与思考态，杜绝点击无响应的迟钝感
+    // 立即清空输入并呈现用户气泡与处理态
     setInputMessage("");
-    setIsGenerating(true);
 
-    setMessages((prev) => [
-      ...prev,
-      { id: userMsgId, role: "user", content: text },
-      {
-        id: asstMsgId,
-        role: "assistant",
-        content: "",
-        isThinking: true,
-        duration: "思考中...",
-      },
-    ]);
+    const userMsg: Message = { id: userMsgId, role: "user", content: text };
+    const asstMsg: Message = {
+      id: asstMsgId,
+      role: "assistant",
+      content: "",
+      isThinking: true,
+      duration: "处理中...",
+      userPrompt: text,
+      modelName: effectiveModel,
+      sessionId: activeSessionId,
+      enableRAG,
+      enableThinking,
+      enableWebSearch: false,
+      traceSteps: {},
+    };
 
+    setMessages((prev) => [...prev, userMsg, asstMsg]);
     setExpandedReasoning((p) => ({ ...p, [asstMsgId]: false }));
 
-    // 确保有合法的 Session ID
-    let activeSessionId = currentSessionId;
-    if (!activeSessionId) {
-      const newId = `s-${Date.now().toString().slice(-6)}`;
-      const newTitle = text.length > 15 ? text.substring(0, 15) + "..." : text;
-      newlyCreatedSessionIdRef.current = newId;
-      activeSessionId = newId;
-      setCurrentSessionId(newId);
-      setSessions([{ id: newId, title: newTitle, time: "刚刚" }, ...sessions]);
-
-      // 异步与后端同步会话记录，不阻塞前台渲染
-      createSessionApi(newTitle).catch(() => {});
-    }
+    // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同)
+    setActiveTraceDrawer({
+      messageId: asstMsgId,
+      defaultTab: "lifecycle",
+    });
+    setTraceLayoutMode("split");
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     let accumulatedContent = "";
     const requestStartTs = Date.now();
     let firstTokenTs = 0;
-
-    const effectiveModel =
-      currentAgent?.model && currentAgent.model !== "deepseek-chat"
-        ? currentAgent.model
-        : systemModel;
 
     try {
       await streamChatFromBackend(
@@ -420,15 +561,63 @@ export default function ChatPlaygroundPage({
           systemPrompt: currentAgent?.systemPrompt,
           temperature: currentAgent?.temperature,
           enableThinking,
-          enableWebSearch,
+          enableWebSearch: false,
           enableRAG,
         },
         {
-          onCitations: (newCitations) => {
+          onTraceStep: (stepData) => {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== asstMsgId) return m;
+                const flatData = { ...stepData, ...(stepData.data || {}) };
+                const prevSteps = m.traceSteps || {};
+                const newSteps = { ...prevSteps, [flatData.step]: flatData };
+                const traceUpdate = { ...(m.trace || {}) };
+
+                if (flatData.hashKey) {
+                  traceUpdate.hashKey = flatData.hashKey;
+                }
+                if (flatData.cached !== undefined) {
+                  traceUpdate.cached = !!flatData.cached;
+                }
+                if (flatData.cacheHit !== undefined) {
+                  traceUpdate.cached = !!flatData.cacheHit;
+                }
+                if (flatData.ragMs !== undefined) {
+                  traceUpdate.ragMs = flatData.ragMs;
+                }
+                if (flatData.costMs !== undefined) {
+                  traceUpdate.ragMs = flatData.costMs;
+                }
+                if (flatData.ttftMs !== undefined) {
+                  traceUpdate.ttftMs = flatData.ttftMs;
+                }
+                if (flatData.totalMs !== undefined) {
+                  traceUpdate.totalMs = flatData.totalMs;
+                }
+                if (flatData.totalTokens !== undefined) {
+                  (traceUpdate as any).tokens = flatData.totalTokens;
+                }
+
+                return {
+                  ...m,
+                  traceSteps: newSteps,
+                  trace: traceUpdate,
+                };
+              })
+            );
+          },
+          onCitations: (newCitations, ragStats) => {
             if (Array.isArray(newCitations) && newCitations.length > 0) {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === asstMsgId ? { ...m, citations: newCitations } : m
+                  m.id === asstMsgId
+                    ? {
+                        ...m,
+                        citations: newCitations,
+                        ragStats: ragStats || m.ragStats,
+                      }
+                    : m
                 )
               );
             }
@@ -489,30 +678,28 @@ export default function ChatPlaygroundPage({
             accumulatedContent += chunk;
             const liveElapsedMs = Date.now() - requestStartTs;
             const liveTtftMs = firstTokenTs ? (firstTokenTs - requestStartTs) : liveElapsedMs;
-            const liveTokens = Math.round(accumulatedContent.length * 0.75);
 
             setMessages((prev) =>
-              prev.map((m) =>
-                m.id === asstMsgId
-                  ? {
-                      ...m,
-                      content: accumulatedContent,
-                      isThinking: false,
-                      tokens: liveTokens,
-                      duration: `${(liveElapsedMs / 1000).toFixed(1)}s`,
-                      trace: {
-                        totalMs: liveElapsedMs,
-                        ragMs: m.citations && m.citations.length > 0 ? 35 : 0,
-                        ttftMs: liveTtftMs,
-                        streamMs: Math.max(0, liveElapsedMs - liveTtftMs),
-                        hitCount: m.citations?.length || 0,
-                      },
-                    }
-                  : m
-              )
+              prev.map((m) => {
+                if (m.id !== asstMsgId) return m;
+                const existingTrace = m.trace || {};
+                return {
+                  ...m,
+                  content: accumulatedContent,
+                  isThinking: false,
+                  duration: `${(liveElapsedMs / 1000).toFixed(1)}s`,
+                  trace: {
+                    ...existingTrace,
+                    totalMs: liveElapsedMs,
+                    ttftMs: liveTtftMs,
+                    streamMs: Math.max(0, liveElapsedMs - liveTtftMs),
+                  },
+                };
+              })
             );
           },
           onFinish: (rawMeta) => {
+            isGeneratingRef.current = false;
             setIsGenerating(false);
             try {
               const meta = typeof rawMeta === "string" ? JSON.parse(rawMeta) : rawMeta;
@@ -539,6 +726,7 @@ export default function ChatPlaygroundPage({
             }
           },
           onError: (err) => {
+            isGeneratingRef.current = false;
             setIsGenerating(false);
             setMessages((prev) =>
               prev.map((m) =>
@@ -556,7 +744,9 @@ export default function ChatPlaygroundPage({
         abortController.signal
       );
     } catch (err: any) {
-      setIsGenerating(false);
+      if (err?.name === "AbortError" || abortController.signal.aborted) {
+        return;
+      }
       setMessages((prev) =>
         prev.map((m) =>
           m.id === asstMsgId
@@ -568,13 +758,25 @@ export default function ChatPlaygroundPage({
             : m
         )
       );
+    } finally {
+      isGeneratingRef.current = false;
+      setIsGenerating(false);
     }
   };
 
   useEffect(() => {
-    if (initialPrompt && initialPrompt.trim()) {
-      handleSend(initialPrompt);
-      if (onClearInitialPrompt) onClearInitialPrompt();
+    if (initialPrompt) {
+      const promptText = typeof initialPrompt === "string" ? initialPrompt : initialPrompt.prompt;
+      const shouldAutoSend = typeof initialPrompt === "string" ? true : initialPrompt.autoSend !== false;
+      if (promptText && promptText.trim()) {
+        if (shouldAutoSend) {
+          handleSend(promptText);
+        } else {
+          setInputMessage(promptText);
+          setTimeout(() => textareaRef.current?.focus(), 100);
+        }
+        if (onClearInitialPrompt) onClearInitialPrompt();
+      }
     }
   }, [initialPrompt]);
 
@@ -612,7 +814,7 @@ export default function ChatPlaygroundPage({
     return "bg-slate-100 text-slate-700 border-slate-200";
   };
 
-  const isChatEmpty = messages.length === 0;
+  const isChatEmpty = messages.length === 0 && !isGenerating;
 
   return (
     <div className="flex-1 flex h-full w-full overflow-hidden bg-[#FAFBFC] relative font-sans">
@@ -680,17 +882,6 @@ export default function ChatPlaygroundPage({
         {/* 顶部极简透明工具条 */}
         <div className="h-14 px-6 flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-2">
-            {onBackHome && (
-              <button
-                onClick={onBackHome}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-slate-700 hover:text-blue-600 bg-white hover:bg-slate-50 rounded-xl border border-slate-200/90 shadow-2xs transition cursor-pointer"
-                title="返回系统首页门户"
-              >
-                <ArrowRight className="w-3.5 h-3.5 rotate-180 text-slate-400" />
-                <span>平台首页</span>
-              </button>
-            )}
-
             {!isHistoryOpen && (
               <button
                 onClick={() => setIsHistoryOpen(true)}
@@ -704,7 +895,7 @@ export default function ChatPlaygroundPage({
 
             <button
               onClick={handleCreateNewSession}
-              className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:text-slate-900 bg-white/80 hover:bg-white rounded-xl border border-slate-200/80 shadow-2xs transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50/80 hover:bg-blue-100/80 rounded-xl border border-blue-200/60 shadow-2xs transition cursor-pointer"
               title="新建对话"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -714,6 +905,27 @@ export default function ChatPlaygroundPage({
 
           {/* 当前模型真实连接状态胶囊与设置快捷入口 */}
           <div className="flex items-center gap-2">
+            {/* 智能体角色快速切换下拉框 */}
+            {agents && agents.length > 0 && (
+              <div className="relative">
+                <select
+                  value={currentAgent?.id || ""}
+                  onChange={(e) => {
+                    const found = agents.find((a) => a.id === e.target.value);
+                    if (found && onSelectAgent) onSelectAgent(found);
+                  }}
+                  className="text-xs font-semibold bg-white border border-slate-200/90 rounded-full px-3 py-1 text-slate-700 shadow-2xs hover:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition"
+                  title="选择当前交互智能体角色"
+                >
+                  {agents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      🤖 {a.name} ({a.model})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div
               className={`flex items-center gap-1.5 px-3 py-1 bg-white/95 border rounded-full text-xs shadow-2xs transition-all ${
                 modelProbe?.connected
@@ -723,7 +935,7 @@ export default function ChatPlaygroundPage({
               title={
                 modelProbe?.connected
                   ? `大模型服务在线（响应延迟 ${modelProbe.latencyMs || 0}ms）`
-                  : `${modelProbe?.message || "大模型未连接"}。系统已启用高保真离线沙箱提供交互推演，点击齿轮可配置大模型。`
+                  : `${modelProbe?.message || "大模型未连接"}。可在右上角设置中填入 API Key；当前仍完整支持本地知识库 查知识库、重复问题可走缓存。`
               }
             >
               {/* 状态指示灯：真实在线为绿灯，未连通大模型为琥珀色警示灯 */}
@@ -749,31 +961,51 @@ export default function ChatPlaygroundPage({
 
               {!modelProbe?.connected && (
                 <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.2 rounded-md font-medium ml-0.5">
-                  离线沙箱
+                  待配置密钥
                 </span>
               )}
             </div>
 
-            {/* FinOps 降本看板快捷入口 */}
+            {/* 右侧执行流程面板切换按钮 */}
             <button
               onClick={() => {
-                const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant") || {
-                  id: "finops-global",
-                  role: "assistant" as const,
-                  content: "FinOps 全局指标概览",
-                  tokens: 0,
-                  duration: "0s",
-                };
+                if (activeTraceDrawer) {
+                  setActiveTraceDrawer(null);
+                } else {
+                  const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
+                  setActiveTraceDrawer({
+                    messageId: targetMsg ? targetMsg.id : "finops-global",
+                    defaultTab: "lifecycle",
+                  });
+                  setTraceLayoutMode("split");
+                }
+              }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition cursor-pointer border ${
+                activeTraceDrawer
+                  ? "bg-blue-50 text-blue-700 border-blue-200"
+                  : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90"
+              }`}
+              title="切换显示右侧实时执行流程记录"
+            >
+              <Activity className="w-3.5 h-3.5 text-blue-600" />
+              <span>{activeTraceDrawer ? "收起流程面板" : "查看执行流程"}</span>
+            </button>
+
+            {/* 开销与缓存统计按钮 */}
+            <button
+              onClick={() => {
+                const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
                 setActiveTraceDrawer({
-                  messageId: targetMsg.id,
+                  messageId: targetMsg ? targetMsg.id : "finops-global",
                   defaultTab: "finops",
                 });
+                setTraceLayoutMode("split");
               }}
               className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-full text-xs font-semibold text-slate-700 shadow-2xs transition cursor-pointer"
-              title="查看 Exact Hash 算力与 Token 降本审计看板"
+              title="查看历史问答缓存与开销节省记录"
             >
               <Coins className="w-3.5 h-3.5 text-emerald-600" />
-              <span>FinOps 降本看板</span>
+              <span>开销与缓存统计</span>
             </button>
 
             {onNavigateSettings && (
@@ -805,27 +1037,27 @@ export default function ChatPlaygroundPage({
                   <div className="flex items-center justify-center gap-2 text-xs text-slate-400 font-medium">
                     {modelProbe?.connected ? (
                       <>
-                        <span>由 {modelProbe.provider} · {modelProbe.model} 提供全自主算力支持</span>
+                        <span>当前大模型已连接（{modelProbe.provider} · {modelProbe.model}）</span>
                         <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          模型在线 ({modelProbe.latencyMs}ms)
+                          模型在线
                         </span>
                       </>
                     ) : (
                       <>
-                        <span className="text-amber-700 font-medium">
-                          大模型服务未连接 · 当前由高保真离线沙箱保障交互
+                        <span className="text-slate-500 font-medium">
+                          系统运行正常 · 支持制度检索、系统工具调用与人工把关
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                          沙箱保护中
+                        <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full font-medium">
+                          <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                          安全模式
                         </span>
                       </>
                     )}
                   </div>
                 </div>
 
-                {/* 居中大对话输入框 (豆包/元宝同款布局) */}
+                {/* 居中大对话输入框 */}
                 <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/40 p-3.5 space-y-3 transition-all focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10">
                   <textarea
                     ref={textareaRef}
@@ -858,15 +1090,13 @@ export default function ChatPlaygroundPage({
                       </button>
 
                       <button
-                        onClick={() => setEnableWebSearch(!enableWebSearch)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
-                          enableWebSearch
-                            ? "bg-blue-50 text-blue-700 border border-blue-200"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                        }`}
+                        type="button"
+                        disabled
+                        className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium text-slate-300 bg-slate-50 border border-slate-100 cursor-not-allowed"
+                        title="联网搜索功能暂未开启"
                       >
-                        <Globe className="w-3.5 h-3.5" />
-                        <span>联网搜索</span>
+                        <Globe className="w-3.5 h-3.5 text-slate-300" />
+                        <span>联网搜索 (未开启)</span>
                       </button>
 
                       <button
@@ -878,15 +1108,15 @@ export default function ChatPlaygroundPage({
                         }`}
                       >
                         <Database className="w-3.5 h-3.5" />
-                        <span>知识库召回</span>
+                        <span>知识库检索</span>
                       </button>
                     </div>
 
-                    {isGenerating ? (
+                    {isGenerating && messages.length > 0 ? (
                       <button
                         onClick={handleStopGenerating}
                         className="flex items-center gap-1 px-3 py-1.5 rounded-full bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition shadow-md shadow-rose-500/25 cursor-pointer"
-                        title="停止生成 (断开物理连接)"
+                        title="停止生成 (断开当前连接)"
                       >
                         <span className="w-2.5 h-2.5 rounded-xs bg-white" />
                         <span>停止</span>
@@ -903,29 +1133,22 @@ export default function ChatPlaygroundPage({
                   </div>
                 </div>
 
-                {/* ── 企业常用业务自动化流水线 ── */}
+                {/* ── 常用业务场景 ── */}
                 <div className="w-full max-w-3xl space-y-3 pt-2">
                   <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
                       <span className="text-xs font-black text-slate-800 tracking-tight">
-                        企业常用业务自动化流水线 (Production Workflows)
+                        常用业务场景（点击即可快速开始）
                       </span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      {onOpenCreateWorkflow && (
-                        <button
-                          onClick={onOpenCreateWorkflow}
-                          className="text-[11px] font-bold text-blue-600 hover:text-blue-700 transition cursor-pointer flex items-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" />
-                          <span>配置流水线</span>
-                        </button>
-                      )}
-                      <span className="text-[11px] font-mono text-slate-400">
-                        点击快速启动端到端自动化业务处理链路
-                      </span>
-                    </div>
+                    {workflows && workflows.length > 0 && (
+                      <div className="flex items-center gap-3">
+                        <span className="text-[11px] text-slate-400">
+                          左侧对话问答，右侧实时显示每步处理过程
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -933,7 +1156,10 @@ export default function ChatPlaygroundPage({
                       workflows.slice(0, 3).map((item) => (
                         <div
                           key={item.id}
-                          className="group relative p-4 rounded-2xl bg-white hover:bg-slate-50/90 border border-slate-200/90 hover:border-blue-400 text-left transition-all shadow-xs hover:shadow-md flex flex-col justify-between space-y-3"
+                          className="group relative p-4 rounded-2xl bg-white hover:bg-slate-50/90 border border-slate-200/90 hover:border-blue-400 text-left transition-all shadow-xs hover:shadow-md flex flex-col justify-between space-y-3 cursor-pointer"
+                          onClick={() => {
+                            handleSend(item.promptTemplate);
+                          }}
                         >
                           <div className="space-y-2">
                             <div className="flex items-center justify-between">
@@ -974,18 +1200,28 @@ export default function ChatPlaygroundPage({
 
                             <div className="flex items-center justify-between gap-2 pt-0.5">
                               <button
-                                onClick={() => handleSend(item.promptTemplate)}
-                                className="text-[11px] text-slate-500 hover:text-blue-600 transition cursor-pointer"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setInputMessage(item.promptTemplate);
+                                  textareaRef.current?.focus();
+                                }}
+                                className="text-[11px] text-slate-500 hover:text-blue-600 font-medium transition cursor-pointer"
                                 title="填入 Prompt 对话"
                               >
-                                填入对话
+                                填入输入框
                               </button>
 
                               <button
-                                onClick={() => onRunWorkflow ? onRunWorkflow(item) : handleSend(item.promptTemplate)}
-                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white rounded-lg text-[11px] font-bold transition shadow-2xs cursor-pointer"
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleSend(item.promptTemplate);
+                                }}
+                                className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white hover:bg-blue-700 rounded-lg text-[11px] font-bold transition shadow-2xs cursor-pointer"
+                                title="立即运行此业务场景"
                               >
-                                <span>执行瀑布流</span>
+                                <span>立即运行</span>
                                 <CornerRightUp className="w-3 h-3" />
                               </button>
                             </div>
@@ -993,8 +1229,20 @@ export default function ChatPlaygroundPage({
                         </div>
                       ))
                     ) : (
-                      <div className="col-span-3 p-4 bg-white border border-dashed border-slate-200 rounded-2xl text-center text-xs text-slate-400">
-                        暂无配置的业务流水线，可在首页或通过配置中心自由添加
+                      <div className="col-span-3 p-4 bg-white border border-slate-200/80 rounded-2xl flex items-center justify-between text-xs text-slate-600 shadow-2xs">
+                        <div className="flex items-center gap-2">
+                          <Layers className="w-4 h-4 text-blue-600" />
+                          <span>暂无已发布的业务自动化流水线</span>
+                        </div>
+                        {onNavigateStudio && (
+                          <button
+                            onClick={onNavigateStudio}
+                            className="inline-flex items-center gap-1 text-blue-600 font-bold hover:underline cursor-pointer"
+                          >
+                            <span>前往「业务配置中心」编排流水线</span>
+                            <ArrowRight className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -1035,7 +1283,7 @@ export default function ChatPlaygroundPage({
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : "text-slate-400"
                                 }`}
-                                title="第一阶段：从企业知识库召回合规军规"
+                                title="打开相关制度"
                               >
                                 <span>{msg.citations?.length ? "✓" : "○"} 1. 规约对齐</span>
                                 {msg.citations?.length ? <span className="font-mono text-[10px]">({msg.citations.length}篇)</span> : null}
@@ -1095,10 +1343,10 @@ export default function ChatPlaygroundPage({
                                 type="button"
                                 onClick={() => setActiveTraceDrawer({ messageId: msg.id, defaultTab: "waterfall" })}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 cursor-pointer transition"
-                                title="第五阶段：Trace 瀑布流与审计单据落库"
+                                title="查看耗时明细"
                               >
                                 <span>✓ 5. 审计归档</span>
-                                <span className="font-mono text-[10px]">(Trace ↗)</span>
+                                <span className="font-mono text-[10px]">(详情 ↗)</span>
                               </button>
                             </div>
                           )}
@@ -1109,7 +1357,7 @@ export default function ChatPlaygroundPage({
                               {msg.isThinking ? (
                                 <div className="flex items-center gap-2 text-xs text-purple-600 font-medium py-1">
                                   <Brain className="w-3.5 h-3.5 animate-pulse" />
-                                  <span className="animate-pulse">正在深度推演思考中...</span>
+                                  <span className="animate-pulse">正在整理思路…</span>
                                 </div>
                               ) : (
                                 <div className="space-y-1.5">
@@ -1124,7 +1372,7 @@ export default function ChatPlaygroundPage({
                                       className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 font-medium transition cursor-pointer py-0.5"
                                     >
                                       <Brain className="w-3.5 h-3.5 text-purple-500" />
-                                      <span>已深度思考 ({msg.duration || "完成"})</span>
+                                      <span>思考过程（可展开） ({msg.duration || "完成"})</span>
                                       <ChevronDown
                                         className={`w-3.5 h-3.5 transition-transform duration-200 ${
                                           expandedReasoning[msg.id] ? "rotate-180" : ""
@@ -1141,10 +1389,10 @@ export default function ChatPlaygroundPage({
                                           })
                                         }
                                         className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200/80 font-medium transition cursor-pointer"
-                                        title="点击在右侧抽屉查看命中的知识切片"
+                                        title="点击在右侧查看引用的制度原文"
                                       >
                                         <Database className="w-3 h-3 text-emerald-600" />
-                                        <span>已检索增强 ({msg.citations.length} 篇规范)</span>
+                                        <span>已参考 {msg.citations.length} 条制度</span>
                                       </button>
                                     )}
                                   </div>
@@ -1165,17 +1413,21 @@ export default function ChatPlaygroundPage({
                               {msg.toolCalls.map((tc, idx) => (
                                 <div
                                   key={idx}
-                                  className="flex items-center justify-between px-3 py-2 bg-amber-50/70 border border-amber-200/70 rounded-xl text-xs"
+                                  className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs"
                                 >
-                                  <div className="flex items-center gap-2 text-amber-900 font-medium">
-                                    <span className="w-2 h-2 rounded-full bg-amber-500 animate-ping" />
-                                    <span>⚡ 智能体自主调用工具:</span>
-                                    <span className="font-mono font-bold text-amber-950 bg-amber-100/80 px-2 py-0.5 rounded">
+                                  <div className="flex items-center gap-2 text-slate-800 font-medium">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                    <span className="text-slate-600 font-medium">调用系统接口:</span>
+                                    <span className="font-mono font-semibold text-slate-900 bg-slate-200/60 px-2 py-0.5 rounded">
                                       {tc.displayName || tc.tool}
                                     </span>
                                   </div>
-                                  <div className="flex items-center gap-2 text-[11px] text-amber-700">
-                                    <span className="font-semibold text-emerald-600">✓ 执行成功</span>
+                                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                    {tc.status === "FAILED" || tc.status === "error" || (tc as any).isSuccess === false ? (
+                                      <span className="font-medium text-rose-600">❌ 执行异常</span>
+                                    ) : (
+                                      <span className="font-medium text-emerald-600">✓ 执行成功</span>
+                                    )}
                                     {tc.duration && <span className="font-mono">({tc.duration})</span>}
                                   </div>
                                 </div>
@@ -1185,7 +1437,40 @@ export default function ChatPlaygroundPage({
 
                           {/* 文本回复泡 */}
                           <div className="rounded-2xl rounded-tl-sm bg-white border border-slate-200/80 p-4.5 shadow-xs text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
-                            {msg.content || (
+                            {msg.content ? (
+                              <>
+                                <div>
+                                  {renderContentWithCitations(msg.content, msg.citations, () => {
+                                    setActiveTraceDrawer({
+                                      messageId: msg.id,
+                                      defaultTab: "knowledge",
+                                    });
+                                  })}
+                                </div>
+                                {msg.citations && msg.citations.length > 0 && (
+                                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
+                                    <span className="text-[10px] text-slate-400 font-sans">引用来源:</span>
+                                    {msg.citations.map((c, idx) => (
+                                      <button
+                                        key={idx}
+                                        onClick={() =>
+                                          setActiveTraceDrawer({
+                                           messageId: msg.id,
+                                           defaultTab: "knowledge",
+                                           highlightCitationIndex: idx,
+                                          })
+                                        }
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-mono bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 cursor-pointer transition"
+                                        title={c.docTitle}
+                                      >
+                                        <span className="text-indigo-600 font-bold">[{idx + 1}]</span>
+                                        <span className="truncate max-w-[160px]">{c.docTitle}</span>
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                              </>
+                            ) : (
                               <span className="inline-flex items-center gap-2 text-slate-400 text-xs">
                                 <RefreshCw className="w-3.5 h-3.5 animate-spin text-blue-500" />
                                 <span>大模型正在实时流式生成...</span>
@@ -1193,21 +1478,25 @@ export default function ChatPlaygroundPage({
                             )}
                           </div>
 
-                          {/* 生产级高危写操作人机协同审批卡片 (Human-in-the-Loop) */}
+                          {/* 生产级高危写操作人工协同审批卡片 */}
                           {msg.approvalTicket && (
                             <div className="p-4 bg-amber-50/90 border border-amber-300 rounded-2xl space-y-3 shadow-xs">
                               <div className="flex items-center justify-between text-xs">
                                 <div className="flex items-center gap-2 font-bold text-amber-900">
-                                  <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />
-                                  <span>高危操作触发安全拦截 · 人机协同审批单 (Human-in-the-Loop)</span>
+                                  <ShieldAlert className="w-4 h-4 text-amber-600" />
+                                  <span>高危操作触发安全拦截 · 人工复核审批单</span>
                                 </div>
                                 <span className="font-mono text-[11px] bg-amber-200/80 text-amber-900 px-2.5 py-0.5 rounded-full font-bold">
                                   单号: {msg.approvalTicket.ticketId}
                                 </span>
                               </div>
 
+                              <div className="p-2.5 bg-amber-100/60 border border-amber-200 rounded-xl text-[11.5px] text-amber-900 font-medium">
+                                ⚠️ <strong>重要：</strong>确认后将修改数据库，请仔细核对。
+                              </div>
+
                               <div className="text-xs text-amber-800 leading-relaxed font-medium">
-                                {msg.approvalTicket.warning || "检测到涉及非只读数据库写操作指令，已触发生产级安全挂起策略。请合规安全员进行人工核准或驳回。"}
+                                {msg.approvalTicket.warning || "检测到涉及非只读数据库写操作指令，已触发生产级安全挂起策略。请授权负责人人工核准或驳回。"}
                               </div>
 
                               {msg.approvalTicket.sql && (
@@ -1223,16 +1512,16 @@ export default function ChatPlaygroundPage({
                                     onClick={() => handleApproveTicket(msg.id, msg.approvalTicket!.ticketId)}
                                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                                   >
-                                    <span>✅ 批准执行 (断点续跑)</span>
+                                    <span>✅ 批准并执行变更</span>
                                   </button>
                                   <button
                                     onClick={() => handleRejectTicket(msg.id, msg.approvalTicket!.ticketId)}
                                     className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 active:scale-95 text-white text-xs font-bold transition shadow-xs cursor-pointer"
                                   >
-                                    <span>❌ 驳回并终止</span>
+                                    <span>❌ 驳回并终止操作</span>
                                   </button>
-                                  <span className="text-[11px] text-slate-500 ml-auto font-mono">
-                                    [任务挂起中 · 虚拟线程已释放]
+                                  <span className="text-[11px] text-slate-500 ml-auto font-sans">
+                                    [操作已挂起 · 等待确认]
                                   </span>
                                 </div>
                               ) : (
@@ -1269,10 +1558,10 @@ export default function ChatPlaygroundPage({
                                     })
                                   }
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100/90 text-emerald-800 border border-emerald-200/80 text-[11px] font-semibold transition cursor-pointer shadow-2xs"
-                                  title="点击在右侧抽屉展开查看完整命中文档、切片分块与余弦打分"
+                                  title="点击在右侧查看引用制度与相关度"
                                 >
                                   <Database className="w-3.5 h-3.5 text-emerald-600" />
-                                  <span>知识库已增强 ({msg.citations.length} 篇切片)</span>
+                                  <span>已引用 {msg.citations.length} 条制度原文</span>
                                   <ExternalLink className="w-3 h-3 text-emerald-500 opacity-70" />
                                 </button>
                               )}
@@ -1302,18 +1591,18 @@ export default function ChatPlaygroundPage({
                                     })
                                   }
                                   className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-full font-bold transition cursor-pointer"
-                                  title="该回答命中 Exact Hash Cache，免除大模型推理与 Token 计费，点击查看 FinOps 看板"
+                                  title="相同问题已缓存，未再调用模型"
                                 >
                                   <Zap className="w-3 h-3 text-emerald-600" />
                                   <span>
-                                    Exact Hash 命中 · 0 Token
+                                    相同问题已缓存 · 未再调用模型
                                     {msg.trace?.savedTokens && msg.trace.savedTokens > 0
                                       ? ` (省 ${msg.trace.savedTokens.toLocaleString()} tk)`
                                       : ""}
                                   </span>
                                 </button>
                               ) : msg.tokens ? (
-                                <span>Tokens: {msg.tokens}</span>
+                                <span>用量（字）: {msg.tokens}</span>
                               ) : null}
                               {msg.duration && (
                                 <>
@@ -1381,15 +1670,13 @@ export default function ChatPlaygroundPage({
                     </button>
 
                     <button
-                      onClick={() => setEnableWebSearch(!enableWebSearch)}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${
-                        enableWebSearch
-                          ? "bg-blue-50 text-blue-700 border border-blue-200"
-                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
+                      type="button"
+                      disabled
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium text-slate-300 bg-slate-50 border border-slate-100 cursor-not-allowed"
+                      title="联网搜索功能暂未开启"
                     >
-                      <Globe className="w-3 h-3" />
-                      <span>联网</span>
+                      <Globe className="w-3 h-3 text-slate-300" />
+                      <span>联网 (未开启)</span>
                     </button>
 
                     <button
@@ -1430,16 +1717,81 @@ export default function ChatPlaygroundPage({
         )}
       </div>
 
-      {/* Trace Inspector Drawer */}
+      {/* Trace Inspector Drawer (支持 split 分栏与 drawer 抽屉双模式切换) */}
       <TraceInspectorDrawer
         isOpen={!!activeTraceDrawer}
         onClose={() => setActiveTraceDrawer(null)}
-        defaultTab={activeTraceDrawer?.defaultTab || "waterfall"}
+        layoutMode={traceLayoutMode}
+        onToggleLayout={() => setTraceLayoutMode((prev) => (prev === "split" ? "drawer" : "split"))}
+        defaultTab={activeTraceDrawer?.defaultTab || "lifecycle"}
+        highlightCitationIndex={activeTraceDrawer?.highlightCitationIndex}
         message={
           activeTraceDrawer
-            ? messages.find((m) => m.id === activeTraceDrawer.messageId) || null
+            ? (() => {
+                if (activeTraceDrawer.messageId === "finops-global") {
+                  return {
+                    id: "finops-global",
+                    role: "assistant",
+                    content: "历史问答缓存与开销统计",
+                    userPrompt: "开销与缓存统计",
+                    modelName: currentAgent?.model || systemModel || "系统模型",
+                    sessionId: currentSessionId,
+                    enableRAG,
+                    enableThinking,
+                    enableWebSearch: false,
+                    traceSteps: {},
+                    trace: {
+                      cached: false,
+                      totalMs: 0,
+                      tokens: 0,
+                      savedTokens: 0,
+                      savedMs: 0,
+                    },
+                  } as Message;
+                }
+                const targetMsg = messages.find((m) => m.id === activeTraceDrawer.messageId);
+                if (!targetMsg) {
+                  const lastAsst = messages.slice().reverse().find((m) => m.role === "assistant");
+                  if (lastAsst) return lastAsst;
+                  return {
+                    id: activeTraceDrawer.messageId,
+                    role: "assistant",
+                    content: "",
+                    userPrompt: "当前会话监控",
+                    modelName: currentAgent?.model || systemModel || "qwen-plus",
+                    sessionId: currentSessionId,
+                    enableRAG,
+                    enableThinking,
+                    enableWebSearch,
+                    traceSteps: {},
+                  } as Message;
+                }
+                const msgIdx = messages.findIndex((m) => m.id === activeTraceDrawer.messageId);
+                const prevUserMsg = msgIdx > 0 ? messages.slice(0, msgIdx).reverse().find((m) => m.role === "user") : null;
+                return {
+                  ...targetMsg,
+                  userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "",
+                  modelName: targetMsg.modelName || currentAgent?.model || systemModel || "qwen-plus",
+                  sessionId: targetMsg.sessionId || currentSessionId,
+                  enableRAG,
+                  enableThinking,
+                  enableWebSearch,
+                };
+              })()
             : null
         }
+      />
+
+      {/* 业务流水线执行窗口 */}
+      <WorkflowExecutionModal
+        isOpen={!!runningWorkflow}
+        onClose={() => setRunningWorkflow(null)}
+        workflow={runningWorkflow}
+        onSwitchToChat={(prompt) => {
+          setInputMessage(prompt);
+          setRunningWorkflow(null);
+          textareaRef.current?.focus();
+        }}
       />
     </div>
   );

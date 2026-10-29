@@ -24,6 +24,7 @@ import {
   resetFailoverApi,
   FailoverStatusResponse,
 } from "@/services/api";
+import { useToast } from "@/context/ToastContext";
 
 interface QuickPreset {
   id: string;
@@ -106,6 +107,7 @@ const QUICK_PRESETS: QuickPreset[] = [
 ];
 
 export default function SettingsPage() {
+  const toast = useToast();
   const [baseUrl, setBaseUrl] = useState("https://dashscope.aliyuncs.com/compatible-mode/v1");
   const [apiKey, setApiKey] = useState("");
   const [modelName, setModelName] = useState("qwen-plus");
@@ -144,8 +146,9 @@ export default function SettingsPage() {
     try {
       const res = await toggleFailoverTimeoutApi();
       setFailoverInfo(res);
+      toast.success(res.isTimeoutSimulated ? "已开启上游超时熔断注入" : "已恢复正常网络状态", "容灾切换");
     } catch (e: any) {
-      alert("切换失败: " + e.message);
+      toast.error(e.message || "切换失败", "容灾设置异常");
     } finally {
       setIsTogglingTimeout(false);
     }
@@ -155,8 +158,9 @@ export default function SettingsPage() {
     try {
       const res = await resetFailoverApi();
       setFailoverInfo(res);
+      toast.success("已重置容灾状态至主通道模式", "重置成功");
     } catch (e: any) {
-      alert("重置失败: " + e.message);
+      toast.error(e.message || "重置失败", "重置异常");
     }
   };
 

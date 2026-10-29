@@ -32,6 +32,7 @@ import {
   fetchWorkflowInstanceApi,
   commitWorkflowApprovalApi,
 } from "@/services/api";
+import { useToast } from "@/context/ToastContext";
 
 interface WorkflowWaterfallDrawerProps {
   isOpen: boolean;
@@ -48,6 +49,7 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
   instanceId,
   onApprovalDecided,
 }) => {
+  const toast = useToast();
   const [instance, setInstance] = useState<WorkflowInstanceData | null>(null);
   const [steps, setSteps] = useState<NodeExecutionData[]>([]);
   const [activeTicket, setActiveTicket] = useState<ApprovalTicketData | null>(null);
@@ -186,8 +188,9 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
       setActiveTicket(null);
       await refreshInstanceData();
       if (onApprovalDecided) onApprovalDecided();
-    } catch (err) {
-      alert("提交审批决策失败: " + String(err));
+      toast.success(decision === "APPROVED" ? "审批通过，流程继续下发" : "操作已人工阻断并归档", "审批决策成功");
+    } catch (err: any) {
+      toast.error(err.message || String(err), "提交审批决策失败");
     } finally {
       setIsCommitting(false);
     }
@@ -224,7 +227,7 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
         return (
           <span className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 text-amber-700 border border-amber-300 rounded-full text-xs font-bold">
             <Lock className="w-3.5 h-3.5" />
-            <span>等待 2PC 人工审批</span>
+            <span>等待人工安全核准</span>
           </span>
         );
       case "COMPLETED":
@@ -238,7 +241,7 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
         return (
           <span className="flex items-center gap-1.5 px-2.5 py-1 bg-purple-50 text-purple-700 border border-purple-300 rounded-full text-xs font-bold">
             <RefreshCw className="w-3.5 h-3.5" />
-            <span>已驳回并 Saga 逆向补偿完成</span>
+            <span>已驳回并完成自动安全回滚</span>
           </span>
         );
       case "FAILED":
@@ -268,13 +271,14 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
       case "MCP_TOOL_CALL":
         return <span className="px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 text-[10px] font-semibold">接口工具</span>;
       case "HITL_APPROVAL":
-      case "HUMAN_APPROVAL_2PC":
-        return <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">2PC 门闩</span>;
+      case "HUMAN_APPROVAL_GATE":
+      case "HUMAN_APPROVAL_人工核准":
+        return <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold">人工审批</span>;
       case "LLM_REDUCE":
       case "LLM_REASONING":
-        return <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-semibold">大模型聚合</span>;
+        return <span className="px-1.5 py-0.5 rounded bg-purple-100 text-purple-700 text-[10px] font-semibold">生成结果</span>;
       case "COMPENSATION_ACTION":
-        return <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-bold">Saga 补偿</span>;
+        return <span className="px-1.5 py-0.5 rounded bg-rose-100 text-rose-800 text-[10px] font-bold">异常回滚</span>;
       default:
         return <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[10px] font-semibold">{type}</span>;
     }
@@ -350,7 +354,7 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
           </div>
         </div>
 
-        {/* ═══════════ 2PC 人工安全审批门闩交互卡片 ═══════════ */}
+        {/* ═══════════ 高危操作人工复核卡片 ═══════════ */}
         {activeTicket && (
           <div className="p-5 rounded-2xl bg-amber-50/90 border-2 border-amber-400 text-amber-950 shadow-md space-y-4 animate-in zoom-in-95 duration-200">
             <div className="flex items-start justify-between">
@@ -360,21 +364,21 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
                 </div>
                 <div>
                   <h3 className="text-sm font-black text-amber-900">
-                    2PC 人工安全授权门闩触发 (Zero-Trust Gate)
+                    操作需要管理员人工审批确认
                   </h3>
                   <p className="text-[11px] text-amber-700 font-mono mt-0.5">
-                    Ticket ID: {activeTicket.id} · 级别: {activeTicket.policyLevel} · 风控系数: {activeTicket.riskScore}
+                    工单号: {activeTicket.id}
                   </p>
                 </div>
               </div>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-200 text-amber-900 border border-amber-300">
-                PENDING 挂起中
+                等待确认中
               </span>
             </div>
 
             <div className="p-3.5 rounded-xl bg-white/90 border border-amber-200/80 text-xs text-slate-800 space-y-1.5">
               <div className="font-bold text-slate-900 flex items-center gap-1">
-                <span>门闩说明与审计核验摘要：</span>
+                <span>审批说明：</span>
               </div>
               <p className="leading-relaxed text-slate-600">
                 {activeTicket.operationSummary}
@@ -401,7 +405,7 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-50"
               >
                 {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                <span>✔️ 确认授权并批准放行 (2PC Commit)</span>
+                <span>✔️ 确认授权并批准放行</span>
               </button>
 
               <button
@@ -410,7 +414,7 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
                 className="flex-1 flex items-center justify-center gap-1.5 py-2.5 px-4 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black shadow-md hover:shadow-lg transition cursor-pointer disabled:opacity-50"
               >
                 {isCommitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
-                <span>✕ 判定风险并驳回 (Saga 回滚)</span>
+                <span>✕ 判定风险并驳回终止</span>
               </button>
             </div>
           </div>
@@ -525,12 +529,12 @@ export const WorkflowWaterfallDrawer: React.FC<WorkflowWaterfallDrawerProps> = (
                         {item.status === "BLOCKED" && (
                           <span className="flex items-center gap-1 font-mono text-[11px] font-bold text-amber-700">
                             <Lock className="w-3 h-3" />
-                            <span>门闩阻断</span>
+                            <span>复核阻断</span>
                           </span>
                         )}
                         {item.status === "COMPENSATED" && (
                           <span className="font-mono text-[11px] font-bold text-purple-700">
-                            已回滚冲正
+                            已安全回滚
                           </span>
                         )}
                         {item.status === "SUCCESS" && (
