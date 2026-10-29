@@ -130,8 +130,8 @@ export default function Sidebar({ currentTab, onSelectTab, agentsCount, docsCoun
             </div>
           </div>
         </div>
-        <div className="text-[10px] text-slate-400 text-center font-mono">
-          v2.4.0 (Spring Boot 3 + ownagent)
+        <div className="text-[10px] text-slate-400 text-center font-sans">
+          ownagent 企业级智能中枢平台
         </div>
       </div>
     </aside>

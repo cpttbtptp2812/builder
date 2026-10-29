@@ -376,7 +376,7 @@ export default function ChatPlaygroundPage({
                 },
                 content:
                   (m.content ? m.content + "\n\n" : "") +
-                  `> ✅ **【人机协同审批通过】** 审批人已同意执行变更操作。\n> 真实执行结果：变更生效，受影响行数: ${res.affectedRows ?? 1} 行。`,
+                  `> ✅ **【管理员审批通过】** 审批人已同意执行变更操作。\n> 真实执行结果：变更生效，受影响行数: ${res.affectedRows ?? 1} 行。`,
               }
             : m
         )
@@ -387,7 +387,7 @@ export default function ChatPlaygroundPage({
     }
   };
 
-  // 人机协同审批驳回：安全阻断高危操作
+  // 审批驳回：安全阻断变更操作
   const handleRejectTicket = async (msgId: string, ticketId: string) => {
     try {
       const res = await decideApprovalApi(ticketId, "REJECT");
@@ -403,7 +403,7 @@ export default function ChatPlaygroundPage({
                 },
                 content:
                   (m.content ? m.content + "\n\n" : "") +
-                  `> ❌ **【人机协同审批驳回】** 审批人已驳回该变更指令，已安全阻断。`,
+                  `> ❌ **【管理员审批驳回】** 审批人已驳回该变更指令，已安全阻断。`,
               }
             : m
         )
@@ -507,7 +507,7 @@ export default function ChatPlaygroundPage({
     const effectiveModel =
       currentAgent?.model && currentAgent.model !== "deepseek-chat"
         ? currentAgent.model
-        : (systemModel || "qwen-plus");
+        : (systemModel || "deepseek-chat");
 
     // 3. 进入推流生成状态
     isGeneratingRef.current = true;
@@ -853,7 +853,10 @@ export default function ChatPlaygroundPage({
               <div
                 key={s.id}
                 onClick={() => {
-                  if (isGenerating) return;
+                  if (isGenerating) {
+                    handleStopGenerating();
+                    toast.info("已停止上一会话生成并切换会话");
+                  }
                   newlyCreatedSessionIdRef.current = null;
                   setCurrentSessionId(s.id);
                 }}
@@ -1274,7 +1277,7 @@ export default function ChatPlaygroundPage({
                                 <span>业务流水线</span>
                               </span>
 
-                              {/* 步骤 1: 规约对齐 */}
+                              {/* 步骤 1: 制度检索 */}
                               <button
                                 type="button"
                                 onClick={() => msg.citations?.length && setActiveTraceDrawer({ messageId: msg.id, defaultTab: "knowledge" })}
@@ -1283,45 +1286,45 @@ export default function ChatPlaygroundPage({
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : "text-slate-400"
                                 }`}
-                                title="打开相关制度"
+                                title="查看关联规章制度"
                               >
-                                <span>{msg.citations?.length ? "✓" : "○"} 1. 规约对齐</span>
+                                <span>{msg.citations?.length ? "✓" : "○"} 1. 制度检索</span>
                                 {msg.citations?.length ? <span className="font-mono text-[10px]">({msg.citations.length}篇)</span> : null}
                               </button>
 
                               <span className="text-slate-300 text-[10px]">→</span>
 
-                              {/* 步骤 2: 状态感知 */}
+                              {/* 步骤 2: 数据核验 */}
                               <div
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
                                   msg.toolCalls?.length
                                     ? "bg-blue-50 text-blue-700 border border-blue-200"
                                     : "text-slate-400"
                                 }`}
-                                title="第二阶段：调用企业数据库执行只读感知"
+                                title="数据查询与格式核查"
                               >
-                                <span>{msg.toolCalls?.length ? "✓" : "○"} 2. 状态感知</span>
+                                <span>{msg.toolCalls?.length ? "✓" : "○"} 2. 数据核验</span>
                                 {msg.toolCalls?.length ? <span className="font-mono text-[10px]">({msg.toolCalls[0].displayName || msg.toolCalls[0].tool})</span> : null}
                               </div>
 
                               <span className="text-slate-300 text-[10px]">→</span>
 
-                              {/* 步骤 3: 安全防线 */}
+                              {/* 步骤 3: 安全检查 */}
                               <div
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
                                   msg.approvalTicket
                                     ? "bg-rose-50 text-rose-700 border border-rose-200 font-bold"
                                     : "text-slate-400"
                                 }`}
-                                title="第三阶段：生产高危写操作阻断与单据生成"
+                                title="高危变更指令安全阻断"
                               >
-                                <span>{msg.approvalTicket ? "⚠️" : "○"} 3. 高危拦截</span>
+                                <span>{msg.approvalTicket ? "⚠️" : "○"} 3. 安全检查</span>
                                 {msg.approvalTicket ? <span className="font-mono text-[10px]">({msg.approvalTicket.ticketId})</span> : null}
                               </div>
 
                               <span className="text-slate-300 text-[10px]">→</span>
 
-                              {/* 步骤 4: 人机协同 */}
+                              {/* 步骤 4: 人工审批 */}
                               <div
                                 className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
                                   msg.approvalTicket?.status === "APPROVED"
@@ -1330,23 +1333,23 @@ export default function ChatPlaygroundPage({
                                     ? "bg-amber-100 text-amber-800 border border-amber-300 animate-pulse font-bold"
                                     : "text-slate-400"
                                 }`}
-                                title="第四阶段：安全员现场人工决断"
+                                title="管理员审核确认"
                               >
-                                <span>{msg.approvalTicket?.status === "APPROVED" ? "✓" : msg.approvalTicket ? "⏳" : "○"} 4. 人机协同</span>
+                                <span>{msg.approvalTicket?.status === "APPROVED" ? "✓" : msg.approvalTicket ? "⏳" : "○"} 4. 人工审批</span>
                                 {msg.approvalTicket?.status === "APPROVED" ? <span className="font-mono text-[10px]">(已核准)</span> : null}
                               </div>
 
                               <span className="text-slate-300 text-[10px]">→</span>
 
-                              {/* 步骤 5: 交付归档 */}
+                              {/* 步骤 5: 流程归档 */}
                               <button
                                 type="button"
                                 onClick={() => setActiveTraceDrawer({ messageId: msg.id, defaultTab: "waterfall" })}
                                 className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 cursor-pointer transition"
-                                title="查看耗时明细"
+                                title="查看执行耗时明细"
                               >
-                                <span>✓ 5. 审计归档</span>
-                                <span className="font-mono text-[10px]">(详情 ↗)</span>
+                                <span>✓ 5. 流程归档</span>
+                                <span className="font-mono text-[10px]">(查看耗时 ↗)</span>
                               </button>
                             </div>
                           )}
@@ -1496,7 +1499,7 @@ export default function ChatPlaygroundPage({
                               </div>
 
                               <div className="text-xs text-amber-800 leading-relaxed font-medium">
-                                {msg.approvalTicket.warning || "检测到涉及非只读数据库写操作指令，已触发生产级安全挂起策略。请授权负责人人工核准或驳回。"}
+                                {msg.approvalTicket.warning || "检测到涉及修改或变更数据的敏感指令，已自动暂停并等待安全复核。请授权负责人核准或驳回。"}
                               </div>
 
                               {msg.approvalTicket.sql && (
@@ -1597,8 +1600,8 @@ export default function ChatPlaygroundPage({
                                   <span>
                                     相同问题已缓存 · 未再调用模型
                                     {msg.trace?.savedTokens && msg.trace.savedTokens > 0
-                                      ? ` (省 ${msg.trace.savedTokens.toLocaleString()} tk)`
-                                      : ""}
+                                      ? ` (免消耗 ${msg.trace.savedTokens.toLocaleString()} 字符)`
+                                      : " (已秒回)"}
                                   </span>
                                 </button>
                               ) : msg.tokens ? (
@@ -1615,10 +1618,10 @@ export default function ChatPlaygroundPage({
                                       })
                                     }
                                     className="inline-flex items-center gap-1 text-slate-500 hover:text-blue-600 font-medium hover:underline transition cursor-pointer"
-                                    title="点击展开右侧抽屉，查看单次请求全链路甘特瀑布图"
+                                    title="点击展开右侧抽屉，查看全链路处理耗时"
                                   >
                                     <Activity className="w-3 h-3 text-blue-500" />
-                                    <span>耗时: {msg.duration} (Trace 瀑布图 ↗)</span>
+                                    <span>耗时: {msg.duration} (查看耗时 ↗)</span>
                                   </button>
                                 </>
                               )}
@@ -1758,7 +1761,7 @@ export default function ChatPlaygroundPage({
                     role: "assistant",
                     content: "",
                     userPrompt: "当前会话监控",
-                    modelName: currentAgent?.model || systemModel || "qwen-plus",
+                    modelName: currentAgent?.model || systemModel || "deepseek-chat",
                     sessionId: currentSessionId,
                     enableRAG,
                     enableThinking,
@@ -1771,7 +1774,7 @@ export default function ChatPlaygroundPage({
                 return {
                   ...targetMsg,
                   userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "",
-                  modelName: targetMsg.modelName || currentAgent?.model || systemModel || "qwen-plus",
+                  modelName: targetMsg.modelName || currentAgent?.model || systemModel || "deepseek-chat",
                   sessionId: targetMsg.sessionId || currentSessionId,
                   enableRAG,
                   enableThinking,

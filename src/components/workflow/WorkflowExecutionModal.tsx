@@ -321,7 +321,7 @@ export const WorkflowExecutionModal: React.FC<WorkflowExecutionModalProps> = ({
                   className="flex items-center gap-2 px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold transition shadow-md shadow-blue-500/20 disabled:opacity-50 cursor-pointer"
                 >
                   <Play className="w-3.5 h-3.5 fill-current" />
-                  <span>{isExecuting ? "流水线正在调度..." : "启动流水线真实推演"}</span>
+                  <span>{isExecuting ? "正在执行流水线..." : "立即执行流水线"}</span>
                 </button>
               </div>
             </div>
@@ -333,7 +333,7 @@ export const WorkflowExecutionModal: React.FC<WorkflowExecutionModalProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-rose-900 font-bold text-sm">
                   <ShieldAlert className="w-5 h-5 text-rose-600 animate-pulse" />
-                  <span>【触发高危操作拦截】流水线已暂停 · 等待负责人人工复核</span>
+                  <span>【触发安全检查拦截】流水线已暂停 · 等待负责人人工复核</span>
                 </div>
                 <span className="font-mono text-xs font-bold bg-rose-200 text-rose-900 px-2.5 py-0.5 rounded-full">
                   工单: {pendingTicket.id}
@@ -346,8 +346,8 @@ export const WorkflowExecutionModal: React.FC<WorkflowExecutionModalProps> = ({
                   <span className="font-semibold text-rose-700">{pendingTicket.operationSummary || "指令涉及高危写操作或预算超限"}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500">安全级别:</span>
-                  <span className="font-semibold text-rose-600">{pendingTicket.policyLevel || "P1_HIGH"} (风险系数: {pendingTicket.riskScore || 0.08})</span>
+                  <span className="text-slate-500">风险级别:</span>
+                  <span className="font-semibold text-rose-600">{pendingTicket.policyLevel === "P1_HIGH" ? "重要风险 (P1)" : (pendingTicket.policyLevel || "重要风险")} (风险系数: {pendingTicket.riskScore || 0.08})</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500">签批授权人:</span>
@@ -379,7 +379,7 @@ export const WorkflowExecutionModal: React.FC<WorkflowExecutionModalProps> = ({
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-blue-600" />
-                <span>流水线执行节点瀑布流 (Pipeline Execution Steps)</span>
+                <span>业务流水线执行节点 (Execution Steps)</span>
               </h3>
               <span className="text-[11px] font-mono text-slate-500">
                 物理实测耗时: <strong className="text-blue-700">{totalDurationMs}ms</strong>
@@ -388,7 +388,7 @@ export const WorkflowExecutionModal: React.FC<WorkflowExecutionModalProps> = ({
 
             {stepLogs.length === 0 ? (
               <div className="p-8 text-center bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-slate-400 text-xs space-y-1">
-                <p>点击上方「启动流水线真实推演」按钮开始执行</p>
+                <p>点击上方「立即执行流水线」按钮开始执行</p>
                 <p className="text-[11px] text-slate-400">系统将调用后端真实调度引擎，严格按业务步骤推进与核验</p>
               </div>
             ) : (
@@ -507,7 +507,7 @@ export const WorkflowExecutionModal: React.FC<WorkflowExecutionModalProps> = ({
             onClick={onClose}
             className="px-4 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 rounded-xl text-slate-700 text-xs font-bold transition cursor-pointer"
           >
-            关闭推演台
+            关闭窗口
           </button>
         </div>
       </div>

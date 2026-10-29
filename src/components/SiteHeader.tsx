@@ -78,7 +78,7 @@ export function SiteHeader({
             border: "1px solid rgba(99, 102, 241, 0.3)",
           }}
         >
-          v2.4
+          企业版
         </span>
       </div>
 

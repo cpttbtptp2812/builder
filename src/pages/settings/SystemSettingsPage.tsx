@@ -1,4 +1,4 @@
-﻿import React, { useState } from "react";
+import React, { useState } from "react";
 import {
   Cpu,
   ShieldAlert,
@@ -134,14 +134,14 @@ export const SystemSettingsPage: React.FC<SystemSettingsPageProps> = ({
               <div className="grid grid-cols-2 gap-4">
                 <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-700">Spring Boot 3 调度引擎</span>
+                    <span className="text-xs font-bold text-slate-700">业务调度引擎</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                      Virtual Threads 活跃
+                      高并发调度引擎活跃
                     </span>
                   </div>
                   <div className="text-xs font-mono text-slate-500 space-y-1">
-                    <div>运行时版本: Java 21 (Temurin JRE)</div>
-                    <div>引擎服务端口: 8080 (HTTP / SSE)</div>
+                    <div>运行时内核: 企业级高并发运行时</div>
+                    <div>数据通信协议: 安全流式传输 (SSE)</div>
                     <div>健康状态: {health.ok ? "ONLINE (200 OK)" : "STANDBY"}</div>
                   </div>
                 </div>

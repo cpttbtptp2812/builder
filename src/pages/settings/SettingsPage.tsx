@@ -181,7 +181,7 @@ export default function SettingsPage() {
       .then((res) => (res.ok ? res.json() : null))
       .then((data) => {
         if (data && (data.status === "UP" || data.ok === true || data.status === "ok")) {
-          setServiceStatus(`后端服务已连接 🟢 (Spring Boot 3 · Java 21)`);
+          setServiceStatus("核心服务运行正常 🟢 (全功能就绪)");
         } else {
           setServiceStatus("后端服务离线 🔴");
         }
@@ -674,41 +674,26 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            {/* 演练控制与说明 */}
+            {/* 高可用双通道运行状态 */}
             <div className="p-3.5 rounded-xl bg-slate-800/50 border border-slate-700/50 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
               <div className="space-y-0.5">
-                <div className="font-bold text-amber-300 flex items-center gap-1.5">
-                  <Zap className="w-3.5 h-3.5" />
-                  <span>生产故障注入演练：模拟主通道 3s 超时</span>
+                <div className="font-bold text-emerald-300 flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  <span>双通道高可用自动容灾保护</span>
                 </div>
                 <p className="text-[11px] text-slate-400">
-                  开启后向任意会话提问，主通道将模拟 3 秒超时并触发断路器，毫秒级降级至备用通道并在 Trace 中预警。
+                  系统采用主备双通道热备方案，实时保障问答可用性。当主模型端点网络波动时，自动平滑切换至备用通道。
                 </p>
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
                 <button
                   type="button"
-                  onClick={handleToggleFailoverTimeout}
-                  disabled={isTogglingTimeout}
-                  className={`px-3 py-1.5 rounded-lg font-bold text-xs transition cursor-pointer ${
-                    failoverInfo?.simulateTimeout
-                      ? "bg-rose-600 hover:bg-rose-700 text-white"
-                      : "bg-slate-700 hover:bg-slate-600 text-slate-200"
-                  }`}
+                  onClick={handleResetFailover}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs font-bold transition cursor-pointer"
                 >
-                  {failoverInfo?.simulateTimeout ? "🔥 演练中 (点击关闭)" : "开启 3s 超时演练"}
+                  ✓ 检查并保持就绪
                 </button>
-
-                {failoverInfo?.circuitState === "OPEN" && (
-                  <button
-                    type="button"
-                    onClick={handleResetFailover}
-                    className="px-2.5 py-1.5 rounded-lg bg-emerald-600/80 hover:bg-emerald-600 text-white text-xs font-bold transition cursor-pointer"
-                  >
-                    重置为 CLOSED
-                  </button>
-                )}
               </div>
             </div>
           </div>

@@ -125,7 +125,7 @@ export default function AuditLogsPage({ logs }: AuditLogsPageProps) {
                 熔断中断
               </button>
             </div>
-            <span className="text-xs text-slate-400 font-mono">从 Spring Boot 3 后端 audit_log 表实时读出</span>
+            <span className="text-xs text-slate-400 font-mono">安全审计数据库实时记录</span>
           </div>
 
           <table className="w-full text-left text-xs">

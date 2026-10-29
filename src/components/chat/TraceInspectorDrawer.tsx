@@ -154,7 +154,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   }, [isOpen, activeTab]);
 
   const handleClearCache = async () => {
-    if (!window.confirm("确定要清空全部精确哈希降本缓存吗？清空后再次提问将重新调用大模型上游生成。")) {
+    if (!window.confirm("确定要清空历史问答缓存吗？清空后再次提问将重新向模型请求回答。")) {
       return;
     }
     setIsClearing(true);
@@ -723,11 +723,11 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
                   <div className="flex items-center justify-between text-[10px] font-mono text-slate-500 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200/60">
                     <span>输入: {step6.promptTokens} 字</span>
                     <span>输出: {step6.completionTokens} 字</span>
-                    <span>合计: {step6.totalTokens} tk</span>
+                    <span>合计: {step6.totalTokens} 字符</span>
                   </div>
                 )}
                 <p className="text-[10px] text-slate-400 pt-0.5 leading-relaxed">
-                  Token 数据依据上游返回 usage 或流式字符准确换算，已同步持久化落盘至审计对账库。
+                  字数统计依据实际生成字符准确换算，已同步记录至审计日志。
                 </p>
               </div>
             </div>
@@ -744,11 +744,11 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
                     <span>命中历史相同问答</span>
                   </div>
                   <span className="font-mono text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">
-                    耗时 {totalMs}ms · 0 Token 消耗
+                    耗时 {totalMs}ms · 0 算力消耗
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-600">
-                  本次提问经 SHA-256 签名标准化校验，命中本地持久化二级缓存。完全免除公网大模型推理 RTT 与 API 计费，累计节省约 {savedTokens} 个 Token。
+                  本次提问命中历史本地缓存，直接快速响应，免去重复模型生成，累计节省约 {savedTokens} 个字符算力。
                 </p>
               </div>
             )}
@@ -756,38 +756,38 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             {message?.isThinking && (
               <div className="flex items-center gap-2 px-3.5 py-2 bg-emerald-50/90 border border-emerald-200 rounded-xl text-xs text-emerald-800 font-medium animate-pulse shadow-2xs">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                <span>全链路实时动态监测中：当前耗时 {(totalMs / 1000).toFixed(1)}s · 已接收 {tokens} Tokens</span>
+                <span>全链路实时动态监测中：当前耗时 {(totalMs / 1000).toFixed(1)}s · 已接收 {tokens} 字</span>
               </div>
             )}
 
-            {/* 故障转移与断路器高可用告警卡 */}
+            {/* 故障转移与高可用提示卡 */}
             {message.trace?.failover?.triggered && (
               <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-300 text-xs text-amber-950 font-medium shadow-2xs space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5 font-bold text-amber-900">
                     <ShieldAlert className="w-4 h-4 text-amber-600" />
-                    <span>大模型网关故障转移触发 (Failover Active)</span>
+                    <span>高可用双通道自动切换 (Failover Active)</span>
                   </div>
                   <span className="font-mono text-[10px] bg-amber-200/80 text-amber-900 px-2 py-0.5 rounded-full font-bold">
-                    断路器状态: {message.trace.failover.circuitState || "OPEN"}
+                    备用通道运行中
                   </span>
                 </div>
                 <div className="text-[11px] text-slate-700 space-y-1 bg-white/70 p-2.5 rounded-xl border border-amber-200">
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">主通道异常:</span>
+                    <span className="text-slate-500">主通道状态:</span>
                     <span className="font-semibold text-rose-600">{message.trace.failover.reason}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">降级接管算力:</span>
+                    <span className="text-slate-500">已切换至备用通道:</span>
                     <span className="font-semibold text-emerald-700">{message.trace.failover.fallbackChannel}</span>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-slate-500">网关热切换耗时:</span>
+                    <span className="text-slate-500">平滑切换耗时:</span>
                     <span className="font-mono font-bold text-amber-700">{message.trace.failover.switchLatencyMs || 15}ms</span>
                   </div>
                 </div>
                 <p className="text-[10.5px] text-amber-800/80 leading-relaxed">
-                  生产级高可用断路器保障：主供应商响应超时或限流时自动热迁移，业务请求零感知中断。
+                  高可用双通道保障：当主模型响应超时或网络异常时，系统自动平滑切换至备用通道，保障业务零中断。
                 </p>
               </div>
             )}
@@ -812,13 +812,13 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
 
               <div className="p-3 rounded-2xl bg-emerald-50/60 border border-emerald-200/60">
                 <span className="text-[11px] text-emerald-600 font-medium">
-                  {isCacheHit ? "免除 Token 消耗" : "查知识库耗时"}
+                  {isCacheHit ? "免除字符消耗" : "查制度知识库耗时"}
                 </span>
                 <div className="text-lg font-black font-mono text-emerald-900 mt-0.5">
                   {isCacheHit ? (
                     <>
                       +{savedTokens}
-                      <span className="text-xs font-normal text-emerald-600 ml-0.5">tk 节省</span>
+                      <span className="text-xs font-normal text-emerald-600 ml-0.5">字 节省</span>
                     </>
                   ) : (
                     <>
@@ -831,11 +831,11 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
 
               <div className="p-3 rounded-2xl bg-purple-50/60 border border-purple-200/60">
                 <span className="text-[11px] text-purple-600 font-medium">
-                  {isCacheHit ? "本次实际 Token 消耗" : "实发 Token 吞吐"}
+                  {isCacheHit ? "本次实际消耗" : "实际生成字数"}
                 </span>
                 <div className="text-lg font-black font-mono text-purple-900 mt-0.5">
                   {tokens}
-                  <span className="text-xs font-normal text-purple-600 ml-0.5">tk</span>
+                  <span className="text-xs font-normal text-purple-600 ml-0.5">字</span>
                 </div>
               </div>
             </div>
@@ -1173,7 +1173,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               </div>
               <p>
                 耗时由服务端真实记录。
-                相同问题二次触发时命中 Exact Hash Cache，在网关层 15ms 内前置拦截；大模型主通道异常或超时（&ge;3.0s）时由断路器毫秒级降级至备用私有算力。
+                相同问题再次提问时自动命中历史缓存并瞬间返回；当主大模型通道响应超时或异常时，系统将自动无缝平滑切换至备用私有通道。
               </p>
             </div>
           </div>
@@ -1312,8 +1312,8 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
                       </div>
 
                       <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono pt-0.5 border-t border-slate-100">
-                        <span>首发消耗: {e.originalTokens} tk ({e.originalDurationMs}ms)</span>
-                        <span className="text-emerald-600 font-bold">累计省: +{e.totalSavedTokens} tk</span>
+                        <span>首次用量: {e.originalTokens} 字 ({e.originalDurationMs}ms)</span>
+                        <span className="text-emerald-600 font-bold">累计节省: +{e.totalSavedTokens} 字</span>
                       </div>
                     </div>
                   ))}
@@ -1429,9 +1429,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             ) : (
               <div className="space-y-3">
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-600">
-                  <span>思考链推演详情 (Chain of Thought)</span>
+                  <span>深度思考推理过程</span>
                   <span className="text-[10px] font-mono text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full border border-purple-200">
-                    Deep Reasoning Log
+                    Reasoning
                   </span>
                 </div>
 

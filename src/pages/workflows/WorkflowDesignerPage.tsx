@@ -104,7 +104,7 @@ const DEFAULT_STEPS: PipelineStep[] = [
   },
   {
     id: "step-05",
-    name: "终态大模型归纳与审计入库 (LLM Reduce & Audit)",
+    name: "业务归档与合规存证",
     type: "LLM_REDUCE",
     description: "大模型汇总长链执行数据，流式生成业务回执，并异步写入全链路 FinOps 审计追踪",
     config: {
@@ -545,8 +545,8 @@ export const WorkflowDesignerPage: React.FC<WorkflowDesignerPageProps> = ({
               className="font-bold text-sm text-slate-900 bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-600 outline-none px-1 py-0.5 transition w-80 truncate"
               title="点击修改流水线名称"
             />
-            <span className="text-[10px] font-mono font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
-              DAG Pipeline v2.5
+            <span className="text-[10px] font-sans font-bold bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full border border-blue-200">
+              业务流程设计器
             </span>
           </div>
         </div>
@@ -619,7 +619,7 @@ export const WorkflowDesignerPage: React.FC<WorkflowDesignerPageProps> = ({
               <div className="flex items-center justify-between px-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs font-black uppercase tracking-wider text-slate-400">
-                    Execution Pipeline DAG
+                    业务流程节点编排
                   </span>
                   <span className="text-[10px] bg-slate-200/60 text-slate-600 px-2 py-0.2 rounded-full font-bold">
                     共 {steps.length} 个顺序阶段
@@ -884,7 +884,7 @@ export const WorkflowDesignerPage: React.FC<WorkflowDesignerPageProps> = ({
           <div className="p-4 border-b border-slate-200/80 flex items-center justify-between bg-slate-50/60">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-blue-600 animate-pulse" />
-              <h3 className="text-xs font-bold text-slate-900">流水线实时推演工作台</h3>
+              <h3 className="text-xs font-bold text-slate-900">业务流水线执行工作台</h3>
             </div>
             <span className="text-[10px] font-mono bg-blue-50 text-blue-700 px-2 py-0.5 rounded font-bold border border-blue-200">
               Live Runner
@@ -910,7 +910,7 @@ export const WorkflowDesignerPage: React.FC<WorkflowDesignerPageProps> = ({
                 rows={3}
                 value={testPayload}
                 onChange={(e) => setTestPayload(e.target.value)}
-                placeholder="输入待推演的真实业务指令..."
+                placeholder="输入待执行的真实业务指令..."
                 className="w-full text-xs text-slate-800 bg-slate-50 border border-slate-200 rounded-xl p-3 outline-none focus:bg-white focus:border-blue-600 transition resize-none leading-relaxed"
               />
               <button
@@ -1055,7 +1055,7 @@ export const WorkflowDesignerPage: React.FC<WorkflowDesignerPageProps> = ({
                 <div className="flex items-center justify-between border-b border-slate-800 pb-2">
                   <span className="font-bold text-slate-300 flex items-center gap-1.5">
                     <Terminal className="w-3.5 h-3.5 text-blue-400" />
-                    终态业务回执单 (LLM Reduce Output)
+                    业务执行回执单与审计存证
                   </span>
                   <span className="text-[10px] font-mono text-emerald-400">AUDIT_LOG_PERSISTED</span>
                 </div>
