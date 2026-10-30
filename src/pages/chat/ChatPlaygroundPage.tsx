@@ -428,11 +428,7 @@ export default function ChatPlaygroundPage({
       setCurrentSessionId(created.id);
       setMessages([]);
     } catch {
-      const fallbackId = `s-${Date.now().toString().slice(-4)}`;
-      const fallbackSession = { id: fallbackId, title: "新会话", time: "刚刚" };
-      setSessions([fallbackSession, ...sessions]);
-      setCurrentSessionId(fallbackId);
-      setMessages([]);
+      toast.error("创建新会话失败，请检查服务连接");
     }
   };
 
@@ -492,12 +488,9 @@ export default function ChatPlaygroundPage({
         setCurrentSessionId(created.id);
         newlyCreatedSessionIdRef.current = created.id;
         setSessions((prev) => [created, ...prev]);
-      } catch {
-        const fallbackId = `s-${Date.now().toString().slice(-6)}`;
-        activeSessionId = fallbackId;
-        setCurrentSessionId(fallbackId);
-        newlyCreatedSessionIdRef.current = fallbackId;
-        setSessions((prev) => [{ id: fallbackId, title: newSessionTitle, time: "刚刚" }, ...prev]);
+      } catch (err: any) {
+        toast.error("会话初始化失败，请重试或检查服务连接");
+        return;
       }
     } else {
       newlyCreatedSessionIdRef.current = activeSessionId;
