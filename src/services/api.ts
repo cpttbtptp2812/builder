@@ -43,6 +43,7 @@ export interface StreamEventHandlers {
   onApprovalRequired?: (ticket: { ticketId: string; sql?: string; warning?: string; status: string }) => void;
   onCitations?: (citations: any[], ragStats?: any) => void;
   onTraceStep?: (step: TraceStepData) => void;
+  onAgentStep?: (step: any) => void;
   onDelta?: (chunk: string) => void;
   onFinish?: (meta: any) => void;
   onError?: (err: string) => void;
@@ -248,7 +249,11 @@ export async function streamChatFromBackend(
         const event = eventMatch ? eventMatch[1].trim() : "message";
         const data = dataMatch ? dataMatch[1].trim() : "";
 
-        if (event === "trace_step" && handlers.onTraceStep) {
+        if (event === "agent_step" && handlers.onAgentStep) {
+          try {
+            handlers.onAgentStep(JSON.parse(data));
+          } catch {}
+        } else if (event === "trace_step" && handlers.onTraceStep) {
           try {
             handlers.onTraceStep(JSON.parse(data));
           } catch {}

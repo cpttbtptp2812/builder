@@ -41,6 +41,8 @@ import {
 import { useToast } from "@/context/ToastContext";
 import { TraceInspectorDrawer, ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
+import { ThinkingStream } from "@/components/chat/ThinkingStream";
+import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage } from "@/lib/agentTimeline";
 
 export interface CitationItem {
   chunkId: string;
@@ -97,6 +99,7 @@ interface Message {
   enableRAG?: boolean;
   enableThinking?: boolean;
   enableWebSearch?: boolean;
+  agentTimeline?: AgentStep[];
 }
 
 interface ChatPlaygroundProps {
@@ -219,6 +222,7 @@ export default function ChatPlaygroundPage({
   const [traceLayoutMode, setTraceLayoutMode] = useState<"split" | "drawer">("split");
   const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
   const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
+  const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -552,7 +556,7 @@ export default function ChatPlaygroundPage({
     // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同，默认呈现决策瀑布流)
     setActiveTraceDrawer({
       messageId: asstMsgId,
-      defaultTab: "waterfall",
+      defaultTab: "flow",
     });
     setTraceLayoutMode("split");
 
@@ -576,6 +580,18 @@ export default function ChatPlaygroundPage({
           enableRAG,
         },
         {
+          onAgentStep: (stepData) => {
+            setMessages((prev) =>
+              prev.map((m) => {
+                if (m.id !== asstMsgId) return m;
+                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "agent_step", stepData);
+                return {
+                  ...m,
+                  agentTimeline: updatedTimeline,
+                };
+              })
+            );
+          },
           onTraceStep: (stepData) => {
             setMessages((prev) =>
               prev.map((m) => {
@@ -610,10 +626,13 @@ export default function ChatPlaygroundPage({
                   (traceUpdate as any).tokens = flatData.totalTokens;
                 }
 
+                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "trace_step", flatData);
+
                 return {
                   ...m,
                   traceSteps: newSteps,
                   trace: traceUpdate,
+                  agentTimeline: updatedTimeline,
                 };
               })
             );
@@ -621,15 +640,16 @@ export default function ChatPlaygroundPage({
           onCitations: (newCitations, ragStats) => {
             if (Array.isArray(newCitations) && newCitations.length > 0) {
               setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === asstMsgId
-                    ? {
-                      ...m,
-                      citations: newCitations,
-                      ragStats: ragStats || m.ragStats,
-                    }
-                    : m
-                )
+                prev.map((m) => {
+                  if (m.id !== asstMsgId) return m;
+                  const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "citations", { items: newCitations, ...(ragStats || {}) });
+                  return {
+                    ...m,
+                    citations: newCitations,
+                    ragStats: ragStats || m.ragStats,
+                    agentTimeline: updatedTimeline,
+                  };
+                })
               );
             }
           },
@@ -638,10 +658,12 @@ export default function ChatPlaygroundPage({
               prev.map((m) => {
                 if (m.id !== asstMsgId) return m;
                 const existing = m.toolCalls || [];
+                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "tool", toolData);
                 return {
                   ...m,
                   activeToolName: toolData.tool,
                   toolCalls: [...existing, toolData],
+                  agentTimeline: updatedTimeline,
                 };
               })
             );
@@ -997,7 +1019,7 @@ export default function ChatPlaygroundPage({
                   const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
                   setActiveTraceDrawer({
                     messageId: targetMsg ? targetMsg.id : "finops-global",
-                    defaultTab: "waterfall",
+                    defaultTab: "flow",
                   });
                   setTraceLayoutMode("split");
                 }
@@ -1438,169 +1460,17 @@ export default function ChatPlaygroundPage({
                         </div>
 
                         <div className="flex-1 space-y-2 min-w-0">
-                          {/* 业务流水线步进看板：凸显非普通聊天的工业级工作流编排 */}
-                          {(msg.citations?.length || msg.toolCalls?.length || msg.approvalTicket) && (
-                            <div className="p-2 rounded-xl bg-slate-50/90 border border-slate-200/80 text-xs flex flex-wrap items-center gap-1.5 shadow-2xs">
-                              <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1 mr-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-600 animate-pulse" />
-                                <span>业务流水线</span>
-                              </span>
-
-                              {/* 步骤 1: 制度检索 */}
-                              <button
-                                type="button"
-                                onClick={() => msg.citations?.length && setActiveTraceDrawer({ messageId: msg.id, defaultTab: "knowledge" })}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${msg.citations?.length
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                  : "text-slate-400"
-                                  }`}
-                                title="查看关联规章制度"
-                              >
-                                <span>{msg.citations?.length ? "✓" : "○"} 1. 制度检索</span>
-                                {msg.citations?.length ? <span className="font-mono text-[10px]">({msg.citations.length}篇)</span> : null}
-                              </button>
-
-                              <span className="text-slate-300 text-[10px]">→</span>
-
-                              {/* 步骤 2: 数据核验 */}
-                              <div
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${msg.toolCalls?.length
-                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                  : "text-slate-400"
-                                  }`}
-                                title="数据查询与格式核查"
-                              >
-                                <span>{msg.toolCalls?.length ? "✓" : "○"} 2. 数据核验</span>
-                                {msg.toolCalls?.length ? <span className="font-mono text-[10px]">({msg.toolCalls[0].displayName || msg.toolCalls[0].tool})</span> : null}
-                              </div>
-
-                              <span className="text-slate-300 text-[10px]">→</span>
-
-                              {/* 步骤 3: 安全检查 */}
-                              <div
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${msg.approvalTicket
-                                  ? "bg-rose-50 text-rose-700 border border-rose-200 font-bold"
-                                  : "text-slate-400"
-                                  }`}
-                                title="高危变更指令安全阻断"
-                              >
-                                <span>{msg.approvalTicket ? "⚠️" : "○"} 3. 安全检查</span>
-                                {msg.approvalTicket ? <span className="font-mono text-[10px]">({msg.approvalTicket.ticketId})</span> : null}
-                              </div>
-
-                              <span className="text-slate-300 text-[10px]">→</span>
-
-                              {/* 步骤 4: 人工审批 */}
-                              <div
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${msg.approvalTicket?.status === "APPROVED"
-                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"
-                                  : msg.approvalTicket
-                                    ? "bg-amber-100 text-amber-800 border border-amber-300 animate-pulse font-bold"
-                                    : "text-slate-400"
-                                  }`}
-                                title="管理员审核确认"
-                              >
-                                <span>{msg.approvalTicket?.status === "APPROVED" ? "✓" : msg.approvalTicket ? "⏳" : "○"} 4. 人工审批</span>
-                                {msg.approvalTicket?.status === "APPROVED" ? <span className="font-mono text-[10px]">(已核准)</span> : null}
-                              </div>
-
-                              <span className="text-slate-300 text-[10px]">→</span>
-
-                              {/* 步骤 5: 流程归档 */}
-                              <button
-                                type="button"
-                                onClick={() => setActiveTraceDrawer({ messageId: msg.id, defaultTab: "waterfall" })}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 cursor-pointer transition"
-                                title="查看执行耗时明细"
-                              >
-                                <span>✓ 5. 流程归档</span>
-                                <span className="font-mono text-[10px]">(查看耗时 ↗)</span>
-                              </button>
-                            </div>
-                          )}
-
-                          {/* 深度思考过程折叠条 */}
-                          {msg.reasoning && (
-                            <div>
-                              {msg.isThinking ? (
-                                <div className="flex items-center gap-2 text-xs text-purple-600 font-medium py-1">
-                                  <Brain className="w-3.5 h-3.5 animate-pulse" />
-                                  <span className="animate-pulse">正在整理思路…</span>
-                                </div>
-                              ) : (
-                                <div className="space-y-1.5">
-                                  <div className="flex items-center gap-2">
-                                    <button
-                                      onClick={() =>
-                                        setExpandedReasoning((prev) => ({
-                                          ...prev,
-                                          [msg.id]: !prev[msg.id],
-                                        }))
-                                      }
-                                      className="inline-flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 font-medium transition cursor-pointer py-0.5"
-                                    >
-                                      <Brain className="w-3.5 h-3.5 text-purple-500" />
-                                      <span>思考过程（可展开） ({msg.duration || "完成"})</span>
-                                      <ChevronDown
-                                        className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedReasoning[msg.id] ? "rotate-180" : ""
-                                          }`}
-                                      />
-                                    </button>
-
-                                    {msg.citations && msg.citations.length > 0 && (
-                                      <button
-                                        onClick={() =>
-                                          setActiveTraceDrawer({
-                                            messageId: msg.id,
-                                            defaultTab: "knowledge",
-                                          })
-                                        }
-                                        className="inline-flex items-center gap-1 text-[11px] text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-200/80 font-medium transition cursor-pointer"
-                                        title="点击在右侧查看引用的制度原文"
-                                      >
-                                        <Database className="w-3 h-3 text-emerald-600" />
-                                        <span>已参考 {msg.citations.length} 条制度</span>
-                                      </button>
-                                    )}
-                                  </div>
-
-                                  {expandedReasoning[msg.id] && (
-                                    <div className="mt-1.5 pl-3 border-l-2 border-purple-200 text-slate-500 text-xs font-mono whitespace-pre-wrap leading-relaxed bg-purple-50/30 p-2.5 rounded-r-xl">
-                                      {msg.reasoning}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* 1. 工具调用闭环轨迹 (Tool Tracing) */}
-                          {msg.toolCalls && msg.toolCalls.length > 0 && (
-                            <div className="space-y-1.5 mb-2">
-                              {msg.toolCalls.map((tc, idx) => (
-                                <div
-                                  key={idx}
-                                  className="flex items-center justify-between px-3 py-2 bg-slate-50 border border-slate-200/80 rounded-xl text-xs"
-                                >
-                                  <div className="flex items-center gap-2 text-slate-800 font-medium">
-                                    <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
-                                    <span className="text-slate-600 font-medium">调用系统接口:</span>
-                                    <span className="font-mono font-semibold text-slate-900 bg-slate-200/60 px-2 py-0.5 rounded">
-                                      {tc.displayName || tc.tool}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                                    {tc.status === "FAILED" || tc.status === "error" || (tc as any).isSuccess === false ? (
-                                      <span className="font-medium text-rose-600">❌ 执行异常</span>
-                                    ) : (
-                                      <span className="font-medium text-emerald-600">✓ 执行成功</span>
-                                    )}
-                                    {tc.duration && <span className="font-mono">({tc.duration})</span>}
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-                          )}
+                          {/* 智能体中枢决策与思考流 (Thinking & Action Stream) */}
+                          <ThinkingStream
+                            timeline={msg.agentTimeline && msg.agentTimeline.length > 0 ? msg.agentTimeline : rebuildTimelineFromMessage(msg)}
+                            isThinking={msg.isThinking}
+                            activeStepId={focusedStepId}
+                            onSelectStep={(stepId) => {
+                              setFocusedStepId(stepId);
+                              setActiveTraceDrawer({ messageId: msg.id, defaultTab: "flow" });
+                            }}
+                            reasoning={msg.reasoning}
+                          />
 
                           {/* 文本回复泡 */}
                           <div className="rounded-2xl rounded-tl-sm bg-white border border-slate-200/80 p-4.5 shadow-xs text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
@@ -1778,7 +1648,7 @@ export default function ChatPlaygroundPage({
                                     onClick={() =>
                                       setActiveTraceDrawer({
                                         messageId: msg.id,
-                                        defaultTab: "waterfall",
+                                        defaultTab: "flow",
                                       })
                                     }
                                     className="inline-flex items-center gap-1 text-slate-500 hover:text-blue-600 font-medium hover:underline transition cursor-pointer"
@@ -1925,6 +1795,8 @@ export default function ChatPlaygroundPage({
         onToggleLayout={() => setTraceLayoutMode((prev) => (prev === "split" ? "drawer" : "split"))}
         defaultTab={activeTraceDrawer?.defaultTab || "waterfall"}
         highlightCitationIndex={activeTraceDrawer?.highlightCitationIndex}
+        activeStepId={focusedStepId}
+        onSelectStep={(stepId) => setFocusedStepId(stepId)}
         message={
           activeTraceDrawer
             ? (() => {
