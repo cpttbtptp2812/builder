@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import HomePage from "./pages/home/HomePage";
 import ChatPlaygroundPage from "./pages/chat/ChatPlaygroundPage";
-import AgentsListPage from "./pages/agents/AgentsListPage";
-import KnowledgePage from "./pages/knowledge/KnowledgePage";
-import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
 import WorkflowsListPage from "./pages/workflows/WorkflowsListPage";
 import WorkflowDesignerPage from "./pages/workflows/WorkflowDesignerPage";
 import SystemSettingsPage from "./pages/settings/SystemSettingsPage";
-import { NavTab, AgentItem, AuditLogItem, PipelineItem } from "./types/platform";
+import KnowledgePage from "./pages/knowledge/KnowledgePage";
+import AgentsListPage from "./pages/agents/AgentsListPage";
+import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
+import {
+  NavTab,
+  AgentItem,
+  AuditLogItem,
+  PipelineItem,
+  DEFAULT_ENTERPRISE_WORKFLOWS,
+} from "./types/platform";
 import {
   fetchAgentsApi,
   saveAgentApi,
@@ -22,19 +28,20 @@ import {
 import { WorkflowExecutionModal } from "./components/workflow/WorkflowExecutionModal";
 import { useToast } from "./context/ToastContext";
 import {
-  Bot,
-  Database,
-  Wrench,
-  FileText,
-  Settings,
-  Sparkles,
-  MessageSquare,
-  ArrowRight,
-  Layers,
-  BookOpen,
-  Activity,
-  ChevronDown,
-} from "lucide-react";
+  Segmented,
+  Badge,
+  Button,
+  Space,
+  Tag,
+  Tooltip,
+} from "antd";
+import {
+  DashboardOutlined,
+  MessageOutlined,
+  AppstoreOutlined,
+  SettingOutlined,
+  DeploymentUnitOutlined,
+} from "@ant-design/icons";
 
 export type ViewMode =
   | "home"
@@ -49,37 +56,35 @@ export type ViewMode =
 export default function App() {
   const toast = useToast();
   const [currentView, setCurrentView] = useState<ViewMode>("home");
-  const [isAssetsMenuOpen, setIsAssetsMenuOpen] = useState(false);
-  const assetsMenuRef = React.useRef<HTMLDivElement>(null);
+  const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
-  // 点击外部自动收起底层资产库下拉菜单
-  useEffect(() => {
-    const handleGlobalClick = (e: MouseEvent) => {
-      if (assetsMenuRef.current && !assetsMenuRef.current.contains(e.target as Node)) {
-        setIsAssetsMenuOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleGlobalClick);
-    return () => document.removeEventListener("mousedown", handleGlobalClick);
-  }, []);
+  const handleNavChange = (newView: ViewMode) => {
+    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7 };
+    const curIdx = order[currentView] ?? 0;
+    const newIdx = order[newView] ?? 0;
+    if (newIdx > curIdx) {
+      setNavDirection("forward");
+    } else if (newIdx < curIdx) {
+      setNavDirection("backward");
+    }
+    setCurrentView(newView);
+  };
 
-  // 全局业务状态 (100% 真实后端持久化)
+  // 全局业务状态
   const [agents, setAgents] = useState<AgentItem[]>([]);
   const [currentAgent, setCurrentAgent] = useState<AgentItem | null>(null);
   const [logs, setLogs] = useState<AuditLogItem[]>([]);
   const [health, setHealth] = useState<{ ok: boolean; info?: any }>({ ok: false });
 
-  // 业务流水线状态 (纯动态数据库读取)
+  // 业务流状态：从真实后端与数据库获取，严禁假数据污染
   const [workflows, setWorkflows] = useState<PipelineItem[]>([]);
-  const [knowledgeCount, setKnowledgeCount] = useState<number>(0);
-  const [toolsCount, setToolsCount] = useState<number>(0);
   const [editingWorkflow, setEditingWorkflow] = useState<PipelineItem | null>(null);
   const [initialChatPrompt, setInitialChatPrompt] = useState<
     { prompt: string; autoSend?: boolean } | string | undefined
   >(undefined);
   const [executingWorkflow, setExecutingWorkflow] = useState<PipelineItem | null>(null);
 
-  // 1. 初始化探测后端健康度并加载业务数据
+  // 初始化探测后端健康度并加载业务数据
   useEffect(() => {
     checkBackendHealth().then((h) => setHealth(h));
 
@@ -99,20 +104,16 @@ export default function App() {
 
     fetchWorkflowsApi()
       .then((wfList) => {
-        setWorkflows(wfList || []);
+        if (wfList && wfList.length > 0) {
+          setWorkflows(wfList);
+        } else {
+          setWorkflows([]);
+        }
       })
       .catch((err) => {
         console.warn("Workflows fetch returned empty or error", err);
         setWorkflows([]);
       });
-
-    fetchKnowledgeChunksApi().then((chunks) => {
-      if (chunks) setKnowledgeCount(chunks.length);
-    });
-
-    fetchToolsApi().then((tools) => {
-      if (tools) setToolsCount(tools.length);
-    });
   }, []);
 
   const handleAddAuditLog = (newLog: AuditLogItem) => {
@@ -136,12 +137,12 @@ export default function App() {
 
   const handleDeleteAgent = async (id: string) => {
     if (agents.length <= 1) {
-      toast.warning("系统至少需保留一个可用智能体！", "无法删除");
+      toast.warning("系统至少需保留一个可用智能体", "无法删除");
       return;
     }
     try {
       await deleteAgentApi(id);
-      toast.success("智能体已从数据库中彻底移除", "删除成功");
+      toast.success("智能体已彻底移除", "删除成功");
     } catch (err) {
       console.warn("Delete API call", err);
     }
@@ -163,19 +164,19 @@ export default function App() {
     }
   };
 
-  // 业务流水线直接在智能工作台左右分屏实时执行
   const handleLaunchWorkflow = (wf: PipelineItem) => {
     setInitialChatPrompt({ prompt: wf.promptTemplate, autoSend: true });
     setCurrentView("chat");
   };
 
-  const handleFillPromptToChat = (wf: PipelineItem) => {
-    setInitialChatPrompt({ prompt: wf.promptTemplate, autoSend: false });
-    setCurrentView("chat");
-  };
-
   const handleOpenCreateWorkflow = () => {
-    setEditingWorkflow(null);
+    const newWf: PipelineItem = {
+      ...DEFAULT_ENTERPRISE_WORKFLOWS[0],
+      id: `wf-${Date.now().toString().slice(-6)}`,
+      name: "新建自定义研发效能智能体",
+      version: "v1.0.0",
+    };
+    setEditingWorkflow(newWf);
     setCurrentView("designer");
   };
 
@@ -184,11 +185,31 @@ export default function App() {
     setCurrentView("designer");
   };
 
-  const handleSaveWorkflow = (saved: PipelineItem) => {
-    setWorkflows((prev) => {
-      const exists = prev.some((w) => w.id === saved.id);
-      return exists ? prev.map((w) => (w.id === saved.id ? saved : w)) : [saved, ...prev];
-    });
+  const handleOpenRepositories = () => {
+    const codeWf = workflows.find((w) => w.tags?.includes("Git监控") || w.category === "代码协同") || workflows[0];
+    if (codeWf) {
+      setEditingWorkflow(codeWf);
+      setCurrentView("designer");
+    } else {
+      handleOpenCreateWorkflow();
+    }
+  };
+
+  const handleSaveWorkflow = async (saved: PipelineItem) => {
+    try {
+      const persisted = await saveWorkflowApi(saved);
+      setWorkflows((prev) => {
+        const exists = prev.some((w) => w.id === persisted.id);
+        return exists ? prev.map((w) => (w.id === persisted.id ? persisted : w)) : [persisted, ...prev];
+      });
+      toast.success("业务流与代码库配置已成功同步持久化！", "保存成功");
+    } catch (err: any) {
+      console.warn("后端持久化未完成，保留本地状态", err);
+      setWorkflows((prev) => {
+        const exists = prev.some((w) => w.id === saved.id);
+        return exists ? prev.map((w) => (w.id === saved.id ? saved : w)) : [saved, ...prev];
+      });
+    }
   };
 
   const handleDeleteWorkflow = async (id: string) => {
@@ -202,266 +223,317 @@ export default function App() {
     }
   };
 
+  // 导航项映射
+  const navValue = currentView === "designer" ? "workflows" : currentView;
+
+  // 顶栏滑动高光胶囊指示器 (Apple / Linear 级顺滑滑动物理反馈)
+  const navContainerRef = useRef<HTMLDivElement | null>(null);
+  const [navIndicator, setNavIndicator] = useState<{ left: number; width: number }>({ left: 4, width: 98 });
+  const navItemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
+
+  const navItems = [
+    { label: "首页大盘", value: "home", icon: <DashboardOutlined /> },
+    { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
+    { label: "业务流中心", value: "workflows", icon: <AppstoreOutlined /> },
+  ];
+
+  useEffect(() => {
+    const activeKey = currentView === "designer" ? "workflows" : currentView;
+    const targetEl = navItemRefs.current[activeKey];
+    if (targetEl && navContainerRef.current) {
+      const containerRect = navContainerRef.current.getBoundingClientRect();
+      const targetRect = targetEl.getBoundingClientRect();
+      setNavIndicator({
+        left: targetRect.left - containerRect.left,
+        width: targetRect.width,
+      });
+    }
+  }, [currentView]);
+
   return (
-    <div className="relative flex flex-col h-screen w-screen bg-[#FAFBFC] text-slate-800 font-sans overflow-hidden select-none">
-      {/* 顶部企业级导航栏 */}
-      <header className="h-14 px-6 border-b border-slate-200/80 bg-white/95 backdrop-blur-md flex items-center justify-between shrink-0 z-20">
-        <div className="flex items-center gap-6">
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100vh",
+        width: "100vw",
+        background: "#f0f2f5",
+        overflow: "hidden",
+      }}
+    >
+      {/* 顶部现代毛玻璃顶栏 (全幅铺满，触感极佳) */}
+      <header
+        style={{
+          height: 60,
+          padding: "0 28px",
+          background: "rgba(255, 255, 255, 0.92)",
+          backdropFilter: "blur(16px)",
+          borderBottom: "1px solid #e2e8f0",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          flexShrink: 0,
+          zIndex: 20,
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
+          {/* Logo */}
           <div
             onClick={() => setCurrentView("home")}
-            className="flex items-center gap-2.5 cursor-pointer group"
-            title="返回系统首页"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+              cursor: "pointer",
+              userSelect: "none",
+            }}
           >
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-              <Sparkles className="w-4 h-4" />
+            <div
+              style={{
+                width: 34,
+                height: 34,
+                borderRadius: 9,
+                background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                color: "#ffffff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 17,
+                boxShadow: "0 2px 8px rgba(99, 102, 241, 0.35)",
+              }}
+            >
+              <DeploymentUnitOutlined />
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="font-black text-slate-900 tracking-tight text-base">OwnAgent</span>
-              <span className="text-[10px] font-mono px-1.5 py-0.2 rounded-md bg-blue-50 text-blue-700 border border-blue-200 font-bold">
-                企业版
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <span style={{ fontSize: 16.5, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.4px" }}>
+                OwnAgent
               </span>
+              <Tag
+                style={{
+                  margin: 0,
+                  fontSize: 10.5,
+                  borderRadius: 4,
+                  fontWeight: 600,
+                  background: "#eef2ff",
+                  color: "#4f46e5",
+                  border: "1px solid #c7d2fe",
+                  padding: "0 6px",
+                }}
+              >
+                STUDIO
+              </Tag>
             </div>
           </div>
 
-          <nav className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl text-xs font-semibold">
-            <button
-              onClick={() => setCurrentView("home")}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer ${
-                currentView === "home"
-                  ? "bg-white text-blue-600 shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              首页
-            </button>
-            <button
-              onClick={() => setCurrentView("chat")}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                currentView === "chat"
-                  ? "bg-white text-blue-600 shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <MessageSquare className="w-3.5 h-3.5" />
-              <span>智能工作台</span>
-            </button>
-            <button
-              onClick={() => setCurrentView("workflows")}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                currentView === "workflows" || currentView === "designer"
-                  ? "bg-white text-blue-600 shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>方案编排中心</span>
-            </button>
-
-            {/* 全局底层资产池 (增加无缝悬停桥接与点击常开支持，杜绝间隙失焦断触) */}
+          {/* 顶级现代滑动流光切换栏 (Apple / Linear 级顺滑滑动物理反馈) */}
+          <nav
+            ref={navContainerRef}
+            style={{
+              position: "relative",
+              display: "flex",
+              alignItems: "center",
+              gap: 2,
+              background: "#f1f5f9",
+              padding: "4px",
+              borderRadius: 10,
+              border: "1px solid #e2e8f0",
+              boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.03)",
+            }}
+          >
+            {/* 顺滑游动的物理高光胶囊 (Sliding Pill Indicator) */}
             <div
-              ref={assetsMenuRef}
-              className="relative"
-              onMouseEnter={() => setIsAssetsMenuOpen(true)}
-              onMouseLeave={() => setIsAssetsMenuOpen(false)}
-            >
-              <button
-                type="button"
-                onClick={() => setIsAssetsMenuOpen((prev) => !prev)}
-                className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                  currentView === "knowledge" || currentView === "agents" || currentView === "tools" || isAssetsMenuOpen
-                    ? "bg-white text-blue-600 shadow-2xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
-                }`}
-              >
-                <Database className="w-3.5 h-3.5" />
-                <span>底层资产库</span>
-                <ChevronDown className={`w-3 h-3 text-slate-400 transition-transform duration-200 ${isAssetsMenuOpen ? "rotate-180 text-blue-600" : ""}`} />
-              </button>
+              style={{
+                position: "absolute",
+                top: 4,
+                bottom: 4,
+                left: 0,
+                transform: `translateX(${navIndicator.left}px)`,
+                width: `${navIndicator.width}px`,
+                background: "#ffffff",
+                borderRadius: 7,
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.1)",
+                transition: "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            />
 
-              {/* 下拉浮层容器：增加 pt-1.5 内边距实现无缝鼠标桥接，彻底杜绝悬浮断触 */}
-              {isAssetsMenuOpen && (
-                <div className="absolute top-full left-0 pt-1.5 w-48 z-50">
-                  <div className="bg-white rounded-2xl shadow-xl border border-slate-200/90 py-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentView("knowledge");
-                        setIsAssetsMenuOpen(false);
-                      }}
-                      className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 hover:bg-slate-50 text-xs transition cursor-pointer ${
-                        currentView === "knowledge" ? "font-bold text-blue-600 bg-blue-50/60" : "text-slate-700"
-                      }`}
-                    >
-                      <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
-                      <div className="flex flex-col">
-                        <span>企业知识库</span>
-                        <span className="text-[10px] text-slate-400 font-normal">规章制度与合规文档</span>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentView("agents");
-                        setIsAssetsMenuOpen(false);
-                      }}
-                      className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 hover:bg-slate-50 text-xs transition cursor-pointer ${
-                        currentView === "agents" ? "font-bold text-blue-600 bg-blue-50/60" : "text-slate-700"
-                      }`}
-                    >
-                      <Bot className="w-4 h-4 text-indigo-600 shrink-0" />
-                      <div className="flex flex-col">
-                        <span>智能体角色库</span>
-                        <span className="text-[10px] text-slate-400 font-normal">多智能体协同配置</span>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrentView("tools");
-                        setIsAssetsMenuOpen(false);
-                      }}
-                      className={`w-full px-3.5 py-2.5 text-left flex items-center gap-2.5 hover:bg-slate-50 text-xs transition cursor-pointer ${
-                        currentView === "tools" ? "font-bold text-blue-600 bg-blue-50/60" : "text-slate-700"
-                      }`}
-                    >
-                      <Wrench className="w-4 h-4 text-emerald-600 shrink-0" />
-                      <div className="flex flex-col">
-                        <span>扩展工具市场</span>
-                        <span className="text-[10px] text-slate-400 font-normal">受控执行与计算工具</span>
-                      </div>
-                    </button>
-                  </div>
+            {navItems.map((item) => {
+              const isActive = navValue === item.value;
+              return (
+                <div
+                  key={item.value}
+                  ref={(el) => (navItemRefs.current[item.value] = el)}
+                  onClick={() => handleNavChange(item.value as ViewMode)}
+                  style={{
+                    position: "relative",
+                    zIndex: 2,
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "6px 16px",
+                    borderRadius: 7,
+                    fontSize: 13,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? "#4338ca" : "#64748b",
+                    cursor: "pointer",
+                    userSelect: "none",
+                    transition: "color 0.2s ease, transform 0.12s ease",
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isActive) e.currentTarget.style.color = "#0f172a";
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isActive) e.currentTarget.style.color = "#64748b";
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 13,
+                      color: isActive ? "#4f46e5" : "#94a3b8",
+                      transition: "color 0.2s ease",
+                    }}
+                  >
+                    {item.icon}
+                  </span>
+                  <span>{item.label}</span>
                 </div>
-              )}
-            </div>
-
-            <button
-              onClick={() => setCurrentView("settings")}
-              className={`px-3 py-1.5 rounded-lg transition cursor-pointer flex items-center gap-1.5 ${
-                currentView === "settings"
-                  ? "bg-white text-blue-600 shadow-2xs font-bold"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <Activity className="w-3.5 h-3.5" />
-              <span>系统与审计</span>
-            </button>
+              );
+            })}
           </nav>
         </div>
 
-        <div className="flex items-center gap-2.5">
-          <span className="text-[11px] font-medium text-slate-500 bg-slate-100/80 px-2.5 py-1 rounded-lg border border-slate-200/60 hidden sm:inline-block">
+        {/* 右侧状态与设置入口 */}
+        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span
+            style={{
+              fontSize: 11.5,
+              color: health.ok ? "#15803d" : "#b45309",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              fontWeight: 600,
+              background: health.ok ? "rgba(240, 253, 244, 0.85)" : "rgba(255, 251, 235, 0.85)",
+              padding: "4px 12px",
+              borderRadius: 20,
+              border: `1px solid ${health.ok ? "#86efac" : "#fde68a"}`,
+              boxShadow: health.ok ? "0 0 12px rgba(34, 197, 94, 0.2)" : "none",
+              backdropFilter: "blur(8px)",
+            }}
+          >
             <span
-              className={`inline-block w-1.5 h-1.5 rounded-full mr-1.5 ${
-                health.ok ? "bg-emerald-500 animate-pulse" : "bg-amber-400"
-              }`}
+              className={health.ok ? "cyber-radar-dot-green" : "cyber-radar-dot"}
+              style={{ width: 6, height: 6 }}
             />
-            {health.ok ? "系统运行正常" : "正在连接后端服务"}
+            {health.ok ? "系统运行就绪" : "连接后端中"}
           </span>
+
+          <Tooltip title="系统设置与审计日志">
+            <Button
+              type="text"
+              icon={<SettingOutlined style={{ fontSize: 16, color: "#64748b" }} />}
+              onClick={() => setCurrentView("settings")}
+              style={{ borderRadius: 8, height: 34, width: 34 }}
+            />
+          </Tooltip>
         </div>
       </header>
 
       {/* 主视图渲染 */}
-      <main className="relative z-10 flex-1 flex flex-col h-full w-full overflow-hidden">
-        {currentView === "home" && (
-          <HomePage
-            onEnterWorkbench={() => setCurrentView("chat")}
-            onEnterWorkbenchWithPrompt={(prompt, autoSend = true) => {
-              setInitialChatPrompt({ prompt, autoSend });
-              setCurrentView("chat");
-            }}
-            onLaunchWorkflow={handleLaunchWorkflow}
-            onOpenModal={(tab) => {
-              if (tab === "workflows") setCurrentView("workflows");
-              else if (tab === "knowledge") setCurrentView("knowledge");
-              else if (tab === "agents") setCurrentView("agents");
-              else if (tab === "tools") setCurrentView("tools");
-              else setCurrentView("settings");
-            }}
-            workflows={workflows}
-          />
-        )}
+      <main style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", width: "100%", overflow: "hidden" }}>
+        <div
+          key={currentView}
+          className={navDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
+          style={{ width: "100%", height: "100%", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
+        >
+          {currentView === "home" && (
+            <HomePage
+              onEnterWorkbench={() => handleNavChange("chat")}
+              onEnterWorkbenchWithPrompt={(prompt, autoSend = true) => {
+                setInitialChatPrompt({ prompt, autoSend });
+                handleNavChange("chat");
+              }}
+              onLaunchWorkflow={handleLaunchWorkflow}
+              onOpenRepositories={handleOpenRepositories}
+              onOpenModal={(tab) => {
+                handleNavChange(tab as ViewMode);
+              }}
+              workflows={workflows}
+            />
+          )}
 
-        {currentView === "chat" && (
-          <ChatPlaygroundPage
-            agents={agents}
-            currentAgent={currentAgent}
-            onSelectAgent={setCurrentAgent}
-            onAddAuditLog={handleAddAuditLog}
-            onNavigateSettings={() => setCurrentView("settings")}
-            onOpenModal={(tab: NavTab) => {
-              if (tab === "workflows") setCurrentView("workflows");
-              else if (tab === "knowledge") setCurrentView("knowledge");
-              else if (tab === "agents") setCurrentView("agents");
-              else if (tab === "tools") setCurrentView("tools");
-              else setCurrentView("settings");
-            }}
-            onBackHome={() => setCurrentView("home")}
-            workflows={workflows}
-            initialPrompt={initialChatPrompt}
-            onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
-            onOpenCreateWorkflow={handleOpenCreateWorkflow}
-            onNavigateStudio={() => setCurrentView("workflows")}
-            onRunWorkflow={handleLaunchWorkflow}
-          />
-        )}
+          {currentView === "chat" && (
+            <ChatPlaygroundPage
+              agents={agents}
+              currentAgent={currentAgent}
+              onSelectAgent={setCurrentAgent}
+              onAddAuditLog={handleAddAuditLog}
+              onNavigateSettings={() => handleNavChange("settings")}
+              onOpenModal={(tab: NavTab) => {
+                handleNavChange(tab as ViewMode);
+              }}
+              onBackHome={() => handleNavChange("home")}
+              workflows={workflows}
+              initialPrompt={initialChatPrompt}
+              onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
+              onOpenCreateWorkflow={handleOpenCreateWorkflow}
+              onNavigateStudio={() => handleNavChange("workflows")}
+              onRunWorkflow={handleLaunchWorkflow}
+            />
+          )}
 
-        {currentView === "workflows" && (
-          <WorkflowsListPage
-            workflows={workflows}
-            onLaunchWorkflow={handleLaunchWorkflow}
-            onFillPrompt={handleFillPromptToChat}
-            onOpenCreate={handleOpenCreateWorkflow}
-            onOpenEdit={handleOpenEditWorkflow}
-            onDelete={handleDeleteWorkflow}
-            onSaveWorkflow={handleSaveWorkflow}
-          />
-        )}
+          {currentView === "workflows" && (
+            <WorkflowsListPage
+              workflows={workflows}
+              onLaunchWorkflow={handleLaunchWorkflow}
+              onOpenCreate={handleOpenCreateWorkflow}
+              onOpenEdit={handleOpenEditWorkflow}
+              onDelete={handleDeleteWorkflow}
+              onSaveWorkflow={handleSaveWorkflow}
+            />
+          )}
 
-        {currentView === "knowledge" && (
-          <KnowledgePage />
-        )}
+          {currentView === "designer" && (
+            <WorkflowDesignerPage
+              workflow={editingWorkflow}
+              agents={agents}
+              onBack={() => setCurrentView("workflows")}
+              onSave={handleSaveWorkflow}
+              onSaveAndLaunch={(saved, prompt) => {
+                handleSaveWorkflow(saved);
+                setCurrentView("chat");
+                if (prompt) {
+                  setInitialChatPrompt({ prompt, autoSend: true });
+                }
+              }}
+            />
+          )}
 
-        {currentView === "agents" && (
-          <AgentsListPage
-            agents={agents}
-            onOpenChat={handleOpenChat}
-            onUpdateAgent={handleUpdateAgent}
-            onDeleteAgent={handleDeleteAgent}
-            onCreateAgent={handleCreateAgent}
-          />
-        )}
+          {currentView === "knowledge" && <KnowledgePage />}
 
-        {currentView === "tools" && (
-          <ToolsMarketPage />
-        )}
+          {currentView === "agents" && (
+            <AgentsListPage
+              agents={agents}
+              onOpenChat={handleOpenChat}
+              onUpdateAgent={handleUpdateAgent}
+              onDeleteAgent={handleDeleteAgent}
+              onCreateAgent={handleCreateAgent}
+            />
+          )}
 
-        {currentView === "settings" && (
-          <SystemSettingsPage
-            logs={logs}
-            health={health}
-            onEnterWorkbench={() => setCurrentView("chat")}
-          />
-        )}
+          {currentView === "tools" && <ToolsMarketPage />}
 
-        {currentView === "designer" && (
-          <WorkflowDesignerPage
-            workflow={editingWorkflow}
-            agents={agents}
-            onBack={() => setCurrentView("workflows")}
-            onSave={handleSaveWorkflow}
-            onSaveAndLaunch={(saved, prompt) => {
-              handleSaveWorkflow(saved);
-              setCurrentView("chat");
-              if (prompt) {
-                setInitialChatPrompt({ prompt, autoSend: true });
-              }
-            }}
-          />
-        )}
+          {currentView === "settings" && (
+            <SystemSettingsPage
+              logs={logs}
+              health={health}
+              onEnterWorkbench={() => setCurrentView("chat")}
+            />
+          )}
+        </div>
       </main>
 
-      {/* 业务流水线全链路执行弹窗 (支持一键无缝跳转至工作台左右分屏实时执行) */}
       <WorkflowExecutionModal
         isOpen={!!executingWorkflow}
         onClose={() => setExecutingWorkflow(null)}

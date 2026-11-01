@@ -31,6 +31,7 @@ export const SystemSettingsPage: React.FC<SystemSettingsPageProps> = ({
   onEnterWorkbench,
 }) => {
   const [activeTab, setActiveTab] = useState<SystemSettingsTab>("gateway");
+  const [slideDirection, setSlideDirection] = useState<"forward" | "backward">("forward");
 
   const menuItems = [
     {
@@ -57,6 +58,18 @@ export const SystemSettingsPage: React.FC<SystemSettingsPageProps> = ({
     },
   ];
 
+  const activeIdx = menuItems.findIndex((m) => m.id === activeTab);
+
+  const handleTabChange = (newTab: SystemSettingsTab) => {
+    const order: Record<SystemSettingsTab, number> = { gateway: 0, audit: 1, infrastructure: 2 };
+    if (order[newTab] > order[activeTab]) {
+      setSlideDirection("forward");
+    } else if (order[newTab] < order[activeTab]) {
+      setSlideDirection("backward");
+    }
+    setActiveTab(newTab);
+  };
+
   return (
     <div className="flex-1 flex flex-col h-full w-full bg-[#F8FAFC] overflow-hidden">
       {/* ── 主体两栏布局：左侧系统运维导航 + 右侧独立设置工作区 ── */}
@@ -67,41 +80,62 @@ export const SystemSettingsPage: React.FC<SystemSettingsPageProps> = ({
             系统设置
           </div>
 
-          {menuItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = activeTab === item.id;
-            return (
-              <button
-                key={item.id}
-                onClick={() => setActiveTab(item.id)}
-                className={`w-full flex items-center justify-between p-3 rounded-2xl text-left transition-all cursor-pointer ${
-                  isActive
-                    ? "bg-slate-100/90 text-slate-900 shadow-2xs border border-slate-300 font-bold"
-                    : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 border border-transparent"
-                }`}
-              >
-                <div className="flex items-center gap-3">
-                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${item.color}`}>
-                    <Icon className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <div className="text-xs font-bold leading-tight">{item.label}</div>
-                    <div className="text-[10px] font-mono text-slate-400 mt-0.5">{item.subLabel}</div>
-                  </div>
-                </div>
+          <div className="relative flex flex-col space-y-1">
+            {/* 🌟 垂直纵向顺滑滑动的激活底块 (Vertical Sliding Indicator) */}
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                height: 56,
+                transform: `translateY(${activeIdx * (56 + 4)}px)`,
+                borderRadius: 16,
+                background: "linear-gradient(135deg, #f1f5f9 0%, #e2e8f0 100%)",
+                border: "1.5px solid #cbd5e1",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04), 0 0 0 1px rgba(99, 102, 241, 0.12)",
+                transition: "transform 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+                pointerEvents: "none",
+                zIndex: 1,
+              }}
+            />
 
-                {item.count !== undefined && (
-                  <span
-                    className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
-                      isActive ? "bg-slate-200 text-slate-800 font-bold" : "bg-slate-100 text-slate-500"
-                    }`}
-                  >
-                    {item.count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+            {menuItems.map((item) => {
+              const Icon = item.icon;
+              const isActive = activeTab === item.id;
+              return (
+                <button
+                  key={item.id}
+                  onClick={() => handleTabChange(item.id)}
+                  style={{ position: "relative", zIndex: 2, background: "transparent" }}
+                  className={`w-full flex items-center justify-between p-3 rounded-2xl text-left transition-all cursor-pointer ${
+                    isActive
+                      ? "text-slate-900 font-bold"
+                      : "text-slate-600 hover:text-slate-900"
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-8 h-8 rounded-xl flex items-center justify-center border ${item.color}`}>
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-bold leading-tight">{item.label}</div>
+                      <div className="text-[10px] font-mono text-slate-400 mt-0.5">{item.subLabel}</div>
+                    </div>
+                  </div>
+
+                  {item.count !== undefined && (
+                    <span
+                      className={`text-[10px] font-mono px-2 py-0.5 rounded-full ${
+                        isActive ? "bg-slate-200 text-slate-800 font-bold" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      {item.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
           <div className="mt-auto pt-4 border-t border-slate-100">
             <div className="p-3 rounded-2xl bg-slate-50 border border-slate-200/80 text-[11px] text-slate-500 space-y-1">
@@ -118,21 +152,26 @@ export const SystemSettingsPage: React.FC<SystemSettingsPageProps> = ({
 
         {/* 右侧独立运维工作区 */}
         <main className="flex-1 overflow-y-auto bg-slate-50/50">
-          {activeTab === "gateway" && <SettingsPage />}
+          <div
+            key={activeTab}
+            className={slideDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
+            style={{ width: "100%", height: "100%" }}
+          >
+            {activeTab === "gateway" && <SettingsPage />}
 
-          {activeTab === "audit" && <AuditLogsPage logs={logs} />}
+            {activeTab === "audit" && <AuditLogsPage logs={logs} />}
 
-          {activeTab === "infrastructure" && (
-            <div className="p-8 max-w-4xl mx-auto space-y-6">
-              <div>
-                <h2 className="text-lg font-black text-slate-800">平台基础设施与运行时诊断</h2>
-                <p className="text-xs text-slate-500 mt-0.5">
-                  全链路持久化服务与微服务容器探活指标
-                </p>
-              </div>
+            {activeTab === "infrastructure" && (
+              <div className="p-8 max-w-4xl mx-auto space-y-6">
+                <div>
+                  <h2 className="text-lg font-black text-slate-800">平台基础设施与运行时诊断</h2>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    全链路持久化服务与微服务容器探活指标
+                  </p>
+                </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700">业务调度引擎</span>
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
@@ -162,6 +201,7 @@ export const SystemSettingsPage: React.FC<SystemSettingsPageProps> = ({
               </div>
             </div>
           )}
+          </div>
         </main>
       </div>
     </div>

@@ -1,32 +1,26 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
+import { Button, Tag, Space, Spin } from "antd";
 import {
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Cpu,
-  Layers,
-  Database,
-  Wrench,
-  Activity,
-  FileCheck2,
-  CheckCircle2,
-  Terminal,
-  Zap,
-  Play,
-  MessageSquare,
-  ChevronRight,
-  FileText,
-  Bot,
-  Settings,
-  BookOpen,
-  ArrowUpRight,
-} from "lucide-react";
-import { PipelineItem } from "../../types/platform";
+  MessageOutlined,
+  RocketFilled,
+  SlidersOutlined,
+  ArrowRightOutlined,
+  SafetyCertificateOutlined,
+  ThunderboltFilled,
+  ApiOutlined,
+  BranchesOutlined,
+  CheckCircleFilled,
+  SyncOutlined,
+  WarningOutlined,
+} from "@ant-design/icons";
+import { PipelineItem, GitRepositoryConfig } from "../../types/platform";
+import { fetchGitRepositoriesApi } from "../../services/api";
 
 interface HomePageProps {
   onEnterWorkbench: () => void;
   onEnterWorkbenchWithPrompt?: (prompt: string, autoSend?: boolean) => void;
   onLaunchWorkflow?: (workflow: PipelineItem) => void;
+  onOpenRepositories?: () => void;
   onOpenModal: (tab: "settings" | "knowledge" | "tools" | "logs" | "agents" | "workflows") => void;
   workflows?: PipelineItem[];
 }
@@ -34,322 +28,467 @@ interface HomePageProps {
 export const HomePage: React.FC<HomePageProps> = ({
   onEnterWorkbench,
   onEnterWorkbenchWithPrompt,
+  onOpenRepositories,
   onOpenModal,
-  workflows = [],
 }) => {
+  const [savedRepos, setSavedRepos] = useState<GitRepositoryConfig[]>([]);
+  const [loadingRepos, setLoadingRepos] = useState<boolean>(true);
+
+  // 挂载时从真实 H2 数据库拉取已持久化的 Git 代码仓库列表
+  useEffect(() => {
+    let active = true;
+    fetchGitRepositoriesApi()
+      .then((repos) => {
+        if (active) {
+          setSavedRepos(repos || []);
+          setLoadingRepos(false);
+        }
+      })
+      .catch((err) => {
+        console.warn("[ownagent] 主页读取真实代码仓库失败", err);
+        if (active) setLoadingRepos(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const latestRepo = savedRepos.length > 0 ? savedRepos[0] : null;
+
   return (
-    <div className="flex-1 overflow-y-auto bg-[#F8FAFC] text-slate-800 scrollbar-hide">
-      {/* 顶部 Hero 区域 */}
-      <section className="relative px-6 pt-10 pb-12 lg:px-12 border-b border-slate-200/80 bg-gradient-to-b from-white via-white to-slate-50/70">
-        <div className="max-w-6xl mx-auto space-y-5 text-center sm:text-left">
-          <div className="inline-flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200/80 rounded-full text-xs font-semibold text-blue-700 shadow-2xs">
-            <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
-            <span>OwnAgent 企业级智能体编排与全链路可观测平台</span>
-          </div>
+    <div
+      className="cyber-grid-canvas"
+      style={{
+        width: "100%",
+        height: "calc(100vh - 56px)",
+        maxHeight: "calc(100vh - 56px)",
+        overflow: "hidden", // 严守单屏零滚动极简标准
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "0 24px",
+        boxSizing: "border-box",
+        position: "relative",
+      }}
+    >
+      {/* 顶部科技感柔和环境光 (Ambient Aura) */}
+      <div
+        style={{
+          position: "absolute",
+          top: "12%",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: 560,
+          height: 320,
+          borderRadius: "50%",
+          background: "radial-gradient(ellipse, rgba(99, 102, 241, 0.16) 0%, rgba(59, 130, 246, 0.05) 50%, transparent 75%)",
+          filter: "blur(60px)",
+          pointerEvents: "none",
+        }}
+      />
 
-          <div className="max-w-4xl space-y-3">
-            <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black text-slate-900 tracking-tight leading-tight">
-              打通大模型与企业核心业务
-              <br />
-              <span className="bg-gradient-to-r from-blue-600 via-indigo-600 to-cyan-600 bg-clip-text text-transparent">
-                规则合规校验 · 高危操作人工复核 · 实时全链路观测
-              </span>
-            </h1>
-            <p className="text-sm sm:text-base text-slate-600 leading-relaxed max-w-3xl">
-              结合领域知识库检索、业务合规规约校验、受控外部系统调用与全流程操作审计。支持对话左侧实时执行步骤流与右侧毫秒级 APM 瀑布流观测面板。
-            </p>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 pt-2 justify-center sm:justify-start">
-            <button
-              onClick={onEnterWorkbench}
-              className="inline-flex items-center gap-2 px-6 py-3.5 bg-blue-600 hover:bg-blue-700 active:scale-98 text-white rounded-2xl font-bold text-sm shadow-lg shadow-blue-500/25 transition cursor-pointer"
-            >
-              <span>进入智能工作台 (左右协同)</span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
-
-            <button
-              onClick={() => onOpenModal("workflows")}
-              className="inline-flex items-center gap-2 px-5 py-3.5 bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 hover:text-blue-700 rounded-2xl font-bold text-sm shadow-2xs transition cursor-pointer"
-            >
-              <Layers className="w-4 h-4 text-blue-600" />
-              <span>流水线编排中心</span>
-            </button>
-          </div>
+      {/* ──────────────── 1. 一个大图标：气场十足的核心标志 ──────────────── */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          marginBottom: 18,
+        }}
+      >
+        <div
+          style={{
+            width: 80,
+            height: 80,
+            borderRadius: 22,
+            background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #06b6d4 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 12px 32px rgba(99, 102, 241, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.8) inset",
+            color: "#ffffff",
+            fontSize: 38,
+            transition: "transform 0.3s ease, box-shadow 0.3s ease",
+            cursor: "pointer",
+          }}
+          onClick={onEnterWorkbench}
+          title="点击直接进入智能工作台"
+        >
+          <RocketFilled />
         </div>
-      </section>
+      </div>
 
-      {/* 主体功能卡片区域 */}
-      <div className="max-w-6xl mx-auto px-6 py-8 lg:px-12 space-y-10">
-        {/* 核心平台导航 */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                平台核心功能矩阵
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                支持点击直达各功能模块，体验端到端业务闭环
-              </p>
+      {/* ──────────────── 2. 几句话：极简、震撼、直击痛点的文案 ──────────────── */}
+      <div
+        style={{
+          position: "relative",
+          zIndex: 2,
+          textAlign: "center",
+          maxWidth: 720,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+        }}
+      >
+        {/* 顶部微型信标 */}
+        <div
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 7,
+            padding: "4px 14px",
+            borderRadius: 20,
+            background: "#ffffff",
+            border: "1px solid #e0e7ff",
+            boxShadow: "0 2px 6px rgba(99, 102, 241, 0.08)",
+            marginBottom: 12,
+          }}
+        >
+          <span
+            style={{
+              width: 7,
+              height: 7,
+              borderRadius: "50%",
+              background: "#10b981",
+              boxShadow: "0 0 8px #10b981",
+            }}
+          />
+          <span style={{ fontSize: 12, fontWeight: 700, color: "#4338ca", letterSpacing: "0.3px" }}>
+            OWNAGENT · 企业级专业智能体系统
+          </span>
+        </div>
+
+        {/* 主标题 */}
+        <div
+          style={{
+            fontSize: "clamp(26px, 3vw, 38px)",
+            fontWeight: 900,
+            color: "#0f172a",
+            letterSpacing: "-1px",
+            lineHeight: 1.25,
+            marginBottom: 12,
+          }}
+        >
+          让 Agent 告别浅聊，
+          <br />
+          <span
+            style={{
+              background: "linear-gradient(135deg, #4f46e5 0%, #3b82f6 45%, #06b6d4 100%)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+            }}
+          >
+            成为真正懂业务的专家智能体
+          </span>
+        </div>
+
+        {/* 精炼 Slogan */}
+        <div
+          style={{
+            fontSize: "clamp(13px, 1.15vw, 15px)",
+            color: "#64748b",
+            lineHeight: 1.65,
+            maxWidth: 580,
+            marginBottom: 20,
+          }}
+        >
+          赋予智能体代码感知、系统特权与确定性工程工具。
+          <br />
+          从 Git 资产守护到运维交付，全天候自主闭环企业真实业务流。
+        </div>
+
+        {/* ──────────────── 3. 行动按钮组 (高质感双 CTA) ──────────────── */}
+        <Space size={14} style={{ marginBottom: 22 }}>
+          <Button
+            type="primary"
+            size="large"
+            icon={<MessageOutlined style={{ fontSize: 16 }} />}
+            onClick={onEnterWorkbench}
+            style={{
+              height: 44,
+              padding: "0 26px",
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 700,
+              background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+              border: "none",
+              boxShadow: "0 4px 18px rgba(99, 102, 241, 0.4)",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span>开启智能工作台</span>
+            <ArrowRightOutlined style={{ fontSize: 12 }} />
+          </Button>
+
+          <Button
+            size="large"
+            icon={<SlidersOutlined style={{ fontSize: 15 }} />}
+            onClick={() => onOpenModal("workflows")}
+            style={{
+              height: 44,
+              padding: "0 20px",
+              borderRadius: 10,
+              fontSize: 14,
+              fontWeight: 600,
+              background: "#ffffff",
+              border: "1.5px solid #cbd5e1",
+              color: "#1e293b",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+            }}
+          >
+            业务流方案库
+          </Button>
+        </Space>
+
+        {/* ──────────────── 4. 实时守护中的代码仓库卡片 (真实数据库直连) ──────────────── */}
+        <div style={{ width: "100%", maxWidth: 660, marginBottom: 20 }}>
+          {loadingRepos ? (
+            <div style={{ padding: "8px 0", color: "#94a3b8", fontSize: 12 }}>
+              <Spin size="small" style={{ marginRight: 8 }} />
+              正在同步真实已入库代码资产...
             </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* 卡片 1: 智能工作台 */}
+          ) : latestRepo ? (
             <div
-              onClick={onEnterWorkbench}
-              className="group p-5 rounded-2xl bg-white hover:bg-blue-50/30 border border-slate-200/90 hover:border-blue-400 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between space-y-3"
+              style={{
+                background: "#ffffff",
+                borderRadius: 12,
+                border: "1px solid #e0e7ff",
+                boxShadow: "0 4px 16px rgba(99, 102, 241, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03)",
+                padding: "10px 16px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                textAlign: "left",
+                gap: 12,
+              }}
             >
-              <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-100 text-blue-600 flex items-center justify-center font-bold group-hover:scale-105 transition">
-                  <Sparkles className="w-5 h-5" />
+              {/* 左侧库信息 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 3, overflow: "hidden" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
+                  <span
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: "50%",
+                      background: "#10b981",
+                      boxShadow: "0 0 6px #10b981",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <BranchesOutlined style={{ color: "#4f46e5", fontSize: 14, flexShrink: 0 }} />
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
+                    {latestRepo.name}
+                  </span>
+                  <Tag color="indigo" style={{ margin: 0, borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
+                    {latestRepo.branch}
+                  </Tag>
+                  {savedRepos.length > 1 && (
+                    <Tag color="default" style={{ margin: 0, borderRadius: 10, fontSize: 10.5, color: "#64748b" }}>
+                      +{savedRepos.length - 1} 库
+                    </Tag>
+                  )}
+                  {latestRepo.healthStatus === "warning" ? (
+                    <Tag color="warning" style={{ margin: 0, borderRadius: 4, fontSize: 10.5 }}>
+                      ⚠️ 风险阻断中
+                    </Tag>
+                  ) : (
+                    <Tag color="success" style={{ margin: 0, borderRadius: 4, fontSize: 10.5 }}>
+                      🟢 探活正常
+                    </Tag>
+                  )}
                 </div>
-                <h3 className="text-sm font-black text-slate-900 group-hover:text-blue-600 transition flex items-center justify-between">
-                  <span>智能工作台</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500 transition" />
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  对话式业务交互与指令驱动。左侧实时展示 AI 推理与业务执行步骤，右侧实时联动 APM 毫秒级瀑布流抽屉。
-                </p>
-              </div>
-              <span className="text-[11px] font-bold text-blue-600 group-hover:translate-x-1 transition inline-flex items-center gap-1 pt-1">
-                进入工作台 <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
 
-            {/* 卡片 2: 流水线编排 */}
-            <div
-              onClick={() => onOpenModal("workflows")}
-              className="group p-5 rounded-2xl bg-white hover:bg-indigo-50/30 border border-slate-200/90 hover:border-indigo-400 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between space-y-3"
-            >
-              <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 flex items-center justify-center font-bold group-hover:scale-105 transition">
-                  <Layers className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition flex items-center justify-between">
-                  <span>流水线编排</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-indigo-500 transition" />
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  可视化业务流程拓扑设计。支持参数解析、业务规则合规校验、人工复核闸口与审计存证节点。
-                </p>
-              </div>
-              <span className="text-[11px] font-bold text-indigo-600 group-hover:translate-x-1 transition inline-flex items-center gap-1 pt-1">
-                编排流水线 <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-
-            {/* 卡片 3: 知识库管理 */}
-            <div
-              onClick={() => onOpenModal("knowledge")}
-              className="group p-5 rounded-2xl bg-white hover:bg-emerald-50/30 border border-slate-200/90 hover:border-emerald-400 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between space-y-3"
-            >
-              <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-600 flex items-center justify-center font-bold group-hover:scale-105 transition">
-                  <BookOpen className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-black text-slate-900 group-hover:text-emerald-600 transition flex items-center justify-between">
-                  <span>企业知识库</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-emerald-500 transition" />
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  企业制度、风控规约与技术规范管理。支持切片检索调试、在线编辑修改与标准 Markdown 模版导入导出。
-                </p>
-              </div>
-              <span className="text-[11px] font-bold text-emerald-600 group-hover:translate-x-1 transition inline-flex items-center gap-1 pt-1">
-                管理知识库 <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-
-            {/* 卡片 4: 智能体中心 */}
-            <div
-              onClick={() => onOpenModal("agents")}
-              className="group p-5 rounded-2xl bg-white hover:bg-amber-50/30 border border-slate-200/90 hover:border-amber-400 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between space-y-3"
-            >
-              <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 border border-amber-100 text-amber-600 flex items-center justify-center font-bold group-hover:scale-105 transition">
-                  <Bot className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-black text-slate-900 group-hover:text-amber-600 transition flex items-center justify-between">
-                  <span>智能体中心</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-amber-500 transition" />
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  多领域专家智能体配置。支持模型路由设定（通义千问、DeepSeek、本地 Ollama）与专业提示词设定。
-                </p>
-              </div>
-              <span className="text-[11px] font-bold text-amber-600 group-hover:translate-x-1 transition inline-flex items-center gap-1 pt-1">
-                配置智能体 <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-
-            {/* 卡片 5: 扩展工具库 */}
-            <div
-              onClick={() => onOpenModal("tools")}
-              className="group p-5 rounded-2xl bg-white hover:bg-cyan-50/30 border border-slate-200/90 hover:border-cyan-400 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between space-y-3"
-            >
-              <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-cyan-50 border border-cyan-100 text-cyan-600 flex items-center justify-center font-bold group-hover:scale-105 transition">
-                  <Wrench className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-black text-slate-900 group-hover:text-cyan-600 transition flex items-center justify-between">
-                  <span>扩展工具库</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-cyan-500 transition" />
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  系统受控工具与 API 注册中心。支持健康检查检测、高危 SQL 拦截核准与接口参数实时连通性测试。
-                </p>
-              </div>
-              <span className="text-[11px] font-bold text-cyan-600 group-hover:translate-x-1 transition inline-flex items-center gap-1 pt-1">
-                查看工具库 <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-
-            {/* 卡片 6: 系统配置与审计日志 */}
-            <div
-              onClick={() => onOpenModal("settings")}
-              className="group p-5 rounded-2xl bg-white hover:bg-purple-50/30 border border-slate-200/90 hover:border-purple-400 shadow-2xs hover:shadow-md transition cursor-pointer flex flex-col justify-between space-y-3"
-            >
-              <div className="space-y-2.5">
-                <div className="w-10 h-10 rounded-xl bg-purple-50 border border-purple-100 text-purple-600 flex items-center justify-center font-bold group-hover:scale-105 transition">
-                  <Activity className="w-5 h-5" />
-                </div>
-                <h3 className="text-sm font-black text-slate-900 group-hover:text-purple-600 transition flex items-center justify-between">
-                  <span>系统配置与审计日志</span>
-                  <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500 transition" />
-                </h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
-                  大模型配置、API 密钥安全存取与全流程操作审计日志。记录每次问答的耗时、Token 成本与审核记录。
-                </p>
-              </div>
-              <span className="text-[11px] font-bold text-purple-600 group-hover:translate-x-1 transition inline-flex items-center gap-1 pt-1">
-                系统与审计 <ArrowRight className="w-3.5 h-3.5" />
-              </span>
-            </div>
-          </div>
-        </section>
-
-        {/* 业务流水线区域 */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-black text-slate-900 tracking-tight">
-                业务自动化流水线
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                点击卡片即可在智能工作台中实时协同运行，左侧推演步骤，右侧毫秒级瀑布流观测
-              </p>
-            </div>
-
-            {workflows.length > 0 && (
-              <button
-                onClick={() => onOpenModal("workflows")}
-                className="text-xs text-blue-600 hover:text-blue-700 font-bold hover:underline cursor-pointer flex items-center gap-1"
-              >
-                <span>管理流水线 ({workflows.length})</span>
-                <ArrowRight className="w-3.5 h-3.5" />
-              </button>
-            )}
-          </div>
-
-          {workflows.length === 0 ? (
-            <div className="p-8 text-center bg-white border border-dashed border-slate-200 rounded-3xl space-y-3">
-              <Layers className="w-10 h-10 text-slate-300 mx-auto" />
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-slate-700">暂无已配置的业务流水线</p>
-                <p className="text-xs text-slate-400">系统已接入真实数据库持久化，您可以前往流水线编排页面新建或一键导入标准业务模版。</p>
-              </div>
-              <button
-                onClick={() => onOpenModal("workflows")}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer inline-flex items-center gap-1.5"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                <span>前往流水线页面导入或新建</span>
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {workflows.map((wf) => (
                 <div
-                  key={wf.id}
+                  style={{
+                    fontSize: 12,
+                    color: "#64748b",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={latestRepo.lastCommitMessage || latestRepo.repoUrl}
+                >
+                  {latestRepo.lastCommitSha ? (
+                    <span>
+                      最新 Commit <code style={{ color: "#4f46e5", fontWeight: 600 }}>#{latestRepo.lastCommitSha}</code>: {latestRepo.lastCommitMessage}
+                      {latestRepo.lastCommitAuthor && ` (${latestRepo.lastCommitAuthor.split(" <")[0]})`}
+                    </span>
+                  ) : (
+                    <span>{latestRepo.repoUrl}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* 右侧操作按钮 */}
+              <Space size={8} style={{ flexShrink: 0 }}>
+                <Button
+                  size="small"
+                  onClick={onOpenRepositories || (() => onOpenModal("workflows"))}
+                  style={{
+                    borderRadius: 6,
+                    height: 28,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    color: "#475569",
+                    background: "#f8fafc",
+                    borderColor: "#cbd5e1",
+                  }}
+                >
+                  管理仓库配置
+                </Button>
+                <Button
+                  type="primary"
+                  size="small"
                   onClick={() => {
                     if (onEnterWorkbenchWithPrompt) {
-                      onEnterWorkbenchWithPrompt(wf.promptTemplate, true);
+                      onEnterWorkbenchWithPrompt(
+                        `请对当前代码库「${latestRepo.name}」(${latestRepo.branch}分支) 最新提交 #${latestRepo.lastCommitSha || "HEAD"} 执行深度安全体检与依赖扫描。`,
+                        true
+                      );
                     } else {
                       onEnterWorkbench();
                     }
                   }}
-                  className="p-5 rounded-2xl bg-white border border-slate-200/90 hover:border-blue-400 shadow-2xs hover:shadow-md transition-all flex flex-col justify-between space-y-4 cursor-pointer group"
+                  style={{
+                    borderRadius: 6,
+                    height: 28,
+                    fontSize: 12,
+                    fontWeight: 600,
+                    background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
+                    border: "none",
+                  }}
                 >
-                  <div className="space-y-2.5">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full border bg-blue-50 text-blue-700 border-blue-200">
-                          {wf.badge || wf.category || "自动化"}
-                        </span>
-                        <span className="text-[11px] font-mono text-slate-400">
-                          {wf.version || "v1.0.0"}
-                        </span>
-                      </div>
-                    </div>
-
-                    <h3 className="text-sm font-black text-slate-900 group-hover:text-blue-600 transition">
-                      {wf.name}
-                    </h3>
-
-                    <p className="text-xs text-slate-600 leading-relaxed line-clamp-2">
-                      {wf.description}
-                    </p>
-
-                    {wf.tags && wf.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5 pt-1">
-                        {wf.tags.map((t, idx) => (
-                          <span
-                            key={idx}
-                            className="text-[10px] font-mono px-2 py-0.5 bg-slate-100 text-slate-600 rounded-md"
-                          >
-                            {t}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="border-t border-slate-100 pt-3 flex items-center justify-between">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onEnterWorkbenchWithPrompt) {
-                          onEnterWorkbenchWithPrompt(wf.promptTemplate, false);
-                        }
-                      }}
-                      className="text-xs font-semibold text-slate-500 hover:text-blue-600 transition cursor-pointer"
-                      title="填入工作台输入框（不自动发送）"
-                    >
-                      填入对话
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onEnterWorkbenchWithPrompt) {
-                          onEnterWorkbenchWithPrompt(wf.promptTemplate, true);
-                        }
-                      }}
-                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition shadow-2xs cursor-pointer"
-                      title="在智能工作台中左右实时分屏执行"
-                    >
-                      <span>协同执行 ↗</span>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  启动巡检 ➔
+                </Button>
+              </Space>
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 8,
+                padding: "6px 16px",
+                borderRadius: 20,
+                background: "rgba(255, 255, 255, 0.75)",
+                border: "1px dashed #cbd5e1",
+                fontSize: 12,
+                color: "#64748b",
+              }}
+            >
+              <span>📦 尚未接入代码仓库</span>
+              <Button
+                type="link"
+                size="small"
+                onClick={onOpenRepositories || (() => onOpenModal("workflows"))}
+                style={{ fontSize: 12, padding: 0, fontWeight: 700, color: "#4f46e5" }}
+              >
+                立即接入生产代码库 ➔
+              </Button>
             </div>
           )}
-        </section>
+        </div>
+
+        {/* ──────────────── 5. 极简三大专业能力胶囊 ──────────────── */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexWrap: "wrap",
+            gap: 10,
+            marginBottom: 16,
+          }}
+        >
+          <div
+            onClick={onOpenRepositories || (() => onOpenModal("workflows"))}
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 14px",
+              borderRadius: 20,
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+              fontSize: 12,
+              color: "#334155",
+              fontWeight: 600,
+              transition: "all 0.15s ease",
+            }}
+          >
+            <SafetyCertificateOutlined style={{ color: "#4f46e5", fontSize: 13 }} />
+            <span>代码守护智能体：Commit 巡检与脱敏自愈</span>
+          </div>
+
+          <div
+            onClick={() => {
+              if (onEnterWorkbenchWithPrompt) {
+                onEnterWorkbenchWithPrompt("请探活当前关联的服务器运行状态，检查 CPU 与日志", true);
+              } else {
+                onEnterWorkbench();
+              }
+            }}
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 14px",
+              borderRadius: 20,
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+              fontSize: 12,
+              color: "#334155",
+              fontWeight: 600,
+              transition: "all 0.15s ease",
+            }}
+          >
+            <ThunderboltFilled style={{ color: "#0284c7", fontSize: 13 }} />
+            <span>运维与 Sudo 智能体：服务器探活与高危熔断</span>
+          </div>
+
+          <div
+            onClick={() => {
+              if (onEnterWorkbenchWithPrompt) {
+                onEnterWorkbenchWithPrompt("比对后端 API 变动，检查客户端契约兼容性", true);
+              } else {
+                onEnterWorkbench();
+              }
+            }}
+            style={{
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "7px 14px",
+              borderRadius: 20,
+              background: "#ffffff",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
+              fontSize: 12,
+              color: "#334155",
+              fontWeight: 600,
+              transition: "all 0.15s ease",
+            }}
+          >
+            <ApiOutlined style={{ color: "#7c3aed", fontSize: 13 }} />
+            <span>契约与交付智能体：微服务对齐与流水线</span>
+          </div>
+        </div>
+
+        {/* 底部信任行 */}
+        <div style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 10 }}>
+          <span>🔒 只读安全沙箱与 Sudo 双控</span>
+          <span>•</span>
+          <span>⚡ 真实环境直连 · 零 Mock 假数据</span>
+          <span>•</span>
+          <span>🧩 确定性 DAG 业务流编排</span>
+        </div>
       </div>
     </div>
   );

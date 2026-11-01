@@ -13,6 +13,7 @@ import {
   WorkflowInstanceData,
   NodeExecutionData,
   ApprovalTicketData,
+  GitRepositoryConfig,
 } from "../types/platform";
 
 export interface ChatStreamPayload {
@@ -594,6 +595,14 @@ export async function fetchWorkflowsApi(): Promise<PipelineItem[]> {
           parsedSteps = [];
         }
       }
+      let dslData: any = {};
+      if (d.dslJson) {
+        try {
+          dslData = JSON.parse(d.dslJson);
+        } catch {
+          dslData = {};
+        }
+      }
       return {
         id: d.id,
         name: d.name,
@@ -613,6 +622,12 @@ export async function fetchWorkflowsApi(): Promise<PipelineItem[]> {
         updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : "刚刚",
         topologyJson: d.topologyJson || "",
         steps: parsedSteps,
+        gitRepositories: dslData.gitRepositories || [],
+        mcpServers: dslData.mcpServers || [],
+        skills: dslData.skills || [],
+        promptConfig: dslData.promptConfig,
+        modelConfig: dslData.modelConfig,
+        showcaseMeta: dslData.showcaseMeta,
       };
     });
   } catch (err) {
@@ -621,7 +636,68 @@ export async function fetchWorkflowsApi(): Promise<PipelineItem[]> {
   }
 }
 
+export async function fetchWorkflowDefinitionApi(id: string): Promise<PipelineItem | null> {
+  try {
+    const res = await fetch(`/api/workflow/definitions/${id}`);
+    if (!res.ok) return null;
+    const d = await res.json();
+    let parsedSteps: any[] = [];
+    if (d.topologyJson) {
+      try {
+        parsedSteps = JSON.parse(d.topologyJson);
+      } catch {
+        parsedSteps = [];
+      }
+    }
+    let dslData: any = {};
+    const dslRaw = d.dslJson ?? d.dslDefinitionJson;
+    if (dslRaw) {
+      try {
+        dslData = JSON.parse(dslRaw);
+      } catch {
+        dslData = {};
+      }
+    }
+    return {
+      id: d.id,
+      name: d.name,
+      description: d.description || "",
+      category: d.category || "业务自动化",
+      badge: d.badge || "生产流水线",
+      icon: d.icon || "ShieldCheck",
+      promptTemplate: d.promptTemplate || "",
+      tags: d.tags
+        ? typeof d.tags === "string"
+          ? d.tags.split(",").map((s: string) => s.trim()).filter(Boolean)
+          : d.tags
+        : [],
+      version: d.version || "v1.0.0",
+      enabled: d.enabled !== false,
+      sortOrder: d.sortOrder || 0,
+      updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : "刚刚",
+      topologyJson: d.topologyJson || "",
+      steps: parsedSteps,
+      gitRepositories: dslData.gitRepositories || [],
+      mcpServers: dslData.mcpServers || [],
+      skills: dslData.skills || [],
+      promptConfig: dslData.promptConfig,
+      modelConfig: dslData.modelConfig,
+      showcaseMeta: dslData.showcaseMeta,
+    };
+  } catch (err) {
+    console.warn("[ownagent] 获取流水线详情失败", err);
+    return null;
+  }
+}
+
 export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<PipelineItem> {
+  const dslPayload = {
+    gitRepositories: wf.gitRepositories || [],
+    mcpServers: wf.mcpServers || [],
+    skills: wf.skills || [],
+    promptConfig: wf.promptConfig,
+    modelConfig: wf.modelConfig,
+  };
   const payload = {
     id: wf.id,
     name: wf.name,
@@ -635,6 +711,7 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
     enabled: wf.enabled !== false,
     sortOrder: wf.sortOrder || 0,
     topologyJson: wf.topologyJson || (wf.steps ? JSON.stringify(wf.steps) : ""),
+    dslJson: JSON.stringify(dslPayload),
   };
   const res = await fetch("/api/workflow/definitions", {
     method: "POST",
@@ -649,6 +726,14 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
       parsedSteps = JSON.parse(d.topologyJson);
     } catch {
       parsedSteps = [];
+    }
+  }
+  let dslData: any = {};
+  if (d.dslJson) {
+    try {
+      dslData = JSON.parse(d.dslJson);
+    } catch {
+      dslData = {};
     }
   }
   return {
@@ -670,12 +755,29 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
     updatedAt: d.updatedAt ? new Date(d.updatedAt).toLocaleDateString() : "刚刚",
     topologyJson: d.topologyJson || "",
     steps: parsedSteps,
+    gitRepositories: dslData.gitRepositories || [],
+    mcpServers: dslData.mcpServers || [],
+    skills: dslData.skills || [],
+    promptConfig: dslData.promptConfig,
+    modelConfig: dslData.modelConfig,
   };
 }
 
 export async function deleteWorkflowApi(id: string): Promise<void> {
-  const res = await fetch(`/api/workflow/definitions/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("Failed to delete workflow");
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(`/api/workflow/definitions/${id}`, {
+      method: "DELETE",
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(errText || "删除业务流失败");
+    }
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function runWorkflowApi(params: {
@@ -764,3 +866,389 @@ export async function resetFailoverApi(): Promise<FailoverStatusResponse> {
   if (!res.ok) throw new Error("重置断路器失败");
   return res.json();
 }
+
+export interface GitCommitItem {
+  sha: string;
+  author: string;
+  message: string;
+  time: string;
+}
+
+export interface GitFileDiffItem {
+  path: string;
+  status: string; // 'M' | 'A' | 'D'
+  additions: number;
+  deletions: number;
+}
+
+export interface GitDiffResult {
+  ok: boolean;
+  commitSha?: string;
+  author?: string;
+  message?: string;
+  time?: string;
+  files: GitFileDiffItem[];
+  diffText?: string;
+  error?: string;
+}
+
+export interface GitCreateBranchResult {
+  ok: boolean;
+  branch?: string;
+  baseBranch?: string;
+  message?: string;
+  error?: string;
+}
+
+export async function fetchGitCommitsApi(repoId: string, limit = 15): Promise<GitCommitItem[]> {
+  try {
+    const res = await fetch(`/api/git/repositories/${encodeURIComponent(repoId)}/commits?limit=${limit}`);
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.error("[Git] Failed to fetch commit history", err);
+    return [];
+  }
+}
+
+export async function fetchGitDiffApi(
+  repoId: string,
+  sha?: string,
+  file?: string
+): Promise<GitDiffResult> {
+  try {
+    const params = new URLSearchParams();
+    if (sha) params.set("sha", sha);
+    if (file) params.set("file", file);
+    const res = await fetch(`/api/git/repositories/${encodeURIComponent(repoId)}/diff?${params.toString()}`);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      return { ok: false, files: [], error: err.error || "获取 Diff 失败" };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, files: [], error: err.message || "请求失败" };
+  }
+}
+
+export async function createGitFixBranchApi(
+  repoId: string,
+  baseBranch = "main",
+  branchName?: string
+): Promise<GitCreateBranchResult> {
+  try {
+    const res = await fetch(`/api/git/repositories/${encodeURIComponent(repoId)}/create-fix-branch`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ baseBranch, branchName }),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, error: err.message || "分支创建失败" };
+  }
+}
+
+// ─── 真实 Git 仓库持久化与远程探活 API ───
+
+function mapGitRepositoryFromApi(d: any): GitRepositoryConfig {
+  return {
+    id: d.id,
+    workflowId: d.workflowId,
+    name: d.name,
+    repoUrl: d.repoUrl,
+    branch: d.branch || "main",
+    authType: (d.authType || "none").toLowerCase() as "token" | "ssh" | "none",
+    accessToken: d.accessToken,
+    sshKey: d.sshKey,
+    localPath: d.localPath,
+    pollingIntervalMinutes: d.pollingIntervalMinutes ?? 5,
+    autoAnalyzeCommit: d.autoAnalyzeCommit !== false,
+    enabled: d.enabled !== false,
+    status: (d.status || "connected").toLowerCase() as "connected" | "disconnected" | "connecting" | "error",
+    lastCommitSha: d.lastCommitSha,
+    lastCommitMessage: d.lastCommitMessage,
+    lastCommitAuthor: d.lastCommitAuthor,
+    lastCommitTime: d.lastCommitTime,
+    filesCount: d.filesCount ?? 0,
+    healthStatus: (d.healthStatus || "healthy").toLowerCase() as "healthy" | "warning" | "error",
+    healthMessage: d.healthMessage,
+    errorMsg: d.errorMsg,
+    createdAt: d.createdAt,
+    updatedAt: d.updatedAt,
+  };
+}
+
+export async function fetchGitRepositoriesApi(workflowId?: string): Promise<GitRepositoryConfig[]> {
+  try {
+    const url = workflowId
+      ? `/api/git/repositories?workflowId=${encodeURIComponent(workflowId)}`
+      : "/api/git/repositories";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("获取 Git 仓库列表失败");
+    const data = await res.json();
+    return data.map(mapGitRepositoryFromApi);
+  } catch (err) {
+    console.warn("[ownagent] 获取 Git 仓库失败", err);
+    return [];
+  }
+}
+
+export async function saveGitRepositoryApi(
+  repo: Partial<GitRepositoryConfig>,
+  workflowId?: string
+): Promise<GitRepositoryConfig> {
+  const resolvedWorkflowId = workflowId || (repo as any)?.workflowId || undefined;
+  const payload = {
+    id: repo.id,
+    workflowId: resolvedWorkflowId,
+    name: repo.name,
+    repoUrl: repo.repoUrl,
+    branch: repo.branch || "main",
+    authType: (repo.authType || "none").toUpperCase(),
+    accessToken: repo.accessToken,
+    sshKey: repo.sshKey,
+    localPath: repo.localPath,
+    pollingIntervalMinutes: repo.pollingIntervalMinutes ?? 5,
+    autoAnalyzeCommit: repo.autoAnalyzeCommit !== false,
+    enabled: repo.enabled !== false,
+  };
+
+  const res = await fetch("/api/git/repositories", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+
+  if (!res.ok) {
+    const errorBody = await res.text();
+    throw new Error(`保存代码库失败: ${errorBody || res.statusText}`);
+  }
+
+  const d = await res.json();
+  return mapGitRepositoryFromApi(d);
+}
+
+export async function deleteGitRepositoryApi(id: string): Promise<void> {
+  const res = await fetch(`/api/git/repositories/${id}`, { method: "DELETE" });
+  if (!res.ok) throw new Error("解绑代码库失败");
+}
+
+export async function testGitConnectionApi(payload: {
+  repoUrl: string;
+  branch?: string;
+  authType?: string;
+  accessToken?: string;
+  sshKey?: string;
+}): Promise<{
+  ok: boolean;
+  status: string;
+  branch?: string;
+  commitSha?: string;
+  commitAuthor?: string;
+  commitMessage?: string;
+  commitTime?: string;
+  filesCount?: number;
+  healthStatus?: "healthy" | "warning" | "error";
+  healthMessage?: string;
+  error?: string;
+}> {
+  const res = await fetch("/api/git/test-connection", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      repoUrl: payload.repoUrl,
+      branch: payload.branch || "main",
+      authType: (payload.authType || "none").toUpperCase(),
+      accessToken: payload.accessToken,
+      sshKey: payload.sshKey,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    return {
+      ok: false,
+      status: "ERROR",
+      error: `请求探测失败: ${errText || res.statusText}`,
+      healthStatus: "error",
+      healthMessage: "网络或服务异常",
+    };
+  }
+  const d = await res.json();
+  return {
+    ok: d.ok,
+    status: d.status,
+    branch: d.branch,
+    commitSha: d.commitSha,
+    commitAuthor: d.commitAuthor,
+    commitMessage: d.commitMessage,
+    commitTime: d.commitTime,
+    filesCount: d.filesCount,
+    healthStatus: d.healthStatus ? (d.healthStatus.toLowerCase() as any) : "healthy",
+    healthMessage: d.healthMessage,
+    error: d.error,
+  };
+}
+
+export async function fetchRemoteBranchesApi(payload: {
+  repoUrl: string;
+  authType?: string;
+  accessToken?: string;
+  sshKey?: string;
+}): Promise<{
+  ok: boolean;
+  defaultBranch?: string;
+  branches: string[];
+  error?: string;
+}> {
+  try {
+    const res = await fetch("/api/git/branches", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        repoUrl: payload.repoUrl,
+        authType: (payload.authType || "none").toUpperCase(),
+        accessToken: payload.accessToken,
+        sshKey: payload.sshKey,
+      }),
+    });
+    if (!res.ok) {
+      const err = await res.text();
+      return { ok: false, branches: [], error: err || "拉取分支失败" };
+    }
+    const d = await res.json();
+    return {
+      ok: d.ok,
+      defaultBranch: d.defaultBranch,
+      branches: Array.isArray(d.branches) ? d.branches : [],
+      error: d.error,
+    };
+  } catch (err: any) {
+    return { ok: false, branches: [], error: err.message || "拉取分支网络异常" };
+  }
+}
+
+export async function syncGitRepositoryApi(id: string): Promise<GitRepositoryConfig> {
+  const res = await fetch(`/api/git/repositories/${id}/sync`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(err || "同步仓库失败");
+  }
+  const d = await res.json();
+  return mapGitRepositoryFromApi(d);
+}
+
+export interface RemoteUserRepoItem {
+  name: string;
+  fullName: string;
+  description: string;
+  cloneUrl: string;
+  sshUrl: string;
+  defaultBranch: string;
+  isPrivate: boolean;
+  updatedAt: string;
+}
+
+export async function fetchUserRepositoriesApi(payload: {
+  accessToken: string;
+  gitHost?: string;
+}): Promise<RemoteUserRepoItem[]> {
+  try {
+    const res = await fetch("/api/git/user-repos", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) return [];
+    return await res.json();
+  } catch (err) {
+    console.warn("拉取用户仓库列表失败", err);
+    return [];
+  }
+}
+
+export interface GitUserProfile {
+  ok: boolean;
+  login?: string;
+  name?: string;
+  avatarUrl?: string;
+  bio?: string;
+  publicRepos?: number;
+  totalPrivateRepos?: number;
+  error?: string;
+}
+
+export async function verifyGitTokenApi(payload: {
+  accessToken: string;
+  gitHost?: string;
+}): Promise<GitUserProfile> {
+  try {
+    const res = await fetch("/api/git/verify-token", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const txt = await res.text();
+      return { ok: false, error: txt || "验证失败" };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, error: err.message || "网络请求异常" };
+  }
+}
+
+export async function githubOAuthCallbackApi(payload: {
+  code: string;
+  clientId?: string;
+  clientSecret?: string;
+}): Promise<{ ok: boolean; accessToken?: string; login?: string; name?: string; avatarUrl?: string; error?: string }> {
+  try {
+    const res = await fetch("/api/git/oauth/github/callback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await res.json();
+  } catch (err: any) {
+    return { ok: false, error: err.message || "OAuth 换取 Token 失败" };
+  }
+}
+
+export interface TestWebhookResult {
+  ok: boolean;
+  statusCode?: number;
+  responseBody?: string;
+  error?: string;
+  channelType?: string;
+  testedAt?: string;
+}
+
+export async function testIntegrationWebhookApi(params: {
+  webhookUrl: string;
+  channelType?: string;
+  secret?: string;
+}): Promise<TestWebhookResult> {
+  try {
+    const res = await fetch("/api/integration/test-webhook", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(params),
+    });
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}));
+      return {
+        ok: false,
+        error: errData.error || `HTTP ${res.status}: 请求失败`,
+        statusCode: res.status,
+      };
+    }
+    return await res.json();
+  } catch (err: any) {
+    return {
+      ok: false,
+      error: err.message || "网络请求失败，请检查服务地址",
+    };
+  }
+}
+
+

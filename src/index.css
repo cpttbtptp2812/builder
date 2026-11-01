@@ -65,11 +65,996 @@ html, body, #root {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ==============================================================================
+   全域平滑滚动与极简霓虹科技滚动条体系 (Universal Cyber Glow Scrollbars)
+   彻底消除 Windows 默认 17px 宽粗灰色滚动条，带来丝滑顺畅与高科技视觉
+   ============================================================================== */
+* {
+  scroll-behavior: smooth;
+}
+
+/* Chrome, Edge, Safari Webkit 极简 5px 霓虹滚动条 */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.4);
+  border-radius: 9999px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #6366f1 0%, #06b6d4 100%);
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.6);
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(148, 163, 184, 0.4) transparent;
+}
+
 /* 隐藏滚动条但保留滚动能力 */
 .scrollbar-hide::-webkit-scrollbar {
-  display: none;
+  display: none !important;
 }
 .scrollbar-hide {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
 }
+
+/* ==============================================================================
+   多层级差异化触感交互引擎 (Differentiated Tactile Interaction Engine)
+   根据不同位置与功能，赋予截然不同的物理质感与心理反馈
+   ============================================================================== */
+
+/* 1. 通用弹性基础 */
+.ant-btn,
+button,
+[role="button"] {
+  cursor: pointer !important;
+  user-select: none !important;
+  position: relative;
+  transition: transform 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.16s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.16s ease !important;
+}
+
+/* ── 层级 1：关键发起主行动 (Hero / Primary Launch CTA) ──
+   功能定位：启动工作台、新建方案等决定性业务起点
+   触感人格：磁吸微浮、充盈能量、自信回弹
+*/
+.btn-hero-launch {
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              filter 0.2s ease !important;
+}
+.btn-hero-launch:hover:not(:disabled) {
+  transform: translateY(-2px) scale(1.015) !important;
+  box-shadow: 0 8px 24px -2px rgba(99, 102, 241, 0.45) !important;
+  filter: brightness(1.05) !important;
+}
+.btn-hero-launch:active:not(:disabled) {
+  transform: translateY(1.5px) scale(0.97) !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3) !important;
+  filter: brightness(0.95) !important;
+  transition: transform 0.05s ease-out !important;
+}
+
+/* ── 层级 2：保存与锁定行动 (Save / Commit Lock) ──
+   功能定位：保存配置并生效、保存并应用
+   触感人格：机械卡扣、沉稳扎实、工业锁死感 (深度沉降下压，安全踏实)
+*/
+.btn-save-commit {
+  transition: transform 0.14s ease, box-shadow 0.14s ease, filter 0.14s ease !important;
+}
+.btn-save-commit:hover:not(:disabled) {
+  transform: translateY(-1px) !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.35) !important;
+  filter: brightness(1.03) !important;
+}
+.btn-save-commit:active:not(:disabled) {
+  /* 沉重扎实的下沉感，像工业机械卡扣嵌入 */
+  transform: translateY(2.5px) scale(0.96) !important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+  filter: brightness(0.9) !important;
+  transition: transform 0.04s ease-out !important;
+}
+
+/* ── 层级 3：探针与即刻动作 (Action Probe & Test) ──
+   功能定位：测试连通、采纳补丁
+   触感人格：疾速响应、电波脉冲、轻快干脆
+*/
+.btn-action-probe {
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+.btn-action-probe:hover:not(:disabled) {
+  transform: translateY(-1.5px) !important;
+  filter: brightness(1.06) !important;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25) !important;
+}
+.btn-action-probe:active:not(:disabled) {
+  transform: scale(0.95) !important;
+  filter: brightness(0.92) !important;
+  transition: transform 0.05s ease-out !important;
+}
+
+/* ── 层级 4：探索气泡 (Playful Discovery Bubbles) ──
+   功能定位：快捷提问气泡、探索建议
+   触感人格：气态轻盈、高弹性橡皮糖微动、激发探索欲
+*/
+.bubble-playful {
+  cursor: pointer;
+  user-select: none;
+  transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+              box-shadow 0.22s ease,
+              border-color 0.22s ease !important;
+}
+.bubble-playful:hover {
+  transform: translateY(-2px) scale(1.02) !important;
+  box-shadow: 0 6px 18px -2px rgba(217, 119, 6, 0.16) !important;
+}
+.bubble-playful:active {
+  /* 像压下气球般的橡皮弹簧感 */
+  transform: translateY(1px) scale(0.95) !important;
+  filter: brightness(0.96) !important;
+  transition: transform 0.06s ease-out !important;
+}
+
+/* ── 层级 5：羽量级辅助/返回 (Featherlight Secondary & Back) ──
+   功能定位：返回上一步、取消、辅助动作
+   触感人格：极轻极静、微向左滑、温和克制不抢焦点
+*/
+.btn-feather-back {
+  transition: background 0.18s ease, transform 0.15s ease, color 0.15s ease !important;
+}
+.btn-feather-back:hover:not(:disabled) {
+  background: rgba(241, 245, 249, 0.9) !important;
+  transform: translateX(-2.5px) !important;
+  color: #0f172a !important;
+}
+.btn-feather-back:active:not(:disabled) {
+  transform: translateX(-1px) scale(0.97) !important;
+  background: rgba(226, 232, 240, 0.9) !important;
+}
+
+/* ── 层级 6：审慎危险动作 (Cautionary Danger) ──
+   功能定位：删除仓库、解绑、清空
+   触感人格：警示顿挫、审慎阻尼、微下陷警告
+*/
+.btn-danger-cautious {
+  transition: all 0.18s ease !important;
+}
+.btn-danger-cautious:hover:not(:disabled) {
+  background: #fef2f2 !important;
+  color: #dc2626 !important;
+  border-color: #fecaca !important;
+  transform: translateY(-1px) !important;
+  box-shadow: 0 2px 8px rgba(239, 68, 68, 0.15) !important;
+}
+.btn-danger-cautious:active:not(:disabled) {
+  transform: scale(0.95) !important;
+  background: #fee2e2 !important;
+  transition: transform 0.05s ease !important;
+}
+
+/* ── 层级 7：立体浮岛卡片 (Depth Island Cards) ──
+   功能定位：业务流方案卡片、Git 仓库卡片
+   触感人格：空间景深浮起、光影微漫射
+*/
+.card-depth-island {
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease !important;
+  cursor: pointer;
+  position: relative;
+}
+.card-depth-island:hover {
+  transform: translateY(-3px) !important;
+  box-shadow: 0 12px 30px -4px rgba(99, 102, 241, 0.14), 0 3px 8px rgba(0, 0, 0, 0.03) !important;
+}
+.card-depth-island:active {
+  transform: translateY(1px) scale(0.99) !important;
+  transition: transform 0.06s ease-out !important;
+}
+
+/* 6. 幽灵/文本按钮（Text / Link）轻量背景激活 */
+.ant-btn-text:hover:not(:disabled) {
+  background-color: #f1f5f9 !important;
+}
+
+.ant-btn-text:active:not(:disabled) {
+  background-color: #e2e8f0 !important;
+}
+
+/* 7. 互动卡片与列表项的轻质按压触感 */
+.interactive-card {
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  cursor: pointer;
+  position: relative;
+}
+
+.interactive-card:hover {
+  transform: translateY(-2.5px);
+  box-shadow: 0 10px 28px -4px rgba(99, 102, 241, 0.14), 0 2px 6px rgba(0, 0, 0, 0.03);
+  border-color: #c7d2fe;
+}
+
+.interactive-card:active {
+  transform: translateY(1px) scale(0.985);
+  transition: transform 0.06s ease-out;
+}
+
+/* 8. 现代化开关 (Switch) 顺滑弹簧滑动质感 */
+.ant-switch {
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.ant-switch:hover {
+  filter: brightness(1.05);
+}
+
+.ant-switch:active .ant-switch-handle {
+  width: 22px !important;
+}
+
+.ant-switch .ant-switch-handle {
+  transition: all 0.25s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+}
+
+/* 9. 输入框/文本域呼吸发光聚焦光圈 (Focus Ring) */
+input:focus,
+textarea:focus,
+.ant-input:focus,
+.ant-input-focused {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.18) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+/* 10. 标签/气泡按钮点击弹簧跳跃质感 */
+.interactive-bubble {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.interactive-bubble:hover {
+  transform: translateY(-1.5px) scale(1.02);
+  filter: brightness(1.03);
+}
+
+.interactive-bubble:active {
+  transform: translateY(1px) scale(0.96);
+  filter: brightness(0.95);
+  transition: transform 0.05s ease-out;
+}
+
+/* 11. 呼吸与脉冲动画 */
+@keyframes fluidSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fluid-in {
+  animation: fluidSlideIn 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* ==============================================================================
+   12. 极客动态科技感引擎 (Cyber Dynamic Tech Engine)
+   ============================================================================== */
+
+/* 雷达探针呼吸脉冲动画 (Radar Beacon Ping) */
+@keyframes radarBeaconPing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0.7);
+    transform: scale(0.95);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(99, 102, 241, 0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(99, 102, 241, 0);
+    transform: scale(0.95);
+  }
+}
+
+@keyframes radarGreenPing {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.8);
+    transform: scale(0.95);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(16, 185, 129, 0);
+    transform: scale(1.05);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    transform: scale(0.95);
+  }
+}
+
+@keyframes cyberNeonPulse {
+  0%, 100% {
+    opacity: 1;
+    filter: drop-shadow(0 0 6px rgba(99, 102, 241, 0.5));
+  }
+  50% {
+    opacity: 0.85;
+    filter: drop-shadow(0 0 14px rgba(6, 182, 212, 0.7));
+  }
+}
+
+@keyframes typingCursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+.cyber-radar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #6366f1;
+  display: inline-block;
+  animation: radarBeaconPing 1.8s infinite ease-out;
+}
+
+.cyber-radar-dot-green {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #10b981;
+  display: inline-block;
+  animation: radarGreenPing 1.8s infinite ease-out;
+}
+
+.cyber-typing-cursor {
+  display: inline-block;
+  color: #6366f1;
+  font-weight: 900;
+  animation: typingCursorBlink 0.9s infinite;
+}
+
+/* 科技网格背景 (Cyber Grid Pattern - 蓝紫微光全息空间) */
+.cyber-grid-canvas {
+  background-color: #f8fafc;
+  background-image: 
+    radial-gradient(ellipse at 50% -10%, rgba(99, 102, 241, 0.14) 0%, transparent 60%),
+    radial-gradient(ellipse at 85% 85%, rgba(6, 182, 212, 0.1) 0%, transparent 55%),
+    radial-gradient(#cbd5e1 1.2px, transparent 1.2px);
+  background-size: 100% 100%, 100% 100%, 24px 24px;
+}
+
+/* 科技卡片流光边框 (Cyber Glow Card - 触感微浮与顶栏激光流光) */
+.cyber-glow-card {
+  position: relative;
+  background: linear-gradient(180deg, #ffffff 0%, #fafcff 100%);
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03), 0 0 0 1px rgba(99, 102, 241, 0.04);
+}
+
+.cyber-glow-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #818cf8, #06b6d4, transparent);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none !important;
+}
+
+.cyber-glow-card:hover {
+  border-color: #818cf8 !important;
+  box-shadow: 0 12px 30px -4px rgba(99, 102, 241, 0.18), 0 0 0 1px rgba(99, 102, 241, 0.25) !important;
+  transform: translateY(-2px);
+}
+
+.cyber-glow-card:hover::before {
+  opacity: 1;
+}
+
+/* 终端代码样式字体 */
+.font-mono-cyber {
+  font-family: ui-monospace, SFMono-Regular, "JetBrains Mono", Menlo, Consolas, "Liberation Mono", monospace !important;
+}
+
+/* 科技终端顶栏 (Cyber Terminal Header - 深空黑客 IDE) */
+.cyber-terminal-header {
+  background: linear-gradient(135deg, #090d16 0%, #0f172a 45%, #1e1b4b 100%);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.25);
+  padding: 8px 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-radius: 10px 10px 0 0;
+  user-select: none;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+/* 矩阵科技感卡片 (Cyber Matrix Card - 边缘微光呼吸) */
+.cyber-matrix-card {
+  position: relative;
+  background: #ffffff;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 10px;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+.cyber-matrix-card::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: transparent;
+  transition: all 0.2s ease;
+  pointer-events: none !important;
+}
+
+.cyber-matrix-card:hover {
+  border-color: #818cf8;
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.22), 0 4px 14px rgba(15, 23, 42, 0.05);
+  transform: translateY(-2px);
+}
+
+.cyber-matrix-card.active {
+  border-color: #6366f1;
+  background: linear-gradient(180deg, #f5f3ff 0%, #ffffff 100%);
+  box-shadow: 0 0 22px rgba(99, 102, 241, 0.28), 0 0 0 1px rgba(99, 102, 241, 0.2);
+}
+
+.cyber-matrix-card.active::after {
+  background: linear-gradient(90deg, #4f46e5, #06b6d4);
+}
+
+/* 科技遥测胶囊 (Cyber Telemetry Pill) */
+.cyber-telemetry-pill {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(15, 23, 42, 0.03);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  color: #475569;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.15s ease;
+}
+
+.cyber-telemetry-pill:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+/* 科技 HUD 标签 (Cyber HUD Badge) */
+.cyber-hud-badge {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  color: #4f46e5;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 0 8px rgba(99, 102, 241, 0.1);
+}
+
+/* 科技主行动发光按钮 (Cyber Primary Launch Button) */
+.btn-cyber-primary {
+  background: linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #06b6d4 100%) !important;
+  border: none !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35), 0 0 16px rgba(6, 182, 212, 0.2) !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.btn-cyber-primary:hover {
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.5), 0 0 24px rgba(6, 182, 212, 0.4) !important;
+  transform: translateY(-1.5px) !important;
+}
+
+.btn-cyber-primary::after {
+  content: "";
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: linear-gradient(60deg, transparent, rgba(255, 255, 255, 0.25), transparent);
+  transform: rotate(25deg) translateY(-100%);
+  transition: transform 0.6s ease;
+}
+
+.btn-cyber-primary:hover::after {
+  transform: rotate(25deg) translateY(100%);
+}
+
+/* ==============================================================================
+   现代高科技 AI 组件样式体系 (Cyber AI Component Aesthetics)
+   全面升级 Ant Design 输入框、下拉选择器、开关、滑块、弹窗等
+   ============================================================================== */
+
+/* 1. 科技输入框与文本域 (Cyber Input & Textarea) */
+.ant-input,
+.ant-input-affix-wrapper {
+  border-radius: 8px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-size: 12.5px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.ant-input:hover,
+.ant-input-affix-wrapper:hover {
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.1) !important;
+}
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper-focused {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16), 0 0 14px rgba(99, 102, 241, 0.12) !important;
+  outline: none !important;
+}
+
+/* 2. 科技下拉选择器 (Cyber Select) */
+.ant-select .ant-select-selector {
+  border-radius: 8px !important;
+  border: 1.5px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  color: #0f172a !important;
+  font-weight: 500 !important;
+  font-size: 12.5px !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.ant-select:hover .ant-select-selector {
+  border-color: #818cf8 !important;
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.1) !important;
+}
+
+.ant-select-focused .ant-select-selector,
+.ant-select-open .ant-select-selector {
+  border-color: #6366f1 !important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.16), 0 0 14px rgba(99, 102, 241, 0.12) !important;
+}
+
+/* 科技下拉弹出浮层 (Cyber Dropdown Menu) */
+.ant-select-dropdown {
+  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(16px) !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 16px 36px -6px rgba(15, 23, 42, 0.16), 0 0 0 1px rgba(99, 102, 241, 0.12) !important;
+  padding: 6px !important;
+}
+
+.ant-select-dropdown .ant-select-item {
+  border-radius: 6px !important;
+  padding: 6px 12px !important;
+  font-size: 12.5px !important;
+  transition: all 0.15s ease !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-active:not(.ant-select-item-option-selected) {
+  background: #f1f5f9 !important;
+  color: #0f172a !important;
+}
+
+.ant-select-dropdown .ant-select-item-option-selected {
+  background: linear-gradient(135deg, #eef2ff 0%, #ede9fe 100%) !important;
+  color: #4f46e5 !important;
+  font-weight: 700 !important;
+}
+
+/* 3. 科技发光开关 (Cyber Neon Switch) */
+.ant-switch {
+  background: #cbd5e1 !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.ant-switch:hover {
+  background: #94a3b8 !important;
+}
+
+.ant-switch.ant-switch-checked {
+  background: linear-gradient(135deg, #4f46e5 0%, #06b6d4 100%) !important;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.5) !important;
+}
+
+/* 4. 科技渐变滑块 (Cyber Slider) */
+.ant-slider .ant-slider-track {
+  background: linear-gradient(90deg, #6366f1, #06b6d4) !important;
+}
+
+.ant-slider .ant-slider-handle::after {
+  box-shadow: 0 0 10px rgba(99, 102, 241, 0.6) !important;
+  border-color: #6366f1 !important;
+}
+
+/* 5. 科技下拉动作菜单 (Cyber Action Dropdown Menu) */
+.ant-dropdown .ant-dropdown-menu {
+  border-radius: 10px !important;
+  background: rgba(255, 255, 255, 0.98) !important;
+  backdrop-filter: blur(14px) !important;
+  border: 1px solid #e2e8f0 !important;
+  box-shadow: 0 12px 30px -4px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(99, 102, 241, 0.08) !important;
+  padding: 6px !important;
+}
+
+.ant-dropdown .ant-dropdown-menu-item {
+  border-radius: 6px !important;
+  font-size: 12px !important;
+  padding: 6px 12px !important;
+  transition: all 0.15s ease !important;
+}
+
+.ant-dropdown .ant-dropdown-menu-item:hover {
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+}
+
+/* 6. 弹性自适应高度 Form.Item 支持 (保证文本框完全吸纳剩余全屏高度并 100% 铺满横向宽度，严禁页面留白) */
+.prompt-expand-fill,
+.prompt-expand-fill .ant-form-item-row,
+.prompt-expand-fill .ant-form-item-control,
+.prompt-expand-fill .ant-form-item-control-input,
+.prompt-expand-fill .ant-form-item-control-input-content {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+.prompt-expand-fill textarea.ant-input {
+  width: 100% !important;
+  min-width: 100% !important;
+  max-width: 100% !important;
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 180px !important;
+  box-sizing: border-box !important;
+}
+
+/* ==============================================================================
+   科技感滑动与弹性位移动画体系 (Cyber Motion & Slide Animations)
+   赋予 Tab 切换、步骤更迭、卡片悬浮、抽屉滑出工业级阻尼弹簧质感
+   ============================================================================== */
+
+@keyframes cyberSlideFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes cyberSlideFromRight {
+  0% {
+    opacity: 0;
+    transform: translateX(36px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cyberSlideFromLeft {
+  0% {
+    opacity: 0;
+    transform: translateX(-36px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes cyberScalePulse {
+  0%, 100% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.03);
+  }
+}
+
+@keyframes cyberShimmerBeam {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+/* 页面与 Tab 进入动画 */
+.cyber-tab-content-enter {
+  animation: cyberSlideFadeIn 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* 右侧抽屉/模拟器滑动出现 */
+.cyber-slide-in-right {
+  animation: cyberSlideFromRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* 左侧抽屉滑动出现 */
+.cyber-slide-in-left {
+  animation: cyberSlideFromLeft 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  will-change: transform, opacity;
+}
+
+/* 常用指令大卡片的高科技悬浮与微光交互 */
+.cyber-directive-card {
+  position: relative;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.22s ease !important;
+  will-change: transform, box-shadow;
+}
+
+.cyber-directive-card:hover {
+  transform: translateY(-3px) scale(1.008) !important;
+  border-color: #818cf8 !important;
+  box-shadow: 0 10px 25px -4px rgba(99, 102, 241, 0.18), 0 0 0 1px rgba(99, 102, 241, 0.25) !important;
+}
+
+/* 交互卡片悬停微浮 */
+.cyber-interactive-hover {
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.cyber-interactive-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.12);
+}
+.cyber-interactive-hover:active {
+  transform: translateY(1px) scale(0.98);
+}
+
+/* 滚动区域渐变遮罩 (柔和渐隐边缘，杜绝生硬切割) */
+.cyber-scroll-mask {
+  mask-image: linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 12px, black calc(100% - 12px), transparent);
+}
+
+/* 科技感玻璃按钮 (Cyber Glass Button) */
+.btn-cyber-glass {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1.5px solid #cbd5e1 !important;
+  color: #334155 !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  backdrop-filter: blur(8px) !important;
+}
+
+.btn-cyber-glass:hover {
+  background: #f5f3ff !important;
+  border-color: #818cf8 !important;
+  color: #4338ca !important;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.16) !important;
+  transform: translateY(-1.5px) !important;
+}
+
+.btn-cyber-glass:active {
+  transform: scale(0.98) !important;
+}
+
+/* 科技感返回胶囊按钮 (Cyber Return Back Pill) */
+.btn-cyber-back {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+  padding: 6px 16px !important;
+  background: linear-gradient(135deg, #eef2ff 0%, #faf5ff 100%) !important;
+  border: 1.5px solid #c7d2fe !important;
+  color: #4338ca !important;
+  border-radius: 20px !important;
+  font-weight: 700 !important;
+  font-size: 12.5px !important;
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.1) !important;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  cursor: pointer !important;
+}
+
+.btn-cyber-back:hover {
+  background: linear-gradient(135deg, #e0e7ff 0%, #f3e8ff 100%) !important;
+  border-color: #818cf8 !important;
+  color: #3730a3 !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25) !important;
+  transform: translateX(-2px) !important;
+}
+
+/* 科技感高亮发射按钮 (Cyber Neon Action Button) */
+.btn-cyber-neon {
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #06b6d4 100%) !important;
+  background-size: 200% auto !important;
+  border: none !important;
+  color: #ffffff !important;
+  border-radius: 8px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.3px !important;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+.btn-cyber-neon:hover {
+  background-position: right center !important;
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5), 0 0 20px rgba(6, 182, 212, 0.4) !important;
+  transform: translateY(-1.5px) !important;
+  color: #ffffff !important;
+}
+
+.btn-cyber-neon:active {
+  transform: scale(0.98) !important;
+}
+
+/* TipTap 科技感富文本编辑器样式体系 */
+.tiptap-editor-wrap {
+  position: relative !important;
+  z-index: 5 !important;
+  cursor: default !important; /* 保持鼠标指针为清晰箭头，绝不转为 1px 黑线融入文字 */
+}
+
+.ProseMirror {
+  outline: none !important;
+  min-height: 300px !important;
+  padding: 18px 22px !important;
+  font-size: 14px !important;
+  line-height: 1.8 !important;
+  color: #0f172a !important;
+  cursor: default !important; /* 鼠标箭头始终浮在所有文字最上层，永远清晰可见，杜绝被文本盖住 */
+  caret-color: #4f46e5 !important;
+  position: relative !important;
+  z-index: 5 !important;
+  background: #ffffff !important;
+}
+
+.ProseMirror p {
+  margin-bottom: 0.75em !important;
+}
+
+.ProseMirror h1, .ProseMirror h2, .ProseMirror h3 {
+  font-weight: 700 !important;
+  color: #0f172a !important;
+  margin-top: 1em !important;
+  margin-bottom: 0.5em !important;
+}
+
+.ProseMirror blockquote {
+  border-left: 3.5px solid #6366f1 !important;
+  padding: 8px 14px !important;
+  margin: 0.75em 0 !important;
+  color: #475569 !important;
+  background: #f8fafc !important;
+  border-radius: 0 8px 8px 0 !important;
+}
+
+.ProseMirror pre {
+  background: #0f172a !important;
+  color: #38bdf8 !important;
+  font-family: 'JetBrains Mono', Consolas, Monaco, monospace !important;
+  padding: 12px 16px !important;
+  border-radius: 8px !important;
+  overflow-x: auto !important;
+  font-size: 12.5px !important;
+  margin: 0.75em 0 !important;
+}
+
+.ProseMirror code:not(pre code) {
+  background: #f1f5f9 !important;
+  color: #e11d48 !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: 12px !important;
+  font-family: monospace !important;
+}
+
+.ProseMirror ul, .ProseMirror ol {
+  padding-left: 24px !important;
+  margin-bottom: 0.75em !important;
+}
+
+.ProseMirror p.is-editor-empty:first-child::before {
+  color: #94a3b8 !important;
+  content: attr(data-placeholder) !important;
+  float: left !important;
+  height: 0 !important;
+  pointer-events: none !important;
+}
+
+/* CodeMirror 科技感编辑器样式体系 */
+.cm-editor {
+  height: 100% !important;
+  font-family: 'JetBrains Mono', Consolas, Monaco, monospace !important;
+  font-size: 13px !important;
+  background: #ffffff !important;
+}
+
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+
+.cm-gutters {
+  background: #f8fafc !important;
+  color: #94a3b8 !important;
+  border-right: 1px solid #e2e8f0 !important;
+}
+
+.cm-activeLineGutter {
+  background: #eef2ff !important;
+  color: #4f46e5 !important;
+  font-weight: 700 !important;
+}
+
+.cm-activeLine {
+  background: rgba(99, 102, 241, 0.04) !important;
+}
+
+/* 沉浸式提示词工坊全屏动效 */
+.cyber-studio-view {
+  animation: cyberStudioFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes cyberStudioFadeIn {
+  from {
+    opacity: 0;
+    transform: scale(0.995) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+
+
+
+

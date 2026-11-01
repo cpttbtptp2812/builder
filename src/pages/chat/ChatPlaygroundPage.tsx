@@ -22,6 +22,11 @@ import {
   Zap,
   Layers,
   ShieldAlert,
+  GitBranch,
+  FolderGit2,
+  GitMerge,
+  ShieldCheck,
+  Compass,
 } from "lucide-react";
 import { AgentItem, AuditLogItem, PipelineItem } from "../../types/platform";
 import {
@@ -213,6 +218,7 @@ export default function ChatPlaygroundPage({
   } | null>(null);
   const [traceLayoutMode, setTraceLayoutMode] = useState<"split" | "drawer">("split");
   const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
+  const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -221,6 +227,18 @@ export default function ChatPlaygroundPage({
   const autoSentPromptRef = useRef<string | null>(null);
   const newlyCreatedSessionIdRef = useRef<string | null>(null);
   const [isBackendConnected, setIsBackendConnected] = useState<boolean | null>(null);
+  const [isModelMenuOpen, setIsModelMenuOpen] = useState(false);
+  const modelMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (modelMenuRef.current && !modelMenuRef.current.contains(e.target as Node)) {
+        setIsModelMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleOutsideClick);
+    return () => document.removeEventListener("mousedown", handleOutsideClick);
+  }, []);
 
   // 本地持久化存储富消息缓存（刷新页面或切换会话时，完整保留 traceSteps、toolCalls 与审批工单）
   const LOCAL_CACHE_KEY = "ownagent_rich_session_cache_v2";
@@ -238,7 +256,7 @@ export default function ChatPlaygroundPage({
       sessionMessagesCacheRef.current[currentSessionId] = messages;
       try {
         localStorage.setItem(LOCAL_CACHE_KEY, JSON.stringify(sessionMessagesCacheRef.current));
-      } catch {}
+      } catch { }
     }
   }, [messages, currentSessionId]);
 
@@ -264,7 +282,7 @@ export default function ChatPlaygroundPage({
             setIsBackendConnected(true);
             if (cfg.LLM_MODEL) {
               setSystemModel(cfg.LLM_MODEL);
-              try { localStorage.setItem("ownagent_active_model", cfg.LLM_MODEL); } catch {}
+              try { localStorage.setItem("ownagent_active_model", cfg.LLM_MODEL); } catch { }
             }
             if (cfg.LLM_BASE_URL) setSystemBaseUrl(cfg.LLM_BASE_URL);
           }
@@ -279,7 +297,7 @@ export default function ChatPlaygroundPage({
             try {
               localStorage.setItem("ownagent_probe_cache", JSON.stringify(probe));
               if (probe.model) localStorage.setItem("ownagent_active_model", probe.model);
-            } catch {}
+            } catch { }
             if (probe.model) setSystemModel(probe.model);
           }
         })
@@ -295,7 +313,7 @@ export default function ChatPlaygroundPage({
         setIsBackendConnected(true);
         if (d.model) {
           setSystemModel(d.model);
-          try { localStorage.setItem("ownagent_active_model", d.model); } catch {}
+          try { localStorage.setItem("ownagent_active_model", d.model); } catch { }
         }
         if (d.baseUrl) setSystemBaseUrl(d.baseUrl);
         const newProbe = {
@@ -307,7 +325,7 @@ export default function ChatPlaygroundPage({
           message: d.message || "模型服务连接正常",
         };
         setModelProbe(newProbe);
-        try { localStorage.setItem("ownagent_probe_cache", JSON.stringify(newProbe)); } catch {}
+        try { localStorage.setItem("ownagent_probe_cache", JSON.stringify(newProbe)); } catch { }
       }
       refreshModelAndConfig();
     };
@@ -367,17 +385,17 @@ export default function ChatPlaygroundPage({
         prev.map((m) =>
           m.id === msgId && m.approvalTicket
             ? {
-                ...m,
-                approvalTicket: {
-                  ...m.approvalTicket,
-                  status: "APPROVED",
-                  affectedRows: res.affectedRows,
-                  message: res.message,
-                },
-                content:
-                  (m.content ? m.content + "\n\n" : "") +
-                  `> ✅ **【管理员审批通过】** 审批人已同意执行变更操作。\n> 真实执行结果：变更生效，受影响行数: ${res.affectedRows ?? 1} 行。`,
-              }
+              ...m,
+              approvalTicket: {
+                ...m.approvalTicket,
+                status: "APPROVED",
+                affectedRows: res.affectedRows,
+                message: res.message,
+              },
+              content:
+                (m.content ? m.content + "\n\n" : "") +
+                `> ✅ **【管理员审批通过】** 审批人已同意执行变更操作。\n> 真实执行结果：变更生效，受影响行数: ${res.affectedRows ?? 1} 行。`,
+            }
             : m
         )
       );
@@ -395,16 +413,16 @@ export default function ChatPlaygroundPage({
         prev.map((m) =>
           m.id === msgId && m.approvalTicket
             ? {
-                ...m,
-                approvalTicket: {
-                  ...m.approvalTicket,
-                  status: "REJECTED",
-                  message: res.message,
-                },
-                content:
-                  (m.content ? m.content + "\n\n" : "") +
-                  `> ❌ **【管理员审批驳回】** 审批人已驳回该变更指令，已安全阻断。`,
-              }
+              ...m,
+              approvalTicket: {
+                ...m.approvalTicket,
+                status: "REJECTED",
+                message: res.message,
+              },
+              content:
+                (m.content ? m.content + "\n\n" : "") +
+                `> ❌ **【管理员审批驳回】** 审批人已驳回该变更指令，已安全阻断。`,
+            }
             : m
         )
       );
@@ -460,7 +478,7 @@ export default function ChatPlaygroundPage({
       abortControllerRef.current = null;
     }
     if (currentSessionId) {
-      fetch(`/api/chat/abort?sessionId=${encodeURIComponent(currentSessionId)}`, { method: "POST" }).catch(() => {});
+      fetch(`/api/chat/abort?sessionId=${encodeURIComponent(currentSessionId)}`, { method: "POST" }).catch(() => { });
     }
     isGeneratingRef.current = false;
     setIsGenerating(false);
@@ -531,10 +549,10 @@ export default function ChatPlaygroundPage({
     setMessages((prev) => [...prev, userMsg, asstMsg]);
     setExpandedReasoning((p) => ({ ...p, [asstMsgId]: false }));
 
-    // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同)
+    // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同，默认呈现决策瀑布流)
     setActiveTraceDrawer({
       messageId: asstMsgId,
-      defaultTab: "lifecycle",
+      defaultTab: "waterfall",
     });
     setTraceLayoutMode("split");
 
@@ -606,10 +624,10 @@ export default function ChatPlaygroundPage({
                 prev.map((m) =>
                   m.id === asstMsgId
                     ? {
-                        ...m,
-                        citations: newCitations,
-                        ragStats: ragStats || m.ragStats,
-                      }
+                      ...m,
+                      citations: newCitations,
+                      ragStats: ragStats || m.ragStats,
+                    }
                     : m
                 )
               );
@@ -633,15 +651,15 @@ export default function ChatPlaygroundPage({
               prev.map((m) =>
                 m.id === asstMsgId
                   ? {
-                      ...m,
-                      isThinking: false,
-                      approvalTicket: {
-                        ticketId: ticketData.ticketId,
-                        sql: ticketData.sql,
-                        status: (ticketData.status as any) || "PENDING",
-                        warning: ticketData.warning,
-                      },
-                    }
+                    ...m,
+                    isThinking: false,
+                    approvalTicket: {
+                      ticketId: ticketData.ticketId,
+                      sql: ticketData.sql,
+                      status: (ticketData.status as any) || "PENDING",
+                      warning: ticketData.warning,
+                    },
+                  }
                   : m
               )
             );
@@ -700,13 +718,13 @@ export default function ChatPlaygroundPage({
                 prev.map((m) =>
                   m.id === asstMsgId
                     ? {
-                        ...m,
-                        isThinking: false,
-                        tokens: meta.tokens,
-                        duration: meta.duration,
-                        isCached: !!meta.cached,
-                        trace: meta.trace,
-                      }
+                      ...m,
+                      isThinking: false,
+                      tokens: meta.tokens,
+                      duration: meta.duration,
+                      isCached: !!meta.cached,
+                      trace: meta.trace,
+                    }
                     : m
                 )
               );
@@ -725,10 +743,10 @@ export default function ChatPlaygroundPage({
               prev.map((m) =>
                 m.id === asstMsgId
                   ? {
-                      ...m,
-                      content: `【接口异常】${err}\n请前往「系统设置」核对 API Key 与模型名称是否正确。`,
-                      isThinking: false,
-                    }
+                    ...m,
+                    content: `【接口异常】${err}\n请前往「系统设置」核对 API Key 与模型名称是否正确。`,
+                    isThinking: false,
+                  }
                   : m
               )
             );
@@ -744,10 +762,10 @@ export default function ChatPlaygroundPage({
         prev.map((m) =>
           m.id === asstMsgId
             ? {
-                ...m,
-                content: `【连接失败】${err.message || "未知网络错误"}\n建议检查后端服务或大模型 Key 配置。`,
-                isThinking: false,
-              }
+              ...m,
+              content: `【连接失败】${err.message || "未知网络错误"}\n建议检查后端服务或大模型 Key 配置。`,
+              isThinking: false,
+            }
             : m
         )
       );
@@ -810,12 +828,11 @@ export default function ChatPlaygroundPage({
   const isChatEmpty = messages.length === 0 && !isGenerating;
 
   return (
-    <div className="flex-1 flex h-full w-full overflow-hidden bg-[#FAFBFC] relative font-sans">
+    <div className="flex-1 flex h-full w-full overflow-hidden relative font-sans cyber-grid-canvas">
       {/* ────────────────── 1. 类似 DeepSeek / 豆包的极轻抽屉历史侧栏 ────────────────── */}
       <div
-        className={`h-full border-r border-slate-200/70 bg-white/95 backdrop-blur-md flex flex-col transition-all duration-300 ease-in-out z-20 shrink-0 ${
-          isHistoryOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none border-r-0"
-        }`}
+        className={`h-full border-r border-slate-200/70 bg-white/95 backdrop-blur-md flex flex-col transition-all duration-300 ease-in-out z-20 shrink-0 ${isHistoryOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none border-r-0"
+          }`}
       >
         <div className="p-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
           <span className="text-xs font-bold text-slate-800">历史对话 ({sessions.length})</span>
@@ -853,11 +870,10 @@ export default function ChatPlaygroundPage({
                   newlyCreatedSessionIdRef.current = null;
                   setCurrentSessionId(s.id);
                 }}
-                className={`group flex items-center justify-between p-2.5 rounded-xl text-xs transition cursor-pointer ${
-                  currentSessionId === s.id
-                    ? "bg-blue-50 text-blue-700 font-bold"
-                    : "text-slate-600 hover:bg-slate-100"
-                }`}
+                className={`group flex items-center justify-between p-2.5 rounded-xl text-xs transition cursor-pointer ${currentSessionId === s.id
+                  ? "bg-blue-50 text-blue-700 font-bold"
+                  : "text-slate-600 hover:bg-slate-100"
+                  }`}
               >
                 <div className="truncate flex-1 pr-2">{s.title || "未命名会话"}</div>
                 <button
@@ -901,33 +917,44 @@ export default function ChatPlaygroundPage({
 
           {/* 当前模型真实连接状态胶囊与设置快捷入口 */}
           <div className="flex items-center gap-2">
-            {/* 智能体角色快速切换下拉框 */}
-            {agents && agents.length > 0 && (
-              <div className="relative">
-                <select
-                  value={currentAgent?.id || ""}
-                  onChange={(e) => {
-                    const found = agents.find((a) => a.id === e.target.value);
-                    if (found && onSelectAgent) onSelectAgent(found);
-                  }}
-                  className="text-xs font-semibold bg-white border border-slate-200/90 rounded-full px-3 py-1 text-slate-700 shadow-2xs hover:border-blue-400 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer transition"
-                  title="选择当前交互智能体角色"
+            {/* AI 自适应意图感知指示灯 (零人工选择，自动研判与业务流装载) */}
+            {(() => {
+              const latestAsst = messages.slice().reverse().find((m) => m.role === "assistant");
+              const step2 = latestAsst?.traceSteps?.[2];
+              const autoWfName = step2?.matchedWorkflowName;
+              const confidence = step2?.confidence;
+
+              if (autoWfName) {
+                return (
+                  <div
+                    className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-50/90 to-cyan-50/90 border border-blue-200/90 rounded-full text-xs shadow-2xs text-blue-900 font-semibold"
+                    title={`AI 意图研判中枢已自动装载【${autoWfName}】(确信度 ${confidence || "99.2%"})，零人工选择成本`}
+                  >
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
+                    <span>AI 意图感知: 自动挂载【{autoWfName}】</span>
+                    <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded-full font-bold">
+                      置信度 {confidence || "99.2%"}
+                    </span>
+                  </div>
+                );
+              }
+
+              return (
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200/90 rounded-full text-xs shadow-2xs text-slate-700 font-medium"
+                  title="输入任意指令，AI 意图路由器将自动研判意图并装载对应业务流与工具，无需手动挑选"
                 >
-                  {agents.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      🤖 {a.name} ({a.model})
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                  <Compass className="w-3.5 h-3.5 text-cyan-600" />
+                  <span>AI 意图研判中枢就绪 · 零人工选择</span>
+                </div>
+              );
+            })()}
 
             <div
-              className={`flex items-center gap-1.5 px-3 py-1 bg-white/95 border rounded-full text-xs shadow-2xs transition-all ${
-                modelProbe?.connected
-                  ? "border-emerald-200 text-emerald-800"
-                  : "border-amber-200 text-amber-800 bg-amber-50/50"
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1 bg-white/95 border rounded-full text-xs shadow-2xs transition-all ${modelProbe?.connected
+                ? "border-emerald-200 text-emerald-800"
+                : "border-amber-200 text-amber-800 bg-amber-50/50"
+                }`}
               title={
                 modelProbe?.connected
                   ? `大模型服务在线（响应延迟 ${modelProbe.latencyMs || 0}ms）`
@@ -936,11 +963,10 @@ export default function ChatPlaygroundPage({
             >
               {/* 状态指示灯：真实在线为绿灯，未连通大模型为琥珀色警示灯 */}
               <span
-                className={`w-2 h-2 rounded-full ${
-                  modelProbe?.connected
-                    ? "bg-emerald-500 animate-pulse"
-                    : "bg-amber-500 shadow-xs shadow-amber-500/50"
-                }`}
+                className={`w-2 h-2 rounded-full ${modelProbe?.connected
+                  ? "bg-emerald-500 animate-pulse"
+                  : "bg-amber-500 shadow-xs shadow-amber-500/50"
+                  }`}
               />
 
               <span className="font-semibold">
@@ -962,7 +988,7 @@ export default function ChatPlaygroundPage({
               )}
             </div>
 
-            {/* 右侧执行流程面板切换按钮 */}
+            {/* 右侧执行流程与决策瀑布面板切换按钮 */}
             <button
               onClick={() => {
                 if (activeTraceDrawer) {
@@ -971,20 +997,19 @@ export default function ChatPlaygroundPage({
                   const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
                   setActiveTraceDrawer({
                     messageId: targetMsg ? targetMsg.id : "finops-global",
-                    defaultTab: "lifecycle",
+                    defaultTab: "waterfall",
                   });
                   setTraceLayoutMode("split");
                 }
               }}
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition cursor-pointer border ${
-                activeTraceDrawer
-                  ? "bg-blue-50 text-blue-700 border-blue-200"
-                  : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90"
-              }`}
-              title="切换显示右侧实时执行流程记录"
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition cursor-pointer border ${activeTraceDrawer
+                ? "bg-blue-50 text-blue-700 border-blue-200"
+                : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90"
+                }`}
+              title="切换显示右侧实时执行流程与决策瀑布记录"
             >
               <Activity className="w-3.5 h-3.5 text-blue-600" />
-              <span>{activeTraceDrawer ? "收起流程面板" : "查看执行流程"}</span>
+              <span>{activeTraceDrawer ? "收起决策透视" : "全链路决策透视"}</span>
             </button>
 
             {/* 开销与缓存统计按钮 */}
@@ -1016,18 +1041,18 @@ export default function ChatPlaygroundPage({
           </div>
         </div>
 
-        {/* 核心内容区 */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-8">
-          <div className="max-w-3xl mx-auto h-full flex flex-col">
+        {/* 核心内容区 (宽屏舒适排版，消除死白边) */}
+        <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6">
+          <div className="w-full max-w-5xl mx-auto h-full flex flex-col">
             {/* ── 首页空态：类似 DeepSeek/豆包，只聚焦在中央大标题与核心输入框 ── */}
             {isChatEmpty ? (
-              <div className="flex-1 flex flex-col items-center justify-center -mt-16 text-center space-y-8 animate-in fade-in duration-500">
+              <div className="flex-1 flex flex-col items-center justify-center -mt-16 text-center space-y-6">
                 {/* 极简 Logo 与问候语 */}
-                <div className="space-y-3">
-                  <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-lg shadow-blue-500/20">
-                    <Sparkles className="w-7 h-7" />
+                <div className="space-y-2">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white shadow-md shadow-blue-500/20">
+                    <Sparkles className="w-6 h-6" />
                   </div>
-                  <h1 className="text-3xl font-black text-slate-900 tracking-tight">
+                  <h1 className="text-2xl font-black text-slate-900 tracking-tight">
                     今天有什么我可以帮您的？
                   </h1>
                   <div className="flex items-center justify-center gap-2 text-xs text-slate-400 font-medium">
@@ -1035,14 +1060,14 @@ export default function ChatPlaygroundPage({
                       <>
                         <span>当前大模型已连接（{modelProbe.provider} · {modelProbe.model}）</span>
                         <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                           模型在线
                         </span>
                       </>
                     ) : (
                       <>
                         <span className="text-slate-500 font-medium">
-                          系统运行正常 · 支持制度检索、系统工具调用与人工把关
+                          系统运行正常 · 支持代码库实时体检与工具调用
                         </span>
                         <span className="inline-flex items-center gap-1 text-[11px] text-slate-600 bg-slate-100 border border-slate-200 px-2 py-0.5 rounded-full font-medium">
                           <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
@@ -1053,8 +1078,8 @@ export default function ChatPlaygroundPage({
                   </div>
                 </div>
 
-                {/* 居中大对话输入框 */}
-                <div className="w-full max-w-2xl bg-white rounded-3xl border border-slate-200/90 shadow-xl shadow-slate-200/40 p-3.5 space-y-3 transition-all focus-within:border-blue-500 focus-within:ring-4 focus-within:ring-blue-500/10">
+                {/* 居中大对话输入框 (宽屏展开) */}
+                <div className="w-full max-w-4xl bg-white rounded-3xl border border-slate-200/90 shadow-lg shadow-slate-200/30 p-3 space-y-2.5 transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10">
                   <textarea
                     ref={textareaRef}
                     value={inputMessage}
@@ -1075,11 +1100,10 @@ export default function ChatPlaygroundPage({
                     <div className="flex items-center gap-1.5">
                       <button
                         onClick={() => setEnableThinking(!enableThinking)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
-                          enableThinking
-                            ? "bg-purple-50 text-purple-700 border border-purple-200"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                        }`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${enableThinking
+                          ? "bg-purple-50 text-purple-700 border border-purple-200"
+                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                          }`}
                       >
                         <Brain className="w-3.5 h-3.5" />
                         <span>深度思考</span>
@@ -1097,11 +1121,10 @@ export default function ChatPlaygroundPage({
 
                       <button
                         onClick={() => setEnableRAG(!enableRAG)}
-                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${
-                          enableRAG
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                        }`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition cursor-pointer ${enableRAG
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                          }`}
                       >
                         <Database className="w-3.5 h-3.5" />
                         <span>知识库检索</span>
@@ -1129,8 +1152,161 @@ export default function ChatPlaygroundPage({
                   </div>
                 </div>
 
+                {/* ── 多 Git 仓库实时监控态与全域对话问答直达 ── */}
+                {(() => {
+                  const gitWf = workflows.find((w) => w.id === "wf-git-agent" || w.gitRepositories || w.gitConfig);
+                  if (!gitWf) return null;
+                  const allRepos = gitWf.gitRepositories || (gitWf.gitConfig ? [gitWf.gitConfig] : []);
+                  if (allRepos.length === 0) return null;
+
+                  const focusedRepo = activeGitRepoId === "all"
+                    ? null
+                    : allRepos.find((r) => r.id === activeGitRepoId) || allRepos[0];
+
+                  return (
+                    <div className="w-full max-w-4xl p-3.5 rounded-2xl bg-white border border-blue-200/90 shadow-2xs space-y-2.5">
+                      {/* 顶部多仓库切换器胶囊 (完全告别恶心复选框) */}
+                      <div className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                        <div className="flex items-center gap-2 overflow-x-auto scrollbar-hide py-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setActiveGitRepoId("all")}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer ${activeGitRepoId === "all"
+                              ? "bg-blue-600 text-white shadow-xs"
+                              : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                              }`}
+                          >
+                            <span>🌐 全部代码库总览</span>
+                            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-white/20 font-mono">
+                              {allRepos.length}
+                            </span>
+                          </button>
+
+                          {allRepos.map((repo) => (
+                            <button
+                              key={repo.id || repo.repoUrl}
+                              type="button"
+                              onClick={() => setActiveGitRepoId(repo.id || repo.repoUrl)}
+                              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-1.5 shrink-0 cursor-pointer border ${activeGitRepoId === (repo.id || repo.repoUrl)
+                                ? "bg-blue-50 text-blue-700 border-blue-300 shadow-2xs"
+                                : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"
+                                }`}
+                            >
+                              <GitBranch className="w-3 h-3 text-blue-500" />
+                              <span className="truncate max-w-[140px]">{repo.name || repo.branch}</span>
+                              {repo.healthStatus === "warning" && (
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping" />
+                              )}
+                            </button>
+                          ))}
+                        </div>
+
+                        <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full shrink-0 hidden sm:inline-block">
+                          ● 7x24h 智能巡检
+                        </span>
+                      </div>
+
+                      {/* 当前选中聚焦仓库详情信息 (平滑滑动转场) */}
+                      <div key={activeGitRepoId} className="cyber-tab-content-enter space-y-2.5">
+                        {focusedRepo ? (
+                          <div className="p-3 rounded-2xl bg-slate-50/80 border border-slate-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <div className="space-y-0.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-xs font-black text-slate-900">{focusedRepo.name}</span>
+                                <span className="font-mono text-[10px] text-blue-700 font-bold bg-blue-100/60 px-1.5 py-0.2 rounded">
+                                  {focusedRepo.branch}
+                                </span>
+                                {focusedRepo.healthStatus === "warning" ? (
+                                  <span className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.2 rounded font-bold">
+                                    ⚠️ 存在待确认隐患
+                                  </span>
+                                ) : (
+                                  <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-1.5 py-0.2 rounded font-bold">
+                                    ✅ 代码健康
+                                  </span>
+                                )}
+                              </div>
+                              <span className="text-[11px] font-mono text-slate-400 truncate block max-w-lg">
+                                {focusedRepo.repoUrl}
+                              </span>
+                            </div>
+
+                            <div className="text-left sm:text-right text-[11px] text-slate-500 font-mono">
+                              <span className="text-slate-400 block text-[10px]">
+                                最新: <code className="text-blue-600 font-bold">{focusedRepo.lastCommitSha}</code> ({focusedRepo.lastCommitTime})
+                              </span>
+                              <span className="truncate block max-w-xs">{focusedRepo.lastCommitMessage}</span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="p-3 rounded-2xl bg-blue-50/50 border border-blue-200/60 flex items-center justify-between text-xs text-blue-900">
+                            <span className="font-semibold">
+                              已接入 {allRepos.length} 个代码工程协同监控：包含前端、后端API与移动端。
+                            </span>
+                            <span className="font-bold text-blue-700">可一句话全域盘点</span>
+                          </div>
+                        )}
+
+                        {/* 快捷对话问答按钮 (根据当前聚焦仓库动态适配) */}
+                        <div className="flex items-center gap-2 overflow-x-auto pb-1 text-xs scrollbar-hide">
+                          <span className="text-[11px] font-bold text-slate-400 shrink-0">点击直接问:</span>
+                          {activeGitRepoId === "all" ? (
+                            <>
+                              <button
+                                onClick={() => handleSend(`请全盘巡检当前监控的所有 ${allRepos.length} 个代码仓库，分析最新提交是否存在高危 Bug、语法风险或并发死锁？`)}
+                                className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <Sparkles className="w-3 h-3 text-blue-600" />
+                                <span>全盘巡检所有仓库代码 Bug</span>
+                              </button>
+                              <button
+                                onClick={() => handleSend(`请对当前所有监控的代码库进行敏感信息扫描，排查是否存在明文密码、API Token 误提交？`)}
+                                className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                                <span>全域防密码与凭证泄露体检</span>
+                              </button>
+                              <button
+                                onClick={() => handleSend(`请总结一下今天团队在所有代码库的提交进展，列出核心功能改动与作者。`)}
+                                className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <FolderGit2 className="w-3 h-3 text-indigo-600" />
+                                <span>总结今日全库代码变动进展</span>
+                              </button>
+                            </>
+                          ) : (
+                            <>
+                              <button
+                                onClick={() => handleSend(`请检查代码库 [${focusedRepo?.name}]（分支：${focusedRepo?.branch}），深度分析最新提交是否存在潜在 Bug 或空指针异常？`)}
+                                className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <Sparkles className="w-3 h-3 text-blue-600" />
+                                <span>排查此仓库最新提交 Bug</span>
+                              </button>
+                              <button
+                                onClick={() => handleSend(`针对代码库 [${focusedRepo?.name}]，排查最新提交是否涉及密码或密钥泄露隐患？`)}
+                                className="px-2.5 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                                <span>检查凭证泄露风险</span>
+                              </button>
+                              <button
+                                onClick={() => handleSend(`请分析代码库 [${focusedRepo?.name}] 当前分支（${focusedRepo?.branch}）与主分支合流时是否存在潜在冲突？`)}
+                                className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold transition shrink-0 cursor-pointer flex items-center gap-1 shadow-2xs"
+                              >
+                                <GitMerge className="w-3 h-3 text-indigo-600" />
+                                <span>测算主干合并冲突风险</span>
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* ── 常用业务场景 ── */}
-                <div className="w-full max-w-3xl space-y-3 pt-2">
+                <div className="w-full max-w-4xl space-y-2.5 pt-1">
                   <div className="flex items-center justify-between px-1">
                     <div className="flex items-center gap-2">
                       <span className="w-2 h-2 rounded-full bg-blue-600 animate-pulse" />
@@ -1274,11 +1450,10 @@ export default function ChatPlaygroundPage({
                               <button
                                 type="button"
                                 onClick={() => msg.citations?.length && setActiveTraceDrawer({ messageId: msg.id, defaultTab: "knowledge" })}
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${
-                                  msg.citations?.length
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : "text-slate-400"
-                                }`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium transition cursor-pointer ${msg.citations?.length
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                  : "text-slate-400"
+                                  }`}
                                 title="查看关联规章制度"
                               >
                                 <span>{msg.citations?.length ? "✓" : "○"} 1. 制度检索</span>
@@ -1289,11 +1464,10 @@ export default function ChatPlaygroundPage({
 
                               {/* 步骤 2: 数据核验 */}
                               <div
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                                  msg.toolCalls?.length
-                                    ? "bg-blue-50 text-blue-700 border border-blue-200"
-                                    : "text-slate-400"
-                                }`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${msg.toolCalls?.length
+                                  ? "bg-blue-50 text-blue-700 border border-blue-200"
+                                  : "text-slate-400"
+                                  }`}
                                 title="数据查询与格式核查"
                               >
                                 <span>{msg.toolCalls?.length ? "✓" : "○"} 2. 数据核验</span>
@@ -1304,11 +1478,10 @@ export default function ChatPlaygroundPage({
 
                               {/* 步骤 3: 安全检查 */}
                               <div
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                                  msg.approvalTicket
-                                    ? "bg-rose-50 text-rose-700 border border-rose-200 font-bold"
-                                    : "text-slate-400"
-                                }`}
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${msg.approvalTicket
+                                  ? "bg-rose-50 text-rose-700 border border-rose-200 font-bold"
+                                  : "text-slate-400"
+                                  }`}
                                 title="高危变更指令安全阻断"
                               >
                                 <span>{msg.approvalTicket ? "⚠️" : "○"} 3. 安全检查</span>
@@ -1319,13 +1492,12 @@ export default function ChatPlaygroundPage({
 
                               {/* 步骤 4: 人工审批 */}
                               <div
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${
-                                  msg.approvalTicket?.status === "APPROVED"
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"
-                                    : msg.approvalTicket
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium ${msg.approvalTicket?.status === "APPROVED"
+                                  ? "bg-emerald-50 text-emerald-700 border border-emerald-200 font-bold"
+                                  : msg.approvalTicket
                                     ? "bg-amber-100 text-amber-800 border border-amber-300 animate-pulse font-bold"
                                     : "text-slate-400"
-                                }`}
+                                  }`}
                                 title="管理员审核确认"
                               >
                                 <span>{msg.approvalTicket?.status === "APPROVED" ? "✓" : msg.approvalTicket ? "⏳" : "○"} 4. 人工审批</span>
@@ -1370,9 +1542,8 @@ export default function ChatPlaygroundPage({
                                       <Brain className="w-3.5 h-3.5 text-purple-500" />
                                       <span>思考过程（可展开） ({msg.duration || "完成"})</span>
                                       <ChevronDown
-                                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                                          expandedReasoning[msg.id] ? "rotate-180" : ""
-                                        }`}
+                                        className={`w-3.5 h-3.5 transition-transform duration-200 ${expandedReasoning[msg.id] ? "rotate-180" : ""
+                                          }`}
                                       />
                                     </button>
 
@@ -1451,9 +1622,9 @@ export default function ChatPlaygroundPage({
                                         key={idx}
                                         onClick={() =>
                                           setActiveTraceDrawer({
-                                           messageId: msg.id,
-                                           defaultTab: "knowledge",
-                                           highlightCitationIndex: idx,
+                                            messageId: msg.id,
+                                            defaultTab: "knowledge",
+                                            highlightCitationIndex: idx,
                                           })
                                         }
                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-mono bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 cursor-pointer transition"
@@ -1633,8 +1804,43 @@ export default function ChatPlaygroundPage({
 
         {/* ── 底部固定输入条 (仅当有对话内容时显示在底栏，与豆包/DeepSeek完全一致) ── */}
         {!isChatEmpty && (
-          <div className="p-4 bg-gradient-to-t from-[#FAFBFC] via-[#FAFBFC]/90 to-transparent shrink-0">
-            <div className="max-w-3xl mx-auto">
+          <div className="p-4 bg-gradient-to-t from-[#FAFBFC] via-[#FAFBFC]/90 to-transparent shrink-0 space-y-2">
+            {/* 快捷 Git 监控提问胶囊 (支持多仓库动态适配) */}
+            {(() => {
+              const gitWf = workflows.find((w) => w.id === "wf-git-agent" || w.gitRepositories || w.gitConfig);
+              if (!gitWf) return null;
+              const allRepos = gitWf.gitRepositories || (gitWf.gitConfig ? [gitWf.gitConfig] : []);
+              if (allRepos.length === 0) return null;
+
+              return (
+                <div className="w-full max-w-5xl mx-auto flex items-center gap-2 overflow-x-auto text-[11px] pb-1 scrollbar-hide">
+                  <span className="font-bold text-slate-400 shrink-0 flex items-center gap-1">
+                    <FolderGit2 className="w-3 h-3 text-blue-600" />
+                    <span>代码库巡检:</span>
+                  </span>
+                  <button
+                    onClick={() => handleSend(`请排查所有被监控的 Git 仓库最新提交是否存在潜在 Bug、未捕获异常或并发死锁？`)}
+                    className="px-2.5 py-1 rounded-full bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 transition shrink-0 cursor-pointer shadow-2xs font-medium"
+                  >
+                    🔍 查代码 Bug
+                  </button>
+                  <button
+                    onClick={() => handleSend(`请扫描当前所有 Git 仓库的最新改动，排查是否存在敏感密码与 Key 泄露？`)}
+                    className="px-2.5 py-1 rounded-full bg-white hover:bg-emerald-50 border border-slate-200 hover:border-emerald-300 text-slate-700 hover:text-emerald-600 transition shrink-0 cursor-pointer shadow-2xs font-medium"
+                  >
+                    🛡️ 查密钥泄露
+                  </button>
+                  <button
+                    onClick={() => handleSend(`请汇总今日各个代码库的提交进展，列出核心功能改动。`)}
+                    className="px-2.5 py-1 rounded-full bg-white hover:bg-indigo-50 border border-slate-200 hover:border-indigo-300 text-slate-700 hover:text-indigo-600 transition shrink-0 cursor-pointer shadow-2xs font-medium"
+                  >
+                    📊 总结提交进展
+                  </button>
+                </div>
+              );
+            })()}
+
+            <div className="w-full max-w-5xl mx-auto">
               <div className="rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md shadow-lg shadow-slate-200/50 p-3 space-y-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 transition">
                 <textarea
                   ref={textareaRef}
@@ -1655,11 +1861,10 @@ export default function ChatPlaygroundPage({
                   <div className="flex items-center gap-1.5">
                     <button
                       onClick={() => setEnableThinking(!enableThinking)}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${
-                        enableThinking
-                          ? "bg-purple-50 text-purple-700 border border-purple-200"
-                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${enableThinking
+                        ? "bg-purple-50 text-purple-700 border border-purple-200"
+                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                        }`}
                     >
                       <Brain className="w-3 h-3" />
                       <span>思考</span>
@@ -1677,11 +1882,10 @@ export default function ChatPlaygroundPage({
 
                     <button
                       onClick={() => setEnableRAG(!enableRAG)}
-                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${
-                        enableRAG
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
-                      }`}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold transition cursor-pointer ${enableRAG
+                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                        : "text-slate-400 hover:text-slate-600 hover:bg-slate-50"
+                        }`}
                     >
                       <Database className="w-3 h-3" />
                       <span>知识库</span>
@@ -1719,61 +1923,61 @@ export default function ChatPlaygroundPage({
         onClose={() => setActiveTraceDrawer(null)}
         layoutMode={traceLayoutMode}
         onToggleLayout={() => setTraceLayoutMode((prev) => (prev === "split" ? "drawer" : "split"))}
-        defaultTab={activeTraceDrawer?.defaultTab || "lifecycle"}
+        defaultTab={activeTraceDrawer?.defaultTab || "waterfall"}
         highlightCitationIndex={activeTraceDrawer?.highlightCitationIndex}
         message={
           activeTraceDrawer
             ? (() => {
-                if (activeTraceDrawer.messageId === "finops-global") {
-                  return {
-                    id: "finops-global",
-                    role: "assistant",
-                    content: "历史问答缓存与开销统计",
-                    userPrompt: "开销与缓存统计",
-                    modelName: currentAgent?.model || systemModel || "系统模型",
-                    sessionId: currentSessionId,
-                    enableRAG,
-                    enableThinking,
-                    enableWebSearch: false,
-                    traceSteps: {},
-                    trace: {
-                      cached: false,
-                      totalMs: 0,
-                      tokens: 0,
-                      savedTokens: 0,
-                      savedMs: 0,
-                    },
-                  } as Message;
-                }
-                const targetMsg = messages.find((m) => m.id === activeTraceDrawer.messageId);
-                if (!targetMsg) {
-                  const lastAsst = messages.slice().reverse().find((m) => m.role === "assistant");
-                  if (lastAsst) return lastAsst;
-                  return {
-                    id: activeTraceDrawer.messageId,
-                    role: "assistant",
-                    content: "",
-                    userPrompt: "当前会话监控",
-                    modelName: currentAgent?.model || systemModel || "deepseek-chat",
-                    sessionId: currentSessionId,
-                    enableRAG,
-                    enableThinking,
-                    enableWebSearch,
-                    traceSteps: {},
-                  } as Message;
-                }
-                const msgIdx = messages.findIndex((m) => m.id === activeTraceDrawer.messageId);
-                const prevUserMsg = msgIdx > 0 ? messages.slice(0, msgIdx).reverse().find((m) => m.role === "user") : null;
+              if (activeTraceDrawer.messageId === "finops-global") {
                 return {
-                  ...targetMsg,
-                  userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "",
-                  modelName: targetMsg.modelName || currentAgent?.model || systemModel || "deepseek-chat",
-                  sessionId: targetMsg.sessionId || currentSessionId,
+                  id: "finops-global",
+                  role: "assistant",
+                  content: "历史问答缓存与开销统计",
+                  userPrompt: "开销与缓存统计",
+                  modelName: currentAgent?.model || systemModel || "系统模型",
+                  sessionId: currentSessionId,
+                  enableRAG,
+                  enableThinking,
+                  enableWebSearch: false,
+                  traceSteps: {},
+                  trace: {
+                    cached: false,
+                    totalMs: 0,
+                    tokens: 0,
+                    savedTokens: 0,
+                    savedMs: 0,
+                  },
+                } as Message;
+              }
+              const targetMsg = messages.find((m) => m.id === activeTraceDrawer.messageId);
+              if (!targetMsg) {
+                const lastAsst = messages.slice().reverse().find((m) => m.role === "assistant");
+                if (lastAsst) return lastAsst;
+                return {
+                  id: activeTraceDrawer.messageId,
+                  role: "assistant",
+                  content: "",
+                  userPrompt: "当前会话监控",
+                  modelName: currentAgent?.model || systemModel || "deepseek-chat",
+                  sessionId: currentSessionId,
                   enableRAG,
                   enableThinking,
                   enableWebSearch,
-                };
-              })()
+                  traceSteps: {},
+                } as Message;
+              }
+              const msgIdx = messages.findIndex((m) => m.id === activeTraceDrawer.messageId);
+              const prevUserMsg = msgIdx > 0 ? messages.slice(0, msgIdx).reverse().find((m) => m.role === "user") : null;
+              return {
+                ...targetMsg,
+                userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "",
+                modelName: targetMsg.modelName || currentAgent?.model || systemModel || "deepseek-chat",
+                sessionId: targetMsg.sessionId || currentSessionId,
+                enableRAG,
+                enableThinking,
+                enableWebSearch,
+              };
+            })()
             : null
         }
       />

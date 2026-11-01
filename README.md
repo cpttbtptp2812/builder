@@ -1,116 +1,42 @@
-# 王旭 · 前端技术作品集
+# OwnAgent · 企业级智能体平台
 
-**个人技术展示站**，适合放入简历链接。首页展示 10 年开发经历与代表项目，内置可交互 **AI 产品演示**（对齐 `agent` + `imean-ai` 架构）。
+**打通大模型与企业核心业务协同**。提供极简三屏架构：在【首页】洞悉业务大盘，在【工作台】实现代码查验与实时链路协同，在【业务流】以 4 步精确向导配置 Git 协同智能体与全域业务规则，支持代码库内置工具与轻量增量微调。
 
 | 模块 | 说明 |
 |------|------|
-| 作品集首页 | 关于、项目、技能、经历、联系方式 |
-| 交互演示 | 流式对话、工作流匹配、执行进度、工具卡、智能体 |
+| **01. 平台首页 (Overview)** | 全局业务健康度感知、生产业务流速览与核心业务智能体快速启动入口 |
+| **02. 智能工作台 (Workbench)** | 左右分屏深度协同、左侧推演业务步骤，右侧实时联动 APM 毫秒级瀑布流链路追踪 |
+| **03. 业务流中心 (Workflows)** | 4 步精确向导，自由配置代码库、智能体提示词人设、检查门禁规则与代码库内置 MCP |
 
-纯前端 + 浏览器存储，支持 **GitHub Pages** 与 **百度智能云 BOS** 静态托管。
+---
 
-## 在线访问
+## 核心标杆业务流
 
-推送 `main` 分支后自动部署：
+1. **Git 仓库实时监控与代码智能体 (v1.2.0)**
+   - 配置 Git 仓库地址后，智能体在对话中实时解析代码库状态，自动监控每次 Commit 与改动，深度排查代码 Bug、安全漏洞与潜在合并隐患。
+   - 标签：`#Git 监控` `#仓库凭证配置` `#视觉排查` `#安全漏洞` `#协同任务`
+2. **企业全域数据清洗与智能分析流 (v2.0.0)**
+   - 面向企业核心运营与财务数据的端到端智能流水线，涵盖多源数据抽取脱敏、合规性清洗与阈值校验、高风险账目人工校验复核，以及大模型智能 BI 指标分析与决策简报生成。
+   - 标签：`#数据清洗` `#脱敏规则` `#规则合规` `#BI 分析` `#审计存证`
 
-**https://cpttbtptp2812.github.io/builder/**
+---
 
-## 开发
+## 本地开发与运行
 
 ```bash
-git clone https://github.com/cpttbtptp2812/builder.git
-cd builder
+# 安装依赖
 npm install
+
+# 启动开发服务器
 npm run dev
 ```
 
-打开 `http://localhost:5173` → 浏览作品集 → 点击 **交互演示** 进入 `#/demo/chat`。
+浏览器访问 `http://localhost:5173` 即可进入 OwnAgent 平台。
 
-## GitHub Pages（演示部署）
-
-仓库已配置 Actions 工作流（`.github/workflows/static.yml`）：
-
-1. push 到 `main` 后自动 `npm ci && npm run build`
-2. 部署 `dist/` 到 Pages（Node 24）
-3. **首次部署前**（只需一次）：仓库 **Settings → Pages → Build and deployment → Source** 选 **GitHub Actions**，保存后再 push 或手动重跑工作流
-
-### 演示模式 vs 完整产品
-
-| | GitHub Pages 演示 | Docker / 本地 dev:full |
-|--|-------------------|-------------------------|
-| 作品集、简历 | ✅ | ✅ |
-| OwnAgent 对话（Guest） | ✅ | ✅ |
-| 知识库（浏览器） | ✅ | ✅ + 服务端同步 |
-| 知识广场发布/搜索 | ✅ 本机 localStorage | ✅ SQLite 全员共享 |
-| 管理后台 /admin | ❌ 需连后端 | ✅ |
-| 知识运营、数据分析 | ❌ | ✅ |
-
-**直接 push 即可演示**，代码和功能全部保留；客户交付时再 `docker compose up -d`。
-
-本地模拟 Pages 构建：
-
-```bash
-# PowerShell
-$env:GITHUB_PAGES="true"; npm run build; npm run preview
-```
-
-## 构建 & 发布到百度
+## 生产构建
 
 ```bash
 npm run build
 ```
 
-（不要设置 `GITHUB_PAGES`，默认 `base: './'` 适用于 BOS 根目录）
-
-### 1. 上传 BOS
-
-1. 登录 [百度智能云控制台](https://cloud.baidu.com/) → **对象存储 BOS** → 创建 Bucket（**公有读**）。
-2. **Bucket 配置 → 静态网站托管**：
-   - 索引文档：`index.html`
-   - 错误文档：`index.html`（Hash 路由必须）
-3. 将 `dist/` 内**全部文件**上传到 Bucket 根目录。
-
-### 2. SEO 与百度收录
-
-发布前请替换占位域名：
-
-| 文件 | 操作 |
-|------|------|
-| `public/robots.txt` | 将 `YOUR_DOMAIN` 改为你的域名 |
-| `public/sitemap.xml` | 同上 |
-| `index.html` | 取消注释 `baidu-site-verification`，填入站长验证码 |
-
-然后在 [百度搜索资源平台](https://ziyuan.baidu.com/)：
-
-1. 添加站点并验证所有权
-2. 提交 sitemap：`https://你的域名/sitemap.xml`
-3. 使用「链接提交」主动推送首页 URL
-
-### 3. 自定义域名（可选）
-
-在 BOS 绑定域名并完成备案后，将上述文件中的 `YOUR_DOMAIN` 全部替换为正式域名。
-
-## 页面路由
-
-| 路由 | 功能 |
-|------|------|
-| `/` | 作品集首页（简历展示） |
-| `#/demo/chat` | 对话 + 工作流卡 + 进度 + 工具卡 |
-| `#/demo/agents` | 智能体列表 |
-| `#/demo/workflows` | 工作流频道库 |
-| `#/demo/history` | 会话历史 |
-| `#/demo/features` | 与 agent / imean-ai 的能力对照 |
-
-## 试用提示词
-
-- `帮我找一个自动化工作流`
-- `查一下知识库文档`
-
-## 参考仓库
-
-| 仓库 | 本站点复现 |
-|------|-----------|
-| `tianyangAgent/agent` | 流式对话、智能体、历史、工具卡 |
-| `tianyang/imean-ai` | 工作流匹配、频道库、执行进度、评价 |
-
-完整线上能力需部署 `agent` Next 应用及 iMean 后端；本站点为**静态可部署**的技术展示与 UI 演示。
+构建产物将输出至 `dist/` 目录。
