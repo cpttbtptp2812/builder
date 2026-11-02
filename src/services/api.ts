@@ -177,6 +177,7 @@ export async function fetchMessagesApi(sessionId: string): Promise<any[]> {
       tokens: m.tokens,
       duration: m.duration,
       isCached: !!m.isCached,
+      createdAt: m.createdAt,
     }));
   } catch {
     return [];

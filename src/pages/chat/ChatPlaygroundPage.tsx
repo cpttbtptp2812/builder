@@ -28,6 +28,7 @@ import {
   ShieldCheck,
   Compass,
   Download,
+  Clock,
 } from "lucide-react";
 import { downloadSummaryReport } from "@/lib/reportExport";
 import { AgentItem, AuditLogItem, PipelineItem } from "../../types/platform";
@@ -103,7 +104,26 @@ interface Message {
   enableThinking?: boolean;
   enableWebSearch?: boolean;
   agentTimeline?: AgentStep[];
+  createdAt?: string;
 }
+
+const formatMessageTime = (timeStr?: string) => {
+  if (!timeStr) return "";
+  try {
+    const d = new Date(timeStr);
+    if (isNaN(d.getTime())) return timeStr;
+    const pad = (n: number) => n.toString().padStart(2, "0");
+    const YYYY = d.getFullYear();
+    const MM = pad(d.getMonth() + 1);
+    const DD = pad(d.getDate());
+    const hh = pad(d.getHours());
+    const mm = pad(d.getMinutes());
+    const ss = pad(d.getSeconds());
+    return `${YYYY}-${MM}-${DD} ${hh}:${mm}:${ss}`;
+  } catch {
+    return timeStr;
+  }
+};
 
 interface ChatPlaygroundProps {
   agents?: AgentItem[];
@@ -503,6 +523,10 @@ export default function ChatPlaygroundPage({
     const text = (textToSend !== undefined ? textToSend : inputMessage).trim();
     if (!text || isGeneratingRef.current) return;
 
+    // 立即加锁置为推流生成中，从最前端物理阻断任何时序/异步竞态下的二次触发
+    isGeneratingRef.current = true;
+    setIsGenerating(true);
+
     // 1. 同步获取真实后端 Session ID，从源头杜绝本地与服务端 ID 竞态打架
     let activeSessionId = currentSessionId;
     if (!activeSessionId) {
@@ -514,6 +538,8 @@ export default function ChatPlaygroundPage({
         newlyCreatedSessionIdRef.current = created.id;
         setSessions((prev) => [created, ...prev]);
       } catch (err: any) {
+        isGeneratingRef.current = false;
+        setIsGenerating(false);
         toast.error("会话初始化失败，请重试或检查服务连接");
         return;
       }
@@ -521,23 +547,21 @@ export default function ChatPlaygroundPage({
       newlyCreatedSessionIdRef.current = activeSessionId;
     }
 
-    // 2. 计算生效模型
+    // 2. 计算生效模型：优先采用系统全局统一对齐的云端配置模型 (如 qwen-plus)
     const effectiveModel =
-      currentAgent?.model && currentAgent.model !== "deepseek-chat"
+      systemModel ||
+      (currentAgent?.model && !currentAgent.model.includes("deepseek")
         ? currentAgent.model
-        : (systemModel || "deepseek-chat");
-
-    // 3. 进入推流生成状态
-    isGeneratingRef.current = true;
-    setIsGenerating(true);
+        : "qwen-plus");
 
     const userMsgId = `u-${Date.now()}`;
     const asstMsgId = `a-${Date.now()}`;
+    const nowTimeStr = new Date().toISOString();
 
     // 立即清空输入并呈现用户气泡与处理态
     setInputMessage("");
 
-    const userMsg: Message = { id: userMsgId, role: "user", content: text };
+    const userMsg: Message = { id: userMsgId, role: "user", content: text, createdAt: nowTimeStr };
     const asstMsg: Message = {
       id: asstMsgId,
       role: "assistant",
@@ -551,6 +575,7 @@ export default function ChatPlaygroundPage({
       enableThinking,
       enableWebSearch: false,
       traceSteps: {},
+      createdAt: nowTimeStr,
     };
 
     setMessages((prev) => [...prev, userMsg, asstMsg]);
@@ -812,6 +837,12 @@ export default function ChatPlaygroundPage({
       const promptText = typeof initialPrompt === "string" ? initialPrompt : initialPrompt.prompt;
       const shouldAutoSend = typeof initialPrompt === "string" ? true : initialPrompt.autoSend !== false;
       if (promptText && promptText.trim()) {
+        // 防止 React StrictMode 或组件多轮渲染导致重复触发双发会话
+        if (autoSentPromptRef.current === promptText) {
+          return;
+        }
+        autoSentPromptRef.current = promptText;
+
         if (shouldAutoSend) {
           handleSend(promptText);
         } else {
@@ -820,6 +851,8 @@ export default function ChatPlaygroundPage({
         }
         if (onClearInitialPrompt) onClearInitialPrompt();
       }
+    } else {
+      autoSentPromptRef.current = null;
     }
   }, [initialPrompt]);
 
@@ -1458,10 +1491,15 @@ export default function ChatPlaygroundPage({
                 {messages.map((msg) => (
                   <div key={msg.id} className="space-y-3 animate-in fade-in duration-200">
                     {msg.role === "user" ? (
-                      <div className="flex justify-end">
+                      <div className="flex flex-col items-end gap-1">
                         <div className="max-w-xl bg-slate-900 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
                           {msg.content}
                         </div>
+                        {msg.createdAt && (
+                          <div className="text-[10px] text-slate-400 font-mono pr-1">
+                            {formatMessageTime(msg.createdAt)}
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div className="flex gap-3.5 items-start">
@@ -1640,8 +1678,17 @@ export default function ChatPlaygroundPage({
                               </button>
                             </div>
 
-                            {/* 耗时与 Token 统计，点击查看瀑布流 Trace */}
-                            <div className="flex items-center gap-2 font-mono text-[10px]">
+                            {/* 耗时、时间与 Token 统计，点击查看瀑布流 Trace */}
+                            <div className="flex items-center gap-2 font-mono text-[10px] text-slate-500">
+                              {msg.createdAt && (
+                                <span className="inline-flex items-center gap-1 text-slate-500 font-medium">
+                                  <Clock className="w-3 h-3 text-slate-400" />
+                                  <span>{formatMessageTime(msg.createdAt)}</span>
+                                </span>
+                              )}
+                              {msg.createdAt && (msg.tokens || msg.duration || msg.isCached) && (
+                                <span>·</span>
+                              )}
                               {msg.isCached || msg.trace?.cached ? (
                                 <button
                                   onClick={() =>
