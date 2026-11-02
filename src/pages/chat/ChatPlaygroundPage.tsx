@@ -1519,6 +1519,7 @@ export default function ChatPlaygroundPage({
                             }}
                             reasoning={msg.reasoning}
                             userPrompt={msg.userPrompt}
+                            duration={msg.duration}
                           />
 
                           {/* 文本回复泡 */}

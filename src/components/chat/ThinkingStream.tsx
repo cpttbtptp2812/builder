@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Sparkles,
   ShieldCheck,
@@ -8,8 +8,11 @@ import {
   ChevronRight,
   ExternalLink,
   Check,
+  Brain,
+  Loader2,
 } from "lucide-react";
 import { AgentStep } from "@/lib/agentTimeline";
+import { Markdown } from "@/components/prompt-kit/markdown";
 
 interface ThinkingStreamProps {
   timeline: AgentStep[];
@@ -18,6 +21,7 @@ interface ThinkingStreamProps {
   onSelectStep?: (stepId: string) => void;
   reasoning?: string | null;
   userPrompt?: string;
+  duration?: string;
 }
 
 const FOUR_STAGES = [
@@ -31,25 +35,59 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
   timeline,
   isThinking = false,
   onSelectStep,
+  reasoning,
   userPrompt,
+  duration,
 }) => {
-  // 默认收起！展示呼吸灯与阶段流向，用户想看详细成果时才点击展开
+  // 默认收起！展示呼吸灯与阶段流向，用户想看详细思考过程时随时点击展开
   const [isOpen, setIsOpen] = useState<boolean>(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
+
+  // 思考中实时秒数计时器
+  useEffect(() => {
+    let timer: NodeJS.Timeout | null = null;
+    if (isThinking) {
+      setElapsedSeconds(1);
+      const startTime = Date.now();
+      timer = setInterval(() => {
+        const sec = Math.max(1, Math.floor((Date.now() - startTime) / 1000));
+        setElapsedSeconds(sec);
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isThinking]);
+
+  // 计算展示给用户的用时文本 (对标主流 AI: "已深度思考 (用时 2.4 秒)")
+  const formattedDuration = (() => {
+    if (duration && duration !== "处理中..." && duration !== "0s") {
+      if (duration.endsWith("s")) {
+        const val = parseFloat(duration);
+        if (!isNaN(val)) return `${val} 秒`;
+      }
+      return duration;
+    }
+    if (elapsedSeconds > 0) {
+      return `${elapsedSeconds} 秒`;
+    }
+    return "";
+  })();
 
   if (!timeline || timeline.length === 0) {
-    if (!isThinking) return null;
+    if (!isThinking && !reasoning) return null;
   }
 
   // 1. 听懂需求
-  const intentSteps = timeline.filter((s) => s.phase === "intent" || s.phase === "workflow");
+  const intentSteps = timeline ? timeline.filter((s) => s.phase === "intent" || s.phase === "workflow") : [];
   // 2. 拿上规矩
-  const contextSteps = timeline.filter((s) => s.phase === "context");
+  const contextSteps = timeline ? timeline.filter((s) => s.phase === "context") : [];
   // 3. 动手排查 (工具调度 + 大模型推理)
-  const actionSteps = timeline.filter(
-    (s) => s.phase === "skill" || s.phase === "llm" || s.stepId.startsWith("tool-")
-  );
+  const actionSteps = timeline
+    ? timeline.filter((s) => s.phase === "skill" || s.phase === "llm" || s.stepId.startsWith("tool-"))
+    : [];
   // 4. 把关交活
-  const deliverySteps = timeline.filter((s) => s.phase === "delivery" || s.phase === "closure");
+  const deliverySteps = timeline ? timeline.filter((s) => s.phase === "delivery" || s.phase === "closure") : [];
 
   const getStageStatus = (steps: AgentStep[]) => {
     // 若消息已结束流式生成，四大阶段全部视为已达成交付
@@ -73,9 +111,12 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
   const step2 = intentSteps.find((s) => s.rightDetail?.matchedWorkflowName);
   const matchedWorkflowName = step2?.rightDetail?.matchedWorkflowName;
   const isGitOrCodeTask = Boolean(
-    (matchedWorkflowName && (matchedWorkflowName.includes("Git") || matchedWorkflowName.includes("代码") || matchedWorkflowName.includes("仓库"))) ||
-    timeline.some((s) => s.phase === "skill" || s.stepId?.startsWith("tool-")) ||
-    (userPrompt && /git|commit|代码|仓库|分支|diff|状态|status/i.test(userPrompt))
+    (matchedWorkflowName &&
+      (matchedWorkflowName.includes("Git") ||
+        matchedWorkflowName.includes("代码") ||
+        matchedWorkflowName.includes("仓库"))) ||
+      (timeline && timeline.some((s) => s.phase === "skill" || s.stepId?.startsWith("tool-"))) ||
+      (userPrompt && /git|commit|代码|仓库|分支|diff|状态|status/i.test(userPrompt))
   );
 
   const contextStep = contextSteps[0];
@@ -98,18 +139,20 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
           title: "02. 拿上规矩",
           icon: ShieldCheck,
           status: stageStatuses.context,
-          summary: activeSkills.length > 0
-            ? `进入目标代码现场，已装配 ${activeSkills.length} 项企业 P0 防崩排查准则`
-            : "安全接入工程工作区，拿出企业安全防线与排查准则",
+          summary:
+            activeSkills.length > 0
+              ? `进入目标代码现场，已装配 ${activeSkills.length} 项企业 P0 防崩排查准则`
+              : "安全接入工程工作区，拿出企业安全防线与排查准则",
         },
         {
           stageNum: "③",
           title: "03. 动手排查",
           icon: Wrench,
           status: stageStatuses.action,
-          summary: actionSteps.length > 0
-            ? "沙箱调用系统命令取回现场数据，对照规矩逐行比对推导诊断建议"
-            : "在受控沙箱中执行工具或深入推导，专家大脑正在生成建议...",
+          summary:
+            actionSteps.length > 0
+              ? "沙箱调用系统命令取回现场数据，对照规矩逐行比对推导诊断建议"
+              : "在受控沙箱中执行工具或深入推导，专家大脑正在生成建议...",
         },
         {
           stageNum: "④",
@@ -143,9 +186,10 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
           title: "03. 动手排查",
           icon: Wrench,
           status: stageStatuses.action,
-          summary: actionSteps.length > 0
-            ? "基座模型深度推演，结合日常语境构思体贴回应"
-            : "基座大模型正在结合语境深度构思...",
+          summary:
+            actionSteps.length > 0
+              ? "基座模型深度推演，结合日常语境构思体贴回应"
+              : "基座大模型正在结合语境深度构思...",
         },
         {
           stageNum: "④",
@@ -160,27 +204,42 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
 
   return (
     <div className="my-2 rounded-2xl border border-slate-200/90 bg-white shadow-2xs transition-all duration-200 overflow-hidden">
-      {/* ── 默认未展开态：左右同频 4 阶段呼吸灯流转胶囊 ── */}
+      {/* ── 默认未展开态：主流AI思考中胶囊条 ── */}
       <div
         onClick={() => setIsOpen(!isOpen)}
-        className="px-3 py-2 flex items-center justify-between cursor-pointer select-none group bg-slate-50/70 hover:bg-slate-100/70 transition"
+        className="px-3.5 py-2.5 flex items-center justify-between cursor-pointer select-none group bg-slate-50/70 hover:bg-slate-100/70 transition"
       >
-        {/* 左侧：呼吸灯与 4 大阶段流转 */}
-        <div className="flex items-center gap-2 min-w-0">
-          {/* 呼吸灯指示器 */}
+        {/* 左侧：呼吸灯与主流AI思考状态指示 */}
+        <div className="flex items-center gap-2.5 min-w-0">
+          {/* 呼吸灯/指示器 */}
           <div className="relative flex items-center justify-center shrink-0">
             {isThinking ? (
-              <span className="relative flex h-2.5 w-2.5">
+              <span className="relative flex h-3 w-3">
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-cyan-500 shadow-[0_0_8px_rgba(6,182,212,0.8)]" />
               </span>
             ) : (
               <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.8)]" />
             )}
           </div>
 
+          {/* 状态主文案：对齐主流 AI（思考中 / 已深度思考） */}
+          <div className="flex items-center gap-1.5 min-w-0">
+            {isThinking ? (
+              <div className="flex items-center gap-1.5 text-xs font-semibold text-cyan-800">
+                <Brain className="w-3.5 h-3.5 text-cyan-600 animate-pulse shrink-0" />
+                <span>思考中{elapsedSeconds > 0 ? ` (${elapsedSeconds}s)` : "..."}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1.5 text-xs font-medium text-slate-700">
+                <Brain className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                <span>已深度思考{formattedDuration ? ` (用时 ${formattedDuration})` : ""}</span>
+              </div>
+            )}
+          </div>
+
           {/* 四大阶段微型流线 */}
-          <div className="flex items-center gap-1 text-[11px] font-medium text-slate-500">
+          <div className="hidden sm:flex items-center gap-1 text-[10.5px] font-medium text-slate-400 ml-1.5">
             {FOUR_STAGES.map((st, idx) => {
               const status = stageStatuses[st.id];
               const isCurrent = status === "running";
@@ -201,7 +260,7 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
                     {st.name}
                   </span>
                   {idx < FOUR_STAGES.length - 1 && (
-                    <span className="text-slate-300 text-[10px]">➔</span>
+                    <span className="text-slate-300 text-[9px]">➔</span>
                   )}
                 </React.Fragment>
               );
@@ -216,21 +275,39 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
           )}
         </div>
 
-        {/* 右侧：折叠指示箭头 */}
-        <div className="flex items-center gap-1 text-slate-400 group-hover:text-slate-700 transition shrink-0 text-xs">
-          <span className="text-[10px] hidden sm:inline">
-            {isOpen ? "收起" : "查看执行结果"}
+        {/* 右侧：折叠展开指示 (主流AI逻辑：展开 / 收起，杜绝“查看执行结果”) */}
+        <div className="flex items-center gap-1 text-slate-400 group-hover:text-slate-700 transition shrink-0 text-xs font-medium">
+          <span className="text-[11px] hidden sm:inline">
+            {isOpen ? "收起" : isThinking ? "查看思考" : "展开"}
           </span>
           {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
         </div>
       </div>
 
-      {/* ── 点击展开后：写给客户看的 4 步极简业务结论看板 ── */}
+      {/* ── 点击展开后：主流AI思考过程 (CoT) + 4 步企业业务结论看板 ── */}
       {isOpen && (
-        <div className="p-3 border-t border-slate-100 bg-white space-y-2 animate-in fade-in duration-150">
+        <div className="p-3 border-t border-slate-100 bg-white space-y-2.5 animate-in fade-in duration-150">
+          {/* 1. 主流AI思维链内容 (Reasoning / Chain-of-Thought) */}
+          {reasoning ? (
+            <div className="p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 text-xs text-slate-600 leading-relaxed font-sans max-h-80 overflow-y-auto">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-500 mb-1.5 select-none">
+                <Sparkles className="w-3.5 h-3.5 text-cyan-600" />
+                <span>思维链思考过程 (Chain of Thought)</span>
+              </div>
+              <div className="prose prose-xs max-w-none text-slate-600 whitespace-pre-wrap">
+                <Markdown>{reasoning}</Markdown>
+              </div>
+            </div>
+          ) : isThinking ? (
+            <div className="p-3 rounded-xl bg-cyan-50/40 border border-cyan-100/70 text-xs text-cyan-800 flex items-center gap-2">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-600 shrink-0" />
+              <span>智能体深度思考中，正在检索知识库、调度工具与组织推导链路...</span>
+            </div>
+          ) : null}
+
+          {/* 2. 企业四大执行交付阶段卡片 */}
           <div className="space-y-1.5">
             {executiveSummaries.map((item) => {
-              const Icon = item.icon;
               const isRunning = item.status === "running";
               const isDone = item.status === "done";
 
@@ -283,7 +360,7 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
             })}
           </div>
 
-          {/* 底部引导在右侧抽屉查看全景 */}
+          {/* 3. 底部引导在右侧抽屉查看全景 */}
           <div className="pt-1 text-center">
             <button
               onClick={() => onSelectStep?.("01. 听懂需求")}
