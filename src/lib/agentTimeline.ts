@@ -92,12 +92,23 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, data
 
     if (eventName === "trace_step") {
       const stepNum = data.step || current.length + 1;
-      const stepId = data.stepId || `step-${stepNum}-${(data.name || "step").toLowerCase().replace(/_/g, "-")}`;
-      return timelineReducer(current, {
+      const stepId = data.stepId || `step-${stepNum}`;
+      const phase =
+        data.phase ||
+        (stepNum <= 2 ? "workflow" : stepNum === 3 ? "context" : stepNum === 4 ? "llm" : stepNum === 5 ? "skill" : "delivery");
+      const status = data.status ? (data.status.toLowerCase() as StepStatus) : "done";
+
+      // 如果当前阶段已完成，先将时间线中同阶段的历史中间态全部标记为已完成，防止挂起
+      let updatedList = current;
+      if (status === "done" || status === "passed") {
+        updatedList = current.map((s) => (s.phase === phase ? { ...s, status: "done" as StepStatus } : s));
+      }
+
+      return timelineReducer(updatedList, {
         stepId,
         seq: stepNum,
-        phase: data.phase || (stepNum === 1 ? "intent" : stepNum === 2 ? "workflow" : stepNum === 3 ? "context" : stepNum === 4 ? "llm" : stepNum === 5 ? "skill" : "delivery"),
-        status: data.status ? (data.status.toLowerCase() as StepStatus) : "done",
+        phase,
+        status,
         leftTitle: data.leftTitle || data.title || `步骤 ${stepNum}`,
         leftSummary: data.leftSummary || `已完成阶段: ${data.title || data.name}`,
         rightTitle: data.rightTitle || data.title || `阶段 ${stepNum}`,
@@ -221,4 +232,16 @@ export function rebuildTimelineFromMessage(msg: {
 
   return steps.sort((a, b) => a.seq - b.seq);
 }
+
+/**
+ * 任务交付闭环时，将时间线中所有未完成阶段统一收束为完成状态，杜绝挂起
+ */
+export function finalizeTimeline(timeline: AgentStep[]): AgentStep[] {
+  if (!timeline) return [];
+  return timeline.map((s) => ({
+    ...s,
+    status: s.status === "failed" ? "failed" : "done",
+  }));
+}
+
 

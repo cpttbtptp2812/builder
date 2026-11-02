@@ -27,7 +27,9 @@ import {
   GitMerge,
   ShieldCheck,
   Compass,
+  Download,
 } from "lucide-react";
+import { downloadSummaryReport } from "@/lib/reportExport";
 import { AgentItem, AuditLogItem, PipelineItem } from "../../types/platform";
 import {
   fetchSessionsApi,
@@ -42,7 +44,8 @@ import { useToast } from "@/context/ToastContext";
 import { TraceInspectorDrawer, ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
 import { ThinkingStream } from "@/components/chat/ThinkingStream";
-import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage } from "@/lib/agentTimeline";
+import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
+import { Markdown } from "@/components/prompt-kit/markdown";
 
 export interface CitationItem {
   chunkId: string;
@@ -746,6 +749,7 @@ export default function ChatPlaygroundPage({
                       duration: meta.duration,
                       isCached: !!meta.cached,
                       trace: meta.trace,
+                      agentTimeline: finalizeTimeline(m.agentTimeline || []),
                     }
                     : m
                 )
@@ -753,7 +757,13 @@ export default function ChatPlaygroundPage({
             } catch {
               setMessages((prev) =>
                 prev.map((m) =>
-                  m.id === asstMsgId ? { ...m, isThinking: false } : m
+                  m.id === asstMsgId
+                    ? {
+                      ...m,
+                      isThinking: false,
+                      agentTimeline: finalizeTimeline(m.agentTimeline || []),
+                    }
+                    : m
                 )
               );
             }
@@ -1470,19 +1480,15 @@ export default function ChatPlaygroundPage({
                               setActiveTraceDrawer({ messageId: msg.id, defaultTab: "flow" });
                             }}
                             reasoning={msg.reasoning}
+                            userPrompt={msg.userPrompt}
                           />
 
                           {/* 文本回复泡 */}
-                          <div className="rounded-2xl rounded-tl-sm bg-white border border-slate-200/80 p-4.5 shadow-xs text-sm text-slate-800 leading-relaxed whitespace-pre-wrap">
+                          <div className="rounded-2xl rounded-tl-sm bg-white border border-slate-200/80 p-4.5 shadow-xs text-sm text-slate-800 leading-relaxed font-sans">
                             {msg.content ? (
                               <>
-                                <div>
-                                  {renderContentWithCitations(msg.content, msg.citations, () => {
-                                    setActiveTraceDrawer({
-                                      messageId: msg.id,
-                                      defaultTab: "knowledge",
-                                    });
-                                  })}
+                                <div className="space-y-1">
+                                  <Markdown>{msg.content}</Markdown>
                                 </div>
                                 {msg.citations && msg.citations.length > 0 && (
                                   <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap items-center gap-1.5 text-xs text-slate-500">
@@ -1614,6 +1620,23 @@ export default function ChatPlaygroundPage({
                                   <Copy className="w-3.5 h-3.5" />
                                 )}
                                 <span>{copiedId === msg.id ? "已复制" : "复制"}</span>
+                              </button>
+
+                              {/* 下载总结 */}
+                              <button
+                                onClick={() => {
+                                  const ok = downloadSummaryReport(msg);
+                                  if (ok) {
+                                    toast.success("巡检交付总结报告已成功导出下载！", "下载完成");
+                                  } else {
+                                    toast.warning("当前消息暂无总结内容可供下载");
+                                  }
+                                }}
+                                className="flex items-center gap-1 hover:text-blue-700 hover:bg-blue-50 text-slate-500 transition cursor-pointer px-1.5 py-0.5 rounded border border-transparent hover:border-blue-200"
+                                title="下载完整巡检交付总结 (Markdown 报告)"
+                              >
+                                <Download className="w-3.5 h-3.5 text-blue-600" />
+                                <span>下载总结</span>
                               </button>
                             </div>
 

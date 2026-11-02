@@ -242,12 +242,22 @@ export async function streamChatFromBackend(
       buffer = lines.pop() || "";
 
       for (const block of lines) {
-        if (!block.trim()) continue;
-        const eventMatch = block.match(/event:(.*)/);
-        const dataMatch = block.match(/data:(.*)/);
+        if (!block) continue;
+        const blockLines = block.split(/\r?\n/);
+        let event = "message";
+        const dataLines: string[] = [];
 
-        const event = eventMatch ? eventMatch[1].trim() : "message";
-        const data = dataMatch ? dataMatch[1].trim() : "";
+        for (const line of blockLines) {
+          if (line.startsWith("event:")) {
+            event = line.slice(6).trim();
+          } else if (line.startsWith("data:")) {
+            const rawVal = line.slice(5);
+            // 严格遵循 W3C SSE 规范：仅剥离紧随 data: 的单个规范空格，完整保留换行与有效缩进
+            dataLines.push(rawVal.startsWith(" ") ? rawVal.slice(1) : rawVal);
+          }
+        }
+
+        const data = dataLines.join("\n");
 
         if (event === "agent_step" && handlers.onAgentStep) {
           try {

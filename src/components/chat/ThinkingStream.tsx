@@ -17,6 +17,7 @@ interface ThinkingStreamProps {
   activeStepId?: string | null;
   onSelectStep?: (stepId: string) => void;
   reasoning?: string | null;
+  userPrompt?: string;
 }
 
 const FOUR_STAGES = [
@@ -30,6 +31,7 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
   timeline,
   isThinking = false,
   onSelectStep,
+  userPrompt,
 }) => {
   // 默认收起！展示呼吸灯与阶段流向，用户想看详细成果时才点击展开
   const [isOpen, setIsOpen] = useState<boolean>(false);
@@ -50,6 +52,8 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
   const deliverySteps = timeline.filter((s) => s.phase === "delivery" || s.phase === "closure");
 
   const getStageStatus = (steps: AgentStep[]) => {
+    // 若消息已结束流式生成，四大阶段全部视为已达成交付
+    if (!isThinking) return "done" as const;
     if (steps.length === 0) return "pending" as const;
     if (steps.some((s) => s.status === "running")) return "running" as const;
     if (steps.some((s) => s.status === "done" || s.status === "passed")) return "done" as const;
@@ -67,48 +71,92 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
   const currentRunningStage = FOUR_STAGES.find((st) => stageStatuses[st.id] === "running")?.fullName;
 
   const step2 = intentSteps.find((s) => s.rightDetail?.matchedWorkflowName);
+  const matchedWorkflowName = step2?.rightDetail?.matchedWorkflowName;
+  const isGitOrCodeTask = Boolean(
+    (matchedWorkflowName && (matchedWorkflowName.includes("Git") || matchedWorkflowName.includes("代码") || matchedWorkflowName.includes("仓库"))) ||
+    timeline.some((s) => s.phase === "skill" || s.stepId?.startsWith("tool-")) ||
+    (userPrompt && /git|commit|代码|仓库|分支|diff|状态|status/i.test(userPrompt))
+  );
+
   const contextStep = contextSteps[0];
   const activeSkills: string[] = contextStep?.rightDetail?.activeSkills || [];
   const deliveryStep = deliverySteps[deliverySteps.length - 1];
 
-  const executiveSummaries = [
-    {
-      stageNum: "①",
-      title: "01. 听懂需求",
-      icon: Sparkles,
-      status: stageStatuses.intent,
-      summary: step2?.rightDetail?.matchedWorkflowName
-        ? `弄清提问意图，已精准分配至《${step2.rightDetail.matchedWorkflowName}》专属流程`
-        : "看懂用户问题，提取具体代码库与排查目标",
-    },
-    {
-      stageNum: "②",
-      title: "02. 拿上规矩",
-      icon: ShieldCheck,
-      status: stageStatuses.context,
-      summary: activeSkills.length > 0
-        ? `进入目标代码现场，已装配 ${activeSkills.length} 项企业 P0 防崩排查准则`
-        : "安全进入工作现场，拿出企业安全规矩与排查清单",
-    },
-    {
-      stageNum: "③",
-      title: "03. 动手排查",
-      icon: Wrench,
-      status: stageStatuses.action,
-      summary: actionSteps.length > 0
-        ? "沙箱翻查现场代码改动，专家大脑深度比对，已生成防崩加固修复方案"
-        : "在受控环境中翻查代码真实改动，专家大脑正在深入推导...",
-    },
-    {
-      stageNum: "④",
-      title: "04. 把关交活",
-      icon: CheckCircle2,
-      status: stageStatuses.delivery,
-      summary: deliveryStep
-        ? `最后一道出厂安全检查 100% 达标，算清用量账单并交活归档`
-        : "通过最后一道出厂安全质检，正在送呈交付成果...",
-    },
-  ];
+  const executiveSummaries = isGitOrCodeTask
+    ? [
+        {
+          stageNum: "①",
+          title: "01. 听懂需求",
+          icon: Sparkles,
+          status: stageStatuses.intent,
+          summary: matchedWorkflowName
+            ? `弄清提问意图，已精准分配至《${matchedWorkflowName}》专属流程`
+            : "看懂用户问题，提取具体代码库与排查目标",
+        },
+        {
+          stageNum: "②",
+          title: "02. 拿上规矩",
+          icon: ShieldCheck,
+          status: stageStatuses.context,
+          summary: activeSkills.length > 0
+            ? `进入目标代码现场，已装配 ${activeSkills.length} 项企业 P0 防崩排查准则`
+            : "安全接入工程工作区，拿出企业安全防线与排查准则",
+        },
+        {
+          stageNum: "③",
+          title: "03. 动手排查",
+          icon: Wrench,
+          status: stageStatuses.action,
+          summary: actionSteps.length > 0
+            ? "沙箱调用系统命令取回现场数据，对照规矩逐行比对推导诊断建议"
+            : "在受控沙箱中执行工具或深入推导，专家大脑正在生成建议...",
+        },
+        {
+          stageNum: "④",
+          title: "04. 把关交活",
+          icon: CheckCircle2,
+          status: stageStatuses.delivery,
+          summary: deliveryStep
+            ? "最后一道出厂安全检查 100% 达标，算清用量账单并交活归档"
+            : "通过出厂安全质检，正在送呈交付成果并留痕归档...",
+        },
+      ]
+    : [
+        {
+          stageNum: "①",
+          title: "01. 听懂需求",
+          icon: Sparkles,
+          status: stageStatuses.intent,
+          summary: matchedWorkflowName
+            ? `感知用户交互意图，已分配至《${matchedWorkflowName}》通用流程`
+            : "看懂日常交流提问，提取意图上下文与交互需求",
+        },
+        {
+          stageNum: "②",
+          title: "02. 拿上规矩",
+          icon: ShieldCheck,
+          status: stageStatuses.context,
+          summary: "免挂载工程代码环境，调出通用大模型对话能力与企业伦理防线",
+        },
+        {
+          stageNum: "③",
+          title: "03. 动手排查",
+          icon: Wrench,
+          status: stageStatuses.action,
+          summary: actionSteps.length > 0
+            ? "基座模型深度推演，结合日常语境构思体贴回应"
+            : "基座大模型正在结合语境深度构思...",
+        },
+        {
+          stageNum: "④",
+          title: "04. 把关交活",
+          icon: CheckCircle2,
+          status: stageStatuses.delivery,
+          summary: deliveryStep
+            ? "内容合规出厂质检通过，算清用量账单并完成会话存证"
+            : "安全出厂把关完成，正在交付答复...",
+        },
+      ];
 
   return (
     <div className="my-2 rounded-2xl border border-slate-200/90 bg-white shadow-2xs transition-all duration-200 overflow-hidden">

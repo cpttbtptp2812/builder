@@ -9,7 +9,9 @@ import {
   RefreshCw,
   Layers,
   GripVertical,
+  Download,
 } from "lucide-react";
+import { downloadSummaryReport } from "@/lib/reportExport";
 import {
   fetchFinOpsCacheMetricsApi,
   clearFinOpsCacheApi,
@@ -305,6 +307,18 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             </button>
           </div>
 
+          {/* 下载完整交付总结报告 */}
+          {message?.content && (
+            <button
+              onClick={() => downloadSummaryReport(message)}
+              className="flex items-center gap-1 px-2.5 py-1 bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 rounded-lg text-xs font-semibold transition cursor-pointer border border-transparent hover:border-blue-200"
+              title="下载完整巡检交付总结 (Markdown 报告)"
+            >
+              <Download className="w-3.5 h-3.5 text-blue-600" />
+              <span className="hidden sm:inline">下载总结</span>
+            </button>
+          )}
+
           {onToggleLayout && (
             <button
               onClick={onToggleLayout}
@@ -331,6 +345,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         {activeTab === "flow" && (
           <InspectorStepCards
             timeline={timeline}
+            message={message}
             activeStepId={activeStepId}
             onSelectStep={onSelectStep}
             isThinking={message.isThinking}
