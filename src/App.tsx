@@ -7,6 +7,7 @@ import SystemSettingsPage from "./pages/settings/SystemSettingsPage";
 import KnowledgePage from "./pages/knowledge/KnowledgePage";
 import AgentsListPage from "./pages/agents/AgentsListPage";
 import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
+import ActionsConsolePage from "./pages/actions/ActionsConsolePage";
 import {
   NavTab,
   AgentItem,
@@ -24,6 +25,7 @@ import {
   deleteWorkflowApi,
   fetchKnowledgeChunksApi,
   fetchToolsApi,
+  saveWorkflowApi,
 } from "./services/api";
 import { WorkflowExecutionModal } from "./components/workflow/WorkflowExecutionModal";
 import { useToast } from "./context/ToastContext";
@@ -50,6 +52,7 @@ export type ViewMode =
   | "knowledge"
   | "agents"
   | "tools"
+  | "actions"
   | "settings"
   | "designer";
 
@@ -59,7 +62,7 @@ export default function App() {
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
-    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7 };
+    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, actions: 7, settings: 8 };
     const curIdx = order[currentView] ?? 0;
     const newIdx = order[newView] ?? 0;
     if (newIdx > curIdx) {
@@ -235,6 +238,7 @@ export default function App() {
     { label: "首页大盘", value: "home", icon: <DashboardOutlined /> },
     { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
     { label: "业务流中心", value: "workflows", icon: <AppstoreOutlined /> },
+    { label: "执行控制", value: "actions", icon: <DeploymentUnitOutlined /> },
   ];
 
   useEffect(() => {
@@ -523,6 +527,8 @@ export default function App() {
           )}
 
           {currentView === "tools" && <ToolsMarketPage />}
+
+          {currentView === "actions" && <ActionsConsolePage />}
 
           {currentView === "settings" && (
             <SystemSettingsPage
