@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, Plus, RefreshCw, Shield, ShieldAlert, Wrench, XCircle } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, Plus, RefreshCw, Shield, ShieldAlert, Wrench } from "lucide-react";
 
 type Tool = {
   toolId: string; toolName: string; description: string;
