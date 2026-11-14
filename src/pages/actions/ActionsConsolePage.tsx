@@ -33,7 +33,7 @@ export default function ActionsConsolePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tab, setTab] = useState<"actions" | "tools">("actions");
+  const [tab, setTab] = useState<"actions" | "tools" | "worker">("actions");
   const [showRegister, setShowRegister] = useState(false);
   const [toolName, setToolName] = useState("demo.echo");
   const [description, setDescription] = useState("Echo a message using the built-in safe demo handler");
@@ -202,6 +202,7 @@ export default function ActionsConsolePage() {
         <div className="flex gap-1">
           <button onClick={() => setTab("actions")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "actions" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Actions & Runs</button>
           <button onClick={() => setTab("tools")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "tools" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Tool Registry</button>
+          <button onClick={() => setTab("worker")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "worker" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Local Worker</button>
         </div>
         {tab === "tools" && <button onClick={() => setShowRegister(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold"><Plus className="w-4 h-4" /> 注册工具</button>}
       </div>
@@ -258,7 +259,7 @@ export default function ActionsConsolePage() {
             </div>
           </section>}
         </div>
-      ) : (
+      ) : tab === "tools" ? (
         <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100"><div className="font-bold text-slate-900">Agent 工具注册表</div><p className="text-xs text-slate-500 mt-1">工具定义只声明输入契约和风险等级；只有服务端安装了对应 Handler 才能执行。</p></div>
           {tools.length === 0 ? <div className="py-16 text-center text-sm text-slate-400"><Wrench className="w-8 h-8 mx-auto mb-2 opacity-40" />还没有注册工具</div> :
@@ -267,9 +268,44 @@ export default function ActionsConsolePage() {
               <div className="flex gap-2"><span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">{tool.riskLevel}</span><span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${tool.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{tool.enabled ? "启用" : "停用"}</span></div>
             </div>)}</div>}
         </section>
+      ) : (
+        <section className="space-y-4">
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 lg:p-6 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div><div className="text-xs font-bold uppercase tracking-wider text-indigo-600">Developer execution</div><h2 className="text-lg font-black text-slate-950 mt-1">在自己的机器运行 Python 工具</h2></div>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-bold">Backend API available</span>
+            </div>
+            <p className="text-sm text-slate-600 leading-relaxed">Local Worker 会领取属于当前 Agent 的 ALLOW / READY Action，并在本机执行你明确注册的 Python 函数。OwnAgent 服务端不会下载或执行你的 Python 源码。</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs font-bold text-slate-800">1. 安装 SDK</div><pre className="text-[11px] mt-2 whitespace-pre-wrap break-all text-slate-600">cd sdk/python{"\n"}python -m pip install -e .</pre></div>
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs font-bold text-slate-800">2. 配置环境变量</div><pre className="text-[11px] mt-2 whitespace-pre-wrap break-all text-slate-600">OWNAGENT_BASE_URL{"\n"}OWNAGENT_AGENT_API_KEY{"\n"}OWNAGENT_TOOL_ADMIN_API_KEY</pre></div>
+              <div className="rounded-xl bg-slate-50 border border-slate-200 p-3"><div className="text-xs font-bold text-slate-800">3. 启动 Worker</div><pre className="text-[11px] mt-2 whitespace-pre-wrap break-all text-slate-600">python examples/local_worker.py</pre></div>
+            </div>
+          </div>
+          <div className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3">
+            <div className="font-bold text-slate-900">注册自己的 Handler</div>
+            <p className="text-xs text-slate-500">工具名称必须与 Tool Registry 中的名称一致。Worker 只领取本地进程明确注册的工具。</p>
+            <pre className="bg-slate-950 text-slate-100 rounded-xl p-4 text-xs overflow-x-auto">{`from ownagent import LocalWorker, OwnAgentClient
+
+client = OwnAgentClient(
+    "http://localhost:8080",
+    api_key=AGENT_API_KEY,
+    tool_admin_api_key=TOOL_ADMIN_KEY,
+)
+
+worker = LocalWorker(client)
+worker.register(
+    "my.tools.greet",
+    lambda args: {"message": f"Hello, {args['name']}"},
+)
+worker.run_forever()`}</pre>
+            <p className="text-xs text-slate-500">Agent 通过 create_action 提交同名工具的 Action。只有策略允许的 Action 才会被 Worker 领取。</p>
+          </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-900 leading-relaxed"><b>安全边界：</b>当前 Worker 运行在启动它的 Python 进程中，不是安全沙箱。它拥有该进程的操作系统权限。不要执行不可信代码；生产环境还需要独立 Worker 身份、隔离执行、审批恢复和人工对账能力。</div>
+        </section>
       )}
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0" /><div><b>当前阶段边界：</b>Runtime 目前只执行服务端显式安装的安全示例 Handler（demo.echo、text.transform）。已支持执行租约心跳续期、Handler 超时检测和过期租约恢复；无法确认结果的任务会标记为 UNKNOWN。Java 线程中断属于尽力而为，外部副作用仍需人工核对。真正的 Worker 调度、审批后恢复执行、取消和人工对账界面仍在开发中。</div></div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0" /><div><b>当前阶段边界：</b>Runtime 支持服务端显式安装的安全示例 Handler，以及开发者本机运行的 Python Local Worker。Action 执行支持租约、心跳、超时和 UNKNOWN 状态；无法确认外部副作用时不会自动重试。Worker 当前不是沙箱；审批后恢复执行、独立 Worker 身份、OS 级隔离和人工对账仍在开发中。</div></div>
 
       {showRegister && <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
