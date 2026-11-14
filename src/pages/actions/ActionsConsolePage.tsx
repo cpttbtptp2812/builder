@@ -15,6 +15,12 @@ type Action = {
 };
 type ActionEvent = { eventId: string; actionId: string; eventType: string; details?: Record<string, unknown>; createdAt: string };
 type Identity = { agentId?: string; status?: string };
+type TraceSpan = {
+  traceId: string; spanId: string; parentSpanId?: string | null; runId?: string | null;
+  name: string; spanKind: string; status: string; startedAt: string; endedAt?: string | null;
+  durationMs?: number | null; inputTokens?: number | null; outputTokens?: number | null;
+  totalTokens?: number | null; usageSource: string; attributes?: Record<string, unknown> | null;
+};
 
 const API = "/api/v1";
 const riskOptions = ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
@@ -37,7 +43,11 @@ export default function ActionsConsolePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
-  const [tab, setTab] = useState<"actions" | "tools" | "worker">("actions");
+  const [tab, setTab] = useState<"actions" | "tools" | "worker" | "traces">("actions");
+  const [traceSpans, setTraceSpans] = useState<TraceSpan[]>([]);
+  const [selectedTraceId, setSelectedTraceId] = useState("");
+  const [selectedTraceSpans, setSelectedTraceSpans] = useState<TraceSpan[]>([]);
+  const [loadingTraces, setLoadingTraces] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
   const [toolName, setToolName] = useState("demo.echo");
   const [description, setDescription] = useState("Echo a message using the built-in safe demo handler");
@@ -88,6 +98,32 @@ export default function ActionsConsolePage() {
       setIdentity(null); setTools([]); setActions([]);
     } finally { setLoading(false); }
   }, [agentKey, request, actionTool]);
+
+  const loadTraces = useCallback(async () => {
+    if (!agentKey.trim()) return;
+    setLoadingTraces(true);
+    setError("");
+    try {
+      const spans = await request("/traces");
+      setTraceSpans(Array.isArray(spans) ? spans : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载 Trace 列表失败");
+      setTraceSpans([]);
+    } finally {
+      setLoadingTraces(false);
+    }
+  }, [agentKey, request]);
+
+  const inspectRunTrace = async (traceId: string) => {
+    setError("");
+    try {
+      const spans = await request(`/traces/${encodeURIComponent(traceId)}/spans`);
+      setSelectedTraceId(traceId);
+      setSelectedTraceSpans(Array.isArray(spans) ? spans : []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "加载 Run Trace 失败");
+    }
+  };
 
   const registerTool = async () => {
     setError(""); setNotice("");
@@ -233,6 +269,7 @@ export default function ActionsConsolePage() {
           <button onClick={() => setTab("actions")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "actions" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Actions & Runs</button>
           <button onClick={() => setTab("tools")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "tools" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Tool Registry</button>
           <button onClick={() => setTab("worker")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "worker" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Local Worker</button>
+          <button onClick={() => { setTab("traces"); void loadTraces(); }} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "traces" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Run Traces</button>
         </div>
         {tab === "tools" && <button onClick={() => setShowRegister(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold"><Plus className="w-4 h-4" /> 注册工具</button>}
       </div>
@@ -307,6 +344,38 @@ export default function ActionsConsolePage() {
               <div><div className="font-mono text-sm font-bold text-slate-900">{tool.toolName}</div><p className="text-xs text-slate-500 mt-1">{tool.description}</p><div className="text-[11px] text-slate-400 mt-2">Schema：{Object.keys((tool.inputSchema?.properties || {}) as object).length} 个字段 · {tool.enabled ? "Enabled" : "Disabled"}</div></div>
               <div className="flex gap-2"><span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 text-[10px] font-bold">{tool.riskLevel}</span><span className={`px-2.5 py-1 rounded-lg text-[10px] font-bold ${tool.enabled ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>{tool.enabled ? "启用" : "停用"}</span></div>
             </div>)}</div>}
+        </section>
+      ) : tab === "traces" ? (
+        <section className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <div><h2 className="text-lg font-black text-slate-950">真实 Run Trace</h2><p className="text-xs text-slate-500 mt-1">来自 SDK 上报的持久化 Span；Token 只显示 Provider 实际返回的 Usage。</p></div>
+            <button onClick={() => void loadTraces()} disabled={loadingTraces || !agentKey.trim()} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-bold disabled:opacity-50"><RefreshCw className={`w-3.5 h-3.5 inline mr-1 ${loadingTraces ? "animate-spin" : ""}`} />刷新 Trace</button>
+          </div>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(280px,0.8fr)_minmax(0,1.4fr)] gap-4">
+            <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm">最近 Span / Run</div>
+              {traceSpans.length === 0 ? <div className="p-8 text-center text-xs text-slate-400">{loadingTraces ? "正在加载..." : "暂无 Trace。运行 Python Demo Agent 后，这里会出现真实的模型调用和 Action Span。"}</div> :
+                <div className="divide-y divide-slate-100">{Array.from(new Map(traceSpans.map(span => [span.traceId, span])).entries()).map(([traceId, span]) => {
+                  const count = traceSpans.filter(item => item.traceId === traceId).length;
+                  const tokens = traceSpans.filter(item => item.traceId === traceId).reduce((sum, item) => sum + (item.totalTokens || 0), 0);
+                  return <button key={traceId} onClick={() => void inspectRunTrace(traceId)} className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${selectedTraceId === traceId ? "bg-indigo-50" : ""}`}>
+                    <div className="font-mono text-xs font-bold text-slate-800 break-all">{traceId}</div>
+                    <div className="flex flex-wrap gap-3 text-[11px] text-slate-500 mt-2"><span>{count} spans</span><span>{tokens} provider tokens</span><span>{span.runId || "no run id"}</span></div>
+                  </button>;
+                })}</div>}
+            </section>
+            <section className="bg-white border border-slate-200 rounded-2xl rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-100"><div className="font-bold text-sm text-slate-900">Span Waterfall</div><div className="text-[11px] text-slate-400 mt-1 font-mono">{selectedTraceId || "选择左侧 Run 查看完整 Span"}</div></div>
+              {!selectedTraceId ? <div className="p-10 text-center text-xs text-slate-400">选择一个 Run 查看真实时间线</div> :
+                <div className="p-4 space-y-3">{selectedTraceSpans.map(span => <div key={span.spanId} className="relative pl-5 border-l-2 border-indigo-100">
+                  <span className={`absolute -left-[5px] top-1 w-2 h-2 rounded-full ${span.status === "ERROR" ? "bg-rose-500" : "bg-indigo-500"}`} />
+                  <div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-bold text-slate-800">{span.name}</div><span className="text-[10px] text-slate-500">{span.spanKind} · {span.status}</span></div>
+                  <div className="text-[11px] text-slate-400 mt-1">{new Date(span.startedAt).toLocaleString()} · {span.durationMs == null ? "running / unknown duration" : `${span.durationMs} ms`}</div>
+                  <div className="flex flex-wrap gap-3 text-[11px] mt-2"><span className="text-slate-600">Tokens: {span.totalTokens == null ? "—" : span.totalTokens}</span><span className="text-slate-500">Input {span.inputTokens ?? "—"} / Output {span.outputTokens ?? "—"}</span><span className={span.usageSource === "PROVIDER" ? "text-emerald-700" : "text-amber-700"}>{span.usageSource}</span></div>
+                  {span.attributes && <pre className="mt-2 p-2 rounded-lg bg-slate-50 text-[10px] text-slate-500 whitespace-pre-wrap break-all">{pretty(span.attributes)}</pre>}
+                </div>)}</div>}
+            </section>
+          </div>
         </section>
       ) : (
         <section className="space-y-4">
