@@ -9,6 +9,8 @@ type Action = {
   actionId: string; toolName: string; status: string; decision: string;
   riskLevel: string; arguments: Record<string, unknown>; output?: Record<string, unknown> | null;
   errorCode?: string | null; errorMessage?: string | null; attemptCount?: number;
+  approvalStatus?: string | null; approvalDecidedBy?: string | null;
+  approvalDecidedAt?: string | null; approvalReason?: string | null;
   createdAt: string; startedAt?: string | null; completedAt?: string | null;
 };
 type ActionEvent = { eventId: string; actionId: string; eventType: string; details?: Record<string, unknown>; createdAt: string };
@@ -27,6 +29,8 @@ function statusTone(value: string) {
 export default function ActionsConsolePage() {
   const [agentKey, setAgentKey] = useState("");
   const [adminKey, setAdminKey] = useState("");
+  const [approverKey, setApproverKey] = useState("");
+  const [approvalReason, setApprovalReason] = useState("");
   const [identity, setIdentity] = useState<Identity | null>(null);
   const [tools, setTools] = useState<Tool[]>([]);
   const [actions, setActions] = useState<Action[]>([]);
@@ -137,6 +141,29 @@ export default function ActionsConsolePage() {
     finally { setRunningAction(""); }
   };
 
+  const decideApproval = async (action: Action, decision: "approve" | "reject") => {
+    setError(""); setNotice("");
+    if (!approverKey.trim()) {
+      setError("请先填写 Approver API Key");
+      return;
+    }
+    try {
+      const result = await request(`/actions/${encodeURIComponent(action.actionId)}/${decision}`, {
+        method: "POST",
+        headers: { "X-OwnAgent-Approver-Key": approverKey },
+        body: JSON.stringify({ reason: approvalReason })
+      });
+      setNotice(decision === "approve"
+        ? `Action ${result.actionId} 已批准，现已进入 READY 队列`
+        : `Action ${result.actionId} 已拒绝`);
+      setApprovalReason("");
+      await load();
+      await inspectTrace({ ...action, ...result } as Action);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "审批操作失败");
+    }
+  };
+
   const inspectTrace = async (action: Action) => {
     setError("");
     try {
@@ -152,7 +179,7 @@ export default function ActionsConsolePage() {
   const summary = [
     { label: "已注册工具", value: tools.length, icon: Wrench },
     { label: "Actions", value: actions.length, icon: Activity },
-    { label: "待审批", value: actions.filter(a => a.decision === "REQUIRE_APPROVAL").length, icon: ShieldAlert }
+    { label: "待审批", value: actions.filter(a => a.status === "PENDING_APPROVAL").length, icon: ShieldAlert }
   ];
 
   return (
@@ -170,13 +197,16 @@ export default function ActionsConsolePage() {
 
       <section className="bg-white border border-slate-200 rounded-2xl p-4 lg:p-5 shadow-sm space-y-3">
         <div className="flex items-center gap-2 font-bold text-slate-900"><KeyRound className="w-4 h-4 text-indigo-600" /> API 连接</div>
-        <p className="text-xs text-slate-500">凭证只保存在当前页面内存中，不写入 localStorage。请使用测试环境的 Agent Key 和独立的 Tool Admin Key。</p>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <p className="text-xs text-slate-500">凭证只保存在当前页面内存中，不写入 localStorage。Agent、Tool Admin 和 Approver 使用不同密钥；审批密钥只用于批准或拒绝高风险 Action。</p>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           <label className="text-xs font-semibold text-slate-600 space-y-1.5">Agent API Key
             <input type="password" value={agentKey} onChange={e => setAgentKey(e.target.value)} placeholder="oa_live_..." className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono outline-none focus:border-indigo-400" />
           </label>
           <label className="text-xs font-semibold text-slate-600 space-y-1.5">Tool Admin Key（仅注册工具需要）
             <input type="password" value={adminKey} onChange={e => setAdminKey(e.target.value)} placeholder="开发者管理密钥" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono outline-none focus:border-indigo-400" />
+          </label>
+          <label className="text-xs font-semibold text-slate-600 space-y-1.5">Approver API Key（审批需要）
+            <input type="password" value={approverKey} onChange={e => setApproverKey(e.target.value)} placeholder="审批专用密钥" className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono outline-none focus:border-indigo-400" />
           </label>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -218,6 +248,7 @@ export default function ActionsConsolePage() {
                     <div className="min-w-0"><div className="font-mono text-sm font-bold text-slate-800">{action.toolName}</div><div className="text-[11px] text-slate-400 mt-1">{action.actionId} · {action.createdAt ? new Date(action.createdAt).toLocaleString() : "时间未知"}</div><pre className="text-[11px] text-slate-500 mt-2 whitespace-pre-wrap break-all">{pretty(action.arguments)}</pre>
                       {action.output && <pre className="text-[11px] text-emerald-700 mt-2 whitespace-pre-wrap break-all">Output: {pretty(action.output)}</pre>}
                       {action.errorMessage && <p className={`text-xs mt-2 ${action.status === "UNKNOWN" ? "text-amber-800" : "text-rose-700"}`}>{action.errorCode}: {action.errorMessage}</p>}
+                      {action.approvalStatus && action.approvalStatus !== "NOT_REQUIRED" && <p className="text-[11px] text-indigo-700 mt-2">Approval: {action.approvalStatus}{action.approvalDecidedBy ? ` · by ${action.approvalDecidedBy}` : ""}{action.approvalReason ? ` · ${action.approvalReason}` : ""}</p>}
                     </div>
                     <div className="flex flex-wrap gap-1.5 shrink-0 items-center">
                       <span className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${statusTone(action.decision)}`}>{action.decision}</span>
@@ -226,7 +257,16 @@ export default function ActionsConsolePage() {
                     </div>
                   </div>
                   <div className="flex flex-wrap gap-2">
-                    {action.decision === "ALLOW" && action.status === "READY" && <button onClick={() => void executeAction(action)} disabled={!!runningAction} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold disabled:opacity-50"><Play className="w-3 h-3" />{runningAction === action.actionId ? "执行中..." : "执行 Action"}</button>}
+                    {action.status === "READY" && ["ALLOW", "REQUIRE_APPROVAL"].includes(action.decision) && ["demo.echo", "text.transform"].includes(action.toolName) && <button onClick={() => void executeAction(action)} disabled={!!runningAction} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold disabled:opacity-50"><Play className="w-3 h-3" />{runningAction === action.actionId ? "执行中..." : "执行 Action"}</button>}
+                    {action.status === "READY" && !["demo.echo", "text.transform"].includes(action.toolName) && <span className="text-xs text-indigo-700 self-center">等待 Local Worker 领取</span>}
+                    {action.status === "PENDING_APPROVAL" && action.approvalStatus === "PENDING" && <div className="w-full rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                      <div className="text-xs font-bold text-amber-900">需要人工审批 · {action.riskLevel}</div>
+                      <textarea value={approvalReason} onChange={e => setApprovalReason(e.target.value)} rows={2} placeholder="填写审批原因（可选）" className="w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs outline-none focus:border-amber-400" />
+                      <div className="flex flex-wrap gap-2">
+                        <button onClick={() => void decideApproval(action, "approve")} disabled={!approverKey.trim()} className="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-bold disabled:opacity-40">批准并放入执行队列</button>
+                        <button onClick={() => void decideApproval(action, "reject")} disabled={!approverKey.trim()} className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 text-xs font-bold disabled:opacity-40">拒绝</button>
+                      </div>
+                    </div>}
                     <button onClick={() => void inspectTrace(action)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50"><ListTree className="w-3 h-3" />查看 Trace</button>
                     {typeof action.attemptCount === "number" && <span className="text-[11px] text-slate-400 self-center">Attempts: {action.attemptCount}</span>}
                   </div>
@@ -250,7 +290,7 @@ export default function ActionsConsolePage() {
           {traceAction && <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
             <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"><div><div className="font-bold text-slate-900">Execution Trace</div><div className="text-[11px] text-slate-400 font-mono mt-1">{traceAction.actionId}</div></div><button onClick={() => { setTraceAction(null); setTraceEvents([]); }} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button></div>
             <div className="p-5 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-5">
-              <div className="space-y-2 text-xs"><div className="text-slate-500">状态</div><span className={`inline-flex px-2 py-1 rounded-lg border font-bold ${statusTone(traceAction.status)}`}>{traceAction.status}</span><div className="text-slate-500 pt-2">Attempt count</div><b>{traceAction.attemptCount ?? 0}</b>{traceAction.status === "UNKNOWN" && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 leading-relaxed">执行超时、请求中断或租约过期，无法确认外部操作是否已经发生。OwnAgent 不会自动重试；请先核对外部系统，再决定后续处理。</p>}<div className="text-slate-500 pt-2">开始时间</div><span>{traceAction.startedAt ? new Date(traceAction.startedAt).toLocaleString() : "—"}</span><div className="text-slate-500 pt-2">结束时间</div><span>{traceAction.completedAt ? new Date(traceAction.completedAt).toLocaleString() : "—"}</span></div>
+              <div className="space-y-2 text-xs"><div className="text-slate-500">状态</div><span className={`inline-flex px-2 py-1 rounded-lg border font-bold ${statusTone(traceAction.status)}`}>{traceAction.status}</span>{traceAction.approvalStatus && <><div className="text-slate-500 pt-2">审批状态</div><b>{traceAction.approvalStatus}</b>{traceAction.approvalDecidedBy && <span>审批人：{traceAction.approvalDecidedBy}</span>}{traceAction.approvalReason && <span>审批原因：{traceAction.approvalReason}</span>}</>}<div className="text-slate-500 pt-2">Attempt count</div><b>{traceAction.attemptCount ?? 0}</b>{traceAction.status === "UNKNOWN" && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 leading-relaxed">执行超时、请求中断或租约过期，无法确认外部操作是否已经发生。OwnAgent 不会自动重试；请先核对外部系统，再决定后续处理。</p>}<div className="text-slate-500 pt-2">开始时间</div><span>{traceAction.startedAt ? new Date(traceAction.startedAt).toLocaleString() : "—"}</span><div className="text-slate-500 pt-2">结束时间</div><span>{traceAction.completedAt ? new Date(traceAction.completedAt).toLocaleString() : "—"}</span></div>
               <div className="space-y-3">
                 {traceEvents.length === 0 ? <p className="text-sm text-slate-400">暂无执行事件。READY 状态尚未执行时，这是正常的。</p> : traceEvents.map(event => <div key={event.eventId} className="flex gap-3 border-l-2 border-indigo-200 pl-4 py-1"><div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 -ml-[21px]" /><div><div className="text-sm font-bold text-slate-800">{event.eventType}</div><div className="text-[11px] text-slate-400 mt-0.5">{new Date(event.createdAt).toLocaleString()}</div>{event.details && <pre className="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">{pretty(event.details)}</pre>}</div></div>)}
                 {traceAction.output && <div><div className="text-xs font-bold text-emerald-700 mb-1">Output</div><pre className="bg-emerald-50 rounded-xl p-3 text-xs whitespace-pre-wrap break-all">{pretty(traceAction.output)}</pre></div>}
