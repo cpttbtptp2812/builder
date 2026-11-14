@@ -70,7 +70,7 @@ export default function ActionsConsolePage() {
       setIdentity(null); setTools([]); setActions([]);
       return;
     }
-    setLoading(true); setError(""); setNotice("");
+    setLoading(true); setError("");
     try {
       const [who, toolList, actionList] = await Promise.all([
         request("/identity"), request("/tools"), request("/actions?limit=50")
