@@ -355,7 +355,7 @@ export default function ActionsConsolePage() {
             <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100 font-bold text-sm">最近 Span / Run</div>
               {traceSpans.length === 0 ? <div className="p-8 text-center text-xs text-slate-400">{loadingTraces ? "正在加载..." : "暂无 Trace。运行 Python Demo Agent 后，这里会出现真实的模型调用和 Action Span。"}</div> :
-                <div className="divide-y divide-slate-100">{Array.from(new Map(traceSpans.map(span => [span.traceId, span])).entries()).map(([traceId, span]) => {
+                <div className="divide-y divide-slate-100">{Array.from(new Map(traceSpans.map(span => [span.traceId, span] as const)).entries()).map(([traceId, span]) => {
                   const count = traceSpans.filter(item => item.traceId === traceId).length;
                   const tokens = traceSpans.filter(item => item.traceId === traceId).reduce((sum, item) => sum + (item.totalTokens || 0), 0);
                   return <button key={traceId} onClick={() => void inspectRunTrace(traceId)} className={`w-full text-left px-4 py-3 hover:bg-slate-50 ${selectedTraceId === traceId ? "bg-indigo-50" : ""}`}>
@@ -364,7 +364,7 @@ export default function ActionsConsolePage() {
                   </button>;
                 })}</div>}
             </section>
-            <section className="bg-white border border-slate-200 rounded-2xl rounded-2xl overflow-hidden">
+            <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100"><div className="font-bold text-sm text-slate-900">Span Waterfall</div><div className="text-[11px] text-slate-400 mt-1 font-mono">{selectedTraceId || "选择左侧 Run 查看完整 Span"}</div></div>
               {!selectedTraceId ? <div className="p-10 text-center text-xs text-slate-400">选择一个 Run 查看真实时间线</div> :
                 <div className="p-4 space-y-3">{selectedTraceSpans.map(span => <div key={span.spanId} className="relative pl-5 border-l-2 border-indigo-100">
