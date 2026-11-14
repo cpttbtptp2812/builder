@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, Plus, RefreshCw, Shield, ShieldAlert, Wrench } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, Plus, RefreshCw, Shield, ShieldAlert, Wrench, Play, ListTree, X } from "lucide-react";
 
 type Tool = {
   toolId: string; toolName: string; description: string;
@@ -7,8 +7,11 @@ type Tool = {
 };
 type Action = {
   actionId: string; toolName: string; status: string; decision: string;
-  riskLevel: string; arguments: Record<string, unknown>; createdAt: string;
+  riskLevel: string; arguments: Record<string, unknown>; output?: Record<string, unknown> | null;
+  errorCode?: string | null; errorMessage?: string | null; attemptCount?: number;
+  createdAt: string; startedAt?: string | null; completedAt?: string | null;
 };
+type ActionEvent = { eventId: string; actionId: string; eventType: string; details?: Record<string, unknown>; createdAt: string };
 type Identity = { agentId?: string; status?: string };
 
 const API = "/api/v1";
@@ -16,8 +19,8 @@ const riskOptions = ["READ_ONLY", "LOW", "MEDIUM", "HIGH", "CRITICAL"];
 
 function pretty(value: unknown) { return JSON.stringify(value, null, 2); }
 function statusTone(value: string) {
-  if (["ALLOW", "READY", "APPROVED"].includes(value)) return "bg-emerald-50 text-emerald-700 border-emerald-200";
-  if (["REQUIRE_APPROVAL", "PENDING_APPROVAL", "PENDING_POLICY"].includes(value)) return "bg-amber-50 text-amber-700 border-amber-200";
+  if (["ALLOW", "READY", "APPROVED", "SUCCEEDED"].includes(value)) return "bg-emerald-50 text-emerald-700 border-emerald-200";
+  if (["REQUIRE_APPROVAL", "PENDING_APPROVAL", "PENDING_POLICY", "RUNNING", "UNKNOWN"].includes(value)) return "bg-amber-50 text-amber-700 border-amber-200";
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
 
@@ -32,18 +35,19 @@ export default function ActionsConsolePage() {
   const [notice, setNotice] = useState("");
   const [tab, setTab] = useState<"actions" | "tools">("actions");
   const [showRegister, setShowRegister] = useState(false);
-  const [toolName, setToolName] = useState("file.read");
-  const [description, setDescription] = useState("Read a file from the agent workspace");
-  const [riskLevel, setRiskLevel] = useState("READ_ONLY");
+  const [toolName, setToolName] = useState("demo.echo");
+  const [description, setDescription] = useState("Echo a message using the built-in safe demo handler");
+  const [riskLevel, setRiskLevel] = useState("LOW");
   const [schemaText, setSchemaText] = useState(pretty({
-    type: "object",
-    properties: { path: { type: "string" } },
-    required: ["path"],
-    additionalProperties: false
+    type: "object", properties: { message: { type: "string" } },
+    required: ["message"], additionalProperties: false
   }));
-  const [actionTool, setActionTool] = useState("");
-  const [argumentsText, setArgumentsText] = useState(pretty({ path: "/workspace/README.md" }));
+  const [actionTool, setActionTool] = useState("demo.echo");
+  const [argumentsText, setArgumentsText] = useState(pretty({ message: "Hello from OwnAgent" }));
   const [creating, setCreating] = useState(false);
+  const [runningAction, setRunningAction] = useState("");
+  const [traceAction, setTraceAction] = useState<Action | null>(null);
+  const [traceEvents, setTraceEvents] = useState<ActionEvent[]>([]);
 
   const headers = useMemo(() => ({
     Authorization: `Bearer ${agentKey.trim()}`,
@@ -54,15 +58,10 @@ export default function ActionsConsolePage() {
     if (!agentKey.trim()) throw new Error("请先填写 Agent API Key");
     const response = await fetch(`${API}${path}`, {
       ...init,
-      headers: {
-        ...headers,
-        ...(init.headers || {})
-      }
+      headers: { ...headers, ...(init.headers || {}) }
     });
     const body = await response.json().catch(() => null);
-    if (!response.ok) {
-      throw new Error(body?.error?.message || body?.message || `请求失败：HTTP ${response.status}`);
-    }
+    if (!response.ok) throw new Error(body?.error?.message || body?.message || `请求失败：HTTP ${response.status}`);
     return body;
   }, [agentKey, headers]);
 
@@ -71,12 +70,10 @@ export default function ActionsConsolePage() {
       setIdentity(null); setTools([]); setActions([]);
       return;
     }
-    setLoading(true); setError(""); setNotice("");
+    setLoading(true); setError("");
     try {
       const [who, toolList, actionList] = await Promise.all([
-        request("/identity"),
-        request("/tools"),
-        request("/actions?limit=50")
+        request("/identity"), request("/tools"), request("/actions?limit=50")
       ]);
       setIdentity(who as Identity);
       setTools(Array.isArray(toolList) ? toolList : []);
@@ -100,7 +97,7 @@ export default function ActionsConsolePage() {
         headers: { "X-OwnAgent-Tool-Admin-Key": adminKey },
         body: JSON.stringify({ toolName, description, riskLevel, enabled: true, inputSchema })
       });
-      setNotice("工具定义已保存。注意：注册工具不等于已提供可执行 Handler。");
+      setNotice("工具定义已保存。只有服务端安装了对应 Handler 的工具才能执行；元数据本身不会执行代码。");
       setShowRegister(false);
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : "注册失败"); }
@@ -112,22 +109,44 @@ export default function ActionsConsolePage() {
     let args: unknown;
     try { args = JSON.parse(argumentsText); }
     catch { setError("Arguments 不是有效 JSON"); return; }
-    if (!actionTool) { setError("请先注册至少一个工具"); return; }
+    if (!actionTool) { setError("请先选择工具"); return; }
     setCreating(true);
     try {
       const result = await request("/actions", {
         method: "POST",
         body: JSON.stringify({
-          toolName: actionTool,
-          arguments: args,
+          toolName: actionTool, arguments: args,
           idempotencyKey: `console-${crypto.randomUUID()}`,
           metadata: { source: "ownagent-console" }
         })
       });
-      setNotice(`Action ${result.actionId} 已创建：${result.decision} / ${result.status}。此版本尚不会执行工具。`);
+      setNotice(`Action ${result.actionId} 已创建：${result.decision} / ${result.status}`);
       await load();
     } catch (e) { setError(e instanceof Error ? e.message : "创建 Action 失败"); }
     finally { setCreating(false); }
+  };
+
+  const executeAction = async (action: Action) => {
+    setError(""); setNotice(""); setRunningAction(action.actionId);
+    try {
+      const result = await request(`/actions/${encodeURIComponent(action.actionId)}/execute`, { method: "POST" });
+      setNotice(`Action ${result.actionId} 执行结束：${result.status}`);
+      await load();
+      await inspectTrace({ ...action, ...result } as Action);
+    } catch (e) { setError(e instanceof Error ? e.message : "执行 Action 失败"); }
+    finally { setRunningAction(""); }
+  };
+
+  const inspectTrace = async (action: Action) => {
+    setError("");
+    try {
+      const [latest, events] = await Promise.all([
+        request(`/actions/${encodeURIComponent(action.actionId)}`),
+        request(`/actions/${encodeURIComponent(action.actionId)}/events`)
+      ]);
+      setTraceAction(latest as Action);
+      setTraceEvents(Array.isArray(events) ? events : []);
+    } catch (e) { setError(e instanceof Error ? e.message : "加载 Trace 失败"); }
   };
 
   const summary = [
@@ -140,11 +159,9 @@ export default function ActionsConsolePage() {
     <div className="flex-1 overflow-y-auto bg-[#f6f8fc] text-slate-800 p-5 lg:p-8 space-y-6">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold tracking-[0.16em] uppercase">
-            <Shield className="w-4 h-4" /> Action Control Plane
-          </div>
-          <h1 className="text-2xl font-black tracking-tight text-slate-950 mt-2">执行控制台</h1>
-          <p className="text-sm text-slate-500 mt-1">管理 Agent 可调用的工具，并在真正执行前检查每一次 Action。</p>
+          <div className="flex items-center gap-2 text-indigo-600 text-xs font-bold tracking-[0.16em] uppercase"><Shield className="w-4 h-4" /> Agent Engineering Platform</div>
+          <h1 className="text-2xl font-black tracking-tight text-slate-950 mt-2">Agent 执行与观测</h1>
+          <p className="text-sm text-slate-500 mt-1">提交 Action、运行已安装的安全 Handler，并检查持久化执行事件。</p>
         </div>
         <button onClick={() => void load()} disabled={loading || !agentKey.trim()} className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold hover:border-indigo-300 disabled:opacity-50">
           <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> 刷新数据
@@ -183,39 +200,67 @@ export default function ActionsConsolePage() {
 
       <div className="flex items-center justify-between border-b border-slate-200">
         <div className="flex gap-1">
-          <button onClick={() => setTab("actions")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "actions" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Actions</button>
+          <button onClick={() => setTab("actions")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "actions" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Actions & Runs</button>
           <button onClick={() => setTab("tools")} className={`px-4 py-3 text-sm font-bold border-b-2 ${tab === "tools" ? "border-indigo-600 text-indigo-700" : "border-transparent text-slate-500"}`}>Tool Registry</button>
         </div>
         {tab === "tools" && <button onClick={() => setShowRegister(true)} className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold"><Plus className="w-4 h-4" /> 注册工具</button>}
       </div>
 
       {tab === "actions" ? (
-        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4">
-          <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"><div className="font-bold text-slate-900">最近 Actions</div><span className="text-xs text-slate-400">最多 50 条</span></div>
-            {actions.length === 0 ? <div className="py-16 text-center text-sm text-slate-400"><Clock3 className="w-8 h-8 mx-auto mb-2 opacity-40" />暂无 Action 记录</div> :
-              <div className="divide-y divide-slate-100">{actions.map(action => <div key={action.actionId} className="px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
-                <div className="min-w-0"><div className="font-mono text-sm font-bold text-slate-800">{action.toolName}</div><div className="text-[11px] text-slate-400 mt-1">{action.actionId} · {action.createdAt ? new Date(action.createdAt).toLocaleString() : "时间未知"}</div><pre className="text-[11px] text-slate-500 mt-2 whitespace-pre-wrap break-all">{pretty(action.arguments)}</pre></div>
-                <div className="flex flex-wrap gap-1.5 shrink-0"><span className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${statusTone(action.decision)}`}>{action.decision}</span><span className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${statusTone(action.status)}`}>{action.status}</span><span className="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[10px] font-bold">{action.riskLevel}</span></div>
-              </div>)}</div>}
-          </section>
-          <section className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 h-fit">
-            <div className="font-bold text-slate-900">创建 Action</div>
-            <p className="text-xs text-slate-500">模拟你的 Agent 提交一次工具调用请求。这里只做策略判断和记录，不会执行文件或外部操作。</p>
-            <label className="block text-xs font-semibold text-slate-600">目标工具
-              <select value={actionTool} onChange={e => setActionTool(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white">
-                <option value="">请选择工具</option>{tools.map(tool => <option key={tool.toolId} value={tool.toolName}>{tool.toolName} · {tool.riskLevel}</option>)}
-              </select>
-            </label>
-            <label className="block text-xs font-semibold text-slate-600">Arguments（JSON）
-              <textarea value={argumentsText} onChange={e => setArgumentsText(e.target.value)} rows={7} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono outline-none focus:border-indigo-400" />
-            </label>
-            <button onClick={() => void createAction()} disabled={creating || !identity?.agentId || !actionTool} className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold disabled:opacity-40">{creating ? "提交中..." : "提交 Action 并检查策略"}</button>
-          </section>
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4">
+            <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"><div className="font-bold text-slate-900">最近 Actions</div><span className="text-xs text-slate-400">最多 50 条</span></div>
+              {actions.length === 0 ? <div className="py-16 text-center text-sm text-slate-400"><Clock3 className="w-8 h-8 mx-auto mb-2 opacity-40" />暂无 Action 记录</div> :
+                <div className="divide-y divide-slate-100">{actions.map(action => <div key={action.actionId} className="px-5 py-4 space-y-3">
+                  <div className="flex flex-col md:flex-row md:items-start justify-between gap-3">
+                    <div className="min-w-0"><div className="font-mono text-sm font-bold text-slate-800">{action.toolName}</div><div className="text-[11px] text-slate-400 mt-1">{action.actionId} · {action.createdAt ? new Date(action.createdAt).toLocaleString() : "时间未知"}</div><pre className="text-[11px] text-slate-500 mt-2 whitespace-pre-wrap break-all">{pretty(action.arguments)}</pre>
+                      {action.output && <pre className="text-[11px] text-emerald-700 mt-2 whitespace-pre-wrap break-all">Output: {pretty(action.output)}</pre>}
+                      {action.errorMessage && <p className={`text-xs mt-2 ${action.status === "UNKNOWN" ? "text-amber-800" : "text-rose-700"}`}>{action.errorCode}: {action.errorMessage}</p>}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 shrink-0 items-center">
+                      <span className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${statusTone(action.decision)}`}>{action.decision}</span>
+                      <span className={`px-2 py-1 rounded-lg border text-[10px] font-bold ${statusTone(action.status)}`}>{action.status}</span>
+                      <span className="px-2 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-600 text-[10px] font-bold">{action.riskLevel}</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {action.decision === "ALLOW" && action.status === "READY" && <button onClick={() => void executeAction(action)} disabled={!!runningAction} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold disabled:opacity-50"><Play className="w-3 h-3" />{runningAction === action.actionId ? "执行中..." : "执行 Action"}</button>}
+                    <button onClick={() => void inspectTrace(action)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50"><ListTree className="w-3 h-3" />查看 Trace</button>
+                    {typeof action.attemptCount === "number" && <span className="text-[11px] text-slate-400 self-center">Attempts: {action.attemptCount}</span>}
+                  </div>
+                </div>)}</div>}
+            </section>
+            <section className="bg-white border border-slate-200 rounded-2xl p-5 space-y-3 h-fit">
+              <div className="font-bold text-slate-900">创建 Action</div>
+              <p className="text-xs text-slate-500">先创建并执行策略判断。只有 ALLOW / READY 的 Action 才能调用已安装的服务端 Handler。</p>
+              <label className="block text-xs font-semibold text-slate-600">目标工具
+                <select value={actionTool} onChange={e => setActionTool(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white">
+                  <option value="">请选择工具</option>{tools.map(tool => <option key={tool.toolId} value={tool.toolName}>{tool.toolName} · {tool.riskLevel}</option>)}
+                </select>
+              </label>
+              <label className="block text-xs font-semibold text-slate-600">Arguments（JSON）
+                <textarea value={argumentsText} onChange={e => setArgumentsText(e.target.value)} rows={7} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono outline-none focus:border-indigo-400" />
+              </label>
+              <button onClick={() => void createAction()} disabled={creating || !identity?.agentId || !actionTool} className="w-full py-2.5 rounded-xl bg-slate-900 text-white text-sm font-bold disabled:opacity-40">{creating ? "提交中..." : "提交 Action"}</button>
+            </section>
+          </div>
+
+          {traceAction && <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"><div><div className="font-bold text-slate-900">Execution Trace</div><div className="text-[11px] text-slate-400 font-mono mt-1">{traceAction.actionId}</div></div><button onClick={() => { setTraceAction(null); setTraceEvents([]); }} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button></div>
+            <div className="p-5 grid grid-cols-1 lg:grid-cols-[220px_minmax(0,1fr)] gap-5">
+              <div className="space-y-2 text-xs"><div className="text-slate-500">状态</div><span className={`inline-flex px-2 py-1 rounded-lg border font-bold ${statusTone(traceAction.status)}`}>{traceAction.status}</span><div className="text-slate-500 pt-2">Attempt count</div><b>{traceAction.attemptCount ?? 0}</b>{traceAction.status === "UNKNOWN" && <p className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-900 leading-relaxed">执行超时、请求中断或租约过期，无法确认外部操作是否已经发生。OwnAgent 不会自动重试；请先核对外部系统，再决定后续处理。</p>}<div className="text-slate-500 pt-2">开始时间</div><span>{traceAction.startedAt ? new Date(traceAction.startedAt).toLocaleString() : "—"}</span><div className="text-slate-500 pt-2">结束时间</div><span>{traceAction.completedAt ? new Date(traceAction.completedAt).toLocaleString() : "—"}</span></div>
+              <div className="space-y-3">
+                {traceEvents.length === 0 ? <p className="text-sm text-slate-400">暂无执行事件。READY 状态尚未执行时，这是正常的。</p> : traceEvents.map(event => <div key={event.eventId} className="flex gap-3 border-l-2 border-indigo-200 pl-4 py-1"><div className="w-2 h-2 rounded-full bg-indigo-500 mt-1.5 -ml-[21px]" /><div><div className="text-sm font-bold text-slate-800">{event.eventType}</div><div className="text-[11px] text-slate-400 mt-0.5">{new Date(event.createdAt).toLocaleString()}</div>{event.details && <pre className="text-[11px] text-slate-500 mt-1 whitespace-pre-wrap">{pretty(event.details)}</pre>}</div></div>)}
+                {traceAction.output && <div><div className="text-xs font-bold text-emerald-700 mb-1">Output</div><pre className="bg-emerald-50 rounded-xl p-3 text-xs whitespace-pre-wrap break-all">{pretty(traceAction.output)}</pre></div>}
+                {traceAction.errorMessage && <div className="text-xs text-rose-700">{traceAction.errorCode}: {traceAction.errorMessage}</div>}
+              </div>
+            </div>
+          </section>}
         </div>
       ) : (
         <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-          <div className="px-5 py-4 border-b border-slate-100"><div className="font-bold text-slate-900">Agent 工具注册表</div><p className="text-xs text-slate-500 mt-1">每个工具声明输入契约和风险等级。工具 Handler / Runtime 尚未接通。</p></div>
+          <div className="px-5 py-4 border-b border-slate-100"><div className="font-bold text-slate-900">Agent 工具注册表</div><p className="text-xs text-slate-500 mt-1">工具定义只声明输入契约和风险等级；只有服务端安装了对应 Handler 才能执行。</p></div>
           {tools.length === 0 ? <div className="py-16 text-center text-sm text-slate-400"><Wrench className="w-8 h-8 mx-auto mb-2 opacity-40" />还没有注册工具</div> :
             <div className="divide-y divide-slate-100">{tools.map(tool => <div key={tool.toolId} className="px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-3">
               <div><div className="font-mono text-sm font-bold text-slate-900">{tool.toolName}</div><p className="text-xs text-slate-500 mt-1">{tool.description}</p><div className="text-[11px] text-slate-400 mt-2">Schema：{Object.keys((tool.inputSchema?.properties || {}) as object).length} 个字段 · {tool.enabled ? "Enabled" : "Disabled"}</div></div>
@@ -224,13 +269,13 @@ export default function ActionsConsolePage() {
         </section>
       )}
 
-      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0" /><div><b>当前阶段边界：</b>OwnAgent 已能注册工具、校验参数并给出 ALLOW / REQUIRE_APPROVAL / DENY 决策；尚未实现真实工具执行、人工审批流程和结果验证。请勿将 READY 理解为工具已经运行。</div></div>
+      <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 text-xs text-amber-900 flex gap-2"><ShieldAlert className="w-4 h-4 shrink-0" /><div><b>当前阶段边界：</b>Runtime 目前只执行服务端显式安装的安全示例 Handler（demo.echo、text.transform）。已支持执行租约心跳续期、Handler 超时检测和过期租约恢复；无法确认结果的任务会标记为 UNKNOWN。Java 线程中断属于尽力而为，外部副作用仍需人工核对。真正的 Worker 调度、审批后恢复执行、取消和人工对账界面仍在开发中。</div></div>
 
       {showRegister && <div className="fixed inset-0 z-50 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center p-4">
         <div className="w-full max-w-2xl bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden">
           <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between"><div><div className="font-bold text-slate-900">注册 Agent 工具</div><div className="text-xs text-slate-500 mt-1">工具定义由开发者管理密钥授权</div></div><button onClick={() => setShowRegister(false)} className="p-2 rounded-lg hover:bg-slate-100"><X className="w-4 h-4" /></button></div>
           <div className="p-5 space-y-3">
-            <label className="block text-xs font-semibold text-slate-600">工具名称<input value={toolName} onChange={e => setToolName(e.target.value)} placeholder="file.read" className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono" /></label>
+            <label className="block text-xs font-semibold text-slate-600">工具名称<input value={toolName} onChange={e => setToolName(e.target.value)} placeholder="demo.echo" className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm font-mono" /></label>
             <label className="block text-xs font-semibold text-slate-600">描述<input value={description} onChange={e => setDescription(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm" /></label>
             <label className="block text-xs font-semibold text-slate-600">风险等级<select value={riskLevel} onChange={e => setRiskLevel(e.target.value)} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-white">{riskOptions.map(level => <option key={level}>{level}</option>)}</select></label>
             <label className="block text-xs font-semibold text-slate-600">Input Schema（JSON Schema 子集）<textarea value={schemaText} onChange={e => setSchemaText(e.target.value)} rows={10} className="mt-1 w-full border border-slate-200 rounded-xl px-3 py-2.5 text-xs font-mono" /></label>
