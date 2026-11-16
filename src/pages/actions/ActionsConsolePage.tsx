@@ -249,6 +249,25 @@ export default function ActionsConsolePage() {
     }
   };
 
+  const retryTraceAction = async (actionId: string) => {
+    const confirmed = window.confirm(
+      "该执行步骤关联的 Action 失败了，但仍可能产生部分外部副作用。重试会创建新的 Action，可能重复执行。UNKNOWN 状态不允许重试，必须先核对外部系统。是否继续？"
+    );
+    if (!confirmed) return;
+    setError(""); setNotice("");
+    try {
+      const result = await request(
+        `/actions/${encodeURIComponent(actionId)}/retry?confirmPossibleDuplicateSideEffect=true`,
+        { method: "POST" }
+      );
+      setNotice(`已创建新 Action ${result.actionId}：${result.decision} / ${result.status}`);
+      await load();
+      await loadTraces();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "重试关联 Action 失败");
+    }
+  };
+
   const registerTool = async () => {
     setError(""); setNotice("");
     let inputSchema: unknown;
@@ -299,6 +318,24 @@ export default function ActionsConsolePage() {
       await inspectTrace({ ...action, ...result } as Action);
     } catch (e) { setError(e instanceof Error ? e.message : "执行 Action 失败"); }
     finally { setRunningAction(""); }
+  };
+
+  const retryFailedAction = async (action: Action) => {
+    const confirmed = window.confirm(
+      "该 Action 标记为 FAILED，但外部操作仍可能产生部分副作用。重试会创建一个新的 Action，可能重复执行。请先确认外部系统状态。是否继续？"
+    );
+    if (!confirmed) return;
+    setError(""); setNotice("");
+    try {
+      const result = await request(
+        `/actions/${encodeURIComponent(action.actionId)}/retry?confirmPossibleDuplicateSideEffect=true`,
+        { method: "POST" }
+      );
+      setNotice(`已创建重试 Action ${result.actionId}：${result.decision} / ${result.status}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "重试 Action 失败");
+    }
   };
 
   const decideApproval = async (action: Action, decision: "approve" | "reject") => {
@@ -428,6 +465,7 @@ export default function ActionsConsolePage() {
                         <button onClick={() => void decideApproval(action, "reject")} disabled={!approverKey.trim()} className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 text-xs font-bold disabled:opacity-40">拒绝</button>
                       </div>
                     </div>}
+                    {action.status === "FAILED" && <button onClick={() => void retryFailedAction(action)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-bold hover:bg-amber-100">确认风险并重试</button>}
                     <button onClick={() => void inspectTrace(action)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50"><ListTree className="w-3 h-3" />查看 Trace</button>
                     {typeof action.attemptCount === "number" && <span className="text-[11px] text-slate-400 self-center">Attempts: {action.attemptCount}</span>}
                   </div>
@@ -505,6 +543,7 @@ export default function ActionsConsolePage() {
                     </div>
                     <div className="flex flex-wrap gap-3 text-[10px] mt-2 text-slate-500"><span>{new Date(span.startedAt).toLocaleTimeString()}</span><span>{span.durationMs == null ? "duration unknown" : `${span.durationMs} ms`}</span><span>Tokens: {span.totalTokens ?? "—"}</span><span>Input {span.inputTokens ?? "—"} / Output {span.outputTokens ?? "—"}</span><span className={span.usageSource === "PROVIDER" ? "text-emerald-700" : "text-amber-700"}>{span.usageSource}</span></div>
                     {span.attributes && <details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">Span attributes</summary><pre className="mt-1 p-2 rounded-lg bg-slate-50 text-[10px] text-slate-500 whitespace-pre-wrap break-all">{pretty(span.attributes)}</pre></details>}
+                    {span.status === "ERROR" && typeof span.attributes?.action_id === "string" && <button onClick={() => void retryTraceAction(span.attributes!.action_id as string)} className="mt-2 px-2.5 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-[10px] font-bold hover:bg-amber-100">确认风险并重试关联 Action</button>}
                   </div>)}
                 </div>}
             </section>
