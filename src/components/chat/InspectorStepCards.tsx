@@ -18,6 +18,7 @@ const statusMeta = {
   running: { label: "执行中", color: "text-blue-700 bg-blue-50 border-blue-200" },
   failed: { label: "失败", color: "text-rose-700 bg-rose-50 border-rose-200" },
   pending: { label: "等待中", color: "text-slate-500 bg-slate-50 border-slate-200" },
+  unknown: { label: "状态未知", color: "text-amber-700 bg-amber-50 border-amber-200" },
 } as const;
 
 function formatTokens(detail?: Record<string, any>): string | null {
@@ -128,7 +129,7 @@ export const InspectorStepCards: React.FC<InspectorStepCardsProps> = ({
       <div className="relative space-y-2">
         <div className="absolute left-[15px] top-4 bottom-4 w-px bg-slate-200" />
         {ordered.map((step, index) => {
-          const meta = statusMeta[step.status] || statusMeta.pending;
+          const meta = statusMeta[step.status] || statusMeta.unknown;
           const expanded = expandedIds.has(step.stepId) || activeStepId === step.stepId;
           const detail = step.rightDetail || {};
           const duration = formatDuration(step.durationMs);
@@ -139,7 +140,7 @@ export const InspectorStepCards: React.FC<InspectorStepCardsProps> = ({
 
           return (
             <div key={step.stepId} className="relative pl-9">
-              <div className={`absolute left-[7px] top-3 w-[17px] h-[17px] rounded-full border-2 bg-white flex items-center justify-center z-[1] ${step.status === "failed" ? "border-rose-500 text-rose-500" : step.status === "running" ? "border-blue-500 text-blue-500" : step.status === "done" || step.status === "passed" ? "border-emerald-500 text-emerald-500" : "border-slate-300 text-slate-300"}`}>
+              <div className={`absolute left-[7px] top-3 w-[17px] h-[17px] rounded-full border-2 bg-white flex items-center justify-center z-[1] ${step.status === "failed" ? "border-rose-500 text-rose-500" : step.status === "running" ? "border-blue-500 text-blue-500" : step.status === "done" || step.status === "passed" ? "border-emerald-500 text-emerald-500" : step.status === "unknown" ? "border-amber-500 text-amber-500" : "border-slate-300 text-slate-300"}`}>
                 <Icon className={`w-2.5 h-2.5 ${step.status === "running" ? "animate-spin" : ""}`} />
               </div>
               <button
