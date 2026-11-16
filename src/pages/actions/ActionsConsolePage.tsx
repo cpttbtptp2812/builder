@@ -219,6 +219,11 @@ export default function ActionsConsolePage() {
     }
   };
 
+  useEffect(() => {
+    traceStreamAbortRef.current?.abort();
+    setTraceStreamStatus("idle");
+  }, [agentKey]);
+
   useEffect(() => () => traceStreamAbortRef.current?.abort(), []);
 
   const inspectRunTrace = async (traceId: string) => {
