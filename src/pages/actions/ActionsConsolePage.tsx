@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, Plus, RefreshCw, Shield, ShieldAlert, Wrench, Play, ListTree, X } from "lucide-react";
 
 type Tool = {
@@ -85,6 +85,8 @@ export default function ActionsConsolePage() {
   const [selectedTraceId, setSelectedTraceId] = useState("");
   const [selectedTraceSpans, setSelectedTraceSpans] = useState<TraceSpan[]>([]);
   const [loadingTraces, setLoadingTraces] = useState(false);
+  const [traceStreamStatus, setTraceStreamStatus] = useState<"idle" | "connecting" | "connected" | "disconnected">("idle");
+  const traceStreamAbortRef = useRef<AbortController | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [toolName, setToolName] = useState("demo.echo");
   const [description, setDescription] = useState("Echo a message using the built-in safe demo handler");
@@ -151,12 +153,97 @@ export default function ActionsConsolePage() {
     }
   }, [agentKey, request]);
 
+  const startTraceStream = async (traceId: string) => {
+    traceStreamAbortRef.current?.abort();
+    const controller = new AbortController();
+    traceStreamAbortRef.current = controller;
+    setTraceStreamStatus("connecting");
+    try {
+      const response = await fetch(`${API}/traces/${encodeURIComponent(traceId)}/events`, {
+        headers: { Authorization: `Bearer ${agentKey.trim()}`, Accept: "text/event-stream" },
+        signal: controller.signal,
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message || `实时订阅失败：HTTP ${response.status}`);
+      }
+      if (!response.body) throw new Error("当前浏览器不支持读取实时事件流");
+      setTraceStreamStatus("connected");
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      const consume = async () => {
+        while (!controller.signal.aborted) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true }).replace(/\r\n/g, "\n");
+          let boundary = buffer.indexOf("\n\n");
+          while (boundary >= 0) {
+            const block = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            const lines = block.split("\n");
+            const eventName = lines.find(line => line.startsWith("event:"))?.slice(6).trim();
+            const dataText = lines.filter(line => line.startsWith("data:")).map(line => line.slice(5).trimStart()).join("\n");
+            if (eventName === "trace_span" && dataText) {
+              try {
+                const span = JSON.parse(dataText) as TraceSpan;
+                setSelectedTraceSpans(current => {
+                  const byId = new Map(current.map(item => [item.spanId, item]));
+                  byId.set(span.spanId, span);
+                  return Array.from(byId.values()).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+                });
+                setTraceSpans(current => {
+                  const byId = new Map(current.map(item => [item.spanId, item]));
+                  byId.set(span.spanId, span);
+                  return Array.from(byId.values()).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
+                });
+              } catch {
+                setError("收到无法解析的 Trace 事件");
+              }
+            }
+            boundary = buffer.indexOf("\n\n");
+          }
+        }
+        if (!controller.signal.aborted) setTraceStreamStatus("disconnected");
+      };
+      void consume().catch(error => {
+        if (!controller.signal.aborted) {
+          setTraceStreamStatus("disconnected");
+          setError(error instanceof Error ? error.message : "Trace 实时连接中断");
+        }
+      });
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setTraceStreamStatus("disconnected");
+        setError(error instanceof Error ? error.message : "Trace 实时连接失败");
+      }
+    }
+  };
+
+  useEffect(() => {
+    traceStreamAbortRef.current?.abort();
+    setTraceStreamStatus("idle");
+  }, [agentKey]);
+
+  useEffect(() => () => traceStreamAbortRef.current?.abort(), []);
+
   const inspectRunTrace = async (traceId: string) => {
     setError("");
+    setSelectedTraceId(traceId);
+    setSelectedTraceSpans([]);
+    // Establish the live subscription before loading the snapshot; merge by spanId
+    // so an event arriving during the snapshot request is not overwritten.
+    await startTraceStream(traceId);
     try {
       const spans = await request(`/traces/${encodeURIComponent(traceId)}/spans`);
-      setSelectedTraceId(traceId);
-      setSelectedTraceSpans(Array.isArray(spans) ? spans : []);
+      if (Array.isArray(spans)) {
+        setSelectedTraceSpans(current => {
+          const byId = new Map(current.map(item => [item.spanId, item]));
+          spans.forEach((span: TraceSpan) => byId.set(span.spanId, span));
+          return Array.from(byId.values()).sort((a, b) => a.startedAt.localeCompare(b.startedAt));
+        });
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "加载 Run Trace 失败");
     }
@@ -402,7 +489,7 @@ export default function ActionsConsolePage() {
                 })}</div>}
             </section>
             <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-slate-100"><div className="font-bold text-sm text-slate-900">Span Waterfall</div><div className="text-[11px] text-slate-400 mt-1 font-mono">{selectedTraceId || "选择左侧 Run 查看完整 Span"}</div></div>
+              <div className="px-4 py-3 border-b border-slate-100"><div className="font-bold text-sm text-slate-900">Span Waterfall</div><div className="flex items-center gap-2 mt-1"><div className="text-[11px] text-slate-400 font-mono truncate">{selectedTraceId || "选择左侧 Run 查看完整 Span"}</div>{selectedTraceId && <span className={`text-[10px] font-semibold ${traceStreamStatus === "connected" ? "text-emerald-600" : traceStreamStatus === "connecting" ? "text-blue-600" : "text-amber-600"}`}>{traceStreamStatus === "connected" ? "● 实时连接" : traceStreamStatus === "connecting" ? "连接中…" : traceStreamStatus === "disconnected" ? "连接已断开" : "未连接"}</span>}</div></div>
               {!selectedTraceId ? <div className="p-10 text-center text-xs text-slate-400">选择一个 Run 查看真实时间线</div> :
                 <div className="p-4 space-y-3">
                   <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(0,1.2fr)] gap-3 text-[10px] uppercase tracking-wide text-slate-400"><span>Span hierarchy</span><span>Relative execution time</span></div>
