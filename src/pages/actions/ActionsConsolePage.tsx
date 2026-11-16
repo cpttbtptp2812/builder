@@ -84,7 +84,9 @@ export default function ActionsConsolePage() {
   const [traceSpans, setTraceSpans] = useState<TraceSpan[]>([]);
   const [selectedTraceId, setSelectedTraceId] = useState("");
   const [selectedTraceSpans, setSelectedTraceSpans] = useState<TraceSpan[]>([]);
-  const [loadingTraces, setLoadingTraces] = useState(false);\n  const [traceStreamStatus, setTraceStreamStatus] = useState<"idle" | "connecting" | "connected" | "disconnected">("idle");\n  const traceStreamAbortRef = useRef<AbortController | null>(null);
+  const [loadingTraces, setLoadingTraces] = useState(false);
+  const [traceStreamStatus, setTraceStreamStatus] = useState<"idle" | "connecting" | "connected" | "disconnected">("idle");
+  const traceStreamAbortRef = useRef<AbortController | null>(null);
   const [showRegister, setShowRegister] = useState(false);
   const [toolName, setToolName] = useState("demo.echo");
   const [description, setDescription] = useState("Echo a message using the built-in safe demo handler");
