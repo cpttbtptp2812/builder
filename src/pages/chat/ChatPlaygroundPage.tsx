@@ -1868,6 +1868,12 @@ export default function ChatPlaygroundPage({
         highlightCitationIndex={activeTraceDrawer?.highlightCitationIndex}
         activeStepId={focusedStepId}
         onSelectStep={(stepId) => setFocusedStepId(stepId)}
+        onRetryRun={() => {
+          const target = activeTraceDrawer
+            ? messages.find((item) => item.id === activeTraceDrawer.messageId)
+            : undefined;
+          if (target?.userPrompt) handleSend(target.userPrompt);
+        }}
         message={
           activeTraceDrawer
             ? (() => {

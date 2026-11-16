@@ -58,6 +58,7 @@ interface TraceInspectorDrawerProps {
   onToggleLayout?: () => void;
   activeStepId?: string | null;
   onSelectStep?: (stepId: string) => void;
+  onRetryRun?: () => void;
 }
 
 const STORAGE_WIDTH_KEY = "ownagent_drawer_width";
@@ -72,6 +73,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   onToggleLayout,
   activeStepId,
   onSelectStep,
+  onRetryRun,
 }) => {
   // 严格只保留 2 个 Tab：流程图 与 成本效能
   const [activeTab, setActiveTab] = useState<"flow" | "finops">(
@@ -349,6 +351,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             activeStepId={activeStepId}
             onSelectStep={onSelectStep}
             isThinking={message.isThinking}
+            onRetryRun={onRetryRun}
           />
         )}
 
