@@ -32,6 +32,43 @@ function statusTone(value: string) {
   return "bg-rose-50 text-rose-700 border-rose-200";
 }
 
+type SpanRow = { span: TraceSpan; depth: number; left: number; width: number };
+
+function buildSpanRows(spans: TraceSpan[]): SpanRow[] {
+  if (spans.length === 0) return [];
+  const byId = new Map(spans.map(span => [span.spanId, span]));
+  const children = new Map<string, TraceSpan[]>();
+  const roots: TraceSpan[] = [];
+  for (const span of spans) {
+    const parent = span.parentSpanId ? byId.get(span.parentSpanId) : undefined;
+    if (parent && parent.spanId !== span.spanId) {
+      const list = children.get(parent.spanId) || [];
+      list.push(span); children.set(parent.spanId, list);
+    } else roots.push(span);
+  }
+  const start = Math.min(...spans.map(span => new Date(span.startedAt).getTime()));
+  const end = Math.max(...spans.map(span => {
+    const started = new Date(span.startedAt).getTime();
+    const ended = span.endedAt ? new Date(span.endedAt).getTime() : started + (span.durationMs || 0);
+    return Math.max(started, ended);
+  }));
+  const range = Math.max(1, end - start);
+  const rows: SpanRow[] = [];
+  const visited = new Set<string>();
+  const visit = (span: TraceSpan, depth: number) => {
+    if (visited.has(span.spanId)) return;
+    visited.add(span.spanId);
+    const started = new Date(span.startedAt).getTime();
+    const ended = span.endedAt ? new Date(span.endedAt).getTime() : started + (span.durationMs || 0);
+    const left = Math.max(0, ((started - start) / range) * 100);
+    const width = Math.max(1.2, (Math.max(0, ended - started) / range) * 100);
+    rows.push({ span, depth, left, width: Math.min(width, 100 - left) });
+    (children.get(span.spanId) || []).sort((a, b) => a.startedAt.localeCompare(b.startedAt)).forEach(child => visit(child, depth + 1));
+  };
+  roots.sort((a, b) => a.startedAt.localeCompare(b.startedAt)).forEach(root => visit(root, 0));
+  spans.filter(span => !visited.has(span.spanId)).sort((a, b) => a.startedAt.localeCompare(b.startedAt)).forEach(orphan => visit(orphan, 0));
+  return rows;
+}
 export default function ActionsConsolePage() {
   const [agentKey, setAgentKey] = useState("");
   const [adminKey, setAdminKey] = useState("");
@@ -367,13 +404,22 @@ export default function ActionsConsolePage() {
             <section className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-100"><div className="font-bold text-sm text-slate-900">Span Waterfall</div><div className="text-[11px] text-slate-400 mt-1 font-mono">{selectedTraceId || "选择左侧 Run 查看完整 Span"}</div></div>
               {!selectedTraceId ? <div className="p-10 text-center text-xs text-slate-400">选择一个 Run 查看真实时间线</div> :
-                <div className="p-4 space-y-3">{selectedTraceSpans.map(span => <div key={span.spanId} className="relative pl-5 border-l-2 border-indigo-100">
-                  <span className={`absolute -left-[5px] top-1 w-2 h-2 rounded-full ${span.status === "ERROR" ? "bg-rose-500" : "bg-indigo-500"}`} />
-                  <div className="flex flex-wrap items-center justify-between gap-2"><div className="text-sm font-bold text-slate-800">{span.name}</div><span className="text-[10px] text-slate-500">{span.spanKind} · {span.status}</span></div>
-                  <div className="text-[11px] text-slate-400 mt-1">{new Date(span.startedAt).toLocaleString()} · {span.durationMs == null ? "running / unknown duration" : `${span.durationMs} ms`}</div>
-                  <div className="flex flex-wrap gap-3 text-[11px] mt-2"><span className="text-slate-600">Tokens: {span.totalTokens == null ? "—" : span.totalTokens}</span><span className="text-slate-500">Input {span.inputTokens ?? "—"} / Output {span.outputTokens ?? "—"}</span><span className={span.usageSource === "PROVIDER" ? "text-emerald-700" : "text-amber-700"}>{span.usageSource}</span></div>
-                  {span.attributes && <pre className="mt-2 p-2 rounded-lg bg-slate-50 text-[10px] text-slate-500 whitespace-pre-wrap break-all">{pretty(span.attributes)}</pre>}
-                </div>)}</div>}
+                <div className="p-4 space-y-3">
+                  <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(0,1.2fr)] gap-3 text-[10px] uppercase tracking-wide text-slate-400"><span>Span hierarchy</span><span>Relative execution time</span></div>
+                  {buildSpanRows(selectedTraceSpans).map(({ span, depth, left, width }) => <div key={span.spanId} className="rounded-xl border border-slate-100 p-3">
+                    <div className="grid grid-cols-[minmax(120px,0.8fr)_minmax(0,1.2fr)] gap-3 items-center">
+                      <div className="min-w-0" style={{ paddingLeft: `${Math.min(depth, 6) * 12}px` }}>
+                        <div className="text-xs font-bold text-slate-800 truncate" title={span.name}>{depth > 0 ? "↳ " : ""}{span.name}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{span.spanKind} · {span.status}</div>
+                      </div>
+                      <div className="relative h-5 rounded-md bg-slate-100 overflow-hidden">
+                        <div className={`absolute top-0.5 bottom-0.5 rounded ${span.status === "ERROR" ? "bg-rose-500" : span.status === "OK" ? "bg-indigo-500" : "bg-amber-400"}`} style={{ left: `${left}%`, width: `${width}%` }} title={`${span.name}: ${span.durationMs ?? "unknown"} ms`} />
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-3 text-[10px] mt-2 text-slate-500"><span>{new Date(span.startedAt).toLocaleTimeString()}</span><span>{span.durationMs == null ? "duration unknown" : `${span.durationMs} ms`}</span><span>Tokens: {span.totalTokens ?? "—"}</span><span>Input {span.inputTokens ?? "—"} / Output {span.outputTokens ?? "—"}</span><span className={span.usageSource === "PROVIDER" ? "text-emerald-700" : "text-amber-700"}>{span.usageSource}</span></div>
+                    {span.attributes && <details className="mt-2"><summary className="cursor-pointer text-[10px] text-slate-400">Span attributes</summary><pre className="mt-1 p-2 rounded-lg bg-slate-50 text-[10px] text-slate-500 whitespace-pre-wrap break-all">{pretty(span.attributes)}</pre></details>}
+                  </div>)}
+                </div>}
             </section>
           </div>
         </section>
