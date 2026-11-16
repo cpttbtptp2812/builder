@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentStep, rebuildTimelineFromMessage } from "@/lib/agentTimeline";
 import { InspectorStepCards } from "./InspectorStepCards";
+import { ExternalAgentTracePanel } from "./ExternalAgentTracePanel";
 import {
   X,
   Compass,
