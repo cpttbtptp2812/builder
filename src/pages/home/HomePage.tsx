@@ -13,13 +13,19 @@ interface HomePageProps {
 
 const HomePage: React.FC<HomePageProps> = ({ onEnterWorkbench, onEnterWorkbenchWithPrompt }) => {
   const [dream, setDream] = useState("");
+  const trimmedDream = dream.trim();
 
   const startWriting = () => {
-    const prompt = dream.trim()
-      ? `我想认真写下一个纯粹属于自己的梦想：${dream.trim()}。请陪我把它记录下来，不要急着评价它是否现实、是否有用，也不要把它变成赚钱或成功的计划。`
+    const prompt = trimmedDream
+      ? `我想认真写下一个纯粹属于自己的梦想：${trimmedDream}。请陪我把它记录下来，不要急着评价它是否现实、是否有用，也不要把它变成赚钱或成功的计划。`
       : "我想认真写下一个纯粹属于自己的梦想。请先问我：如果人生不再为钱发愁，我最想做什么？不要评价它是否现实或有用。";
-    if (onEnterWorkbenchWithPrompt) onEnterWorkbenchWithPrompt(prompt, false);
-    else onEnterWorkbench();
+
+    // 只把内容带入工作台输入框，不自动发送，让用户保留最后的决定权。
+    if (onEnterWorkbenchWithPrompt) {
+      onEnterWorkbenchWithPrompt(prompt, false);
+    } else {
+      onEnterWorkbench();
+    }
   };
 
   return (
@@ -127,6 +133,7 @@ const HomePage: React.FC<HomePageProps> = ({ onEnterWorkbench, onEnterWorkbenchW
                 value={dream}
                 onChange={(event) => setDream(event.target.value)}
                 placeholder="如果不用考虑钱、时间，或别人的眼光……"
+                aria-label="写下你真正想做的事"
                 autoSize={{ minRows: 4, maxRows: 7 }}
                 bordered={false}
                 maxLength={1000}
@@ -134,12 +141,18 @@ const HomePage: React.FC<HomePageProps> = ({ onEnterWorkbench, onEnterWorkbenchW
               />
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, paddingTop: 18, borderTop: "1px solid rgba(210,190,156,.13)", gap: 12 }}>
                 <span style={{ color: "#777e7e", fontSize: 11 }}>不必伟大，不必合理，不必向谁解释。</span>
-                <Button className="dream-cta" onClick={startWriting} type="primary" style={{ height: 42, padding: "0 20px", border: 0, borderRadius: 8, background: "#c9b48f", color: "#1a1d20", fontWeight: 600, boxShadow: "none" }}>
-                  把它写下来 <ArrowRightOutlined />
-                </Button>
+                <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                  <span aria-live="polite" style={{ color: "#777e7e", fontSize: 11, fontVariantNumeric: "tabular-nums" }}>{dream.length}/1000</span>
+                  <Button className="dream-cta" onClick={startWriting} type="primary" style={{ height: 42, padding: "0 20px", border: 0, borderRadius: 8, background: "#c9b48f", color: "#1a1d20", fontWeight: 600, boxShadow: "none" }}>
+                    {trimmedDream ? "带着这个梦想继续" : "从一个问题开始"} <ArrowRightOutlined />
+                  </Button>
+                </div>
               </div>
             </div>
-            <div style={{ marginTop: 26, textAlign: "center", color: "#747b7c", fontSize: 12, lineHeight: 2 }}>
+            <p style={{ margin: "16px 0 0", textAlign: "center", color: "#747b7c", fontSize: 11, lineHeight: 1.9 }}>
+              点击后会先带你进入工作台，内容会放在输入框里；你可以继续修改，再决定是否发送。
+            </p>
+            <div style={{ marginTop: 22, textAlign: "center", color: "#747b7c", fontSize: 12, lineHeight: 2 }}>
               <HeartOutlined style={{ color: "#b7a789", marginRight: 8 }} />
               这里不比较梦想的大小，也不衡量它是否值得。
             </div>
