@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentStep, rebuildTimelineFromMessage } from "@/lib/agentTimeline";
 import { InspectorStepCards } from "./InspectorStepCards";
+import { ExternalAgentTracePanel } from "./ExternalAgentTracePanel";
 import {
   X,
   Compass,
@@ -345,14 +346,17 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
       <div className="flex-1 overflow-y-auto p-3 sm:p-4 scrollbar-hide">
         {/* TAB 1: 流程图 (五大标准执行阶段) */}
         {activeTab === "flow" && (
-          <InspectorStepCards
-            timeline={timeline}
-            message={message}
-            activeStepId={activeStepId}
-            onSelectStep={onSelectStep}
-            isThinking={message.isThinking}
-            onRetryRun={onRetryRun}
-          />
+          <>
+            <ExternalAgentTracePanel />
+            <InspectorStepCards
+              timeline={timeline}
+              message={message}
+              activeStepId={activeStepId}
+              onSelectStep={onSelectStep}
+              isThinking={message.isThinking}
+              onRetryRun={onRetryRun}
+            />
+          </>
         )}
 
         {/* TAB 2: 成本效能 (Tokens 与缓存指标) */}
