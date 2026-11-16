@@ -49,8 +49,15 @@ const HomePage: React.FC<HomePageProps> = ({ onEnterWorkbench, onEnterWorkbenchW
         .dream-link:hover { color:#f0dfbf; }
         .dream-cta { transition:transform .2s ease, background .2s ease, box-shadow .2s ease; }
         .dream-cta:hover { transform:translateY(-2px); box-shadow:0 12px 34px rgba(0,0,0,.24); }
-        .dream-input .ant-input { background:transparent; color:#f3eee5; }
-        .dream-input .ant-input::placeholder { color:#888b8d; }
+        .dream-input.ant-input,
+        .dream-input .ant-input {
+          background:transparent !important;
+          color:#f3eee5 !important;
+          border:0 !important;
+          box-shadow:none !important;
+        }
+        .dream-input.ant-input::placeholder,
+        .dream-input .ant-input::placeholder { color:#888b8d !important; }
         @media (max-width: 640px) {
           .dream-hero-title { font-size:clamp(38px, 12vw, 58px) !important; }
           .dream-section { padding-left:22px !important; padding-right:22px !important; }
