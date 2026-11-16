@@ -1,496 +1,156 @@
-import React, { useState, useEffect } from "react";
-import { Button, Tag, Space, Spin } from "antd";
-import {
-  MessageOutlined,
-  RocketFilled,
-  SlidersOutlined,
-  ArrowRightOutlined,
-  SafetyCertificateOutlined,
-  ThunderboltFilled,
-  ApiOutlined,
-  BranchesOutlined,
-  CheckCircleFilled,
-  SyncOutlined,
-  WarningOutlined,
-} from "@ant-design/icons";
-import { PipelineItem, GitRepositoryConfig } from "../../types/platform";
-import { fetchGitRepositoriesApi } from "../../services/api";
+import React, { useState } from "react";
+import { Button, Input } from "antd";
+import { ArrowDownOutlined, ArrowRightOutlined, HeartOutlined } from "@ant-design/icons";
 
 interface HomePageProps {
   onEnterWorkbench: () => void;
   onEnterWorkbenchWithPrompt?: (prompt: string, autoSend?: boolean) => void;
-  onLaunchWorkflow?: (workflow: PipelineItem) => void;
+  onLaunchWorkflow?: (workflow: any) => void;
   onOpenRepositories?: () => void;
   onOpenModal: (tab: "settings" | "knowledge" | "tools" | "logs" | "agents" | "workflows") => void;
-  workflows?: PipelineItem[];
+  workflows?: any[];
 }
 
-export const HomePage: React.FC<HomePageProps> = ({
-  onEnterWorkbench,
-  onEnterWorkbenchWithPrompt,
-  onOpenRepositories,
-  onOpenModal,
-}) => {
-  const [savedRepos, setSavedRepos] = useState<GitRepositoryConfig[]>([]);
-  const [loadingRepos, setLoadingRepos] = useState<boolean>(true);
+const HomePage: React.FC<HomePageProps> = ({ onEnterWorkbench, onEnterWorkbenchWithPrompt }) => {
+  const [dream, setDream] = useState("");
 
-  // 挂载时从真实 H2 数据库拉取已持久化的 Git 代码仓库列表
-  useEffect(() => {
-    let active = true;
-    fetchGitRepositoriesApi()
-      .then((repos) => {
-        if (active) {
-          setSavedRepos(repos || []);
-          setLoadingRepos(false);
-        }
-      })
-      .catch((err) => {
-        console.warn("[ownagent] 主页读取真实代码仓库失败", err);
-        if (active) setLoadingRepos(false);
-      });
-    return () => {
-      active = false;
-    };
-  }, []);
-
-  const latestRepo = savedRepos.length > 0 ? savedRepos[0] : null;
+  const startWriting = () => {
+    const prompt = dream.trim()
+      ? `我想认真写下一个纯粹属于自己的梦想：${dream.trim()}。请陪我把它记录下来，不要急着评价它是否现实、是否有用，也不要把它变成赚钱或成功的计划。`
+      : "我想认真写下一个纯粹属于自己的梦想。请先问我：如果人生不再为钱发愁，我最想做什么？不要评价它是否现实或有用。";
+    if (onEnterWorkbenchWithPrompt) onEnterWorkbenchWithPrompt(prompt, false);
+    else onEnterWorkbench();
+  };
 
   return (
-    <div
-      className="cyber-grid-canvas"
+    <main
       style={{
-        width: "100%",
-        height: "calc(100vh - 56px)",
-        maxHeight: "calc(100vh - 56px)",
-        overflow: "hidden", // 严守单屏零滚动极简标准
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "0 24px",
-        boxSizing: "border-box",
         position: "relative",
+        width: "100%",
+        height: "100%",
+        minHeight: 0,
+        overflowY: "auto",
+        overflowX: "hidden",
+        background: "#10151b",
+        color: "#f3eee5",
+        fontFamily: 'Inter, "PingFang SC", "Microsoft YaHei", sans-serif',
       }}
     >
-      {/* 顶部科技感柔和环境光 (Ambient Aura) */}
-      <div
-        style={{
-          position: "absolute",
-          top: "12%",
-          left: "50%",
-          transform: "translateX(-50%)",
-          width: 560,
-          height: 320,
-          borderRadius: "50%",
-          background: "radial-gradient(ellipse, rgba(99, 102, 241, 0.16) 0%, rgba(59, 130, 246, 0.05) 50%, transparent 75%)",
-          filter: "blur(60px)",
-          pointerEvents: "none",
-        }}
-      />
+      <style>{`
+        .dream-home * { box-sizing: border-box; }
+        .dream-star { position:absolute; width:2px; height:2px; border-radius:50%; background:#e7d7b8; opacity:.65; box-shadow:0 0 9px rgba(231,215,184,.65); }
+        .dream-link { color:#c9b48f; text-decoration:none; transition:color .2s ease; }
+        .dream-link:hover { color:#f0dfbf; }
+        .dream-cta { transition:transform .2s ease, background .2s ease, box-shadow .2s ease; }
+        .dream-cta:hover { transform:translateY(-2px); box-shadow:0 12px 34px rgba(0,0,0,.24); }
+        .dream-input .ant-input { background:transparent; color:#f3eee5; }
+        .dream-input .ant-input::placeholder { color:#888b8d; }
+        @media (max-width: 640px) {
+          .dream-hero-title { font-size:clamp(38px, 12vw, 58px) !important; }
+          .dream-section { padding-left:22px !important; padding-right:22px !important; }
+          .dream-orbit { width:220px !important; height:220px !important; }
+        }
+      `}</style>
 
-      {/* ──────────────── 1. 一个大图标：气场十足的核心标志 ──────────────── */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          marginBottom: 18,
-        }}
-      >
-        <div
-          style={{
-            width: 80,
-            height: 80,
-            borderRadius: 22,
-            background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 50%, #06b6d4 100%)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 12px 32px rgba(99, 102, 241, 0.32), 0 0 0 1px rgba(255, 255, 255, 0.8) inset",
-            color: "#ffffff",
-            fontSize: 38,
-            transition: "transform 0.3s ease, box-shadow 0.3s ease",
-            cursor: "pointer",
-          }}
-          onClick={onEnterWorkbench}
-          title="点击直接进入智能工作台"
-        >
-          <RocketFilled />
-        </div>
-      </div>
+      <div className="dream-home" style={{ position: "relative", minHeight: "100%", overflow: "hidden" }}>
+        <div style={{ position: "absolute", inset: 0, pointerEvents: "none", background: "radial-gradient(ellipse at 50% 22%, rgba(116,103,83,.20), transparent 48%), linear-gradient(180deg,#10151b 0%,#151b21 58%,#10151b 100%)" }} />
+        {[
+          ["12%", "17%"], ["22%", "31%"], ["79%", "14%"], ["87%", "34%"], ["68%", "8%"], ["8%", "48%"], ["92%", "58%"], ["31%", "9%"], ["73%", "43%"], ["17%", "66%"]
+        ].map(([left, top], index) => (
+          <span key={index} className="dream-star" style={{ left, top }} />
+        ))}
 
-      {/* ──────────────── 2. 几句话：极简、震撼、直击痛点的文案 ──────────────── */}
-      <div
-        style={{
-          position: "relative",
-          zIndex: 2,
-          textAlign: "center",
-          maxWidth: 720,
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-        }}
-      >
-        {/* 顶部微型信标 */}
-        <div
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 7,
-            padding: "4px 14px",
-            borderRadius: 20,
-            background: "#ffffff",
-            border: "1px solid #e0e7ff",
-            boxShadow: "0 2px 6px rgba(99, 102, 241, 0.08)",
-            marginBottom: 12,
-          }}
-        >
-          <span
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: "50%",
-              background: "#10b981",
-              boxShadow: "0 0 8px #10b981",
-            }}
-          />
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#4338ca", letterSpacing: "0.3px" }}>
-            OWNAGENT · 企业级专业智能体系统
-          </span>
-        </div>
+        <header className="dream-section" style={{ position: "relative", zIndex: 1, maxWidth: 1180, margin: "0 auto", padding: "28px 42px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, letterSpacing: "3px", fontSize: 12, color: "#d8c6a6", fontWeight: 600 }}>
+            <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#c9b48f", boxShadow: "0 0 12px #c9b48f" }} />
+            A PLACE FOR YOUR DREAM
+          </div>
+          <span style={{ color: "#85898b", fontSize: 12, letterSpacing: "1px" }}>留给自己的空间</span>
+        </header>
 
-        {/* 主标题 */}
-        <div
-          style={{
-            fontSize: "clamp(26px, 3vw, 38px)",
-            fontWeight: 900,
-            color: "#0f172a",
-            letterSpacing: "-1px",
-            lineHeight: 1.25,
-            marginBottom: 12,
-          }}
-        >
-          让 Agent 告别浅聊，
-          <br />
-          <span
-            style={{
-              background: "linear-gradient(135deg, #4f46e5 0%, #3b82f6 45%, #06b6d4 100%)",
-              WebkitBackgroundClip: "text",
-              WebkitTextFillColor: "transparent",
-            }}
-          >
-            成为真正懂业务的专家智能体
-          </span>
-        </div>
+        <section className="dream-section" style={{ position: "relative", zIndex: 1, minHeight: "min(720px, calc(100vh - 80px))", padding: "70px 24px 92px", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+          <div className="dream-orbit" style={{ position: "absolute", width: 310, height: 310, top: "50%", left: "50%", transform: "translate(-50%,-55%)", borderRadius: "50%", border: "1px solid rgba(207,185,146,.12)", boxShadow: "0 0 90px rgba(190,164,120,.08), inset 0 0 70px rgba(190,164,120,.04)", pointerEvents: "none" }}>
+            <div style={{ position: "absolute", width: 9, height: 9, borderRadius: "50%", background: "#d7c29e", top: 34, right: 48, boxShadow: "0 0 22px 5px rgba(215,194,158,.28)" }} />
+          </div>
+          <div style={{ position: "relative", width: 54, height: 54, marginBottom: 34, borderRadius: "50%", background: "linear-gradient(145deg,#e6d6b7,#9f8c6b)", boxShadow: "0 0 55px rgba(215,194,158,.18)" }}>
+            <div style={{ position: "absolute", width: 48, height: 48, borderRadius: "50%", background: "#151b21", top: -7, left: 15 }} />
+          </div>
+          <div style={{ position: "relative", color: "#b7a789", fontSize: 11, letterSpacing: "5px", marginBottom: 28 }}>A QUESTION FOR YOURSELF</div>
+          <h1 className="dream-hero-title" style={{ position: "relative", margin: 0, color: "#f3eee5", fontSize: "clamp(42px, 6.2vw, 76px)", lineHeight: 1.38, fontWeight: 400, letterSpacing: "2px" }}>
+            如果你的人生
+            <br />
+            不再为钱发愁，
+            <br />
+            <span style={{ color: "#d5bd94" }}>你会做什么？</span>
+          </h1>
+          <p style={{ position: "relative", margin: "28px 0 0", color: "#a9a9a4", fontSize: 15, lineHeight: 2.1, letterSpacing: "1px" }}>
+            不为了赚钱，不为了成功，不为了证明自己。
+            <br />
+            只是因为喜欢，只是因为想做，只是因为那是你的愿望。
+          </p>
+          <a href="#write-dream" className="dream-link" style={{ position: "relative", marginTop: 54, display: "inline-flex", alignItems: "center", gap: 12, fontSize: 13, letterSpacing: "2px" }}>
+            写下那个一直藏在心里的梦想 <ArrowDownOutlined />
+          </a>
+        </section>
 
-        {/* 精炼 Slogan */}
-        <div
-          style={{
-            fontSize: "clamp(13px, 1.15vw, 15px)",
-            color: "#64748b",
-            lineHeight: 1.65,
-            maxWidth: 580,
-            marginBottom: 20,
-          }}
-        >
-          赋予智能体代码感知、系统特权与确定性工程工具。
-          <br />
-          从 Git 资产守护到运维交付，全天候自主闭环企业真实业务流。
-        </div>
+        <section className="dream-section" style={{ position: "relative", zIndex: 1, padding: "88px 24px 100px", borderTop: "1px solid rgba(220,207,184,.09)", borderBottom: "1px solid rgba(220,207,184,.09)", background: "rgba(255,255,255,.018)" }}>
+          <div style={{ maxWidth: 760, margin: "0 auto", textAlign: "center" }}>
+            <div style={{ color: "#b7a789", fontSize: 11, letterSpacing: "4px", marginBottom: 24 }}>A DREAM DOESN'T NEED A REASON</div>
+            <h2 style={{ margin: "0 0 24px", color: "#eee8dc", fontSize: "clamp(25px, 3.6vw, 38px)", lineHeight: 1.6, fontWeight: 400 }}>
+              不是每一个梦想，
+              <br />
+              都需要一个有用的理由。
+            </h2>
+            <p style={{ margin: 0, color: "#999b99", fontSize: 14, lineHeight: 2.2 }}>
+              也许你想环游世界，也许你想开一家小小的书店，
+              <br />
+              也许你想写一本没人读过的书，或者只是想看一次极光。
+              <br />
+              它可以很大，也可以很小。可以不切实际，也可以永远不被实现。
+            </p>
+            <p style={{ margin: "30px 0 0", color: "#d4c2a3", fontSize: 16, letterSpacing: "1px" }}>
+              它只需要对你有意义。
+            </p>
+          </div>
+        </section>
 
-        {/* ──────────────── 3. 行动按钮组 (高质感双 CTA) ──────────────── */}
-        <Space size={14} style={{ marginBottom: 22 }}>
-          <Button
-            type="primary"
-            size="large"
-            icon={<MessageOutlined style={{ fontSize: 16 }} />}
-            onClick={onEnterWorkbench}
-            style={{
-              height: 44,
-              padding: "0 26px",
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 700,
-              background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-              border: "none",
-              boxShadow: "0 4px 18px rgba(99, 102, 241, 0.4)",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: 8,
-            }}
-          >
-            <span>开启智能工作台</span>
-            <ArrowRightOutlined style={{ fontSize: 12 }} />
-          </Button>
-
-          <Button
-            size="large"
-            icon={<SlidersOutlined style={{ fontSize: 15 }} />}
-            onClick={() => onOpenModal("workflows")}
-            style={{
-              height: 44,
-              padding: "0 20px",
-              borderRadius: 10,
-              fontSize: 14,
-              fontWeight: 600,
-              background: "#ffffff",
-              border: "1.5px solid #cbd5e1",
-              color: "#1e293b",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
-            }}
-          >
-            业务流方案库
-          </Button>
-        </Space>
-
-        {/* ──────────────── 4. 实时守护中的代码仓库卡片 (真实数据库直连) ──────────────── */}
-        <div style={{ width: "100%", maxWidth: 660, marginBottom: 20 }}>
-          {loadingRepos ? (
-            <div style={{ padding: "8px 0", color: "#94a3b8", fontSize: 12 }}>
-              <Spin size="small" style={{ marginRight: 8 }} />
-              正在同步真实已入库代码资产...
+        <section id="write-dream" className="dream-section" style={{ position: "relative", zIndex: 1, padding: "100px 24px 112px", scrollMarginTop: 20 }}>
+          <div style={{ maxWidth: 680, margin: "0 auto" }}>
+            <div style={{ textAlign: "center", marginBottom: 38 }}>
+              <div style={{ color: "#b7a789", fontSize: 11, letterSpacing: "4px", marginBottom: 18 }}>YOUR DREAM, YOUR SPACE</div>
+              <h2 style={{ margin: 0, color: "#f3eee5", fontSize: "clamp(27px, 4vw, 40px)", fontWeight: 400 }}>如果可以，你想做什么？</h2>
+              <p style={{ color: "#929592", fontSize: 13, lineHeight: 2, marginTop: 16 }}>不用想得很完整。先写下一句话也可以。</p>
             </div>
-          ) : latestRepo ? (
-            <div
-              style={{
-                background: "#ffffff",
-                borderRadius: 12,
-                border: "1px solid #e0e7ff",
-                boxShadow: "0 4px 16px rgba(99, 102, 241, 0.08), 0 1px 3px rgba(0, 0, 0, 0.03)",
-                padding: "10px 16px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                textAlign: "left",
-                gap: 12,
-              }}
-            >
-              {/* 左侧库信息 */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 3, overflow: "hidden" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "nowrap" }}>
-                  <span
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: "50%",
-                      background: "#10b981",
-                      boxShadow: "0 0 6px #10b981",
-                      flexShrink: 0,
-                    }}
-                  />
-                  <BranchesOutlined style={{ color: "#4f46e5", fontSize: 14, flexShrink: 0 }} />
-                  <span style={{ fontSize: 13.5, fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap" }}>
-                    {latestRepo.name}
-                  </span>
-                  <Tag color="indigo" style={{ margin: 0, borderRadius: 4, fontSize: 11, fontWeight: 600 }}>
-                    {latestRepo.branch}
-                  </Tag>
-                  {savedRepos.length > 1 && (
-                    <Tag color="default" style={{ margin: 0, borderRadius: 10, fontSize: 10.5, color: "#64748b" }}>
-                      +{savedRepos.length - 1} 库
-                    </Tag>
-                  )}
-                  {latestRepo.healthStatus === "warning" ? (
-                    <Tag color="warning" style={{ margin: 0, borderRadius: 4, fontSize: 10.5 }}>
-                      ⚠️ 风险阻断中
-                    </Tag>
-                  ) : (
-                    <Tag color="success" style={{ margin: 0, borderRadius: 4, fontSize: 10.5 }}>
-                      🟢 探活正常
-                    </Tag>
-                  )}
-                </div>
-
-                <div
-                  style={{
-                    fontSize: 12,
-                    color: "#64748b",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                  title={latestRepo.lastCommitMessage || latestRepo.repoUrl}
-                >
-                  {latestRepo.lastCommitSha ? (
-                    <span>
-                      最新 Commit <code style={{ color: "#4f46e5", fontWeight: 600 }}>#{latestRepo.lastCommitSha}</code>: {latestRepo.lastCommitMessage}
-                      {latestRepo.lastCommitAuthor && ` (${latestRepo.lastCommitAuthor.split(" <")[0]})`}
-                    </span>
-                  ) : (
-                    <span>{latestRepo.repoUrl}</span>
-                  )}
-                </div>
+            <div style={{ padding: "28px 30px 24px", border: "1px solid rgba(210,190,156,.22)", borderRadius: 16, background: "rgba(255,255,255,.035)", boxShadow: "0 20px 80px rgba(0,0,0,.16)" }}>
+              <Input.TextArea
+                className="dream-input"
+                value={dream}
+                onChange={(event) => setDream(event.target.value)}
+                placeholder="如果不用考虑钱、时间，或别人的眼光……"
+                autoSize={{ minRows: 4, maxRows: 7 }}
+                bordered={false}
+                maxLength={1000}
+                style={{ padding: 0, color: "#f3eee5", fontSize: 16, lineHeight: 2, resize: "none" }}
+              />
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 24, paddingTop: 18, borderTop: "1px solid rgba(210,190,156,.13)", gap: 12 }}>
+                <span style={{ color: "#777e7e", fontSize: 11 }}>不必伟大，不必合理，不必向谁解释。</span>
+                <Button className="dream-cta" onClick={startWriting} type="primary" style={{ height: 42, padding: "0 20px", border: 0, borderRadius: 8, background: "#c9b48f", color: "#1a1d20", fontWeight: 600, boxShadow: "none" }}>
+                  把它写下来 <ArrowRightOutlined />
+                </Button>
               </div>
-
-              {/* 右侧操作按钮 */}
-              <Space size={8} style={{ flexShrink: 0 }}>
-                <Button
-                  size="small"
-                  onClick={onOpenRepositories || (() => onOpenModal("workflows"))}
-                  style={{
-                    borderRadius: 6,
-                    height: 28,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    color: "#475569",
-                    background: "#f8fafc",
-                    borderColor: "#cbd5e1",
-                  }}
-                >
-                  管理仓库配置
-                </Button>
-                <Button
-                  type="primary"
-                  size="small"
-                  onClick={() => {
-                    if (onEnterWorkbenchWithPrompt) {
-                      onEnterWorkbenchWithPrompt(
-                        `请对当前代码库「${latestRepo.name}」(${latestRepo.branch}分支) 最新提交 #${latestRepo.lastCommitSha || "HEAD"} 执行深度安全体检与依赖扫描。`,
-                        true
-                      );
-                    } else {
-                      onEnterWorkbench();
-                    }
-                  }}
-                  style={{
-                    borderRadius: 6,
-                    height: 28,
-                    fontSize: 12,
-                    fontWeight: 600,
-                    background: "linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)",
-                    border: "none",
-                  }}
-                >
-                  启动巡检 ➔
-                </Button>
-              </Space>
             </div>
-          ) : (
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 8,
-                padding: "6px 16px",
-                borderRadius: 20,
-                background: "rgba(255, 255, 255, 0.75)",
-                border: "1px dashed #cbd5e1",
-                fontSize: 12,
-                color: "#64748b",
-              }}
-            >
-              <span>📦 尚未接入代码仓库</span>
-              <Button
-                type="link"
-                size="small"
-                onClick={onOpenRepositories || (() => onOpenModal("workflows"))}
-                style={{ fontSize: 12, padding: 0, fontWeight: 700, color: "#4f46e5" }}
-              >
-                立即接入生产代码库 ➔
-              </Button>
+            <div style={{ marginTop: 26, textAlign: "center", color: "#747b7c", fontSize: 12, lineHeight: 2 }}>
+              <HeartOutlined style={{ color: "#b7a789", marginRight: 8 }} />
+              这里不比较梦想的大小，也不衡量它是否值得。
             </div>
-          )}
-        </div>
-
-        {/* ──────────────── 5. 极简三大专业能力胶囊 ──────────────── */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexWrap: "wrap",
-            gap: 10,
-            marginBottom: 16,
-          }}
-        >
-          <div
-            onClick={onOpenRepositories || (() => onOpenModal("workflows"))}
-            style={{
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 14px",
-              borderRadius: 20,
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
-              fontSize: 12,
-              color: "#334155",
-              fontWeight: 600,
-              transition: "all 0.15s ease",
-            }}
-          >
-            <SafetyCertificateOutlined style={{ color: "#4f46e5", fontSize: 13 }} />
-            <span>代码守护智能体：Commit 巡检与脱敏自愈</span>
           </div>
+        </section>
 
-          <div
-            onClick={() => {
-              if (onEnterWorkbenchWithPrompt) {
-                onEnterWorkbenchWithPrompt("请探活当前关联的服务器运行状态，检查 CPU 与日志", true);
-              } else {
-                onEnterWorkbench();
-              }
-            }}
-            style={{
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 14px",
-              borderRadius: 20,
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
-              fontSize: 12,
-              color: "#334155",
-              fontWeight: 600,
-              transition: "all 0.15s ease",
-            }}
-          >
-            <ThunderboltFilled style={{ color: "#0284c7", fontSize: 13 }} />
-            <span>运维与 Sudo 智能体：服务器探活与高危熔断</span>
-          </div>
-
-          <div
-            onClick={() => {
-              if (onEnterWorkbenchWithPrompt) {
-                onEnterWorkbenchWithPrompt("比对后端 API 变动，检查客户端契约兼容性", true);
-              } else {
-                onEnterWorkbench();
-              }
-            }}
-            style={{
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "7px 14px",
-              borderRadius: 20,
-              background: "#ffffff",
-              border: "1px solid #e2e8f0",
-              boxShadow: "0 1px 3px rgba(0, 0, 0, 0.02)",
-              fontSize: 12,
-              color: "#334155",
-              fontWeight: 600,
-              transition: "all 0.15s ease",
-            }}
-          >
-            <ApiOutlined style={{ color: "#7c3aed", fontSize: 13 }} />
-            <span>契约与交付智能体：微服务对齐与流水线</span>
-          </div>
-        </div>
-
-        {/* 底部信任行 */}
-        <div style={{ fontSize: 11, color: "#94a3b8", display: "flex", alignItems: "center", gap: 10 }}>
-          <span>🔒 只读安全沙箱与 Sudo 双控</span>
-          <span>•</span>
-          <span>⚡ 真实环境直连 · 零 Mock 假数据</span>
-          <span>•</span>
-          <span>🧩 确定性 DAG 业务流编排</span>
-        </div>
+        <footer className="dream-section" style={{ position: "relative", zIndex: 1, padding: "26px 24px 34px", borderTop: "1px solid rgba(220,207,184,.09)", textAlign: "center", color: "#6f7778", fontSize: 11, letterSpacing: "1px" }}>
+          愿你始终拥有一个，不必向世界证明的梦想。
+        </footer>
       </div>
-    </div>
+    </main>
   );
 };
 
