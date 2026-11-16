@@ -164,7 +164,6 @@ export const ExternalAgentTracePanel: React.FC = () => {
           setSpans((current) => mergeSpans(current, snapshot as Span[]));
           setConnected(true);
           setLoading(false);
-          attempt = 0;
           await readStream(streamResponse, controller.signal);
         } catch (cause) {
           if (controller.signal.aborted) break;
@@ -178,6 +177,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
       }
     } catch (cause) {
       if (!controller.signal.aborted) {
+        controller.abort();
         setError(cause instanceof Error ? cause.message : "Trace 连接失败");
       }
     } finally {
