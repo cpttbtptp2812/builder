@@ -22,11 +22,15 @@ type Span = {
 const sleep = (ms: number, signal: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
     if (signal.aborted) return reject(new DOMException("Aborted", "AbortError"));
-    const timer = window.setTimeout(resolve, ms);
-    signal.addEventListener("abort", () => {
+    const onAbort = () => {
       window.clearTimeout(timer);
       reject(new DOMException("Aborted", "AbortError"));
-    }, { once: true });
+    };
+    const timer = window.setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
   });
 
 function mergeSpans(current: Span[], incoming: Span[]): Span[] {
@@ -154,12 +158,22 @@ export const ExternalAgentTracePanel: React.FC = () => {
             { headers, signal: controller.signal, cache: "no-store" }
           );
           if (!snapshotResponse.ok) {
+            void streamResponse.body?.cancel();
             throw new Error(snapshotResponse.status === 401 || snapshotResponse.status === 403
               ? "API Key 无效，或没有权限访问该 Trace"
               : `读取 Trace 失败：HTTP ${snapshotResponse.status}`);
           }
-          const snapshot: unknown = await snapshotResponse.json();
-          if (!Array.isArray(snapshot)) throw new Error("Trace 数据格式不正确：预期是 Span 数组");
+          let snapshot: unknown;
+          try {
+            snapshot = await snapshotResponse.json();
+          } catch {
+            void streamResponse.body?.cancel();
+            throw new Error("Trace 响应不是有效 JSON");
+          }
+          if (!Array.isArray(snapshot)) {
+            void streamResponse.body?.cancel();
+            throw new Error("Trace 数据格式不正确：预期是 Span 数组");
+          }
 
           setSpans((current) => mergeSpans(current, snapshot as Span[]));
           setConnected(true);
