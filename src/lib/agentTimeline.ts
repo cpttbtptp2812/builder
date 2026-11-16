@@ -1,247 +1,198 @@
 /**
- * 智能体单源时间线状态机 (Agent Timeline Single-Source-of-Truth Reducer)
- * 严格对齐 OpenInference 工业标准，同时驱动左视窗（ThinkingStream）与右视窗（InspectorStepCards）
+ * Timeline built from events actually emitted by the Agent backend.
+ * Missing status, timing, or token data stays unknown; the UI must not invent it.
  */
 
 export type StepPhase =
-  | "intent"      // 01. 意图感知与实体提取
-  | "workflow"    // 02. 任务层动态编排与路由
-  | "context"     // 03. 提示词工程与上下文注水 (RAG/规则)
-  | "llm"         // 04. 专家大脑认知推演回路
-  | "skill"       // 05. 技能层受控沙箱执行 (Git/API/Tool)
-  | "delivery"    // 06. 结果流式组装与安全交付
-  | "closure"     // 07. 全链路交付闭环
-  | "degraded";   // 降级模式
+  | "intent" | "workflow" | "context" | "llm" | "skill"
+  | "delivery" | "closure" | "degraded" | "external";
 
-export type StepStatus = "pending" | "running" | "done" | "failed" | "passed";
+export type StepStatus = "pending" | "running" | "done" | "failed" | "passed" | "unknown";
 
 export interface AgentStep {
-  stepId: string;              // 稳定唯一ID，如 "step-1-intent", "tool-get_git_commit_history-1"
-  seq: number;                 // 单调自增序列号 (1, 2, 3...)，防乱序
+  stepId: string;
+  seq: number;
   phase: StepPhase;
   status: StepStatus;
-  leftTitle: string;           // 左视窗思考流标题，如："业务意图感知"
-  leftSummary: string;         // 左视窗思考流简明摘要 (≤100字)
-  rightTitle: string;          // 右视窗卡片大标题
-  rightSubtitle: string;       // 右视窗卡片业务说明
-  rightDetail?: Record<string, any>; // 展开查看的真实参数、返回值与技术指标
+  leftTitle: string;
+  leftSummary: string;
+  rightTitle: string;
+  rightSubtitle: string;
+  rightDetail?: Record<string, any>;
   durationMs?: number;
   timestamp: number;
 }
 
-/**
- * 纯函数 Reducer：将新到达的 AgentStep 合并入时间线数组
- * 保持按 seq 升序排列，支持根据 stepId 增量更新或追加
- */
-export function timelineReducer(current: AgentStep[], incoming: Partial<AgentStep> & { stepId: string }): AgentStep[] {
-  const existingIdx = current.findIndex((s) => s.stepId === incoming.stepId);
+const normalizeStatus = (value: unknown): StepStatus => {
+  const status = typeof value === "string" ? value.toLowerCase() : "";
+  if (["ok", "success", "succeeded", "completed", "done"].includes(status)) return "done";
+  if (["passed", "pass"].includes(status)) return "passed";
+  if (["error", "failed", "failure"].includes(status)) return "failed";
+  if (["running", "started", "in_progress"].includes(status)) return "running";
+  if (["pending", "queued"].includes(status)) return "pending";
+  return "unknown";
+};
+
+const parseDuration = (value: unknown): number | undefined => {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+  if (typeof value === "string") {
+    const ms = value.match(/^([\d.]+)\s*ms$/i);
+    if (ms) return Number(ms[1]);
+    const seconds = value.match(/^([\d.]+)\s*s$/i);
+    if (seconds) return Number(seconds[1]) * 1000;
+  }
+  return undefined;
+};
+
+export function timelineReducer(
+  current: AgentStep[],
+  incoming: Partial<AgentStep> & { stepId: string }
+): AgentStep[] {
+  const existingIdx = current.findIndex((step) => step.stepId === incoming.stepId);
   if (existingIdx >= 0) {
     const updated = [...current];
+    const old = updated[existingIdx];
     updated[existingIdx] = {
-      ...updated[existingIdx],
+      ...old,
       ...incoming,
-      rightDetail: {
-        ...(updated[existingIdx].rightDetail || {}),
-        ...(incoming.rightDetail || {}),
-      },
+      rightDetail: { ...(old.rightDetail || {}), ...(incoming.rightDetail || {}) },
     };
-    return updated;
+    return updated.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
   }
 
-  // 默认补全字段
-  const newStep: AgentStep = {
+  const step: AgentStep = {
     stepId: incoming.stepId,
     seq: incoming.seq ?? current.length + 1,
-    phase: incoming.phase ?? "workflow",
-    status: incoming.status ?? "running",
-    leftTitle: incoming.leftTitle ?? "中枢处理中",
-    leftSummary: incoming.leftSummary ?? "正在执行当前阶段任务...",
-    rightTitle: incoming.rightTitle ?? incoming.leftTitle ?? "执行节点",
-    rightSubtitle: incoming.rightSubtitle ?? "UACOS 运行时处理中",
+    phase: incoming.phase ?? "external",
+    status: incoming.status ?? "unknown",
+    leftTitle: incoming.leftTitle ?? "Agent event",
+    leftSummary: incoming.leftSummary ?? "已收到执行事件",
+    rightTitle: incoming.rightTitle ?? incoming.leftTitle ?? "执行事件",
+    rightSubtitle: incoming.rightSubtitle ?? "",
     rightDetail: incoming.rightDetail ?? {},
     durationMs: incoming.durationMs,
     timestamp: incoming.timestamp ?? Date.now(),
   };
-
-  return [...current, newStep].sort((a, b) => a.seq - b.seq);
+  return [...current, step].sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
 }
 
-/**
- * 将后端 SSE 推送的事件转换为 AgentStep 并注入时间线
- */
-export function applySseToTimeline(current: AgentStep[], eventName: string, dataStr: string): AgentStep[] {
+export function applySseToTimeline(current: AgentStep[], eventName: string, payload: any): AgentStep[] {
   try {
-    const data = typeof dataStr === "string" ? JSON.parse(dataStr) : dataStr;
-    if (!data) return current;
+    const data = typeof payload === "string" ? JSON.parse(payload) : payload;
+    if (!data || typeof data !== "object") return current;
 
-    if (eventName === "agent_step") {
+    if (eventName === "agent_step" || eventName === "trace_step") {
+      const seq = Number.isFinite(Number(data.seq ?? data.step)) ? Number(data.seq ?? data.step) : current.length + 1;
+      const stepId = String(data.stepId ?? data.spanId ?? data.step_id ?? `event-${seq}`);
+      const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle ?? "Agent event";
       return timelineReducer(current, {
-        stepId: data.stepId || `step-${data.seq || current.length + 1}`,
-        seq: data.seq || current.length + 1,
-        phase: data.phase || "workflow",
-        status: data.status ? (data.status.toLowerCase() as StepStatus) : "done",
-        leftTitle: data.leftTitle || data.title || "业务处理节点",
-        leftSummary: data.leftSummary || data.title || "处理完成",
-        rightTitle: data.rightTitle || data.title || "执行节点",
-        rightSubtitle: data.rightSubtitle || "",
-        rightDetail: data.rightDetail || data,
-        durationMs: data.durationMs || data.totalMs,
-        timestamp: data.timestamp || Date.now(),
-      });
-    }
-
-    if (eventName === "trace_step") {
-      const stepNum = data.step || current.length + 1;
-      const stepId = data.stepId || `step-${stepNum}`;
-      const phase =
-        data.phase ||
-        (stepNum <= 2 ? "workflow" : stepNum === 3 ? "context" : stepNum === 4 ? "llm" : stepNum === 5 ? "skill" : "delivery");
-      const status = data.status ? (data.status.toLowerCase() as StepStatus) : "done";
-
-      // 如果当前阶段已完成，先将时间线中同阶段的历史中间态全部标记为已完成，防止挂起
-      let updatedList = current;
-      if (status === "done" || status === "passed") {
-        updatedList = current.map((s) => (s.phase === phase ? { ...s, status: "done" as StepStatus } : s));
-      }
-
-      return timelineReducer(updatedList, {
         stepId,
-        seq: stepNum,
-        phase,
-        status,
-        leftTitle: data.leftTitle || data.title || `步骤 ${stepNum}`,
-        leftSummary: data.leftSummary || `已完成阶段: ${data.title || data.name}`,
-        rightTitle: data.rightTitle || data.title || `阶段 ${stepNum}`,
-        rightSubtitle: data.rightSubtitle || data.name || "",
-        rightDetail: data.rightDetail || data,
-        durationMs: data.durationMs || data.totalMs,
-        timestamp: data.timestamp || Date.now(),
+        seq,
+        phase: data.phase ?? "external",
+        status: normalizeStatus(data.status),
+        leftTitle: data.leftTitle ?? title,
+        leftSummary: data.leftSummary ?? data.message ?? "",
+        rightTitle: title,
+        rightSubtitle: data.rightSubtitle ?? data.description ?? "",
+        rightDetail: data.rightDetail ?? data,
+        durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
       });
     }
 
     if (eventName === "tool") {
-      const toolName = data.tool || "未知工具";
-      const stepId = `tool-${toolName}-${Date.now()}`;
+      const toolName = String(data.tool ?? data.name ?? "Unknown tool");
+      const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.id;
+      const existingCount = current.filter((step) => step.phase === "skill" && step.rightDetail?.tool === toolName).length;
+      const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
+      const status = normalizeStatus(data.status);
       return timelineReducer(current, {
         stepId,
-        seq: 5,
+        seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
         phase: "skill",
-        status: data.status === "error" ? "failed" : "done",
-        leftTitle: `技能调用: ${toolName}`,
-        leftSummary: `成功调度 ${toolName} · 耗时 ${data.duration || "0ms"}`,
-        rightTitle: `执行外部技能: ${toolName}`,
-        rightSubtitle: `沙箱受控执行 · 耗时: ${data.duration || "0ms"}`,
-        rightDetail: {
-          toolName,
-          parameters: data.parameters,
-          result: data.result,
-          duration: data.duration,
-        },
-        timestamp: Date.now(),
+        status,
+        leftTitle: `Tool: ${toolName}`,
+        leftSummary: data.message ?? data.status ?? "收到工具调用事件",
+        rightTitle: toolName,
+        rightSubtitle: data.description ?? "",
+        rightDetail: data,
+        durationMs: parseDuration(data.durationMs ?? data.duration),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
       });
     }
 
     if (eventName === "citations") {
       const items = Array.isArray(data.items) ? data.items : [];
       return timelineReducer(current, {
-        stepId: "step-3-citations",
-        seq: 3,
+        stepId: String(data.stepId ?? "event-citations"),
+        seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
         phase: "context",
         status: "done",
-        leftTitle: "企业规程知识库召回",
-        leftSummary: `检索到 ${items.length} 条高置信度企业合规制度切片`,
-        rightTitle: "03. 知识库多路召回 (RAG)",
-        rightSubtitle: `有效召回: ${items.length} 篇文档切片 · 向量基线核验通过`,
-        rightDetail: {
-          totalDocs: data.totalDocs,
-          validCount: items.length,
-          items: items.map((c: any) => ({
-            title: c.docTitle,
-            section: c.section,
-            score: c.score,
-            snippet: c.snippet,
-          })),
-        },
-        timestamp: Date.now(),
+        leftTitle: "Knowledge retrieval",
+        leftSummary: `Retrieved ${items.length} source item(s)`,
+        rightTitle: "Retrieved sources",
+        rightSubtitle: "",
+        rightDetail: { ...data, items },
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
       });
     }
-
     return current;
-  } catch (e) {
+  } catch {
     return current;
   }
 }
 
-/**
- * 兼容旧消息：从历史消息的 traceSteps 或 toolCalls 中快速构建时间线
- */
+/** Legacy history reconstruction is allowed only from persisted event details. */
 export function rebuildTimelineFromMessage(msg: {
   traceSteps?: Record<number, any>;
-  toolCalls?: Array<{ tool: string; duration?: string; status?: string; result?: any; parameters?: any }>;
+  toolCalls?: Array<{ tool: string; duration?: string; status?: string; result?: any; parameters?: any; id?: string }>;
   agentTimeline?: AgentStep[];
 }): AgentStep[] {
-  if (msg.agentTimeline && msg.agentTimeline.length > 0) {
-    return msg.agentTimeline;
-  }
-
+  if (msg.agentTimeline?.length) return msg.agentTimeline;
   const steps: AgentStep[] = [];
 
-  // 从 traceSteps 构建
-  if (msg.traceSteps) {
-    Object.keys(msg.traceSteps).forEach((k) => {
-      const stepNum = parseInt(k, 10);
-      const data = msg.traceSteps![stepNum];
-      if (data) {
-        steps.push({
-          stepId: data.stepId || `step-${stepNum}-${(data.name || "step").toLowerCase().replace(/_/g, "-")}`,
-          seq: stepNum,
-          phase: data.phase || (stepNum === 1 ? "intent" : stepNum === 2 ? "workflow" : stepNum === 3 ? "context" : stepNum === 4 ? "llm" : stepNum === 5 ? "skill" : "delivery"),
-          status: data.status ? (data.status.toLowerCase() as StepStatus) : "done",
-          leftTitle: data.leftTitle || data.title || `步骤 ${stepNum}`,
-          leftSummary: data.leftSummary || data.title || "已完成",
-          rightTitle: data.rightTitle || data.title || `阶段 ${stepNum}`,
-          rightSubtitle: data.rightSubtitle || data.name || "",
-          rightDetail: data.rightDetail || data,
-          durationMs: data.durationMs || data.totalMs,
-          timestamp: data.timestamp || Date.now(),
-        });
-      }
+  Object.entries(msg.traceSteps || {}).forEach(([key, data]) => {
+    if (!data) return;
+    const seq = Number(key);
+    const title = data.rightTitle ?? data.title ?? data.name ?? `Step ${seq}`;
+    steps.push({
+      stepId: String(data.stepId ?? data.spanId ?? `trace-step-${seq}`),
+      seq,
+      phase: data.phase ?? "external",
+      status: normalizeStatus(data.status),
+      leftTitle: data.leftTitle ?? title,
+      leftSummary: data.leftSummary ?? data.message ?? "",
+      rightTitle: title,
+      rightSubtitle: data.rightSubtitle ?? "",
+      rightDetail: data.rightDetail ?? data,
+      durationMs: parseDuration(data.durationMs ?? data.totalMs ?? data.duration),
+      timestamp: typeof data.timestamp === "number" ? data.timestamp : 0,
     });
-  }
+  });
 
-  // 从 toolCalls 追加
-  if (msg.toolCalls && msg.toolCalls.length > 0) {
-    msg.toolCalls.forEach((tc, idx) => {
-      steps.push({
-        stepId: `tool-${tc.tool}-${idx}`,
-        seq: 5,
-        phase: "skill",
-        status: tc.status === "error" ? "failed" : "done",
-        leftTitle: `技能调用: ${tc.tool}`,
-        leftSummary: `成功调度 ${tc.tool} · 耗时 ${tc.duration || "0ms"}`,
-        rightTitle: `执行技能: ${tc.tool}`,
-        rightSubtitle: `耗时 ${tc.duration || "0ms"} · 状态 ${tc.status || "OK"}`,
-        rightDetail: {
-          parameters: tc.parameters,
-          result: tc.result,
-        },
-        timestamp: Date.now(),
-      });
+  (msg.toolCalls || []).forEach((tool, index) => {
+    const status = normalizeStatus(tool.status);
+    steps.push({
+      stepId: String(tool.id ?? `history-tool-${index + 1}`),
+      seq: steps.length + 1,
+      phase: "skill",
+      status,
+      leftTitle: `Tool: ${tool.tool}`,
+      leftSummary: "",
+      rightTitle: tool.tool,
+      rightSubtitle: "",
+      rightDetail: { parameters: tool.parameters, result: tool.result },
+      durationMs: parseDuration(tool.duration),
+      timestamp: 0,
     });
-  }
-
-  return steps.sort((a, b) => a.seq - b.seq);
+  });
+  return steps.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
 }
 
-/**
- * 任务交付闭环时，将时间线中所有未完成阶段统一收束为完成状态，杜绝挂起
- */
+/** A finished stream does not imply every observed step succeeded. */
 export function finalizeTimeline(timeline: AgentStep[]): AgentStep[] {
-  if (!timeline) return [];
-  return timeline.map((s) => ({
-    ...s,
-    status: s.status === "failed" ? "failed" : "done",
+  return (timeline || []).map((step) => ({
+    ...step,
+    status: step.status === "running" || step.status === "pending" ? "unknown" : step.status,
   }));
 }
-
-
