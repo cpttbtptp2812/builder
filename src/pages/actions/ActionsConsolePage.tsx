@@ -301,6 +301,24 @@ export default function ActionsConsolePage() {
     finally { setRunningAction(""); }
   };
 
+  const retryFailedAction = async (action: Action) => {
+    const confirmed = window.confirm(
+      "该 Action 标记为 FAILED，但外部操作仍可能产生部分副作用。重试会创建一个新的 Action，可能重复执行。请先确认外部系统状态。是否继续？"
+    );
+    if (!confirmed) return;
+    setError(""); setNotice("");
+    try {
+      const result = await request(
+        `/actions/${encodeURIComponent(action.actionId)}/retry?confirmPossibleDuplicateSideEffect=true`,
+        { method: "POST" }
+      );
+      setNotice(`已创建重试 Action ${result.actionId}：${result.decision} / ${result.status}`);
+      await load();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "重试 Action 失败");
+    }
+  };
+
   const decideApproval = async (action: Action, decision: "approve" | "reject") => {
     setError(""); setNotice("");
     if (!approverKey.trim()) {
@@ -428,6 +446,7 @@ export default function ActionsConsolePage() {
                         <button onClick={() => void decideApproval(action, "reject")} disabled={!approverKey.trim()} className="px-3 py-1.5 rounded-lg border border-rose-200 text-rose-700 text-xs font-bold disabled:opacity-40">拒绝</button>
                       </div>
                     </div>}
+                    {action.status === "FAILED" && <button onClick={() => void retryFailedAction(action)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-800 text-xs font-bold hover:bg-amber-100">确认风险并重试</button>}
                     <button onClick={() => void inspectTrace(action)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 text-xs font-bold hover:bg-slate-50"><ListTree className="w-3 h-3" />查看 Trace</button>
                     {typeof action.attemptCount === "number" && <span className="text-[11px] text-slate-400 self-center">Attempts: {action.attemptCount}</span>}
                   </div>
