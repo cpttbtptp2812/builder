@@ -139,6 +139,8 @@ interface ChatPlaygroundProps {
   onOpenCreateWorkflow?: () => void;
   onRunWorkflow?: (wf: PipelineItem) => void;
   onNavigateStudio?: () => void;
+  dreamSeed?: string;
+  onDreamResponse?: (dream: string, response: string) => void;
 }
 
 // 渲染正文内的引用角标 (支持 [1], [2], [^1] 式真实可点击锚点)
@@ -192,6 +194,8 @@ export default function ChatPlaygroundPage({
   onOpenCreateWorkflow,
   onRunWorkflow,
   onNavigateStudio,
+  dreamSeed,
+  onDreamResponse,
 }: ChatPlaygroundProps) {
   const toast = useToast();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -199,6 +203,8 @@ export default function ChatPlaygroundPage({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const dreamResponseHandledRef = useRef(false);
+  useEffect(() => { dreamResponseHandledRef.current = false; }, [dreamSeed]);
 
   // 思考、联网、RAG 开关
   const [enableThinking, setEnableThinking] = useState(true);
@@ -791,6 +797,10 @@ export default function ChatPlaygroundPage({
                     : m
                 )
               );
+            }
+            if (dreamSeed && !dreamResponseHandledRef.current && accumulatedContent.trim()) {
+              dreamResponseHandledRef.current = true;
+              onDreamResponse?.(dreamSeed, accumulatedContent);
             }
           },
           onError: (err) => {
