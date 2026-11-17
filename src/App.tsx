@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
-import HomePage, { DreamoraStar } from "./pages/home/HomePage";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import HomePage, { type DreamoraStar } from "./pages/home/HomePage";
 import ChatPlaygroundPage from "./pages/chat/ChatPlaygroundPage";
 import WorkflowsListPage from "./pages/workflows/WorkflowsListPage";
 import WorkflowDesignerPage from "./pages/workflows/WorkflowDesignerPage";
@@ -89,6 +89,7 @@ export default function App() {
   const [pendingDream, setPendingDream] = useState("");
   const [pendingDreamMode, setPendingDreamMode] = useState("倾听");
   const [dreamArrival, setDreamArrival] = useState<DreamoraStar | null>(null);
+  const dismissDreamArrival = useCallback(() => setDreamArrival(null), []);
 
   const handleLaunchDream = (dream: string, mode: string) => {
     const guidance: Record<string, string> = {
@@ -301,12 +302,12 @@ export default function App() {
       {/* 顶部现代毛玻璃顶栏 (全幅铺满，触感极佳) */}
       <header
         style={{
-          height: 60,
-          padding: "0 28px",
+          height: currentView === "home" ? 0 : 60,
+          padding: currentView === "home" ? 0 : "0 28px",
           background: "rgba(255, 255, 255, 0.92)",
           backdropFilter: "blur(16px)",
           borderBottom: "1px solid #e2e8f0",
-          display: "flex",
+          display: currentView === "home" ? "none" : "flex",
           alignItems: "center",
           justifyContent: "space-between",
           flexShrink: 0,
@@ -488,7 +489,7 @@ export default function App() {
             <HomePage
               onLaunchDream={handleLaunchDream}
               arrivalDream={dreamArrival}
-              onDismissArrival={() => setDreamArrival(null)}
+              onDismissArrival={dismissDreamArrival}
             />
           )}
 
