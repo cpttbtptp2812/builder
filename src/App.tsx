@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import HomePage from "./pages/home/HomePage";
+import HomePage, { DreamoraStar } from "./pages/home/HomePage";
 import ChatPlaygroundPage from "./pages/chat/ChatPlaygroundPage";
 import WorkflowsListPage from "./pages/workflows/WorkflowsListPage";
 import WorkflowDesignerPage from "./pages/workflows/WorkflowDesignerPage";
@@ -86,6 +86,39 @@ export default function App() {
     { prompt: string; autoSend?: boolean } | string | undefined
   >(undefined);
   const [executingWorkflow, setExecutingWorkflow] = useState<PipelineItem | null>(null);
+  const [pendingDream, setPendingDream] = useState("");
+  const [pendingDreamMode, setPendingDreamMode] = useState("倾听");
+  const [dreamArrival, setDreamArrival] = useState<DreamoraStar | null>(null);
+
+  const handleLaunchDream = (dream: string, mode: string) => {
+    const guidance: Record<string, string> = {
+      倾听: "先认真倾听和理解，不急着给建议。回应这份梦想对用户意味着什么，让它被看见。",
+      探索: "陪用户探索这个梦想的来源、可能性和想象空间。先提出有启发的问题，不替用户下结论。",
+      规划: "帮助用户把梦想拆成温和、可调整的阶段和第一个小步骤，不制造压力。",
+      创造: "和用户一起构思可以创造出来的作品、原型或体验，给出一个能开始的创意方向。",
+      研究: "帮助用户梳理值得研究的问题、资料方向和现实资源；不编造事实或来源。",
+      行动: "先提出安全、可确认的行动方案。未经用户明确批准，不执行外部操作、不花钱、不联系他人。"
+    };
+    setPendingDream(dream);
+    setPendingDreamMode(mode);
+    setInitialChatPrompt({
+      prompt: `这是用户亲自写下的梦想：\n\n${dream}\n\n用户选择的陪伴方式：${mode}。\n${guidance[mode] || guidance["倾听"]}\n\n请用真诚、具体、有想象力的中文回应。尊重用户的自主权，不评判梦想是否现实，不把所有梦想强行变成效率任务。`,
+      autoSend: true
+    });
+    handleNavChange("chat");
+  };
+
+  const handleDreamResponse = (dream: string, response: string) => {
+    setDreamArrival({
+      id: `dream-${Date.now()}`,
+      dream,
+      response,
+      mode: pendingDreamMode,
+      createdAt: new Date().toISOString()
+    });
+    setPendingDream("");
+    handleNavChange("home");
+  };
 
   // 初始化探测后端健康度并加载业务数据
   useEffect(() => {
@@ -445,7 +478,7 @@ export default function App() {
       </header>
 
       {/* 主视图渲染 */}
-      <main style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 56px)", width: "100%", overflow: "hidden" }}>
+      <main style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: currentView === "home" ? "100vh" : "calc(100vh - 56px)", width: "100%", overflow: "hidden" }}>
         <div
           key={currentView}
           className={navDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
@@ -453,17 +486,9 @@ export default function App() {
         >
           {currentView === "home" && (
             <HomePage
-              onEnterWorkbench={() => handleNavChange("chat")}
-              onEnterWorkbenchWithPrompt={(prompt, autoSend = true) => {
-                setInitialChatPrompt({ prompt, autoSend });
-                handleNavChange("chat");
-              }}
-              onLaunchWorkflow={handleLaunchWorkflow}
-              onOpenRepositories={handleOpenRepositories}
-              onOpenModal={(tab) => {
-                handleNavChange(tab as ViewMode);
-              }}
-              workflows={workflows}
+              onLaunchDream={handleLaunchDream}
+              arrivalDream={dreamArrival}
+              onDismissArrival={() => setDreamArrival(null)}
             />
           )}
 
@@ -484,6 +509,8 @@ export default function App() {
               onOpenCreateWorkflow={handleOpenCreateWorkflow}
               onNavigateStudio={() => handleNavChange("workflows")}
               onRunWorkflow={handleLaunchWorkflow}
+              dreamSeed={pendingDream}
+              onDreamResponse={handleDreamResponse}
             />
           )}
 
