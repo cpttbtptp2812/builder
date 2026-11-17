@@ -16,6 +16,15 @@ import {
   GitRepositoryConfig,
 } from "../types/platform";
 
+// GitHub Pages and custom-domain builds can point API traffic at the deployed backend.
+const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
+const apiFetch = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  const target = typeof input === "string" && input.startsWith("/") && API_BASE
+    ? API_BASE + input
+    : input;
+  return fetch(target, init);
+};
+
 export interface ChatStreamPayload {
   sessionId?: string;
   message: string;
@@ -54,7 +63,7 @@ export interface StreamEventHandlers {
 // ==========================================
 export async function fetchAgentsApi(): Promise<AgentItem[]> {
   try {
-    const res = await fetch("/api/agents");
+    const res = await apiFetch("/api/agents");
     if (!res.ok) throw new Error("Failed to fetch agents");
     const data = await res.json();
     return data.map((item: any) => ({
@@ -78,7 +87,7 @@ export async function fetchAgentsApi(): Promise<AgentItem[]> {
 }
 
 export async function saveAgentApi(agent: Partial<AgentItem>): Promise<AgentItem> {
-  const res = await fetch("/api/agents", {
+  const res = await apiFetch("/api/agents", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -114,7 +123,7 @@ export async function saveAgentApi(agent: Partial<AgentItem>): Promise<AgentItem
 }
 
 export async function deleteAgentApi(id: string): Promise<void> {
-  const res = await fetch(`/api/agents/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/agents/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete agent");
 }
 
@@ -130,7 +139,7 @@ export interface SessionItem {
 
 export async function fetchSessionsApi(): Promise<SessionItem[]> {
   try {
-    const res = await fetch("/api/chat/sessions");
+    const res = await apiFetch("/api/chat/sessions");
     if (!res.ok) throw new Error("Failed to fetch sessions");
     const data = await res.json();
     return data.map((s: any) => ({
@@ -144,7 +153,7 @@ export async function fetchSessionsApi(): Promise<SessionItem[]> {
 }
 
 export async function createSessionApi(title: string): Promise<SessionItem> {
-  const res = await fetch("/api/chat/sessions", {
+  const res = await apiFetch("/api/chat/sessions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title }),
@@ -155,13 +164,13 @@ export async function createSessionApi(title: string): Promise<SessionItem> {
 }
 
 export async function deleteSessionApi(id: string): Promise<void> {
-  const res = await fetch(`/api/chat/sessions/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/chat/sessions/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete session");
 }
 
 export async function fetchMessagesApi(sessionId: string): Promise<any[]> {
   try {
-    const res = await fetch(`/api/chat/messages?sessionId=${sessionId}`);
+    const res = await apiFetch(`/api/chat/messages?sessionId=${sessionId}`);
     if (!res.ok) throw new Error("Failed to fetch messages");
     const data = await res.json();
     return data.map((m: any) => ({
@@ -194,7 +203,7 @@ export async function streamChatFromBackend(
 ): Promise<void> {
   let response: Response;
   try {
-    response = await fetch("/api/chat/stream", {
+    response = await apiFetch("/api/chat/stream", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -321,7 +330,7 @@ export async function streamChatFromBackend(
 // ==========================================
 export async function fetchToolsApi(): Promise<ToolItem[]> {
   try {
-    const res = await fetch("/api/tools");
+    const res = await apiFetch("/api/tools");
     if (!res.ok) throw new Error("Failed to fetch tools");
     const data = await res.json();
     return data.map((t: any) => ({
@@ -339,14 +348,14 @@ export async function fetchToolsApi(): Promise<ToolItem[]> {
 }
 
 export async function toggleToolApi(id: string): Promise<boolean> {
-  const res = await fetch(`/api/tools/toggle/${id}`, { method: "POST" });
+  const res = await apiFetch(`/api/tools/toggle/${id}`, { method: "POST" });
   if (!res.ok) throw new Error("Failed to toggle tool");
   const data = await res.json();
   return Boolean(data.enabled);
 }
 
 export async function testToolApi(toolName: string, payload: any): Promise<any> {
-  const res = await fetch("/api/tools/test", {
+  const res = await apiFetch("/api/tools/test", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ toolName, payload }),
@@ -374,7 +383,7 @@ export async function saveToolApi(tool: {
     enabled: tool.isEnabled !== false,
     parametersSchema: tool.paramsSchema || "{}",
   };
-  const res = await fetch("/api/tools", {
+  const res = await apiFetch("/api/tools", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -384,7 +393,7 @@ export async function saveToolApi(tool: {
 }
 
 export async function deleteToolApi(id: string): Promise<boolean> {
-  const res = await fetch(`/api/tools/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/tools/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("删除工具失败");
   return true;
 }
@@ -426,7 +435,7 @@ export interface RagRecallItem {
 
 export async function fetchKnowledgeChunksApi(): Promise<KnowledgeChunkItem[]> {
   try {
-    const res = await fetch("/api/knowledge/all");
+    const res = await apiFetch("/api/knowledge/all");
     if (!res.ok) throw new Error("Failed to fetch knowledge");
     return await res.json();
   } catch {
@@ -440,7 +449,7 @@ export async function uploadKnowledgeChunkApi(
   keywords?: string,
   category?: string
 ): Promise<IngestResponse> {
-  const res = await fetch("/api/knowledge/upload", {
+  const res = await apiFetch("/api/knowledge/upload", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title, content, keywords, category }),
@@ -450,7 +459,7 @@ export async function uploadKnowledgeChunkApi(
 }
 
 export async function deleteKnowledgeChunkApi(id: string): Promise<void> {
-  const res = await fetch(`/api/knowledge/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/knowledge/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("Failed to delete knowledge chunk");
 }
 
@@ -458,7 +467,7 @@ export async function updateKnowledgeChunkApi(
   id: string,
   data: Partial<KnowledgeChunkItem>
 ): Promise<KnowledgeChunkItem> {
-  const res = await fetch(`/api/knowledge/${id}`, {
+  const res = await apiFetch(`/api/knowledge/${id}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
@@ -468,7 +477,7 @@ export async function updateKnowledgeChunkApi(
 }
 
 export async function searchKnowledgeApi(query: string): Promise<RagRecallItem[]> {
-  const res = await fetch("/api/knowledge/search", {
+  const res = await apiFetch("/api/knowledge/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query }),
@@ -482,7 +491,7 @@ export async function searchKnowledgeApi(query: string): Promise<RagRecallItem[]
 // ==========================================
 export async function fetchAuditLogsApi(): Promise<AuditLogItem[]> {
   try {
-    const res = await fetch("/api/audit/logs");
+    const res = await apiFetch("/api/audit/logs");
     if (!res.ok) throw new Error("Failed to fetch logs");
     const data = await res.json();
     return data.map((l: any) => ({
@@ -509,7 +518,7 @@ export async function fetchAuditLogsApi(): Promise<AuditLogItem[]> {
 // ==========================================
 export async function checkBackendHealth(): Promise<{ ok: boolean; info?: any }> {
   try {
-    const res = await fetch("/api/health");
+    const res = await apiFetch("/api/health");
     if (!res.ok) return { ok: false };
     const data = await res.json();
     return { ok: true, info: data };
@@ -526,7 +535,7 @@ export async function decideApprovalApi(
   action: "APPROVE" | "REJECT",
   approver?: string
 ): Promise<any> {
-  const res = await fetch("/api/approval/decide", {
+  const res = await apiFetch("/api/approval/decide", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -544,7 +553,7 @@ export async function decideApprovalApi(
 
 export async function fetchApprovalTicketsApi(): Promise<any[]> {
   try {
-    const res = await fetch("/api/approval/tickets");
+    const res = await apiFetch("/api/approval/tickets");
     if (!res.ok) return [];
     return await res.json();
   } catch {
@@ -577,7 +586,7 @@ export interface FinOpsCacheMetrics {
 
 export async function fetchFinOpsCacheMetricsApi(): Promise<FinOpsCacheMetrics | null> {
   try {
-    const res = await fetch("/api/finops/cache-metrics");
+    const res = await apiFetch("/api/finops/cache-metrics");
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -587,7 +596,7 @@ export async function fetchFinOpsCacheMetricsApi(): Promise<FinOpsCacheMetrics |
 
 export async function clearFinOpsCacheApi(): Promise<boolean> {
   try {
-    const res = await fetch("/api/finops/cache-clear", { method: "POST" });
+    const res = await apiFetch("/api/finops/cache-clear", { method: "POST" });
     return res.ok;
   } catch {
     return false;
@@ -599,7 +608,7 @@ export async function clearFinOpsCacheApi(): Promise<boolean> {
 // ==========================================
 export async function fetchWorkflowsApi(): Promise<PipelineItem[]> {
   try {
-    const res = await fetch("/api/workflow/definitions");
+    const res = await apiFetch("/api/workflow/definitions");
     if (!res.ok) throw new Error("Failed to fetch workflows");
     const data = await res.json();
     return data.map((d: any) => {
@@ -654,7 +663,7 @@ export async function fetchWorkflowsApi(): Promise<PipelineItem[]> {
 
 export async function fetchWorkflowDefinitionApi(id: string): Promise<PipelineItem | null> {
   try {
-    const res = await fetch(`/api/workflow/definitions/${id}`);
+    const res = await apiFetch(`/api/workflow/definitions/${id}`);
     if (!res.ok) return null;
     const d = await res.json();
     let parsedSteps: any[] = [];
@@ -729,7 +738,7 @@ export async function saveWorkflowApi(wf: Partial<PipelineItem>): Promise<Pipeli
     topologyJson: wf.topologyJson || (wf.steps ? JSON.stringify(wf.steps) : ""),
     dslJson: JSON.stringify(dslPayload),
   };
-  const res = await fetch("/api/workflow/definitions", {
+  const res = await apiFetch("/api/workflow/definitions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -783,7 +792,7 @@ export async function deleteWorkflowApi(id: string): Promise<void> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(`/api/workflow/definitions/${id}`, {
+    const res = await apiFetch(`/api/workflow/definitions/${id}`, {
       method: "DELETE",
       signal: controller.signal,
     });
@@ -801,7 +810,7 @@ export async function runWorkflowApi(params: {
   inputParams?: string;
   triggeredBy?: string;
 }): Promise<{ instanceId: string; status: string; workflowId: string; startedAt: string }> {
-  const res = await fetch("/api/workflow/run", {
+  const res = await apiFetch("/api/workflow/run", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(params),
@@ -812,7 +821,7 @@ export async function runWorkflowApi(params: {
 
 export async function fetchWorkflowInstancesListApi(): Promise<WorkflowInstanceData[]> {
   try {
-    const res = await fetch("/api/workflow/instances");
+    const res = await apiFetch("/api/workflow/instances");
     if (!res.ok) return [];
     return await res.json();
   } catch {
@@ -824,7 +833,7 @@ export async function fetchWorkflowInstanceApi(instanceId: string): Promise<{
   instance: WorkflowInstanceData;
   steps: NodeExecutionData[];
 }> {
-  const res = await fetch(`/api/workflow/instances/${instanceId}`);
+  const res = await apiFetch(`/api/workflow/instances/${instanceId}`);
   if (!res.ok) throw new Error("Failed to fetch workflow instance");
   return res.json();
 }
@@ -835,7 +844,7 @@ export async function commitWorkflowApprovalApi(params: {
   operatorId?: string;
   auditReason?: string;
 }): Promise<ApprovalTicketData> {
-  const res = await fetch(`/api/workflow/approvals/${params.ticketId}/commit`, {
+  const res = await apiFetch(`/api/workflow/approvals/${params.ticketId}/commit`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -862,13 +871,13 @@ export interface FailoverStatusResponse {
 }
 
 export async function fetchFailoverStatusApi(): Promise<FailoverStatusResponse> {
-  const res = await fetch("/api/failover/status");
+  const res = await apiFetch("/api/failover/status");
   if (!res.ok) throw new Error("获取 Failover 状态失败");
   return res.json();
 }
 
 export async function toggleFailoverTimeoutApi(enabled?: boolean): Promise<FailoverStatusResponse> {
-  const res = await fetch("/api/failover/toggle-timeout", {
+  const res = await apiFetch("/api/failover/toggle-timeout", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(enabled !== undefined ? { enabled } : {}),
@@ -878,7 +887,7 @@ export async function toggleFailoverTimeoutApi(enabled?: boolean): Promise<Failo
 }
 
 export async function resetFailoverApi(): Promise<FailoverStatusResponse> {
-  const res = await fetch("/api/failover/reset", { method: "POST" });
+  const res = await apiFetch("/api/failover/reset", { method: "POST" });
   if (!res.ok) throw new Error("重置断路器失败");
   return res.json();
 }
@@ -918,7 +927,7 @@ export interface GitCreateBranchResult {
 
 export async function fetchGitCommitsApi(repoId: string, limit = 15): Promise<GitCommitItem[]> {
   try {
-    const res = await fetch(`/api/git/repositories/${encodeURIComponent(repoId)}/commits?limit=${limit}`);
+    const res = await apiFetch(`/api/git/repositories/${encodeURIComponent(repoId)}/commits?limit=${limit}`);
     if (!res.ok) return [];
     return await res.json();
   } catch (err) {
@@ -936,7 +945,7 @@ export async function fetchGitDiffApi(
     const params = new URLSearchParams();
     if (sha) params.set("sha", sha);
     if (file) params.set("file", file);
-    const res = await fetch(`/api/git/repositories/${encodeURIComponent(repoId)}/diff?${params.toString()}`);
+    const res = await apiFetch(`/api/git/repositories/${encodeURIComponent(repoId)}/diff?${params.toString()}`);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
       return { ok: false, files: [], error: err.error || "获取 Diff 失败" };
@@ -953,7 +962,7 @@ export async function createGitFixBranchApi(
   branchName?: string
 ): Promise<GitCreateBranchResult> {
   try {
-    const res = await fetch(`/api/git/repositories/${encodeURIComponent(repoId)}/create-fix-branch`, {
+    const res = await apiFetch(`/api/git/repositories/${encodeURIComponent(repoId)}/create-fix-branch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ baseBranch, branchName }),
@@ -999,7 +1008,7 @@ export async function fetchGitRepositoriesApi(workflowId?: string): Promise<GitR
     const url = workflowId
       ? `/api/git/repositories?workflowId=${encodeURIComponent(workflowId)}`
       : "/api/git/repositories";
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     if (!res.ok) throw new Error("获取 Git 仓库列表失败");
     const data = await res.json();
     return data.map(mapGitRepositoryFromApi);
@@ -1029,7 +1038,7 @@ export async function saveGitRepositoryApi(
     enabled: repo.enabled !== false,
   };
 
-  const res = await fetch("/api/git/repositories", {
+  const res = await apiFetch("/api/git/repositories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -1045,7 +1054,7 @@ export async function saveGitRepositoryApi(
 }
 
 export async function deleteGitRepositoryApi(id: string): Promise<void> {
-  const res = await fetch(`/api/git/repositories/${id}`, { method: "DELETE" });
+  const res = await apiFetch(`/api/git/repositories/${id}`, { method: "DELETE" });
   if (!res.ok) throw new Error("解绑代码库失败");
 }
 
@@ -1068,7 +1077,7 @@ export async function testGitConnectionApi(payload: {
   healthMessage?: string;
   error?: string;
 }> {
-  const res = await fetch("/api/git/test-connection", {
+  const res = await apiFetch("/api/git/test-connection", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -1117,7 +1126,7 @@ export async function fetchRemoteBranchesApi(payload: {
   error?: string;
 }> {
   try {
-    const res = await fetch("/api/git/branches", {
+    const res = await apiFetch("/api/git/branches", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -1144,7 +1153,7 @@ export async function fetchRemoteBranchesApi(payload: {
 }
 
 export async function syncGitRepositoryApi(id: string): Promise<GitRepositoryConfig> {
-  const res = await fetch(`/api/git/repositories/${id}/sync`, { method: "POST" });
+  const res = await apiFetch(`/api/git/repositories/${id}/sync`, { method: "POST" });
   if (!res.ok) {
     const err = await res.text();
     throw new Error(err || "同步仓库失败");
@@ -1169,7 +1178,7 @@ export async function fetchUserRepositoriesApi(payload: {
   gitHost?: string;
 }): Promise<RemoteUserRepoItem[]> {
   try {
-    const res = await fetch("/api/git/user-repos", {
+    const res = await apiFetch("/api/git/user-repos", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1198,7 +1207,7 @@ export async function verifyGitTokenApi(payload: {
   gitHost?: string;
 }): Promise<GitUserProfile> {
   try {
-    const res = await fetch("/api/git/verify-token", {
+    const res = await apiFetch("/api/git/verify-token", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1219,7 +1228,7 @@ export async function githubOAuthCallbackApi(payload: {
   clientSecret?: string;
 }): Promise<{ ok: boolean; accessToken?: string; login?: string; name?: string; avatarUrl?: string; error?: string }> {
   try {
-    const res = await fetch("/api/git/oauth/github/callback", {
+    const res = await apiFetch("/api/git/oauth/github/callback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1245,7 +1254,7 @@ export async function testIntegrationWebhookApi(params: {
   secret?: string;
 }): Promise<TestWebhookResult> {
   try {
-    const res = await fetch("/api/integration/test-webhook", {
+    const res = await apiFetch("/api/integration/test-webhook", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(params),
