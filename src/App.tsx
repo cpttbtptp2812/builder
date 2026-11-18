@@ -435,10 +435,10 @@ export default function App() {
                     transition: "color 0.2s ease, transform 0.12s ease",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = "#0f172a";
+                    if (!isActive) e.currentTarget.style.color = currentView === "home" ? "#f1eaff" : "#0f172a";
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.color = "#64748b";
+                    if (!isActive) e.currentTarget.style.color = currentView === "home" ? "#9d9ab8" : "#64748b";
                   }}
                 >
                   <span
