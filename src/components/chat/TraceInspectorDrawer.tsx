@@ -235,10 +235,36 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
       }}
       className={
         isSplit
-          ? "relative h-full bg-white border-l border-slate-200 shadow-xs flex flex-col shrink-0 z-10 select-auto"
-          : "fixed inset-y-0 right-0 z-50 bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto"
+          ? "trace-cosmos relative h-full bg-white border-l border-slate-200 shadow-xs flex flex-col shrink-0 z-10 select-auto"
+          : "trace-cosmos fixed inset-y-0 right-0 z-50 bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto"
       }
     >
+
+      <style>{`
+        .trace-cosmos{--tc-ink:#e7edff;--tc-muted:#8fa2c8;--tc-cyan:#65e6f4;--tc-violet:#a99aff;position:relative;isolation:isolate;overflow:hidden!important;color:var(--tc-ink)!important;background:radial-gradient(ellipse at 78% 0%,rgba(78,91,190,.24),transparent 42%),radial-gradient(ellipse at 8% 72%,rgba(26,130,159,.13),transparent 38%),linear-gradient(160deg,#080f22 0%,#0a1228 48%,#070c1b 100%)!important;border-color:rgba(126,157,220,.22)!important}
+        .trace-cosmos:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;opacity:.32;background-image:linear-gradient(rgba(115,145,210,.08) 1px,transparent 1px),linear-gradient(90deg,rgba(115,145,210,.08) 1px,transparent 1px);background-size:34px 34px;mask-image:linear-gradient(to bottom,black,transparent 92%)}
+        .trace-cosmos:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:420px;height:420px;right:-190px;top:70px;border:1px solid rgba(117,178,255,.12);border-radius:50%;box-shadow:0 0 0 32px rgba(117,178,255,.025),0 0 0 74px rgba(117,178,255,.02),inset 0 0 90px rgba(94,130,255,.06);animation:tc-orbit 36s linear infinite}
+        .trace-cosmos>*{position:relative}
+        .trace-cosmos .bg-white,.trace-cosmos .bg-slate-50,.trace-cosmos .bg-slate-50\/50,.trace-cosmos .bg-slate-100{background:rgba(14,25,49,.72)!important}
+        .trace-cosmos .border-slate-100,.trace-cosmos .border-slate-200,.trace-cosmos .border-slate-300{border-color:rgba(125,157,213,.2)!important}
+        .trace-cosmos .text-slate-900,.trace-cosmos .text-slate-800,.trace-cosmos .text-slate-700{color:#e5edff!important}
+        .trace-cosmos .text-slate-600,.trace-cosmos .text-slate-500,.trace-cosmos .text-slate-400{color:#91a2c5!important}
+        .trace-cosmos .text-blue-700,.trace-cosmos .text-blue-600{color:#72dff2!important}
+        .trace-cosmos .text-emerald-700,.trace-cosmos .text-emerald-600{color:#72e8c0!important}
+        .trace-cosmos .shadow-2xl,.trace-cosmos .shadow-xs{box-shadow:0 20px 70px rgba(0,0,0,.32),inset 0 1px rgba(255,255,255,.035)!important}
+        .trace-cosmos>div:first-of-type:not(.absolute){background:rgba(8,16,34,.78)!important;border-color:rgba(123,157,218,.2)!important;backdrop-filter:blur(22px)}
+        .trace-cosmos button{color:inherit}
+        .trace-cosmos button:hover{filter:brightness(1.16)}
+        .trace-cosmos .rounded-xl,.trace-cosmos .rounded-2xl,.trace-cosmos .rounded-lg{border-color:rgba(123,157,218,.2)}
+        .trace-cosmos [class*=bg-emerald-50]{background:rgba(19,91,83,.22)!important;color:#a9f3dc!important;border-color:rgba(90,222,188,.28)!important}
+        .trace-cosmos [class*=bg-blue-50]{background:rgba(40,91,145,.24)!important;color:#9ae9fa!important;border-color:rgba(96,193,236,.28)!important}
+        .trace-cosmos [class*=bg-amber-50],.trace-cosmos [class*=bg-yellow-50]{background:rgba(112,76,25,.2)!important;color:#f6d59a!important;border-color:rgba(230,184,95,.25)!important}
+        .trace-cosmos [class*=bg-red-50]{background:rgba(112,38,56,.2)!important;color:#ffb7c4!important;border-color:rgba(240,112,145,.25)!important}
+        .trace-cosmos .overflow-y-auto{scrollbar-color:rgba(113,159,221,.45) transparent}
+        .trace-cosmos .overflow-y-auto::-webkit-scrollbar-thumb{background:linear-gradient(180deg,#5d9ed0,#8b79df)}
+        @keyframes tc-orbit{to{transform:rotate(360deg)}}
+        @media(prefers-reduced-motion:reduce){.trace-cosmos:after{animation:none}}
+      `}</style>
       {/* ── 左侧边缘可拖拽把手 (鼠标按住左右拖拽即可缩放抽屉大小) ── */}
       <div
         onMouseDown={handleMouseDown}
