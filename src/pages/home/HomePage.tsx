@@ -63,8 +63,10 @@ const HomePage: React.FC<HomePageProps> = ({ onLaunchDream, arrivalDream, onDism
   useEffect(() => {
     if (!arrivalDream) return;
     setStars((current) => {
-      if (current.some((item) => item.id === arrivalDream.id)) return current;
-      const next = [arrivalDream, ...current].slice(0, 100);
+      const exists = current.some((item) => item.id === arrivalDream.id);
+      const next = exists
+        ? current.map((item) => item.id === arrivalDream.id ? arrivalDream : item)
+        : [arrivalDream, ...current].slice(0, 100);
       try { localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); } catch { /* Storage may be disabled. */ }
       return next;
     });
