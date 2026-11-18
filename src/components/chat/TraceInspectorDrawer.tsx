@@ -388,7 +388,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         {activeTab === "flow" && (
           <>
             <ExternalAgentTracePanel />
-            <InspectorStepCards
+            <MissionControlTimeline
               timeline={timeline}
               message={message}
               activeStepId={activeStepId}
