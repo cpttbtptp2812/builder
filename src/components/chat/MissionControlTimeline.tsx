@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
   Activity, CheckCircle2, Clock3, Copy, Loader2, RotateCcw, XCircle,
-  ChevronDown, Zap, BrainCircuit, Wrench, Database, Search, AlertTriangle,
-  Radio, GitBranch, ArrowDown, Eye, Sparkles, Terminal, FileOutput
+  ChevronDown, BrainCircuit, Wrench, Database, Search, AlertTriangle,
+  GitBranch, Eye, Sparkles, Terminal, FileOutput
 } from "lucide-react";
 import { AgentStep } from "@/lib/agentTimeline";
 import { TraceDrawerMessage } from "./TraceInspectorDrawer";
@@ -95,7 +95,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
     <section className="journey-shell relative space-y-4 overflow-hidden rounded-2xl text-slate-100">
       <style>{`
         .journey-shell{--j-line:rgba(148,163,184,.2);background:radial-gradient(ellipse at 12% 0%,rgba(59,130,246,.17),transparent 42%),radial-gradient(ellipse at 100% 32%,rgba(124,58,237,.13),transparent 38%),linear-gradient(155deg,#07111f 0%,#0a1424 54%,#0b1020 100%);border:1px solid rgba(125,155,205,.22);color:#e6edf8}
-        .journey-grid{background-image:linear-gradient(rgba(148,163,184,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.035) 1px,transparent 1px);background-size:28px 28px}
+        .journey-shell .text-slate-400{color:#94a3b8!important}.journey-shell .text-slate-500{color:#8292a8!important}.journey-shell .rounded-xl,.journey-shell .rounded-2xl,.journey-shell .rounded-lg{border-color:rgba(148,163,184,.2)!important}.journey-shell .journey-node-active{border-color:rgba(96,165,250,.65)!important}.journey-grid{background-image:linear-gradient(rgba(148,163,184,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.035) 1px,transparent 1px);background-size:28px 28px}
         .journey-glow{box-shadow:0 0 0 1px rgba(96,165,250,.22),0 0 28px rgba(59,130,246,.12)}
         .journey-node{transition:transform .2s ease,border-color .2s ease,background .2s ease,box-shadow .2s ease}
         .journey-node:hover{transform:translateX(3px);background:rgba(30,49,76,.75)}
