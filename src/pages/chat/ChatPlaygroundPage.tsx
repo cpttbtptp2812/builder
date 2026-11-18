@@ -841,13 +841,19 @@ export default function ChatPlaygroundPage({
 
       // 流正常关闭却没有 finish/error 事件时，结束加载态并明确告知用户，
       // 不再留下一个空白且永久旋转的 assistant 气泡。
-      if (!terminalEventReceived && !abortController.signal.aborted) {
+      if (!abortController.signal.aborted && (!terminalEventReceived || !accumulatedContent.trim())) {
         setMessages((prev) =>
           prev.map((m) =>
             m.id === asstMsgId
               ? {
                 ...m,
-                content: m.content || "【响应意外结束】连接已关闭，但没有收到模型完成事件。请检查后端日志与 SSE 输出。",
+                content: m.content || (
+                  m.approvalTicket
+                    ? "已生成操作审批请求，请先完成下方人工审批。"
+                    : terminalEventReceived
+                      ? "【未收到文本回复】本次请求已结束，但模型没有返回正文。请查看右侧执行轨迹，或检查后端模型响应。"
+                      : "【响应意外结束】连接已关闭，但没有收到模型完成事件。请检查后端日志与 SSE 输出。"
+                ),
                 isThinking: false,
               }
               : m
