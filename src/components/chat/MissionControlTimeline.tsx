@@ -153,7 +153,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
           {isThinking && <div className="mt-4 h-1 w-36 overflow-hidden rounded-full bg-slate-800"><div className="journey-scan h-full w-1/2" /></div>}
         </div>
       ) : (
-        <div className="relative grid min-w-0 grid-cols-1 gap-4 px-3 pb-4 sm:px-4 lg:grid-cols-[minmax(0,1.02fr)_minmax(0,.98fr)]">
+        <div className="relative grid min-w-0 grid-cols-1 gap-4 px-3 pb-4 sm:px-4 xl:grid-cols-[minmax(0,1.02fr)_minmax(0,.98fr)]">
           <div className="min-w-0">
             <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
               <div><div className="text-[10px] font-bold tracking-[.18em] text-slate-500">THE JOURNEY</div><div className="mt-0.5 text-sm font-semibold text-white">执行路线</div></div>
