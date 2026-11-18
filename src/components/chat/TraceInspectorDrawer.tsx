@@ -353,7 +353,16 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             </button>
           )}
 
-          <button\n            onClick={() => setIsImmersive((value) => !value)}\n            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-200 hover:bg-slate-800/70 transition cursor-pointer"\n            title={isImmersive ? "退出沉浸模式" : "进入全屏沉浸模式"}\n            aria-label={isImmersive ? "退出沉浸模式" : "进入全屏沉浸模式"}\n          >\n            {isImmersive ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}\n          </button>\n\n          {onToggleLayout && (
+          <button
+            onClick={() => setIsImmersive((value) => !value)}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-200 hover:bg-slate-800/70 transition cursor-pointer"
+            title={isImmersive ? "退出沉浸模式" : "进入全屏沉浸模式"}
+            aria-label={isImmersive ? "退出沉浸模式" : "进入全屏沉浸模式"}
+          >
+            {isImmersive ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+          </button>
+
+          {onToggleLayout && (
             <button
               onClick={onToggleLayout}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
