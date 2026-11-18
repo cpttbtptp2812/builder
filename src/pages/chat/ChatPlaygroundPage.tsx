@@ -387,24 +387,36 @@ export default function ChatPlaygroundPage({
       if (newlyCreatedSessionIdRef.current === currentSessionId) {
         return;
       }
-      fetchMessagesApi(currentSessionId).then((history) => {
-        // 如果当前正在推流或会话已改变，杜绝异步覆盖
-        if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
-          return;
-        }
-        const cached = sessionMessagesCacheRef.current[currentSessionId];
-        if (cached && cached.length > 0) {
-          const merged = (history && history.length > 0 ? history : cached).map((h) => {
-            const hit = cached.find((c) => c.id === h.id || c.content === h.content);
-            return hit ? { ...h, ...hit } : h;
-          });
-          setMessages(merged);
-        } else if (history && history.length > 0) {
-          setMessages(history);
-        } else {
-          setMessages([]);
-        }
-      });
+      fetchMessagesApi(currentSessionId)
+        .then((history) => {
+          // 如果当前正在推流或会话已改变，杜绝异步覆盖
+          if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          const cached = sessionMessagesCacheRef.current[currentSessionId];
+          if (cached && cached.length > 0) {
+            const merged = (history && history.length > 0 ? history : cached).map((h) => {
+              const hit = cached.find((c) => c.id === h.id || c.content === h.content);
+              return hit ? { ...h, ...hit } : h;
+            });
+            setMessages(merged);
+          } else {
+            setMessages(history || []);
+          }
+        })
+        .catch((error: any) => {
+          if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          const cached = sessionMessagesCacheRef.current[currentSessionId];
+          setMessages(cached && cached.length > 0 ? cached : []);
+          toast.warning(
+            cached && cached.length > 0
+              ? "历史消息接口暂时不可用，已显示本地缓存"
+              : "历史消息加载失败，请检查后端连接后重试"
+          );
+          console.warn("[chat] Failed to load session history", error);
+        });
     }
   }, [currentSessionId]);
 
