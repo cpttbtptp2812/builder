@@ -1,10 +1,11 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   ArrowLeft, Activity, AlertTriangle, BarChart3, CheckCircle2, Clock3,
   Cpu, Database, Gauge, GitBranch, ShieldCheck, Sparkles, Target,
   Wrench, XCircle, CircleDollarSign, Info, Timer, Layers3
 } from "lucide-react";
 import { AgentStep } from "@/lib/agentTimeline";
+import { judgeAgentRun } from "@/services/api";
 
 type ToolCall = { tool: string; status?: string; duration?: string; durationMs?: number; result?: unknown };
 export interface EvaluationMessage {
@@ -84,6 +85,10 @@ function Empty({ title, desc }: { title: string; desc: string }) {
 }
 
 export default function EvaluationPage({ message, onBack }: { message: EvaluationMessage; onBack: () => void }) {
+  const [judge, setJudge] = useState<any>(null);
+  const [judgeLoading, setJudgeLoading] = useState(false);
+  const [judgeError, setJudgeError] = useState("");
+  const [gate, setGate] = useState(() => { try { return JSON.parse(localStorage.getItem("ownagent_eval_gate") || '{"minOverall":85,"minTask":85,"minReliability":90}'); } catch { return { minOverall: 85, minTask: 85, minReliability: 90 }; } });
   const data = useMemo(() => {
     const steps = getRecordedSteps(message);
     const tools = message.toolCalls?.length ? message.toolCalls : steps.filter(s => s.phase === "skill").map(s => ({
@@ -116,6 +121,24 @@ export default function EvaluationPage({ message, onBack }: { message: Evaluatio
       maxStepMs: stepDurations.length ? Math.max(...stepDurations) : undefined };
   }, [message]);
 
+  const runJudge = async () => {
+    setJudgeLoading(true); setJudgeError("");
+    try {
+      const result = await judgeAgentRun({
+        task: message.userPrompt || "", answer: message.content || "",
+        evidence: { trace: message.trace || null, timeline: data.steps, toolCalls: data.tools, citations: message.citations || [], rag: message.enableRAG ?? null,
+          deterministic: { totalMs: data.totalMs, ttftMs: data.ttftMs, totalTokens: data.totalTokens, successfulSteps: data.successfulSteps, failedSteps: data.failedSteps, successfulTools: data.successfulTools, failedTools: data.failedTools } },
+        rubric: "任务完成度、指令遵循、回答正确性、工具使用合理性。只根据给定证据评分，并解释扣分原因。",
+      });
+      setJudge(result);
+    } catch (e: any) { setJudgeError(e?.message || "Judge 调用失败"); } finally { setJudgeLoading(false); }
+  };
+  const judgeScores = judge?.scores || {};
+  const overall = typeof judgeScores.overall === "number" ? judgeScores.overall : null;
+  const taskScore = typeof judgeScores.taskCompletion === "number" ? judgeScores.taskCompletion : null;
+  const reliability = data.knownSteps ? Math.round(data.successfulSteps / data.knownSteps * 100) : null;
+  const gatePass = overall !== null && taskScore !== null && reliability !== null && overall >= gate.minOverall && taskScore >= gate.minTask && reliability >= gate.minReliability;
+  const persistGate = (next: any) => { setGate(next); try { localStorage.setItem("ownagent_eval_gate", JSON.stringify(next)); } catch {} };
   const metrics: Metric[] = [
     { label: "执行总耗时", value: fmtMs(data.totalMs), detail: data.totalMs !== undefined ? "后端 trace.totalMs / 消息 duration" : "运行记录未提供总耗时", icon: Clock3 },
     { label: "Token 总量", value: fmtInt(data.totalTokens), detail: data.tokensIn !== undefined || data.tokensOut !== undefined ? `输入 ${fmtInt(data.tokensIn)} · 输出 ${fmtInt(data.tokensOut)}` : "读取消息或 Provider usage", icon: Cpu },
@@ -130,7 +153,11 @@ export default function EvaluationPage({ message, onBack }: { message: Evaluatio
       <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-5 p-5 md:p-6">
           <div className="min-w-0"><div className="flex items-center gap-2 text-[10px] font-bold tracking-[.18em] text-indigo-600"><BarChart3 className="h-3.5 w-3.5"/> AGENT RUN ANALYTICS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">对话运行分析</h1><p className="mt-1 max-w-3xl truncate text-sm text-slate-500">{message.userPrompt || "本次 Agent 执行记录"}</p><div className="mt-3 flex flex-wrap gap-2">{message.modelName && <Pill>{message.modelName}</Pill>}<Pill>{data.steps.length} 个事件步骤</Pill><Pill>{data.tools.length} 次工具调用</Pill>{message.enableRAG !== undefined && <Pill>RAG {message.enableRAG ? "开启" : "关闭"}</Pill>}</div></div>
-          <div className="min-w-[170px] rounded-xl bg-slate-50 px-4 py-3"><div className="text-[10px] font-semibold tracking-wider text-slate-500">SEMANTIC EVALUATION</div><div className="mt-1 text-xl font-semibold text-slate-700">尚未评判</div><div className="mt-1 text-[10px] leading-4 text-slate-500">语义质量不由遥测数据推断</div></div>
+          <div className={`min-w-[210px] rounded-xl ${judge ? "bg-indigo-50" : "bg-slate-50"} px-4 py-3`}>
+            <div className="text-[10px] font-semibold tracking-wider text-indigo-600">SEMANTIC EVALUATION</div>
+            <div className="mt-1 text-xl font-semibold text-slate-800">{overall === null ? "尚未评判" : overall + " / 100"}</div>
+            <button onClick={runJudge} disabled={judgeLoading} className="mt-2 rounded-lg bg-indigo-600 px-3 py-1.5 text-[10px] font-semibold text-white transition hover:bg-indigo-700 disabled:opacity-50">{judgeLoading ? "Judge 运行中…" : judge ? "重新评估" : "运行真实 AI Judge"}</button>
+          </div>
         </div>
         <div className="grid grid-cols-2 border-t border-slate-100 md:grid-cols-4">
           {[
@@ -180,7 +207,21 @@ export default function EvaluationPage({ message, onBack }: { message: Evaluatio
       </div>
 
       <section className="mt-5 grid gap-4 md:grid-cols-2"><ContentPanel title="用户任务" content={message.userPrompt || "未保存原始任务文本"}/><ContentPanel title="Agent 最终回复" content={message.content || "暂无最终回复"}/></section>
-      <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Target className="h-4 w-4 text-indigo-500"/>为什么没有综合评分？</div><p className="mt-2 text-[11px] leading-5 text-slate-500">耗时、Token、工具成功率是运行遥测，可以直接计算；任务完成度、事实准确性、指令遵循需要评估标准或 Judge。当前版本不会把运行成功率冒充回答质量。下一步应接入可配置评估集，并保存每条评分的证据、理由和 Judge 模型信息。</p></div>
+      <div className="mt-5 grid gap-5 lg:grid-cols-[1.1fr_.9fr]">
+  <Panel title="AI Judge 语义评估">
+    {judgeError && <div className="mb-3 rounded-lg bg-rose-50 p-3 text-[11px] text-rose-700">{judgeError}</div>}
+    {judge ? <div className="grid gap-3 sm:grid-cols-2">
+      {[["任务完成度", judgeScores.taskCompletion], ["指令遵循", judgeScores.instructionFollowing], ["回答正确性", judgeScores.answerCorrectness], ["工具使用", judgeScores.toolUse], ["综合评分", judgeScores.overall]].map(([label, score]) => <div key={String(label)} className="rounded-xl border border-slate-100 bg-slate-50 p-3"><div className="text-[11px] text-slate-500">{label}</div><div className="mt-1 text-2xl font-semibold text-slate-900">{typeof score === "number" ? score : "—"}</div></div>)}
+      <div className="sm:col-span-2 rounded-xl border border-indigo-100 bg-indigo-50/60 p-3"><div className="text-[11px] font-semibold text-indigo-900">Judge 结论</div><p className="mt-1 text-[11px] leading-5 text-indigo-900/75">{judgeScores.summary || "无总结"}</p><div className="mt-2 flex flex-wrap gap-2">{(judgeScores.issues || []).map((x: any, i: number) => <span key={i} className="rounded-full bg-white px-2 py-1 text-[10px] text-rose-700">{String(x)}</span>)}</div></div>
+    </div> : <Empty title="尚未运行 Judge" desc="点击右上角“运行真实 AI Judge”，使用当前任务、最终回答和执行证据进行语义评估。"/>}
+  </Panel>
+  <Panel title="Evaluation Gate">
+    <Row label="综合评分门槛" value={gate.minOverall + " 分"}/><Row label="任务完成门槛" value={gate.minTask + " 分"}/><Row label="可靠性门槛" value={gate.minReliability + " %"}/>
+    <div className="mt-3 flex gap-2"><button onClick={() => persistGate({...gate,minOverall:Math.max(0,gate.minOverall-5)})} className="rounded-lg border px-2 py-1 text-[10px]">降低 5</button><button onClick={() => persistGate({...gate,minOverall:Math.min(100,gate.minOverall+5)})} className="rounded-lg border px-2 py-1 text-[10px]">提高 5</button></div>
+    <div className={`mt-4 rounded-xl p-4 ${gatePass ? "bg-emerald-50 text-emerald-800" : "bg-slate-50 text-slate-600"}`}><div className="text-xs font-semibold">{judge ? (gatePass ? "PASS · 可以进入发布" : "FAILED · 不满足发布门禁") : "WAITING · 等待 Judge"}</div><p className="mt-1 text-[10px] leading-4">门禁基于真实 Judge 分数 + 本次真实执行可靠性，不使用静态演示分数。</p></div>
+  </Panel>
+</div>
+<div className="mt-5 rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Target className="h-4 w-4 text-indigo-500"/>评估原则</div><p className="mt-2 text-[11px] leading-5 text-slate-500">运行遥测来自真实 Trace；语义评分来自实际 Judge 模型；发布门禁由明确阈值计算。没有数据就显示暂无数据，不用启发式公式伪造质量分。</p></div>
     </div>
   </div>;
 }
