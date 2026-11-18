@@ -7,6 +7,7 @@ import SystemSettingsPage from "./pages/settings/SystemSettingsPage";
 import KnowledgePage from "./pages/knowledge/KnowledgePage";
 import AgentsListPage from "./pages/agents/AgentsListPage";
 import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
+import EvaluationPage from "./pages/evaluation/EvaluationPage";
 import {
   NavTab,
   AgentItem,
@@ -52,7 +53,8 @@ export type ViewMode =
   | "agents"
   | "tools"
   | "settings"
-  | "designer";
+  | "designer"
+  | "evaluation";
 
 export default function App() {
   const toast = useToast();
@@ -60,7 +62,7 @@ export default function App() {
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
-    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7 };
+    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7, evaluation: 8 };
     const curIdx = order[currentView] ?? 0;
     const newIdx = order[newView] ?? 0;
     if (newIdx > curIdx) {
@@ -88,6 +90,7 @@ export default function App() {
   const [pendingDreamMode, setPendingDreamMode] = useState("倾听");
   const [dreamArrival, setDreamArrival] = useState<DreamoraStar | null>(null);
   const [continuingDream, setContinuingDream] = useState<DreamoraStar | null>(null);
+  const [evaluationMessage, setEvaluationMessage] = useState<any>(null);
   const dismissDreamArrival = useCallback(() => setDreamArrival(null), []);
 
   const handleLaunchDream = (dream: string, mode: string) => {
@@ -551,6 +554,10 @@ export default function App() {
           {currentView === "tools" && <ToolsMarketPage />}
 
 
+          {currentView === "evaluation" && evaluationMessage && (
+            <EvaluationPage message={evaluationMessage} onBack={() => handleNavChange("chat")} />
+          )}
+
           {currentView === "settings" && (
             <SystemSettingsPage
               logs={logs}
@@ -590,6 +597,7 @@ export default function App() {
             onRunWorkflow={handleLaunchWorkflow}
             dreamSeed={pendingDream}
             onDreamResponse={handleDreamResponse}
+            onOpenEvaluation={(message) => { setEvaluationMessage(message); handleNavChange("evaluation"); }}
           />
         </div>
       </main>
