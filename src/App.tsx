@@ -498,7 +498,7 @@ export default function App() {
         <div
           key={currentView === "chat" ? "non-chat-view" : currentView}
           className={navDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
-          style={{ width: "100%", height: "100%", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
+          style={{ width: "100%", height: "100%", flex: 1, display: currentView === "chat" ? "none" : "flex", flexDirection: "column", overflow: "hidden" }}
         >
           {currentView === "home" && (
             <HomePage
