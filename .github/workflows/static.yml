@@ -28,7 +28,7 @@ jobs:
         with:
           node-version: "24"
           cache: npm
-      - run: npm ci
+      - run: npm ci --onnxruntime-node-install-cuda=skip
       - run: npm run check:production
         env:
           NODE_OPTIONS: --max-old-space-size=8192
@@ -51,7 +51,7 @@ jobs:
 
       - name: Install and build
         run: |
-          npm ci
+          npm ci --onnxruntime-node-install-cuda=skip
           npm run build
         env:
           GITHUB_PAGES: "true"
