@@ -317,12 +317,12 @@ export default function App() {
       {/* 顶部现代毛玻璃顶栏 (全幅铺满，触感极佳) */}
       <header
         style={{
-          height: currentView === "home" ? 0 : 60,
-          padding: currentView === "home" ? 0 : "0 28px",
-          background: "rgba(255, 255, 255, 0.92)",
-          backdropFilter: "blur(16px)",
-          borderBottom: "1px solid #e2e8f0",
-          display: currentView === "home" ? "none" : "flex",
+          height: 60,
+          padding: "0 28px",
+          background: currentView === "home" ? "rgba(5, 8, 20, 0.78)" : "rgba(255, 255, 255, 0.92)",
+          backdropFilter: "blur(22px)",
+          borderBottom: currentView === "home" ? "1px solid rgba(190,190,255,.14)" : "1px solid #e2e8f0",
+          display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           flexShrink: 0,
@@ -359,8 +359,8 @@ export default function App() {
               <DeploymentUnitOutlined />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 16.5, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.4px" }}>
-                OwnAgent
+              <span style={{ fontSize: 16.5, fontWeight: 800, color: currentView === "home" ? "#f2edff" : "#0f172a", letterSpacing: currentView === "home" ? "3px" : "-0.4px" }}>
+                {currentView === "home" ? "DREAMORA" : "OwnAgent"}
               </span>
               <Tag
                 style={{
@@ -387,11 +387,11 @@ export default function App() {
               display: "flex",
               alignItems: "center",
               gap: 2,
-              background: "#f1f5f9",
+              background: currentView === "home" ? "rgba(255,255,255,.055)" : "#f1f5f9",
               padding: "4px",
-              borderRadius: 10,
-              border: "1px solid #e2e8f0",
-              boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.03)",
+              borderRadius: 999,
+              border: currentView === "home" ? "1px solid rgba(196,181,253,.18)" : "1px solid #e2e8f0",
+              boxShadow: currentView === "home" ? "inset 0 1px 0 rgba(255,255,255,.08)" : "inset 0 1px 2px rgba(0, 0, 0, 0.03)",
             }}
           >
             {/* 顺滑游动的物理高光胶囊 (Sliding Pill Indicator) */}
@@ -403,9 +403,9 @@ export default function App() {
                 left: 0,
                 transform: `translateX(${navIndicator.left}px)`,
                 width: `${navIndicator.width}px`,
-                background: "#ffffff",
-                borderRadius: 7,
-                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.1)",
+                background: currentView === "home" ? "linear-gradient(110deg,rgba(205,190,255,.24),rgba(255,255,255,.12))" : "#ffffff",
+                borderRadius: 999,
+                boxShadow: currentView === "home" ? "0 0 22px rgba(169,145,255,.18)" : "0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.1)",
                 transition: "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
                 pointerEvents: "none",
                 zIndex: 1,
@@ -426,25 +426,25 @@ export default function App() {
                     alignItems: "center",
                     gap: 6,
                     padding: "6px 16px",
-                    borderRadius: 7,
+                    borderRadius: 999,
                     fontSize: 13,
                     fontWeight: isActive ? 700 : 500,
-                    color: isActive ? "#4338ca" : "#64748b",
+                    color: currentView === "home" ? (isActive ? "#f6f0ff" : "#9d9ab8") : (isActive ? "#4338ca" : "#64748b"),
                     cursor: "pointer",
                     userSelect: "none",
                     transition: "color 0.2s ease, transform 0.12s ease",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = "#0f172a";
+                    if (!isActive) e.currentTarget.style.color = currentView === "home" ? "#f1eaff" : "#0f172a";
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.color = "#64748b";
+                    if (!isActive) e.currentTarget.style.color = currentView === "home" ? "#9d9ab8" : "#64748b";
                   }}
                 >
                   <span
                     style={{
                       fontSize: 13,
-                      color: isActive ? "#4f46e5" : "#94a3b8",
+                      color: currentView === "home" ? (isActive ? "#e0d2ff" : "#777692") : (isActive ? "#4f46e5" : "#94a3b8"),
                       transition: "color 0.2s ease",
                     }}
                   >
@@ -494,7 +494,7 @@ export default function App() {
       </header>
 
       {/* 主视图渲染 */}
-      <main style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: currentView === "home" ? "100vh" : "calc(100vh - 56px)", width: "100%", overflow: "hidden" }}>
+      <main style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 60px)", width: "100%", overflow: "hidden" }}>
         <div
           key={currentView}
           className={navDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
