@@ -505,7 +505,28 @@ export async function fetchAuditLogsApi(): Promise<AuditLogItem[]> {
 }
 
 // ==========================================
-// 7. 健康探活 API
+// 7. Agent Evaluation Judge
+// ==========================================
+export async function judgeAgentRun(payload: {
+  task: string;
+  answer: string;
+  evidence: any;
+  rubric?: string;
+}): Promise<{ scores: any; judgeModel?: string }> {
+  const res = await apiFetch('/api/evaluation/judge', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(detail || `Judge failed: HTTP ${res.status}`);
+  }
+  return await res.json();
+}
+
+// ==========================================
+// 8. 健康探活 API
 // ==========================================
 export async function checkBackendHealth(): Promise<{ ok: boolean; info?: any }> {
   try {
@@ -519,7 +540,7 @@ export async function checkBackendHealth(): Promise<{ ok: boolean; info?: any }>
 }
 
 // ==========================================
-// 8. 生产级 Human-in-the-Loop 人机协同审批 API
+// 9. 生产级 Human-in-the-Loop 人机协同审批 API
 // ==========================================
 export async function decideApprovalApi(
   ticketId: string,
@@ -553,7 +574,7 @@ export async function fetchApprovalTicketsApi(): Promise<any[]> {
 }
 
 // ==========================================
-// 9. 真实 FinOps 降本指标与 Exact Hash Cache API
+// 10. 真实 FinOps 降本指标与 Exact Hash Cache API
 // ==========================================
 export interface FinOpsCacheMetrics {
   totalCachedPrompts: number;
