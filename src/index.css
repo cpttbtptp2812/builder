@@ -1058,3 +1058,54 @@ textarea:focus,
 
 
 
+
+/* OwnAgent Evaluation — immersive dream-tech telemetry layer */
+.ownagent-eval{position:relative;background:#050814!important;isolation:isolate}
+.ownagent-eval:before{content:"";position:fixed;inset:60px 0 0;background:
+radial-gradient(circle at 15% 15%,rgba(99,102,241,.2),transparent 28%),
+radial-gradient(circle at 84% 20%,rgba(6,182,212,.14),transparent 25%),
+radial-gradient(circle at 50% 90%,rgba(139,92,246,.12),transparent 34%),
+linear-gradient(rgba(99,102,241,.035) 1px,transparent 1px),
+linear-gradient(90deg,rgba(99,102,241,.035) 1px,transparent 1px);
+background-size:auto,auto,auto,42px 42px,42px 42px;pointer-events:none;z-index:0}
+.ownagent-eval:after{content:"";position:fixed;inset:60px 0 0;background:radial-gradient(circle at 50% 35%,transparent 0,rgba(2,6,23,.28) 65%,rgba(2,6,23,.78) 100%);pointer-events:none;z-index:0}
+.ownagent-eval>div{position:relative;z-index:1}
+.ownagent-eval .mx-auto{max-width:1240px}
+.ownagent-eval .bg-white{background:rgba(10,17,34,.68)!important;color:#e2e8f0!important}
+.ownagent-eval .border-slate-200\/80,.ownagent-eval .border-slate-200{border-color:rgba(148,163,184,.13)!important}
+.ownagent-eval .text-slate-900{color:#f8fafc!important}.ownagent-eval .text-slate-800{color:#e2e8f0!important}
+.ownagent-eval .text-slate-700{color:#cbd5e1!important}.ownagent-eval .text-slate-600{color:#94a3b8!important}
+.ownagent-eval .text-slate-500{color:#64748b!important}.ownagent-eval .text-slate-400{color:#64748b!important}
+.ownagent-eval .bg-slate-50,.ownagent-eval .bg-slate-50\/60{background:rgba(30,41,59,.42)!important}
+.ownagent-eval .shadow-sm{box-shadow:0 14px 50px rgba(2,6,23,.22)!important}
+.ownagent-eval>div>header{position:relative;overflow:hidden;border-color:rgba(129,140,248,.22)!important;border-radius:24px!important;background:linear-gradient(135deg,rgba(15,23,42,.92),rgba(15,23,42,.58))!important;box-shadow:0 24px 80px rgba(2,6,23,.42),inset 0 1px rgba(255,255,255,.06)!important;backdrop-filter:blur(22px)}
+.ownagent-eval>div>header:before{content:"";position:absolute;right:-90px;top:-170px;width:420px;height:420px;border:1px solid rgba(129,140,248,.18);border-radius:50%;box-shadow:0 0 100px rgba(99,102,241,.12),inset 0 0 80px rgba(6,182,212,.05);animation:ownEvalOrbit 18s linear infinite}
+.ownagent-eval>div>header:after{content:"";position:absolute;right:95px;top:-105px;width:280px;height:280px;border:1px solid rgba(6,182,212,.12);border-radius:50%;box-shadow:0 0 70px rgba(6,182,212,.08);pointer-events:none}
+@keyframes ownEvalOrbit{to{transform:rotate(360deg)}}
+.ownagent-eval>div>header .text-indigo-600{color:#a78bfa!important}.ownagent-eval>div>header .bg-indigo-50{background:rgba(79,70,229,.16)!important}
+.ownagent-eval>div>header .border-slate-100{border-color:rgba(148,163,184,.11)!important}
+.ownagent-eval>div>header .text-slate-300{color:#a5b4fc!important}
+.ownagent-eval button{border-color:rgba(129,140,248,.24);background:rgba(15,23,42,.55);color:#cbd5e1}
+.ownagent-eval button:hover{border-color:rgba(129,140,248,.5);color:#fff;box-shadow:0 0 24px rgba(99,102,241,.14)}
+.ownagent-eval button.bg-indigo-600{background:linear-gradient(135deg,#4f46e5,#7c3aed)!important;border:0!important;box-shadow:0 0 28px rgba(99,102,241,.25)}
+.ownagent-eval .rounded-xl,.ownagent-eval .rounded-2xl{border-color:rgba(148,163,184,.12)!important}
+.ownagent-eval .rounded-xl.border.bg-white.p-4{background:rgba(15,23,42,.58)!important}
+.ownagent-eval .rounded-xl.border.bg-white.p-4:hover{border-color:rgba(129,140,248,.32)!important;box-shadow:0 0 28px rgba(99,102,241,.08)!important;transform:translateY(-1px)}
+.ownagent-eval .rounded-xl.border.bg-white.p-4 .bg-indigo-50{background:rgba(99,102,241,.12)!important;color:#a5b4fc!important}
+.ownagent-eval .rounded-xl.border.bg-white.p-4 .bg-emerald-50{background:rgba(16,185,129,.12)!important;color:#6ee7b7!important}
+.ownagent-eval .rounded-xl.border.bg-white.p-4 .bg-rose-50{background:rgba(244,63,94,.12)!important;color:#fda4af!important}
+.ownagent-eval .border-dashed{border-color:rgba(148,163,184,.18)!important}
+.ownagent-eval .bg-sky-50\/70{background:rgba(8,47,73,.28)!important;border-color:rgba(34,211,238,.15)!important}
+.ownagent-eval .text-sky-800{color:#7dd3fc!important}.ownagent-eval .text-sky-600{color:#22d3ee!important}
+.ownagent-eval .bg-indigo-50\/60{background:rgba(49,46,129,.2)!important}
+.ownagent-eval .border-indigo-100{border-color:rgba(129,140,248,.18)!important}
+.ownagent-eval .text-indigo-900{color:#c4b5fd!important}.ownagent-eval .text-indigo-600{color:#a78bfa!important}
+.ownagent-eval .bg-emerald-50{background:rgba(6,78,59,.18)!important}.ownagent-eval .text-emerald-800{color:#6ee7b7!important}
+.ownagent-eval .bg-slate-50 .border-slate-100{border-color:rgba(148,163,184,.1)!important}
+.ownagent-eval .font-mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace!important}
+.ownagent-eval h1{letter-spacing:-.035em}
+.ownagent-eval h2{letter-spacing:-.015em}
+.ownagent-eval .text-rose-700{color:#fda4af!important}.ownagent-eval .bg-rose-50{background:rgba(127,29,29,.18)!important}
+.ownagent-eval .text-emerald-700{color:#6ee7b7!important}.ownagent-eval .text-indigo-600{color:#a78bfa!important}
+.ownagent-eval .text-indigo-500{color:#a78bfa!important}
+@media(max-width:700px){.ownagent-eval>div>header:before{right:-220px}.ownagent-eval>div>header:after{right:-120px}}

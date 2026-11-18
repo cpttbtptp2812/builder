@@ -147,7 +147,7 @@ export default function EvaluationPage({ message, onBack }: { message: Evaluatio
     { label: "实际费用", value: data.cost !== undefined ? data.cost.toFixed(6) : "未上报", detail: data.cost !== undefined ? "读取 Provider / 后端记录，不做价格猜测" : "没有真实费用字段，不估算", icon: CircleDollarSign },
   ];
 
-  return <div className="h-full overflow-y-auto bg-[#f6f8fc] text-slate-800">
+  return <div className="ownagent-eval h-full overflow-y-auto text-slate-100">
     <div className="mx-auto max-w-6xl px-5 py-6 lg:px-8">
       <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-white hover:text-indigo-600"><ArrowLeft className="h-4 w-4"/>返回对话</button>
       <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
