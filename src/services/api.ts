@@ -241,6 +241,62 @@ export async function streamChatFromBackend(
   const decoder = new TextDecoder("utf-8");
   let buffer = "";
 
+  // SSE 事件可能以 LF、CRLF 或 CR 分隔；按完整空行边界解析，
+  // 同时保留跨网络分片的尾部数据，避免丢失 delta / finish。
+  const dispatchBlock = (block: string) => {
+    if (!block) return;
+    let event = "message";
+    const dataLines: string[] = [];
+
+    for (const line of block.split(/\\r\\n|\\r|\\n/)) {
+      if (!line || line.startsWith(":")) continue;
+      const colonIndex = line.indexOf(":");
+      const field = colonIndex === -1 ? line : line.slice(0, colonIndex);
+      let value = colonIndex === -1 ? "" : line.slice(colonIndex + 1);
+      if (value.startsWith(" ")) value = value.slice(1);
+
+      if (field === "event") {
+        event = value.trim();
+      } else if (field === "data") {
+        dataLines.push(value);
+      }
+    }
+
+    const data = dataLines.join("\\n");
+    if (event === "agent_step" && handlers.onAgentStep) {
+      try { handlers.onAgentStep(JSON.parse(data)); } catch { console.warn("[api] Invalid agent_step SSE payload", data); }
+    } else if (event === "trace_step" && handlers.onTraceStep) {
+      try { handlers.onTraceStep(JSON.parse(data)); } catch { console.warn("[api] Invalid trace_step SSE payload", data); }
+    } else if (event === "reasoning" && handlers.onReasoning) {
+      handlers.onReasoning(data);
+    } else if (event === "approval_required" && handlers.onApprovalRequired) {
+      try {
+        handlers.onApprovalRequired(JSON.parse(data));
+      } catch {
+        handlers.onApprovalRequired({ ticketId: data, status: "PENDING" });
+      }
+    } else if (event === "citations" && handlers.onCitations) {
+      try {
+        const parsed = JSON.parse(data);
+        if (Array.isArray(parsed)) handlers.onCitations(parsed);
+        else if (parsed && Array.isArray(parsed.items)) handlers.onCitations(parsed.items, parsed);
+        else handlers.onCitations([]);
+      } catch {
+        handlers.onCitations([]);
+      }
+    } else if (event === "tool" && handlers.onToolCall) {
+      try { handlers.onToolCall(JSON.parse(data)); }
+      catch { handlers.onToolCall({ tool: data }); }
+    } else if (event === "delta" && handlers.onDelta) {
+      handlers.onDelta(data);
+    } else if (event === "finish" && handlers.onFinish) {
+      try { handlers.onFinish(JSON.parse(data)); }
+      catch { handlers.onFinish({ tokens: 0, duration: "0s" }); }
+    } else if (event === "error" && handlers.onError) {
+      handlers.onError(data || "后端返回了未附带详情的流式错误");
+    }
+  };
+
   try {
     while (true) {
       if (signal?.aborted) break;
@@ -248,75 +304,18 @@ export async function streamChatFromBackend(
       if (done) break;
 
       buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n\n");
-      buffer = lines.pop() || "";
-
-      for (const block of lines) {
-        if (!block) continue;
-        const blockLines = block.split(/\r?\n/);
-        let event = "message";
-        const dataLines: string[] = [];
-
-        for (const line of blockLines) {
-          if (line.startsWith("event:")) {
-            event = line.slice(6).trim();
-          } else if (line.startsWith("data:")) {
-            const rawVal = line.slice(5);
-            // 严格遵循 W3C SSE 规范：仅剥离紧随 data: 的单个规范空格，完整保留换行与有效缩进
-            dataLines.push(rawVal.startsWith(" ") ? rawVal.slice(1) : rawVal);
-          }
-        }
-
-        const data = dataLines.join("\n");
-
-        if (event === "agent_step" && handlers.onAgentStep) {
-          try {
-            handlers.onAgentStep(JSON.parse(data));
-          } catch {}
-        } else if (event === "trace_step" && handlers.onTraceStep) {
-          try {
-            handlers.onTraceStep(JSON.parse(data));
-          } catch {}
-        } else if (event === "reasoning" && handlers.onReasoning) {
-          handlers.onReasoning(data);
-        } else if (event === "approval_required" && handlers.onApprovalRequired) {
-          try {
-            handlers.onApprovalRequired(JSON.parse(data));
-          } catch {
-            handlers.onApprovalRequired({ ticketId: data, status: "PENDING" });
-          }
-        } else if (event === "citations" && handlers.onCitations) {
-          try {
-            const parsed = JSON.parse(data);
-            if (Array.isArray(parsed)) {
-              handlers.onCitations(parsed);
-            } else if (parsed && Array.isArray(parsed.items)) {
-              handlers.onCitations(parsed.items, parsed);
-            } else {
-              handlers.onCitations([]);
-            }
-          } catch {
-            handlers.onCitations([]);
-          }
-        } else if (event === "tool" && handlers.onToolCall) {
-          try {
-            handlers.onToolCall(JSON.parse(data));
-          } catch {
-            handlers.onToolCall({ tool: data });
-          }
-        } else if (event === "delta" && handlers.onDelta) {
-          handlers.onDelta(data);
-        } else if (event === "finish" && handlers.onFinish) {
-          try {
-            handlers.onFinish(JSON.parse(data));
-          } catch {
-            handlers.onFinish({ tokens: 0, duration: "0s" });
-          }
-        } else if (event === "error" && handlers.onError) {
-          handlers.onError(data);
-        }
+      let boundary: RegExpExecArray | null;
+      const separator = /(?:\\r\\n|\\r|\\n){2}/;
+      while ((boundary = separator.exec(buffer)) !== null) {
+        const block = buffer.slice(0, boundary.index);
+        buffer = buffer.slice(boundary.index + boundary[0].length);
+        dispatchBlock(block);
       }
     }
+
+    // flush TextDecoder，并派发 EOF 前最后一个没有空行终止的事件块。
+    buffer += decoder.decode();
+    if (!signal?.aborted && buffer.trim()) dispatchBlock(buffer);
   } catch (err: any) {
     if (signal?.aborted || err?.name === "AbortError") {
       return;
