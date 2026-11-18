@@ -387,24 +387,36 @@ export default function ChatPlaygroundPage({
       if (newlyCreatedSessionIdRef.current === currentSessionId) {
         return;
       }
-      fetchMessagesApi(currentSessionId).then((history) => {
-        // 如果当前正在推流或会话已改变，杜绝异步覆盖
-        if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
-          return;
-        }
-        const cached = sessionMessagesCacheRef.current[currentSessionId];
-        if (cached && cached.length > 0) {
-          const merged = (history && history.length > 0 ? history : cached).map((h) => {
-            const hit = cached.find((c) => c.id === h.id || c.content === h.content);
-            return hit ? { ...h, ...hit } : h;
-          });
-          setMessages(merged);
-        } else if (history && history.length > 0) {
-          setMessages(history);
-        } else {
-          setMessages([]);
-        }
-      });
+      fetchMessagesApi(currentSessionId)
+        .then((history) => {
+          // 如果当前正在推流或会话已改变，杜绝异步覆盖
+          if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          const cached = sessionMessagesCacheRef.current[currentSessionId];
+          if (cached && cached.length > 0) {
+            const merged = (history && history.length > 0 ? history : cached).map((h) => {
+              const hit = cached.find((c) => c.id === h.id || c.content === h.content);
+              return hit ? { ...h, ...hit } : h;
+            });
+            setMessages(merged);
+          } else {
+            setMessages(history || []);
+          }
+        })
+        .catch((error: any) => {
+          if (isGeneratingRef.current || currentSessionIdRef.current !== currentSessionId) {
+            return;
+          }
+          const cached = sessionMessagesCacheRef.current[currentSessionId];
+          setMessages(cached && cached.length > 0 ? cached : []);
+          toast.warning(
+            cached && cached.length > 0
+              ? "历史消息接口暂时不可用，已显示本地缓存"
+              : "历史消息加载失败，请检查后端连接后重试"
+          );
+          console.warn("[chat] Failed to load session history", error);
+        });
     }
   }, [currentSessionId]);
 
@@ -599,6 +611,7 @@ export default function ChatPlaygroundPage({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     let accumulatedContent = "";
+    let terminalEventReceived = false;
     const requestStartTs = Date.now();
     let firstTokenTs = 0;
 
@@ -768,6 +781,7 @@ export default function ChatPlaygroundPage({
             );
           },
           onFinish: (rawMeta) => {
+            terminalEventReceived = true;
             isGeneratingRef.current = false;
             setIsGenerating(false);
             try {
@@ -806,6 +820,7 @@ export default function ChatPlaygroundPage({
             }
           },
           onError: (err) => {
+            terminalEventReceived = true;
             isGeneratingRef.current = false;
             setIsGenerating(false);
             setMessages((prev) =>
@@ -823,6 +838,28 @@ export default function ChatPlaygroundPage({
         },
         abortController.signal
       );
+
+      // 流正常关闭却没有 finish/error 事件时，结束加载态并明确告知用户，
+      // 不再留下一个空白且永久旋转的 assistant 气泡。
+      if (!abortController.signal.aborted && (!terminalEventReceived || !accumulatedContent.trim())) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === asstMsgId
+              ? {
+                ...m,
+                content: m.content || (
+                  m.approvalTicket
+                    ? "已生成操作审批请求，请先完成下方人工审批。"
+                    : terminalEventReceived
+                      ? "【未收到文本回复】本次请求已结束，但模型没有返回正文。请查看右侧执行轨迹，或检查后端模型响应。"
+                      : "【响应意外结束】连接已关闭，但没有收到模型完成事件。请检查后端日志与 SSE 输出。"
+                ),
+                isThinking: false,
+              }
+              : m
+          )
+        );
+      }
     } catch (err: any) {
       if (err?.name === "AbortError" || abortController.signal.aborted) {
         return;

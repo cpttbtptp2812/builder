@@ -496,9 +496,9 @@ export default function App() {
       {/* 主视图渲染 */}
       <main style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", height: "calc(100vh - 60px)", width: "100%", overflow: "hidden" }}>
         <div
-          key={currentView}
+          key={currentView === "chat" ? "non-chat-view" : currentView}
           className={navDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
-          style={{ width: "100%", height: "100%", flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}
+          style={{ width: "100%", height: "100%", flex: 1, display: currentView === "chat" ? "none" : "flex", flexDirection: "column", overflow: "hidden" }}
         >
           {currentView === "home" && (
             <HomePage
@@ -506,28 +506,6 @@ export default function App() {
               arrivalDream={dreamArrival}
               onDismissArrival={dismissDreamArrival}
               onContinueDream={handleContinueDream}
-            />
-          )}
-
-          {currentView === "chat" && (
-            <ChatPlaygroundPage
-              agents={agents}
-              currentAgent={currentAgent}
-              onSelectAgent={setCurrentAgent}
-              onAddAuditLog={handleAddAuditLog}
-              onNavigateSettings={() => handleNavChange("settings")}
-              onOpenModal={(tab: NavTab) => {
-                handleNavChange(tab as ViewMode);
-              }}
-              onBackHome={() => handleNavChange("home")}
-              workflows={workflows}
-              initialPrompt={initialChatPrompt}
-              onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
-              onOpenCreateWorkflow={handleOpenCreateWorkflow}
-              onNavigateStudio={() => handleNavChange("workflows")}
-              onRunWorkflow={handleLaunchWorkflow}
-              dreamSeed={pendingDream}
-              onDreamResponse={handleDreamResponse}
             />
           )}
 
@@ -580,6 +558,39 @@ export default function App() {
               onEnterWorkbench={() => setCurrentView("chat")}
             />
           )}
+        </div>
+
+        {/* Keep the chat runtime mounted while navigating so an in-flight SSE response
+            and the current conversation state are not discarded by view transitions. */}
+        <div
+          style={{
+            display: currentView === "chat" ? "flex" : "none",
+            width: "100%",
+            height: "100%",
+            flex: 1,
+            minHeight: 0,
+            overflow: "hidden",
+          }}
+        >
+          <ChatPlaygroundPage
+            agents={agents}
+            currentAgent={currentAgent}
+            onSelectAgent={setCurrentAgent}
+            onAddAuditLog={handleAddAuditLog}
+            onNavigateSettings={() => handleNavChange("settings")}
+            onOpenModal={(tab: NavTab) => {
+              handleNavChange(tab as ViewMode);
+            }}
+            onBackHome={() => handleNavChange("home")}
+            workflows={workflows}
+            initialPrompt={initialChatPrompt}
+            onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
+            onOpenCreateWorkflow={handleOpenCreateWorkflow}
+            onNavigateStudio={() => handleNavChange("workflows")}
+            onRunWorkflow={handleLaunchWorkflow}
+            dreamSeed={pendingDream}
+            onDreamResponse={handleDreamResponse}
+          />
         </div>
       </main>
 
