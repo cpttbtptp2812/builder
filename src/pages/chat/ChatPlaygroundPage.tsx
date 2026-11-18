@@ -141,6 +141,7 @@ interface ChatPlaygroundProps {
   onNavigateStudio?: () => void;
   dreamSeed?: string;
   onDreamResponse?: (dream: string, response: string) => void;
+  onOpenEvaluation?: (message: Message) => void;
 }
 
 // 渲染正文内的引用角标 (支持 [1], [2], [^1] 式真实可点击锚点)
@@ -196,6 +197,7 @@ export default function ChatPlaygroundPage({
   onNavigateStudio,
   dreamSeed,
   onDreamResponse,
+  onOpenEvaluation,
 }: ChatPlaygroundProps) {
   const toast = useToast();
   const [sessions, setSessions] = useState<SessionItem[]>([]);
@@ -1695,6 +1697,18 @@ export default function ChatPlaygroundPage({
                                   <Database className="w-3.5 h-3.5 text-emerald-600" />
                                   <span>已引用 {msg.citations.length} 条制度原文</span>
                                   <ExternalLink className="w-3 h-3 text-emerald-500 opacity-70" />
+                                </button>
+                              )}
+
+                              {/* 单次对话评估：进入独立 Evaluation Dashboard */}
+                              {msg.content && !msg.isThinking && onOpenEvaluation && (
+                                <button
+                                  onClick={() => onOpenEvaluation(msg)}
+                                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-semibold text-indigo-700 transition hover:border-indigo-300 hover:bg-indigo-100"
+                                  title="分析本次 Agent 对话"
+                                >
+                                  <Activity className="w-3.5 h-3.5" />
+                                  <span>评估</span>
                                 </button>
                               )}
 
