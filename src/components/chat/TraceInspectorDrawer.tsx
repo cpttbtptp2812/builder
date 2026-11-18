@@ -317,7 +317,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               }`}
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>流程图</span>
+              <span>执行过程</span>
             </button>
             <button
               onClick={() => setActiveTab("finops")}
@@ -373,9 +373,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         </div>
       </div>
 
-      {/* ── 核心内容区：无任何多余中间垫层，五大类卡片自适应容器宽度 ── */}
+      {/* ── 核心内容区：Agent 执行过程观察器 ── */}
       <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 scrollbar-hide">
-        {/* TAB 1: 流程图 (五大标准执行阶段) */}
+        {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
           <>
             <ExternalAgentTracePanel />
