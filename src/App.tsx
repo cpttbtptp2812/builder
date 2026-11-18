@@ -7,7 +7,6 @@ import SystemSettingsPage from "./pages/settings/SystemSettingsPage";
 import KnowledgePage from "./pages/knowledge/KnowledgePage";
 import AgentsListPage from "./pages/agents/AgentsListPage";
 import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
-import ActionsConsolePage from "./pages/actions/ActionsConsolePage";
 import {
   NavTab,
   AgentItem,
@@ -52,7 +51,6 @@ export type ViewMode =
   | "knowledge"
   | "agents"
   | "tools"
-  | "actions"
   | "settings"
   | "designer";
 
@@ -62,7 +60,7 @@ export default function App() {
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
-    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, actions: 7, settings: 8 };
+    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7 };
     const curIdx = order[currentView] ?? 0;
     const newIdx = order[newView] ?? 0;
     if (newIdx > curIdx) {
@@ -89,6 +87,7 @@ export default function App() {
   const [pendingDream, setPendingDream] = useState("");
   const [pendingDreamMode, setPendingDreamMode] = useState("倾听");
   const [dreamArrival, setDreamArrival] = useState<DreamoraStar | null>(null);
+  const [continuingDream, setContinuingDream] = useState<DreamoraStar | null>(null);
   const dismissDreamArrival = useCallback(() => setDreamArrival(null), []);
 
   const handleLaunchDream = (dream: string, mode: string) => {
@@ -109,14 +108,31 @@ export default function App() {
     handleNavChange("chat");
   };
 
+  const handleContinueDream = (star: DreamoraStar) => {
+    setContinuingDream(star);
+    setPendingDream(star.dream);
+    setPendingDreamMode(star.mode || "倾听");
+    setInitialChatPrompt({
+      prompt: `我们正在继续一份被记录在 DREAMORA 星图里的梦想。\n\n原始梦想：\n${star.dream}\n\n上一次的回应：\n${star.response || "这份梦想刚刚被记录下来。"}\n\n请承接之前的语境继续交流，不要重新介绍自己，也不要重复整段旧回应。可以询问用户下一步最想探索的部分，并给出有温度、有实质内容的回应。`,
+      autoSend: true
+    });
+    handleNavChange("chat");
+  };
+
   const handleDreamResponse = (dream: string, response: string) => {
-    setDreamArrival({
+    const previous = continuingDream;
+    setDreamArrival(previous ? {
+      ...previous,
+      response: [previous.response, response].filter(Boolean).join("\n\n"),
+      createdAt: previous.createdAt
+    } : {
       id: `dream-${Date.now()}`,
       dream,
       response,
       mode: pendingDreamMode,
       createdAt: new Date().toISOString()
     });
+    setContinuingDream(null);
     setPendingDream("");
     handleNavChange("home");
   };
@@ -272,7 +288,6 @@ export default function App() {
     { label: "首页大盘", value: "home", icon: <DashboardOutlined /> },
     { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
     { label: "业务流中心", value: "workflows", icon: <AppstoreOutlined /> },
-    { label: "执行控制", value: "actions", icon: <DeploymentUnitOutlined /> },
   ];
 
   useEffect(() => {
@@ -490,6 +505,7 @@ export default function App() {
               onLaunchDream={handleLaunchDream}
               arrivalDream={dreamArrival}
               onDismissArrival={dismissDreamArrival}
+              onContinueDream={handleContinueDream}
             />
           )}
 
@@ -556,7 +572,6 @@ export default function App() {
 
           {currentView === "tools" && <ToolsMarketPage />}
 
-          {currentView === "actions" && <ActionsConsolePage />}
 
           {currentView === "settings" && (
             <SystemSettingsPage

@@ -203,6 +203,7 @@ export default function ChatPlaygroundPage({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [sessionBootstrapReady, setSessionBootstrapReady] = useState(false);
   const dreamResponseHandledRef = useRef(false);
   useEffect(() => { dreamResponseHandledRef.current = false; }, [dreamSeed]);
 
@@ -305,7 +306,8 @@ export default function ChatPlaygroundPage({
       })
       .catch(() => {
         setIsBackendConnected(false);
-      });
+      })
+      .finally(() => setSessionBootstrapReady(true));
 
     const refreshModelAndConfig = () => {
       fetch("/api/settings/config")
@@ -843,6 +845,7 @@ export default function ChatPlaygroundPage({
   };
 
   useEffect(() => {
+    if (initialPrompt && !sessionBootstrapReady) return;
     if (initialPrompt) {
       const promptText = typeof initialPrompt === "string" ? initialPrompt : initialPrompt.prompt;
       const shouldAutoSend = typeof initialPrompt === "string" ? true : initialPrompt.autoSend !== false;
@@ -864,7 +867,7 @@ export default function ChatPlaygroundPage({
     } else {
       autoSentPromptRef.current = null;
     }
-  }, [initialPrompt]);
+  }, [initialPrompt, sessionBootstrapReady]);
 
   const handleCopyMessage = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
