@@ -1,57 +1,188 @@
-import React from "react";
-import { ArrowLeft, Activity, AlertTriangle, BarChart3, CheckCircle2, Clock3, Cpu, Database, Gauge, GitBranch, ShieldCheck, Sparkles, Target, Wrench, XCircle, CircleDollarSign, Info } from "lucide-react";
+import React, { useMemo } from "react";
+import {
+  ArrowLeft, Activity, AlertTriangle, BarChart3, CheckCircle2, Clock3,
+  Cpu, Database, Gauge, GitBranch, ShieldCheck, Sparkles, Target,
+  Wrench, XCircle, CircleDollarSign, Info, Timer, Layers3
+} from "lucide-react";
 import { AgentStep } from "@/lib/agentTimeline";
 
+type ToolCall = { tool: string; status?: string; duration?: string; durationMs?: number; result?: unknown };
 export interface EvaluationMessage {
- id:string; userPrompt?:string; content:string; tokens?:number; duration?:string; trace?:any;
- agentTimeline?:AgentStep[]; toolCalls?:Array<{tool:string;status?:string;duration?:string}>; enableRAG?:boolean; modelName?:string;
+  id: string;
+  userPrompt?: string;
+  content: string;
+  tokens?: number;
+  duration?: string;
+  trace?: any;
+  traceSteps?: Record<number, any>;
+  agentTimeline?: AgentStep[];
+  toolCalls?: ToolCall[];
+  citations?: unknown[];
+  enableRAG?: boolean;
+  modelName?: string;
 }
-const durationMs=(value?:string,trace?:any)=>{if(typeof trace?.totalMs==="number")return trace.totalMs;if(!value)return 0;const s=value.match(/([\\d.]+)\\s*s/i);if(s)return Number(s[1])*1000;const ms=value.match(/([\\d.]+)\\s*ms/i);return ms?Number(ms[1]):0};
-const fmt=(n:number)=>n>=1000?(n/1000).toFixed(2)+"s":Math.round(n)+"ms";
-export default function EvaluationPage({message,onBack}:{message:EvaluationMessage;onBack:()=>void}) {
- const steps=message.agentTimeline||[];
- const failed=steps.filter(s=>s.status==="failed").length;
- const succeeded=steps.filter(s=>["done","passed","completed","success"].includes(String(s.status).toLowerCase())).length;
- const known=succeeded+failed;
- const tools=message.toolCalls?.length||steps.filter(s=>s.phase==="skill").length;
- const tokens=message.tokens??message.trace?.tokens??message.trace?.totalTokens??0;
- const elapsed=durationMs(message.duration,message.trace);
- const successRate=known?Math.round(succeeded/known*100):null;
- const metrics=[
-  {label:"任务完成度",value:"待评估",detail:"需要任务目标与验收标准",icon:Target},
-  {label:"回答质量",value:"待评估",detail:"需要 Judge 或人工标注",icon:Sparkles},
-  {label:"工具调用",value:String(tools),detail:message.toolCalls?.length?"来自本次对话的工具调用记录":"根据执行步骤统计",icon:Wrench},
-  {label:"执行可靠性",value:successRate===null?"暂无数据":successRate+"%",detail:known? `${succeeded} 成功 / ${failed} 失败`:"尚无可识别的完成/失败状态",icon:ShieldCheck},
-  {label:"执行效率",value:elapsed?fmt(elapsed):"未上报",detail:tokens?tokens.toLocaleString()+" tokens":"Token 用量未上报",icon:Gauge},
- ];
- return <div className="h-full overflow-y-auto bg-[#f6f8fc] text-slate-800"><div className="mx-auto max-w-6xl px-5 py-6 lg:px-8">
-  <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-white hover:text-indigo-600"><ArrowLeft className="h-4 w-4"/>返回对话</button>
-  <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-   <div className="flex flex-wrap items-start justify-between gap-5 p-5 md:p-6"><div className="min-w-0"><div className="flex items-center gap-2 text-[10px] font-bold tracking-[.18em] text-indigo-600"><BarChart3 className="h-3.5 w-3.5"/> AGENT RUN ANALYTICS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">对话评估</h1><p className="mt-1 max-w-3xl truncate text-sm text-slate-500">{message.userPrompt||"本次 Agent 执行记录"}</p><div className="mt-3 flex flex-wrap gap-2">{message.modelName&&<Pill>{message.modelName}</Pill>}<Pill>{steps.length} 个执行步骤</Pill>{message.enableRAG!==undefined&&<Pill>RAG {message.enableRAG?"开启":"关闭"}</Pill>}</div></div><div className="min-w-[150px] rounded-xl bg-indigo-50/70 px-4 py-3"><div className="text-[10px] font-semibold tracking-wider text-indigo-500">SEMANTIC SCORE</div><div className="mt-1 text-2xl font-semibold text-indigo-800">待评估</div><div className="mt-1 text-[10px] leading-4 text-indigo-600/80">尚未运行 AI Judge，不生成虚构总分</div></div></div>
-   <div className="grid grid-cols-2 border-t border-slate-100 md:grid-cols-4">{[
-    {label:"总耗时",value:elapsed?fmt(elapsed):"未上报",icon:Clock3},
-    {label:"Token 用量",value:tokens?tokens.toLocaleString():"未上报",icon:Cpu},
-    {label:"工具调用",value:String(tools),icon:Wrench},
-    {label:"失败步骤",value:String(failed),icon:AlertTriangle},
-   ].map((x,i)=><div key={x.label} className={`p-4 ${i%2===1?"border-l border-slate-100 md:border-l":""} ${i>1?"border-t border-slate-100 md:border-t-0":""} ${i>0?"md:border-l":""}`}><div className="flex items-center gap-1.5 text-[10px] text-slate-400"><x.icon className="h-3.5 w-3.5"/>{x.label}</div><div className="mt-1 font-mono text-lg font-semibold text-slate-800">{x.value}</div></div>)}</div>
-  </header>
-  <div className="mt-5 flex items-start gap-3 rounded-xl border border-sky-100 bg-sky-50/70 p-3.5"><Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600"/><p className="text-[11px] leading-5 text-sky-800">本页区分<strong>运行遥测</strong>与<strong>语义评估</strong>：耗时、Token、工具调用和执行状态来自本次运行记录；任务完成度、回答准确性等需要 Judge 或人工标准答案，目前不会用启发式公式伪造分数。</p></div>
-  <section className="mt-5"><div className="mb-3 flex items-end justify-between"><div><h2 className="text-sm font-semibold text-slate-900">评估维度</h2><p className="mt-1 text-[11px] text-slate-400">每项指标均标注当前数据来源和可用状态</p></div><span className="text-[10px] text-slate-400">5 个维度</span></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{metrics.map(m=><div key={m.label} className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold text-slate-600"><m.icon className="h-4 w-4 text-indigo-500"/>{m.label}</div><div className="mt-4 text-xl font-semibold tracking-tight text-slate-900">{m.value}</div><p className="mt-1 text-[10px] leading-4 text-slate-400">{m.detail}</p></div>)}</div></section>
-  <div className="mt-5 grid gap-5 lg:grid-cols-[1.35fr_.85fr]">
-   <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="text-sm font-semibold text-slate-900">执行过程诊断</h2><p className="mt-1 text-[11px] text-slate-400">逐步查看 Agent 执行事件与状态</p></div><span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${failed?"bg-rose-50 text-rose-700":"bg-emerald-50 text-emerald-700"}`}>{failed?failed+" 个失败事件":"未发现失败事件"}</span></div>
-    <div className="mt-5 space-y-0">{steps.length?steps.map((s,i)=><div key={s.stepId} className="relative flex gap-3 pb-4 last:pb-0"><div className="relative flex w-7 shrink-0 justify-center"><div className={`z-10 flex h-7 w-7 items-center justify-center rounded-full ${s.status==="failed"?"bg-rose-50 text-rose-600":"bg-emerald-50 text-emerald-600"}`}>{s.status==="failed"?<XCircle className="h-4 w-4"/>:<CheckCircle2 className="h-4 w-4"/>}</div>{i!==steps.length-1&&<div className="absolute top-7 h-full w-px bg-slate-200"/>}</div><div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-700">{s.rightTitle||s.leftTitle||"执行步骤"}</div><span className="font-mono text-[10px] text-slate-400">{typeof s.durationMs==="number"?fmt(s.durationMs):"耗时未记录"}</span></div><p className="mt-1 text-[10px] leading-4 text-slate-400">{s.rightSubtitle||s.leftSummary||"暂无事件描述"}</p></div></div>):<Empty title="暂无执行步骤" desc="本次对话没有附带 Agent Timeline 数据。"/>}</div>
-   </section>
-   <div className="space-y-5"><Panel title="性能与成本"><Row icon={<Clock3/>} label="总耗时" value={elapsed?fmt(elapsed):"未上报"}/><Row icon={<Activity/>} label="首 Token 延迟" value={message.trace?.ttftMs?fmt(message.trace.ttftMs):"未上报"}/><Row icon={<Cpu/>} label="Token 用量" value={tokens?tokens.toLocaleString():"未上报"}/><Row icon={<CircleDollarSign/>} label="费用" value={message.trace?.cost!==undefined?String(message.trace.cost):"未上报"}/></Panel>
-    <Panel title="执行可靠性"><Row icon={<GitBranch/>} label="可识别步骤" value={String(known)}/><Row icon={<CheckCircle2/>} label="成功步骤" value={String(succeeded)}/><Row icon={<XCircle/>} label="失败步骤" value={String(failed)}/><Row icon={<Database/>} label="RAG" value={message.enableRAG===undefined?"未知":message.enableRAG?"开启":"关闭"}/></Panel>
-    <div className="rounded-xl border border-indigo-100 bg-gradient-to-br from-indigo-50 to-violet-50 p-4"><div className="flex items-center gap-2 text-xs font-semibold text-indigo-900"><Sparkles className="h-4 w-4"/>AI Judge 尚未运行</div><p className="mt-2 text-[11px] leading-5 text-indigo-800/75">下一阶段接入评估模型与可配置评分标准：任务完成度、事实准确性、指令遵循、工具选择合理性，并为每项评分保留证据和解释。</p></div>
-   </div>
-  </div>
-  <section className="mt-5 grid gap-4 md:grid-cols-2"><ContentPanel title="用户任务" content={message.userPrompt||"当前消息未保存原始任务文本"}/><ContentPanel title="Agent 最终回复" content={message.content||"暂无最终回复"}/></section>
- </div></div>
+type Metric = { label: string; value: string; detail: string; icon: React.ElementType; tone?: "good" | "bad" | "neutral" };
+
+const asNumber = (...values: unknown[]): number | undefined => {
+  for (const value of values) {
+    const n = typeof value === "string" && value.trim() ? Number(value) : value;
+    if (typeof n === "number" && Number.isFinite(n) && n >= 0) return n;
+  }
+  return undefined;
+};
+const parseMs = (value?: string): number | undefined => {
+  if (!value) return undefined;
+  const seconds = value.match(/^\s*([\d.]+)\s*s\s*$/i);
+  if (seconds) return Number(seconds[1]) * 1000;
+  const ms = value.match(/^\s*([\d.]+)\s*ms\s*$/i);
+  return ms ? Number(ms[1]) : undefined;
+};
+const fmtMs = (n?: number) => n === undefined ? "未上报" : n >= 1000 ? (n / 1000).toFixed(2) + "s" : Math.round(n) + "ms";
+const fmtInt = (n?: number) => n === undefined ? "未上报" : Math.round(n).toLocaleString();
+const pct = (n: number, total: number) => total ? (n / total * 100).toFixed(1) + "%" : "暂无数据";
+const normalize = (v: unknown) => String(v ?? "").toLowerCase();
+const isSuccess = (v: unknown) => ["done", "passed", "completed", "success", "succeeded", "ok", "hit"].includes(normalize(v));
+const isFailure = (v: unknown) => ["failed", "failure", "error", "blocked", "execution_failed"].includes(normalize(v));
+
+function getRecordedSteps(message: EvaluationMessage): AgentStep[] {
+  if (message.agentTimeline?.length) return message.agentTimeline;
+  return Object.entries(message.traceSteps || {}).flatMap(([key, raw]) => {
+    if (!raw || typeof raw !== "object") return [];
+    return [{
+      stepId: String(raw.stepId ?? raw.spanId ?? "trace-" + key),
+      seq: Number(key),
+      phase: raw.phase ?? "external",
+      status: isSuccess(raw.status) ? "done" : isFailure(raw.status) ? "failed" : "unknown",
+      leftTitle: raw.leftTitle ?? raw.title ?? raw.name ?? "执行步骤",
+      leftSummary: raw.leftSummary ?? raw.message ?? "",
+      rightTitle: raw.rightTitle ?? raw.title ?? raw.name ?? "执行步骤",
+      rightSubtitle: raw.rightSubtitle ?? raw.description ?? "",
+      rightDetail: raw.rightDetail ?? raw,
+      durationMs: asNumber(raw.durationMs, raw.totalMs, raw.duration),
+      timestamp: asNumber(raw.timestamp) ?? 0,
+    } as AgentStep];
+  }).sort((a, b) => a.seq - b.seq);
 }
-function Pill({children}:{children:React.ReactNode}){return <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] text-slate-500">{children}</span>}
-function StatIcon({children}:{children:React.ReactNode}){return <span className="text-indigo-500">{children}</span>}
-function Row({icon,label,value}:{icon:React.ReactNode;label:string;value:string}){return <div className="flex items-center justify-between border-b border-slate-100 py-2.5 last:border-0"><span className="flex items-center gap-2 text-xs text-slate-500"><StatIcon>{icon}</StatIcon>{label}</span><b className="font-mono text-xs text-slate-700">{value}</b></div>}
-function Panel({title,children}:{title:string;children:React.ReactNode}){return <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"><h3 className="text-xs font-semibold text-slate-800">{title}</h3><div className="mt-2">{children}</div></div>}
-function ContentPanel({title,content}:{title:string;content:string}){return <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"><h3 className="text-xs font-semibold text-slate-800">{title}</h3><p className="mt-3 whitespace-pre-wrap break-words text-xs leading-6 text-slate-600">{content}</p></div>}
-function Empty({title,desc}:{title:string;desc:string}){return <div className="rounded-xl border border-dashed border-slate-200 py-12 text-center"><p className="text-xs font-medium text-slate-500">{title}</p><p className="mt-1 text-[10px] text-slate-400">{desc}</p></div>}
+
+function MetricCard({ metric }: { metric: Metric }) {
+  const Icon = metric.icon;
+  const tone = metric.tone === "good" ? "text-emerald-700 bg-emerald-50" : metric.tone === "bad" ? "text-rose-700 bg-rose-50" : "text-indigo-600 bg-indigo-50";
+  return <div className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-sm">
+    <div className="flex items-center gap-2 text-xs font-semibold text-slate-600"><span className={`flex h-7 w-7 items-center justify-center rounded-lg ${tone}`}><Icon className="h-4 w-4"/></span>{metric.label}</div>
+    <div className="mt-4 text-xl font-semibold tracking-tight text-slate-900 tabular-nums">{metric.value}</div>
+    <p className="mt-1 text-[10px] leading-4 text-slate-400">{metric.detail}</p>
+  </div>;
+}
+function Row({ label, value, detail }: { label: string; value: string; detail?: string }) {
+  return <div className="flex items-start justify-between gap-4 border-b border-slate-100 py-2.5 last:border-0"><div><div className="text-xs text-slate-600">{label}</div>{detail && <div className="mt-0.5 text-[10px] text-slate-400">{detail}</div>}</div><b className="shrink-0 font-mono text-xs text-slate-800 tabular-nums">{value}</b></div>;
+}
+function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+  return <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm"><h2 className="text-sm font-semibold text-slate-900">{title}</h2><div className="mt-3">{children}</div></section>;
+}
+function Empty({ title, desc }: { title: string; desc: string }) {
+  return <div className="rounded-xl border border-dashed border-slate-200 py-10 text-center"><p className="text-xs font-medium text-slate-500">{title}</p><p className="mt-1 text-[10px] text-slate-400">{desc}</p></div>;
+}
+
+export default function EvaluationPage({ message, onBack }: { message: EvaluationMessage; onBack: () => void }) {
+  const data = useMemo(() => {
+    const steps = getRecordedSteps(message);
+    const tools = message.toolCalls?.length ? message.toolCalls : steps.filter(s => s.phase === "skill").map(s => ({
+      tool: s.rightTitle, status: s.status, durationMs: s.durationMs
+    }));
+    const successfulSteps = steps.filter(s => isSuccess(s.status)).length;
+    const failedSteps = steps.filter(s => isFailure(s.status)).length;
+    const unknownSteps = steps.length - successfulSteps - failedSteps;
+    const knownSteps = successfulSteps + failedSteps;
+    const successfulTools = tools.filter(t => isSuccess(t.status)).length;
+    const failedTools = tools.filter(t => isFailure(t.status)).length;
+    const knownTools = successfulTools + failedTools;
+    const toolDurations = tools.map(t => asNumber(t.durationMs) ?? parseMs(t.duration)).filter((n): n is number => n !== undefined);
+    const stepDurations = steps.map(s => asNumber(s.durationMs)).filter((n): n is number => n !== undefined);
+    const trace = message.trace || {};
+    const totalMs = asNumber(trace.totalMs, trace.durationMs) ?? parseMs(message.duration);
+    const ttftMs = asNumber(trace.ttftMs, trace.firstTokenLatencyMs);
+    const tokensIn = asNumber(trace.promptTokens, trace.inputTokens, trace.usage?.prompt_tokens);
+    const tokensOut = asNumber(trace.completionTokens, trace.outputTokens, trace.usage?.completion_tokens);
+    const totalTokens = asNumber(message.tokens, trace.totalTokens, trace.tokens,
+      tokensIn !== undefined && tokensOut !== undefined ? tokensIn + tokensOut : undefined);
+    const cost = asNumber(trace.cost, trace.costCny, trace.usage?.cost);
+    const stepDurationSum = stepDurations.length ? stepDurations.reduce((a, b) => a + b, 0) : undefined;
+    const toolDurationSum = toolDurations.length ? toolDurations.reduce((a, b) => a + b, 0) : undefined;
+    const timestamps = steps.map(s => s.timestamp).filter(t => t > 0);
+    const observedWindowMs = timestamps.length > 1 ? Math.max(...timestamps) - Math.min(...timestamps) : undefined;
+    return { steps, tools, successfulSteps, failedSteps, unknownSteps, knownSteps, successfulTools, failedTools, knownTools,
+      totalMs, ttftMs, tokensIn, tokensOut, totalTokens, cost, stepDurationSum, toolDurationSum, observedWindowMs,
+      avgStepMs: stepDurations.length ? stepDurationSum! / stepDurations.length : undefined,
+      maxStepMs: stepDurations.length ? Math.max(...stepDurations) : undefined };
+  }, [message]);
+
+  const metrics: Metric[] = [
+    { label: "执行总耗时", value: fmtMs(data.totalMs), detail: data.totalMs !== undefined ? "后端 trace.totalMs / 消息 duration" : "运行记录未提供总耗时", icon: Clock3 },
+    { label: "Token 总量", value: fmtInt(data.totalTokens), detail: data.tokensIn !== undefined || data.tokensOut !== undefined ? `输入 ${fmtInt(data.tokensIn)} · 输出 ${fmtInt(data.tokensOut)}` : "读取消息或 Provider usage", icon: Cpu },
+    { label: "工具调用", value: String(data.tools.length), detail: data.knownTools ? `${data.successfulTools} 成功 · ${data.failedTools} 失败` : "按本次实际工具事件计数", icon: Wrench },
+    { label: "步骤成功率", value: data.knownSteps ? pct(data.successfulSteps, data.knownSteps) : "暂无数据", detail: data.knownSteps ? `${data.successfulSteps} 成功 / ${data.failedSteps} 失败 · ${data.unknownSteps} 未知` : "仅统计明确成功或失败的步骤", icon: ShieldCheck, tone: data.failedSteps ? "bad" : "good" },
+    { label: "实际费用", value: data.cost !== undefined ? data.cost.toFixed(6) : "未上报", detail: data.cost !== undefined ? "读取 Provider / 后端记录，不做价格猜测" : "没有真实费用字段，不估算", icon: CircleDollarSign },
+  ];
+
+  return <div className="h-full overflow-y-auto bg-[#f6f8fc] text-slate-800">
+    <div className="mx-auto max-w-6xl px-5 py-6 lg:px-8">
+      <button onClick={onBack} className="mb-5 inline-flex items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium text-slate-500 transition hover:bg-white hover:text-indigo-600"><ArrowLeft className="h-4 w-4"/>返回对话</button>
+      <header className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-5 p-5 md:p-6">
+          <div className="min-w-0"><div className="flex items-center gap-2 text-[10px] font-bold tracking-[.18em] text-indigo-600"><BarChart3 className="h-3.5 w-3.5"/> AGENT RUN ANALYTICS</div><h1 className="mt-2 text-2xl font-semibold tracking-tight text-slate-900">对话运行分析</h1><p className="mt-1 max-w-3xl truncate text-sm text-slate-500">{message.userPrompt || "本次 Agent 执行记录"}</p><div className="mt-3 flex flex-wrap gap-2">{message.modelName && <Pill>{message.modelName}</Pill>}<Pill>{data.steps.length} 个事件步骤</Pill><Pill>{data.tools.length} 次工具调用</Pill>{message.enableRAG !== undefined && <Pill>RAG {message.enableRAG ? "开启" : "关闭"}</Pill>}</div></div>
+          <div className="min-w-[170px] rounded-xl bg-slate-50 px-4 py-3"><div className="text-[10px] font-semibold tracking-wider text-slate-500">SEMANTIC EVALUATION</div><div className="mt-1 text-xl font-semibold text-slate-700">尚未评判</div><div className="mt-1 text-[10px] leading-4 text-slate-500">语义质量不由遥测数据推断</div></div>
+        </div>
+        <div className="grid grid-cols-2 border-t border-slate-100 md:grid-cols-4">
+          {[
+            ["总耗时", fmtMs(data.totalMs)], ["Token", fmtInt(data.totalTokens)],
+            ["工具调用", String(data.tools.length)], ["失败步骤", String(data.failedSteps)]
+          ].map(([label, value], i) => <div key={label} className={`p-4 ${i % 2 ? "border-l border-slate-100" : ""} ${i > 1 ? "border-t border-slate-100 md:border-t-0" : ""} ${i > 0 ? "md:border-l" : ""}`}><div className="text-[10px] text-slate-400">{label}</div><div className="mt-1 font-mono text-lg font-semibold text-slate-800 tabular-nums">{value}</div></div>)}
+        </div>
+      </header>
+
+      <div className="mt-5 flex items-start gap-3 rounded-xl border border-sky-100 bg-sky-50/70 p-3.5"><Info className="mt-0.5 h-4 w-4 shrink-0 text-sky-600"/><p className="text-[11px] leading-5 text-sky-800">以下统计直接读取本次消息持久化的 Agent Timeline、工具调用和 Provider usage。成功率只把明确成功/失败的记录纳入分母；未知状态不会被当成成功。费用仅展示后端实际上报值。</p></div>
+
+      <section className="mt-5"><div className="mb-3"><h2 className="text-sm font-semibold text-slate-900">本次运行指标</h2><p className="mt-1 text-[11px] text-slate-400">每个数字均有数据来源；未采集到的字段保持为空</p></div><div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">{metrics.map(m => <MetricCard key={m.label} metric={m}/>)}</div></section>
+
+      <div className="mt-5 grid gap-5 lg:grid-cols-[1.2fr_.8fr]">
+        <Panel title="执行事件明细">
+          {data.steps.length ? <div className="space-y-0">{data.steps.map((s, i) => {
+            const failed = isFailure(s.status), succeeded = isSuccess(s.status);
+            return <div key={s.stepId} className="relative flex gap-3 pb-4 last:pb-0">
+              <div className="relative flex w-7 shrink-0 justify-center"><div className={`z-10 flex h-7 w-7 items-center justify-center rounded-full ${failed ? "bg-rose-50 text-rose-600" : succeeded ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-500"}`}>{failed ? <XCircle className="h-4 w-4"/> : succeeded ? <CheckCircle2 className="h-4 w-4"/> : <Activity className="h-4 w-4"/>}</div>{i !== data.steps.length - 1 && <div className="absolute top-7 h-full w-px bg-slate-200"/>}</div>
+              <div className="min-w-0 flex-1 rounded-xl border border-slate-100 bg-slate-50/60 p-3"><div className="flex flex-wrap items-center justify-between gap-2"><div className="text-xs font-semibold text-slate-700">{s.rightTitle || s.leftTitle || "执行步骤"}</div><span className="font-mono text-[10px] text-slate-400">{fmtMs(asNumber(s.durationMs))}</span></div><div className="mt-1 flex flex-wrap gap-2 text-[10px] text-slate-400"><span>{s.phase}</span><span>·</span><span>{s.status}</span></div><p className="mt-1 text-[10px] leading-4 text-slate-500">{s.rightSubtitle || s.leftSummary || "事件未附带描述"}</p></div>
+            </div>;
+          })}</div> : <Empty title="没有可分析的执行事件" desc="本次运行未持久化 Agent Timeline / traceSteps。不会用演示数据填充。"/>}
+        </Panel>
+        <div className="space-y-5">
+          <Panel title="耗时拆解">
+            <Row label="首 Token 延迟（TTFT）" value={fmtMs(data.ttftMs)} detail="Provider / 后端上报的真实首 Token 时间"/>
+            <Row label="步骤耗时合计" value={fmtMs(data.stepDurationSum)} detail="仅累加有 durationMs 的事件，可能包含并行区间"/>
+            <Row label="步骤平均耗时" value={fmtMs(data.avgStepMs)} detail={data.avgStepMs !== undefined ? "有耗时记录的步骤平均值" : "没有步骤耗时数据"}/>
+            <Row label="最慢步骤" value={fmtMs(data.maxStepMs)} detail="本次事件中记录到的最大单步耗时"/>
+            <Row label="工具耗时合计" value={fmtMs(data.toolDurationSum)} detail="仅累加工具调用明确上报的耗时"/>
+          </Panel>
+          <Panel title="执行可靠性">
+            <Row label="步骤成功" value={String(data.successfulSteps)}/>
+            <Row label="步骤失败" value={String(data.failedSteps)}/>
+            <Row label="状态未知" value={String(data.unknownSteps)}/>
+            <Row label="明确状态步骤成功率" value={data.knownSteps ? pct(data.successfulSteps, data.knownSteps) : "暂无数据"} detail="成功数 ÷（成功数 + 失败数）"/>
+            <Row label="工具成功率" value={data.knownTools ? pct(data.successfulTools, data.knownTools) : "暂无数据"} detail="只计算明确返回成功/失败状态的工具调用"/>
+          </Panel>
+          <Panel title="Token 与知识检索">
+            <Row label="输入 Token" value={fmtInt(data.tokensIn)}/>
+            <Row label="输出 Token" value={fmtInt(data.tokensOut)}/>
+            <Row label="总 Token" value={fmtInt(data.totalTokens)}/>
+            <Row label="RAG 开关" value={message.enableRAG === undefined ? "未知" : message.enableRAG ? "开启" : "关闭"}/>
+            <Row label="引用来源数" value={message.citations ? String(message.citations.length) : "未上报"} detail="来自本次消息 citations 数据"/>
+          </Panel>
+        </div>
+      </div>
+
+      <section className="mt-5 grid gap-4 md:grid-cols-2"><ContentPanel title="用户任务" content={message.userPrompt || "未保存原始任务文本"}/><ContentPanel title="Agent 最终回复" content={message.content || "暂无最终回复"}/></section>
+      <div className="mt-5 rounded-xl border border-slate-200 bg-white p-4"><div className="flex items-center gap-2 text-xs font-semibold text-slate-700"><Target className="h-4 w-4 text-indigo-500"/>为什么没有综合评分？</div><p className="mt-2 text-[11px] leading-5 text-slate-500">耗时、Token、工具成功率是运行遥测，可以直接计算；任务完成度、事实准确性、指令遵循需要评估标准或 Judge。当前版本不会把运行成功率冒充回答质量。下一步应接入可配置评估集，并保存每条评分的证据、理由和 Judge 模型信息。</p></div>
+    </div>
+  </div>;
+}
+function Pill({ children }: { children: React.ReactNode }) { return <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px] text-slate-500">{children}</span>; }
+function ContentPanel({ title, content }: { title: string; content: string }) { return <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm"><h3 className="text-xs font-semibold text-slate-800">{title}</h3><p className="mt-3 whitespace-pre-wrap break-words text-xs leading-6 text-slate-600">{content}</p></div>; }
