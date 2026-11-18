@@ -599,6 +599,7 @@ export default function ChatPlaygroundPage({
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
     let accumulatedContent = "";
+    let terminalEventReceived = false;
     const requestStartTs = Date.now();
     let firstTokenTs = 0;
 
@@ -768,6 +769,7 @@ export default function ChatPlaygroundPage({
             );
           },
           onFinish: (rawMeta) => {
+            terminalEventReceived = true;
             isGeneratingRef.current = false;
             setIsGenerating(false);
             try {
@@ -806,6 +808,7 @@ export default function ChatPlaygroundPage({
             }
           },
           onError: (err) => {
+            terminalEventReceived = true;
             isGeneratingRef.current = false;
             setIsGenerating(false);
             setMessages((prev) =>
@@ -823,6 +826,22 @@ export default function ChatPlaygroundPage({
         },
         abortController.signal
       );
+
+      // 流正常关闭却没有 finish/error 事件时，结束加载态并明确告知用户，
+      // 不再留下一个空白且永久旋转的 assistant 气泡。
+      if (!terminalEventReceived && !abortController.signal.aborted) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === asstMsgId
+              ? {
+                ...m,
+                content: m.content || "【响应意外结束】连接已关闭，但没有收到模型完成事件。请检查后端日志与 SSE 输出。",
+                isThinking: false,
+              }
+              : m
+          )
+        );
+      }
     } catch (err: any) {
       if (err?.name === "AbortError" || abortController.signal.aborted) {
         return;
