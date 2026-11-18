@@ -248,7 +248,7 @@ export async function streamChatFromBackend(
     let event = "message";
     const dataLines: string[] = [];
 
-    for (const line of block.split(/\\r\\n|\\r|\\n/)) {
+    for (const line of block.split(/\r\n|\r|\n/)) {
       if (!line || line.startsWith(":")) continue;
       const colonIndex = line.indexOf(":");
       const field = colonIndex === -1 ? line : line.slice(0, colonIndex);
@@ -262,7 +262,7 @@ export async function streamChatFromBackend(
       }
     }
 
-    const data = dataLines.join("\\n");
+    const data = dataLines.join("\n");
     if (event === "agent_step" && handlers.onAgentStep) {
       try { handlers.onAgentStep(JSON.parse(data)); } catch { console.warn("[api] Invalid agent_step SSE payload", data); }
     } else if (event === "trace_step" && handlers.onTraceStep) {
@@ -305,7 +305,7 @@ export async function streamChatFromBackend(
 
       buffer += decoder.decode(value, { stream: true });
       let boundary: RegExpExecArray | null;
-      const separator = /(?:\\r\\n|\\r|\\n){2}/;
+      const separator = /(?:\r\n|\r|\n){2}/;
       while ((boundary = separator.exec(buffer)) !== null) {
         const block = buffer.slice(0, boundary.index);
         buffer = buffer.slice(boundary.index + boundary[0].length);
