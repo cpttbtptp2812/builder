@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
-  Activity, CheckCircle2, Circle, Clock3, Copy, Loader2, RotateCcw,
+  Activity, CheckCircle2, Clock3, Copy, Loader2, RotateCcw,
   XCircle, ChevronRight, Zap, Cpu, Wrench, Database, Search,
-  AlertTriangle, Radio, TerminalSquare, Filter, Eye, GitBranch
+  AlertTriangle, Radio, Eye, GitBranch
 } from "lucide-react";
 import { AgentStep } from "@/lib/agentTimeline";
 import { TraceDrawerMessage } from "./TraceInspectorDrawer";
