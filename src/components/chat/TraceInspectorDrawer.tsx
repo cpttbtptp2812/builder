@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentStep, rebuildTimelineFromMessage } from "@/lib/agentTimeline";
-import { InspectorStepCards } from "./InspectorStepCards";
+import { MissionControlTimeline } from "./MissionControlTimeline";
 import { ExternalAgentTracePanel } from "./ExternalAgentTracePanel";
 import {
   X,
@@ -11,6 +11,8 @@ import {
   Layers,
   GripVertical,
   Download,
+  Maximize2,
+  Minimize2,
 } from "lucide-react";
 import { downloadSummaryReport } from "@/lib/reportExport";
 import {
@@ -80,6 +82,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<"flow" | "finops">(
     defaultTab === "finops" ? "finops" : "flow"
   );
+  const [isImmersive, setIsImmersive] = useState(false);
 
   // 抽屉宽度状态（支持拖拽调整并持久化到本地与数据库）
   const [drawerWidth, setDrawerWidth] = useState<number>(() => {
@@ -230,13 +233,15 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: `${drawerWidth}px`,
-        transition: isDragging ? "none" : "width 0.15s ease-out",
+        width: isImmersive ? "100vw" : `${drawerWidth}px`,
+        height: isImmersive ? "100dvh" : undefined,
+        inset: isImmersive ? 0 : undefined,
+        transition: isDragging || isImmersive ? "none" : "width 0.15s ease-out",
       }}
       className={
         isSplit
-          ? "trace-cosmos relative h-full bg-white border-l border-slate-200 shadow-xs flex flex-col shrink-0 z-10 select-auto"
-          : "trace-cosmos fixed inset-y-0 right-0 z-50 bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto"
+          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full border-l shadow-xs z-10"} bg-white border-slate-200 flex flex-col shrink-0 select-auto`
+          : `trace-cosmos fixed ${isImmersive ? "inset-0 z-[100]" : "inset-y-0 right-0 z-50"} bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto`
       }
     >
 
@@ -348,7 +353,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             </button>
           )}
 
-          {onToggleLayout && (
+          <button\n            onClick={() => setIsImmersive((value) => !value)}\n            className="p-1.5 rounded-lg text-slate-400 hover:text-cyan-200 hover:bg-slate-800/70 transition cursor-pointer"\n            title={isImmersive ? "退出沉浸模式" : "进入全屏沉浸模式"}\n            aria-label={isImmersive ? "退出沉浸模式" : "进入全屏沉浸模式"}\n          >\n            {isImmersive ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}\n          </button>\n\n          {onToggleLayout && (
             <button
               onClick={onToggleLayout}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
