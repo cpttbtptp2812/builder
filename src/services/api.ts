@@ -138,18 +138,14 @@ export interface SessionItem {
 }
 
 export async function fetchSessionsApi(): Promise<SessionItem[]> {
-  try {
-    const res = await apiFetch("/api/chat/sessions");
-    if (!res.ok) throw new Error("Failed to fetch sessions");
-    const data = await res.json();
-    return data.map((s: any) => ({
-      id: s.id,
-      title: s.title,
-      time: s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString() : "刚刚",
-    }));
-  } catch {
-    return [];
-  }
+  const res = await apiFetch("/api/chat/sessions");
+  if (!res.ok) throw new Error(`Failed to fetch sessions: HTTP ${res.status}`);
+  const data = await res.json();
+  return data.map((s: any) => ({
+    id: s.id,
+    title: s.title,
+    time: s.updatedAt ? new Date(s.updatedAt).toLocaleTimeString() : "刚刚",
+  }));
 }
 
 export async function createSessionApi(title: string): Promise<SessionItem> {
@@ -169,28 +165,24 @@ export async function deleteSessionApi(id: string): Promise<void> {
 }
 
 export async function fetchMessagesApi(sessionId: string): Promise<any[]> {
-  try {
-    const res = await apiFetch(`/api/chat/messages?sessionId=${sessionId}`);
-    if (!res.ok) throw new Error("Failed to fetch messages");
-    const data = await res.json();
-    return data.map((m: any) => ({
-      id: m.id,
-      role: m.role,
-      content: m.content,
-      reasoning: m.reasoning,
-      citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
-      traceSteps: m.traceStepsJson ? JSON.parse(m.traceStepsJson) : {},
-      toolCalls: m.toolCallsJson ? JSON.parse(m.toolCallsJson) : undefined,
-      approvalTicket: m.approvalTicketJson ? JSON.parse(m.approvalTicketJson) : undefined,
-      trace: m.traceJson ? JSON.parse(m.traceJson) : undefined,
-      tokens: m.tokens,
-      duration: m.duration,
-      isCached: !!m.isCached,
-      createdAt: m.createdAt,
-    }));
-  } catch {
-    return [];
-  }
+  const res = await apiFetch(`/api/chat/messages?sessionId=${encodeURIComponent(sessionId)}`);
+  if (!res.ok) throw new Error(`Failed to fetch messages: HTTP ${res.status}`);
+  const data = await res.json();
+  return data.map((m: any) => ({
+    id: m.id,
+    role: m.role,
+    content: m.content,
+    reasoning: m.reasoning,
+    citations: m.citationsJson ? JSON.parse(m.citationsJson) : undefined,
+    traceSteps: m.traceStepsJson ? JSON.parse(m.traceStepsJson) : {},
+    toolCalls: m.toolCallsJson ? JSON.parse(m.toolCallsJson) : undefined,
+    approvalTicket: m.approvalTicketJson ? JSON.parse(m.approvalTicketJson) : undefined,
+    trace: m.traceJson ? JSON.parse(m.traceJson) : undefined,
+    tokens: m.tokens,
+    duration: m.duration,
+    isCached: !!m.isCached,
+    createdAt: m.createdAt,
+  }));
 }
 
 // ==========================================
