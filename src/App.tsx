@@ -123,7 +123,7 @@ export default function App() {
     const previous = continuingDream;
     setDreamArrival(previous ? {
       ...previous,
-      response: [previous.response, response].filter(Boolean).join("\\n\\n"),
+      response: [previous.response, response].filter(Boolean).join("\n\n"),
       createdAt: previous.createdAt
     } : {
       id: `dream-${Date.now()}`,
