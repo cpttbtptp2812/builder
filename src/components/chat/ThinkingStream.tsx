@@ -131,7 +131,16 @@ export const ThinkingStream: React.FC<ThinkingStreamProps> = ({
   }
 
   return (
-    <div className="my-2.5 rounded-2xl border border-slate-200/90 bg-white shadow-2xs transition-all duration-200 overflow-hidden font-sans">
+    <div className="dream-thinking-stream my-2.5 rounded-2xl border border-slate-200/90 bg-white shadow-2xs transition-all duration-200 overflow-hidden font-sans">
+      <style>{`
+        .dream-thinking-stream{background:linear-gradient(145deg,rgba(24,29,72,.68),rgba(12,23,51,.62))!important;color:#e8ecff}
+        .dream-thinking-stream>div:first-of-type{background:rgba(255,255,255,.035)!important}
+        .dream-thinking-stream .text-slate-700,.dream-thinking-stream .text-slate-800{color:#e7eaff!important}
+        .dream-thinking-stream .text-slate-600,.dream-thinking-stream .text-slate-500,.dream-thinking-stream .text-slate-400{color:#aab5dc!important}
+        .dream-thinking-stream .border-slate-100,.dream-thinking-stream .border-slate-200{border-color:rgba(179,174,255,.16)!important}
+        .dream-thinking-stream .bg-slate-50,.dream-thinking-stream .bg-slate-50\/50{background:rgba(255,255,255,.035)!important}
+        .dream-thinking-stream code{background:rgba(103,232,249,.09)!important;color:#a5f3fc!important;border-color:rgba(103,232,249,.2)!important}
+      `}</style>
       {/* ── 顶部胶囊条：浅色高质感风格 + 保留 4 个阶段进度条 ── */}
       <div
         onClick={handleToggle}

@@ -945,7 +945,30 @@ export default function ChatPlaygroundPage({
   const isChatEmpty = messages.length === 0 && !isGenerating;
 
   return (
-    <div className="flex-1 flex h-full w-full overflow-hidden relative font-sans cyber-grid-canvas">
+    <div className="dream-chat-world flex-1 flex h-full w-full overflow-hidden relative font-sans cyber-grid-canvas">
+      <style>{`
+        .dream-chat-world{isolation:isolate;background:radial-gradient(ellipse at 18% 18%,rgba(102,78,205,.20),transparent 34%),radial-gradient(ellipse at 78% 78%,rgba(40,116,164,.16),transparent 38%),linear-gradient(135deg,#090d24 0%,#11152f 48%,#0a1730 100%);color:#e9eaff}
+        .dream-chat-world:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(210,202,255,.48) .7px,transparent .9px),radial-gradient(rgba(103,232,249,.28) .8px,transparent 1px);background-size:31px 31px,53px 53px;background-position:0 0,17px 23px;mask-image:linear-gradient(180deg,rgba(0,0,0,.9),transparent 94%)}
+        .dream-chat-world:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:58%;height:48%;left:20%;top:26%;background:radial-gradient(ellipse,rgba(124,58,237,.12),transparent 70%);filter:blur(42px)}
+        .dream-chat-world .dream-chat-history{background:rgba(12,17,43,.64)!important;border-color:rgba(173,160,255,.16)!important;backdrop-filter:blur(18px)}
+        .dream-chat-world .dream-chat-main{background:transparent}
+        .dream-chat-world .dream-chat-toolbar{background:linear-gradient(180deg,rgba(9,13,36,.68),rgba(9,13,36,.12));border-bottom:1px solid rgba(183,173,255,.09)}
+        .dream-chat-world .dream-chat-scroll{background:transparent}
+        .dream-chat-world .dream-user-bubble{background:linear-gradient(135deg,rgba(95,77,174,.72),rgba(42,69,123,.74));border:1px solid rgba(180,166,255,.24);box-shadow:0 10px 30px rgba(3,6,24,.22),inset 0 1px rgba(255,255,255,.12);backdrop-filter:blur(14px);color:#f5f3ff}
+        .dream-chat-world .dream-assistant-bubble{background:linear-gradient(145deg,rgba(20,27,62,.72),rgba(12,24,50,.72));border:1px solid rgba(160,174,255,.17);box-shadow:0 12px 34px rgba(3,6,24,.16),inset 0 1px rgba(255,255,255,.06);backdrop-filter:blur(16px);color:#e9edff}
+        .dream-chat-world .dream-assistant-bubble p,.dream-chat-world .dream-assistant-bubble li{color:#e4e9ff}
+        .dream-chat-world .dream-assistant-bubble code{color:#b8f1ff}
+        .dream-chat-world .dream-thinking-stream{background:rgba(23,29,70,.52)!important;border-color:rgba(166,156,255,.2)!important;box-shadow:0 8px 24px rgba(4,8,32,.14)}
+        .dream-chat-world .dream-composer{background:linear-gradient(145deg,rgba(22,29,68,.88),rgba(10,20,48,.9))!important;border-color:rgba(171,160,255,.26)!important;box-shadow:0 18px 48px rgba(3,6,24,.3),inset 0 1px rgba(255,255,255,.1)!important;backdrop-filter:blur(20px)}
+        .dream-chat-world .dream-composer textarea{color:#f1f3ff!important}
+        .dream-chat-world .dream-composer textarea::placeholder{color:rgba(202,208,239,.48)!important}
+        .dream-chat-world .dream-composer .border-slate-100{border-color:rgba(183,173,255,.14)!important}
+        .dream-chat-world .dream-toolbar-pill{background:rgba(25,31,70,.56)!important;border-color:rgba(170,164,255,.2)!important;color:#dfe5ff!important;box-shadow:0 5px 18px rgba(2,6,23,.12)}
+        .dream-chat-world .dream-muted{color:rgba(204,211,243,.62)!important}
+        .dream-chat-world .dream-empty-title{color:#f1efff}
+        @media(prefers-reduced-motion:no-preference){.dream-chat-world .dream-user-bubble,.dream-chat-world .dream-assistant-bubble{animation:dreamMessageIn .38s cubic-bezier(.2,.7,.2,1) both}@keyframes dreamMessageIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}}
+        @media(prefers-reduced-motion:reduce){.dream-chat-world *{animation:none!important;transition:none!important}}
+      `}</style>
       {/* ────────────────── 1. 类似 DeepSeek / 豆包的极轻抽屉历史侧栏 ────────────────── */}
       <div
         className={`h-full border-r border-slate-200/70 bg-white/95 backdrop-blur-md flex flex-col transition-all duration-300 ease-in-out z-20 shrink-0 ${isHistoryOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none border-r-0"
@@ -1007,9 +1030,9 @@ export default function ChatPlaygroundPage({
       </div>
 
       {/* ────────────────── 2. 主聊天视窗 (DeepSeek/元宝极简风) ────────────────── */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="dream-chat-main flex-1 flex flex-col h-full overflow-hidden relative">
         {/* 顶部极简透明工具条 */}
-        <div className="h-14 px-6 flex items-center justify-between shrink-0 z-10">
+        <div className="dream-chat-toolbar h-14 px-6 flex items-center justify-between shrink-0 z-10">
           <div className="flex items-center gap-2">
             {!isHistoryOpen && (
               <button
@@ -1159,7 +1182,7 @@ export default function ChatPlaygroundPage({
         </div>
 
         {/* 核心内容区 (宽屏舒适排版，消除死白边) */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6">
+        <div className="dream-chat-scroll flex-1 overflow-y-auto scrollbar-hide px-4 sm:px-6">
           <div className="w-full max-w-5xl mx-auto h-full flex flex-col">
             {/* ── 首页空态：类似 DeepSeek/豆包，只聚焦在中央大标题与核心输入框 ── */}
             {isChatEmpty ? (
@@ -1196,7 +1219,7 @@ export default function ChatPlaygroundPage({
                 </div>
 
                 {/* 居中大对话输入框 (宽屏展开) */}
-                <div className="w-full max-w-4xl bg-white rounded-3xl border border-slate-200/90 shadow-lg shadow-slate-200/30 p-3 space-y-2.5 transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10">
+                <div className="dream-composer w-full max-w-4xl bg-white rounded-3xl border border-slate-200/90 shadow-lg shadow-slate-200/30 p-3 space-y-2.5 transition-all focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10">
                   <textarea
                     ref={textareaRef}
                     value={inputMessage}
@@ -1544,7 +1567,7 @@ export default function ChatPlaygroundPage({
                   <div key={msg.id} className="space-y-3 animate-in fade-in duration-200">
                     {msg.role === "user" ? (
                       <div className="flex flex-col items-end gap-1">
-                        <div className="max-w-xl bg-slate-900 text-white rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed shadow-sm">
+                        <div className="dream-user-bubble max-w-xl rounded-2xl rounded-tr-sm px-4 py-3 text-sm leading-relaxed">
                           {msg.content}
                         </div>
                         {msg.createdAt && (
@@ -1575,7 +1598,7 @@ export default function ChatPlaygroundPage({
                           />
 
                           {/* 文本回复泡 */}
-                          <div className="rounded-2xl rounded-tl-sm bg-white border border-slate-200/80 p-4.5 shadow-xs text-sm text-slate-800 leading-relaxed font-sans">
+                          <div className="dream-assistant-bubble rounded-2xl rounded-tl-sm p-4.5 text-sm leading-relaxed font-sans">
                             {msg.content ? (
                               <>
                                 <div className="space-y-1">
@@ -1846,7 +1869,7 @@ export default function ChatPlaygroundPage({
             })()}
 
             <div className="w-full max-w-5xl mx-auto">
-              <div className="rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md shadow-lg shadow-slate-200/50 p-3 space-y-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 transition">
+              <div className="dream-composer rounded-2xl border border-slate-200/90 bg-white/95 backdrop-blur-md shadow-lg shadow-slate-200/50 p-3 space-y-2 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/10 transition">
                 <textarea
                   ref={textareaRef}
                   value={inputMessage}

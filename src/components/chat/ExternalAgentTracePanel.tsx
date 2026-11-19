@@ -237,7 +237,20 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const failedCount = spans.filter((span) => span.status === "ERROR").length;
 
   return (
-    <section className="mb-2 overflow-hidden rounded-xl border border-indigo-300/20 bg-[#0b1430]/90 shadow-[0_8px_28px_rgba(10,20,55,.12)]">
+    <section className="external-trace-cosmos mb-2 overflow-hidden rounded-xl border border-indigo-300/20 bg-[#0b1430]/90 shadow-[0_8px_28px_rgba(10,20,55,.12)]">
+      <style>{`
+        .external-trace-cosmos{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:#e9ecff}
+        .external-trace-cosmos .bg-\\[\\#0e1938\\]\/80{background:rgba(255,255,255,.025)!important}
+        .external-trace-cosmos .trace-connect-form{background:rgba(255,255,255,.035)!important;border-color:rgba(174,164,255,.16)!important}
+        .external-trace-cosmos .bg-white{background:rgba(255,255,255,.055)!important;border-color:rgba(174,164,255,.16)!important}
+        .external-trace-cosmos .bg-slate-50{background:rgba(255,255,255,.045)!important}
+        .external-trace-cosmos .border-slate-100,.external-trace-cosmos .border-slate-200{border-color:rgba(174,164,255,.16)!important}
+        .external-trace-cosmos .text-slate-800,.external-trace-cosmos .text-slate-700{color:#e8ecff!important}
+        .external-trace-cosmos .text-slate-600,.external-trace-cosmos .text-slate-500,.external-trace-cosmos .text-slate-400{color:#aab5dc!important}
+        .external-trace-cosmos pre{color:#e6ebff!important}
+        .external-trace-cosmos input{color:#f1f3ff!important;background:rgba(255,255,255,.06)!important;border-color:rgba(174,164,255,.2)!important}
+        .external-trace-cosmos input::placeholder{color:rgba(202,208,239,.45)!important}
+      `}</style>
       <button
         type="button"
         onClick={() => setDetailsOpen((value) => !value)}
@@ -246,13 +259,13 @@ export const ExternalAgentTracePanel: React.FC = () => {
       >
         <span className="flex min-w-0 items-center gap-2">
           <Activity className="h-4 w-4 shrink-0 text-cyan-200" />
-          <b className="truncate text-xs text-slate-100">外部 Agent Trace</b>
+          <b className="truncate text-xs text-slate-100">外部 Trace 接入</b>
           <span className={`rounded-full border px-2 py-0.5 text-[10px] ${connected ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200" : loading ? "border-sky-300/30 bg-sky-400/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-400"}`}>
             {connected ? "实时连接中" : loading ? "正在连接" : "未连接"}
           </span>
         </span>
         <span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-400">
-          {connected ? "实时监听" : spans.length ? `${spans.length} 个事件` : "等待连接"}{failedCount > 0 ? ` · ${failedCount} 失败` : ""}{knownTokenCount > 0 ? ` · ${knownTokenCount} 条含 Token` : ""}
+          {connected ? "正在接收外部事件" : spans.length ? `${spans.length} 条外部事件` : "尚未接入外部数据"}{failedCount > 0 ? ` · ${failedCount} 失败` : ""}{knownTokenCount > 0 ? ` · ${knownTokenCount} 条含 Token` : ""}
           {detailsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </span>
       </button>
@@ -286,7 +299,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
           </button>
         </div>
         <p className="text-[10px] leading-4 text-slate-400">
-          API Key 仅在当前页面内存中使用，不会写入浏览器存储。Span、耗时和 Token 只展示 SDK 实际上报的数据。
+          这是可选的外部 Agent 接入入口。当前会话执行时间线在上方展示；连接外部 Agent 后，这里才显示该 Agent 单独上报的 Trace。API Key 仅保存在当前页面内存中。
         </p>
 
         {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-700">{error}</div>}
