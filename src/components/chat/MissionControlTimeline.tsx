@@ -171,9 +171,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-indigo-500"/>执行路径 <span className="font-normal text-slate-400">· {ordered.length} 个事件</span></div>
             <span className="text-[9px] text-slate-400">选择步骤查看详情</span>
           </div>
-          <div className="relative">
-            <div className="absolute bottom-4 left-[13px] top-4 w-px bg-gradient-to-b from-indigo-300 via-indigo-200 to-slate-100"/>
-            <div className="space-y-1">
+          <div className="relative max-h-[min(68vh,680px)] overflow-y-auto pr-1 [scrollbar-width:thin]">
+            <div className="absolute bottom-4 left-[13px] top-4 w-px bg-gradient-to-b from-indigo-400/80 via-cyan-300/55 to-transparent"/>
+            <div className="space-y-1.5">
               {ordered.map((step,index)=>{
                 const info=phaseMeta[step.phase]||phaseMeta.external;
                 const Icon=info.icon;
