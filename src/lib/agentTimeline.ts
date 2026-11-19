@@ -128,7 +128,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     const data = typeof payload === "string" ? JSON.parse(payload) : payload;
     if (!data || typeof data !== "object") return current;
 
-    if (eventName === "agent_step" || eventName === "trace_step") {
+    if (eventName === "agent_step" || eventName === "trace_step" || eventName === "span" || eventName === "otel_span" || eventName === "gen_ai") {
       const rawSeq = data.seq ?? data.step;
       const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
       const seq = hasSeq ? Number(rawSeq) : current.length + 1;
@@ -137,7 +137,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       return timelineReducer(current, {
         stepId,
         seq: hasSeq ? seq : undefined,
-        phase: data.phase,
+        phase: phaseFromEvent(data),
         status: data.status == null ? undefined : normalizeStatus(data.status),
         leftTitle: data.leftTitle ?? title,
         leftSummary: data.leftSummary ?? data.message,
@@ -150,13 +150,14 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
           ...data,
           ...(data.rightDetail && typeof data.rightDetail === "object" ? data.rightDetail : {}),
         },
-        durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
+        durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs) ??
+          (data.durationNs !== undefined || data.duration_ns !== undefined ? Number(data.durationNs ?? data.duration_ns) / 1000000 : undefined),
+        timestamp: parseEventTimestamp(data),
       });
     }
 
-    if (eventName === "tool") {
-      const toolName = String(data.tool ?? data.name ?? "Unknown tool");
+    if (eventName === "tool" || eventName === "mcp_tool") {
+      const toolName = String(data.tool ?? data.toolName ?? eventAttribute(data, "mcp.tool.name") ?? eventAttribute(data, "gen_ai.tool.name") ?? data.name ?? "Unknown tool");
       const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.id;
       const sameToolSteps = current.filter((step) => step.phase === "skill" && String(step.rightDetail?.tool ?? step.rightDetail?.name ?? "") === toolName);
       const existingCount = sameToolSteps.length;
@@ -177,7 +178,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         rightSubtitle: data.description,
         rightDetail: data,
         durationMs: parseDuration(data.durationMs ?? data.duration),
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
+        timestamp: parseEventTimestamp(data),
       });
     }
 
