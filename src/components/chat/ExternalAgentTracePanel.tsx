@@ -336,25 +336,36 @@ export const ExternalAgentTracePanel: React.FC = () => {
                     {span.parentSpanId && <div className="text-[10px] text-slate-500">父级 Span：<code>{span.parentSpanId}</code></div>}
                     {span.runId && <div className="text-[10px] text-slate-500">Run ID：<code>{span.runId}</code></div>}
                     {(() => {
+                      const isModelSpan = span.name === "chat.completions";
+                      const isActionSpan = span.name === "action.execute";
+                      const errorValue = attrs.error_message ?? attrs.error ?? attrs.exception;
                       const sections: Array<{ label: string; value: unknown; tone: string }> = [
-                        { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
-                        { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
-                        { label: "本轮可用工具定义", value: attrs.tool_schema ?? attrs.tools ?? attrs.tool_definitions, tone: "border-indigo-200 bg-indigo-50/60" },
-                        { label: "模型决定调用的工具", value: attrs.tool_calls ?? attrs.tool_call ?? attrs.function_call, tone: "border-amber-200 bg-amber-50/60" },
-                        { label: "工具实际输入参数", value: attrs.tool_arguments ?? attrs.arguments ?? attrs.action_arguments, tone: "border-sky-200 bg-sky-50/60" },
-                        { label: "工具实际执行结果", value: attrs.tool_result ?? attrs.action_output ?? attrs.result, tone: "border-emerald-200 bg-emerald-50/60" },
-                        { label: "失败信息", value: attrs.error_message ?? attrs.error ?? attrs.exception, tone: "border-rose-200 bg-rose-50/60" },
-                      ].filter((item) => item.value !== undefined && item.value !== null);
+                        ...(isModelSpan ? [
+                          { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
+                          { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
+                          { label: "本轮可用工具定义", value: attrs.tool_schema ?? attrs.tools ?? attrs.tool_definitions, tone: "border-indigo-200 bg-indigo-50/60" },
+                          { label: "模型决定调用的工具", value: attrs.tool_calls ?? attrs.tool_call ?? attrs.function_call, tone: "border-amber-200 bg-amber-50/60" },
+                        ] : []),
+                        ...(isActionSpan ? [
+                          { label: "工具实际输入参数", value: attrs.tool_arguments ?? attrs.arguments ?? attrs.action_arguments, tone: "border-sky-200 bg-sky-50/60" },
+                          { label: "工具实际执行结果", value: attrs.tool_result ?? attrs.action_output ?? attrs.result, tone: "border-emerald-200 bg-emerald-50/60" },
+                        ] : []),
+                        ...(errorValue != null ? [
+                          { label: "失败信息", value: errorValue, tone: "border-rose-200 bg-rose-50/60" },
+                        ] : []),
+                      ];
                       return (
                         <div className="space-y-2">
                           {sections.length === 0 ? (
                             <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-500">
-                              这条 Span 只记录了名称、状态和耗时，没有采集提示词、模型响应或工具参数。需要在 Agent SDK 中显式开启内容采集并上报，不能从 Span 名称还原真实提示词。
+                              这条 Span 没有可展示的结构化内容。需要 Agent SDK 显式上报；界面不会根据名称推测提示词或执行结果。
                             </div>
                           ) : sections.map((item) => (
                             <div key={item.label} className={`overflow-hidden rounded-lg border p-2.5 ${item.tone}`}>
                               <div className="mb-1.5 text-[10px] font-bold text-slate-700">{item.label}</div>
-                              {item.label === "实际发送给模型的提示词 / 上下文" && Array.isArray(item.value) ? (
+                              {item.value == null ? (
+                                <div className="text-[10px] text-slate-400">本次未采集该内容</div>
+                              ) : item.label === "实际发送给模型的提示词 / 上下文" && Array.isArray(item.value) ? (
                                 <div className="space-y-2">
                                   {item.value.map((entry: any, messageIndex: number) => (
                                     <div key={messageIndex} className="overflow-hidden rounded-md border border-white/80 bg-white/80">
