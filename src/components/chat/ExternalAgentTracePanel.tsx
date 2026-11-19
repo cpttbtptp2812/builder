@@ -89,7 +89,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [rawExpanded, setRawExpanded] = useState<Set<string>>(new Set());
-  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -237,17 +237,17 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const failedCount = spans.filter((span) => span.status === "ERROR").length;
 
   return (
-    <section className="mb-3 overflow-hidden rounded-xl border border-indigo-200 bg-indigo-50/40">
+    <section className="mb-2 overflow-hidden rounded-xl border border-indigo-300/20 bg-[#0b1430]/90 shadow-[0_8px_28px_rgba(10,20,55,.12)]">
       <button
         type="button"
         onClick={() => setDetailsOpen((value) => !value)}
-        className="flex w-full items-center justify-between gap-2 border-b border-indigo-100 px-3 py-2.5 text-left"
+        className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left transition hover:bg-white/[0.04]"
         aria-expanded={detailsOpen}
       >
         <span className="flex min-w-0 items-center gap-2">
           <Activity className="h-4 w-4 shrink-0 text-indigo-600" />
-          <b className="truncate text-xs text-slate-800">连接外部 Agent 观察执行</b>
-          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : loading ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-500"}`}>
+          <b className="truncate text-xs text-slate-100">连接外部 Agent 观察执行</b>
+          <span className={`rounded-full border px-2 py-0.5 text-[10px] ${connected ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200" : loading ? "border-sky-300/30 bg-sky-400/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-400"}`}>
             {connected ? "实时连接中" : loading ? "正在连接" : "未连接"}
           </span>
         </span>
@@ -257,7 +257,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
         </span>
       </button>
 
-      {detailsOpen && <div className="space-y-2 p-3">
+      {detailsOpen && <div className="space-y-2 border-t border-white/10 bg-[#0e1938]/80 p-3">
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_auto]">
           <input
             type="password"
@@ -266,7 +266,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
             placeholder="Agent API Key"
             autoComplete="off"
             spellCheck={false}
-            className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-mono"
+            className="min-w-0 rounded-lg border border-indigo-200/15 bg-white/[0.06] px-2.5 py-2 text-xs font-mono text-slate-100 placeholder:text-slate-500 focus:border-cyan-300/50 focus:outline-none"
           />
           <input
             value={traceId}
@@ -274,29 +274,29 @@ export const ExternalAgentTracePanel: React.FC = () => {
             placeholder="Trace ID"
             autoComplete="off"
             spellCheck={false}
-            className="min-w-0 rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs font-mono"
+            className="min-w-0 rounded-lg border border-indigo-200/15 bg-white/[0.04] px-2.5 py-2 text-xs font-mono"
           />
           <button
             type="button"
             onClick={connected || loading ? stop : () => void connect()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-700"
+            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-300/20 bg-indigo-400/20 px-3 py-2 text-xs font-semibold text-indigo-100 transition hover:bg-indigo-400/30"
           >
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : connected ? <WifiOff className="h-3.5 w-3.5" /> : <RefreshCw className="h-3.5 w-3.5" />}
             {loading ? "停止连接" : connected ? "断开连接" : "连接 Trace"}
           </button>
         </div>
-        <p className="text-[10px] leading-4 text-slate-500">
+        <p className="text-[10px] leading-4 text-slate-400">
           API Key 仅在当前页面内存中使用，不会写入浏览器存储。Span、耗时和 Token 只展示 SDK 实际上报的数据。
         </p>
 
         {error && <div className="rounded-lg border border-rose-200 bg-rose-50 p-2 text-[11px] text-rose-700">{error}</div>}
 
         {ordered.length === 0 ? (
-          <div className="py-5 text-center text-[11px] text-slate-400">
+          <div className="py-3 text-center text-[11px] text-slate-400">
             {connected || loading ? "正在等待该 Agent 上报执行步骤…" : "连接后，这里会显示该 Agent 已上报的真实执行步骤"}
           </div>
         ) : (
-          <div className="max-h-[42vh] space-y-1.5 overflow-y-auto">
+          <div className="max-h-[32vh] space-y-1.5 overflow-y-auto pr-1 [scrollbar-width:thin]">
             {ordered.map((span, index) => {
               const open = expanded.has(span.spanId);
               const attrs = span.attributes || {};
@@ -310,18 +310,18 @@ export const ExternalAgentTracePanel: React.FC = () => {
                       open ? next.delete(span.spanId) : next.add(span.spanId);
                       return next;
                     })}
-                    className="flex w-full items-center gap-2 p-2.5 text-left"
+                    className="flex w-full items-center gap-2 p-2.5 text-left transition hover:bg-white/[0.05]"
                     aria-expanded={open}
                   >
                     <span className={`h-2 w-2 shrink-0 rounded-full ${span.status === "ERROR" ? "bg-rose-500" : span.status === "OK" ? "bg-emerald-500" : "animate-pulse bg-blue-400"}`} />
                     <span className="text-[10px] font-mono text-slate-400">#{index + 1}</span>
                     <b className="min-w-0 flex-1 truncate text-xs text-slate-800">{span.name === "chat.completions" ? `模型请求 · 第${span.attributes?.model_step ?? index + 1}轮` : span.name === "action.execute" ? `工具执行 · ${span.attributes?.tool_name ?? "未命名工具"}` : span.name === "agent.run" ? "Agent 总任务" : span.name}</b>
                     <span className={`text-[10px] ${span.status === "ERROR" ? "text-rose-600" : span.status === "OK" ? "text-emerald-600" : "text-blue-600"}`}>{statusLabel(span.status)}</span>
-                    <span className="text-[10px] text-slate-500">{formatDuration(span.durationMs)}</span>
-                    <span className="text-[10px] text-slate-500">{span.totalTokens ?? "—"} tokens</span>
+                    <span className="text-[10px] text-slate-400">{formatDuration(span.durationMs)}</span>
+                    <span className="text-[10px] text-slate-400">{span.totalTokens ?? "—"} tokens</span>
                     {open ? <ChevronDown className="h-3.5 w-3.5 text-slate-400" /> : <ChevronRight className="h-3.5 w-3.5 text-slate-400" />}
                   </button>
-                  {open && <div className="space-y-2 border-t border-slate-100 p-2.5">
+                  {open && <div className="space-y-2 border-t border-indigo-200/10 bg-black/10 p-2.5">
                     <div className="grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
                       <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">状态</div><b>{statusLabel(span.status)}</b></div>
                       <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">输入 / 输出 Token</div><b>{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</b></div>
