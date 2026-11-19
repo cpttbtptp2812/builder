@@ -102,8 +102,8 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const inputTokens=read(d,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]);
   const outputTokens=read(d,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]);
   const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
-  const visiblePromptMessages=toRealityMessageList(stripInternalReasoning(promptMessages));
-  const visibleModelResponse=parseStructured(stripInternalReasoning(modelResponse));
+  const visiblePromptMessages=toRealityMessageList(stripInternalReasoning(parseStructured(promptMessages)));
+  const visibleModelResponse=stripInternalReasoning(parseStructured(modelResponse));
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const why=read(d,["reason","purpose","explanation"]);
   const nextAction=read(d,["next_action","nextAction","next_step","handoff_target"]);
