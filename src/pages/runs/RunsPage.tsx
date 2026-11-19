@@ -69,15 +69,20 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
 
   const loadRunDetail = async (runId: string, key = apiKey) => {
-    const response = await fetch(`${API_BASE}/api/v1/runs/${encodeURIComponent(runId)}`, {
-      headers: { Authorization: `Bearer ${key.trim()}`, Accept: "application/json" },
-    });
-    if (!response.ok) {
-      const body = await response.json().catch(() => null);
-      throw new Error(body?.error?.message || `读取运行详情失败（HTTP ${response.status}）`);
+    try {
+      const response = await fetch(`${API_BASE}/api/v1/runs/${encodeURIComponent(runId)}`, {
+        headers: { Authorization: `Bearer ${key.trim()}`, Accept: "application/json" },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error?.message || `读取运行详情失败（HTTP ${response.status}）`);
+      }
+      const detail = await response.json() as RunDetail;
+      setSelectedDetail(detail);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "读取运行详情失败。");
+      setSelectedDetail(null);
     }
-    const detail = await response.json() as RunDetail;
-    setSelectedDetail(detail);
   };
 
   const loadRuns = async () => {
