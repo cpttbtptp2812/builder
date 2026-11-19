@@ -227,12 +227,36 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                       <span className="text-[11px] text-slate-500">{span.status || "UNSET"}</span>
                       <span className="text-[11px] text-slate-400">{span.durationMs == null ? "耗时 —" : `${span.durationMs} ms`}</span>
                     </div>
-                    <div className="grid grid-cols-2 gap-3 px-4 py-3 text-xs sm:grid-cols-4">
+                    <div className="grid grid-cols-2 gap-3 px-4 py-3 text-xs sm:grid-cols-6">
                       <div><p className="text-slate-400">开始</p><p className="mt-1 text-slate-700">{dateLabel(span.startedAt)}</p></div>
                       <div><p className="text-slate-400">结束</p><p className="mt-1 text-slate-700">{dateLabel(span.endedAt)}</p></div>
                       <div><p className="text-slate-400">输入 / 输出 Token</p><p className="mt-1 text-slate-700">{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</p></div>
                       <div><p className="text-slate-400">Token 来源</p><p className="mt-1 text-slate-700">{span.usageSource || "MISSING"}</p></div>
+                      <div><p className="text-slate-400">模型</p><p className="mt-1 break-all text-slate-700">{String(span.attributes?.model ?? "—")}</p></div>
+                      <div><p className="text-slate-400">Provider</p><p className="mt-1 break-all text-slate-700">{String(span.attributes?.provider ?? "—")}</p></div>
                     </div>
+                    {span.status === "ERROR" && (span.attributes?.error_message || span.attributes?.["exception.message"]) && (
+                      <div className="border-t border-rose-100 bg-rose-50/70 px-4 py-3 text-xs text-rose-700">
+                        <strong>执行错误</strong>
+                        <p className="mt-1 whitespace-pre-wrap break-words">{String(span.attributes?.error_message ?? span.attributes?.["exception.message"])}</p>
+                      </div>
+                    )}
+                    {([
+                      ["prompt_messages", "实际请求消息"],
+                      ["model_response", "模型响应"],
+                      ["tool_schema", "工具定义"],
+                      ["tool_arguments", "工具参数"],
+                      ["tool_result", "工具结果"],
+                    ] as const).filter(([key]) => span.attributes?.[key] != null).map(([key, label]) => (
+                      <details key={key} className="border-t border-slate-100 px-4 py-2">
+                        <summary className="cursor-pointer text-xs font-medium text-slate-600">{label}</summary>
+                        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify(span.attributes?.[key], null, 2)}</pre>
+                      </details>
+                    ))}
+                    {(span.name.toLowerCase().includes("llm") || span.name.toLowerCase().includes("chat.completions") || span.attributes?.model) &&
+                      span.attributes?.prompt_messages == null && span.attributes?.model_response == null && (
+                        <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">模型消息内容未采集（默认关闭）；可在 Agent 接入端显式开启并脱敏后上报。</p>
+                      )}
                     <details className="border-t border-slate-100 px-4 py-2">
                       <summary className="cursor-pointer text-xs font-medium text-slate-500">Span 属性与原始数据</summary>
                       <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify({ traceId: span.traceId, spanId: span.spanId, parentSpanId: span.parentSpanId, runId: span.runId, spanKind: span.spanKind, attributes: span.attributes }, null, 2)}</pre>
