@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, RefreshCw, X, XCircle } from "lucide-react";
 
 type TraceSpan = {
@@ -65,10 +65,17 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [selectedDetail, setSelectedDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [runQuery, setRunQuery] = useState("");
+  const [runStatus, setRunStatus] = useState<"ALL" | "RUNNING" | "COMPLETED" | "ERROR" | "UNKNOWN">("ALL");
   const [detailLoading, setDetailLoading] = useState(false);
   const detailRequestId = useRef(0);
 
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
+  const filteredRuns = useMemo(() => runs.filter((run) => {
+    const query = runQuery.trim().toLowerCase();
+    const matchesQuery = !query || [run.name, run.runId, run.traceId, run.sessionId || "", run.conversationId || ""].some((value) => value.toLowerCase().includes(query));
+    return matchesQuery && (runStatus === "ALL" || run.status === runStatus);
+  }), [runs, runQuery, runStatus]);
   const timelineSpans = selected?.spans ?? [];
   const timelineStart = timelineSpans.length
     ? Math.min(...timelineSpans.map((span) => Date.parse(span.startedAt || "") || 0))
@@ -182,7 +189,13 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         <section className="min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <h2 className="text-sm font-semibold">Runs</h2>
-            <span className="text-xs tabular-nums text-slate-400">{runs.length} 条</span>
+            <span className="text-xs tabular-nums text-slate-400">{filteredRuns.length} / {runs.length} 条</span>
+          </div>
+          <div className="border-b border-slate-100 p-3 space-y-2">
+            <input value={runQuery} onChange={(event) => setRunQuery(event.target.value)} placeholder="搜索 Run / Trace / Session ID" className="h-9 w-full rounded-lg border border-slate-200 px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+            <div className="flex flex-wrap gap-1.5">
+              {(["ALL", "RUNNING", "COMPLETED", "ERROR", "UNKNOWN"] as const).map((status) => <button key={status} onClick={() => setRunStatus(status)} className={`rounded-full px-2.5 py-1 text-[10px] font-medium transition ${runStatus === status ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}>{status === "ALL" ? "全部" : statusLabel[status]}</button>)}
+            </div>
           </div>
           <div className="max-h-[65vh] overflow-auto lg:max-h-full">
             {runs.length === 0 ? (
@@ -209,7 +222,9 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                   <a className="mt-3 inline-flex text-xs font-medium text-indigo-600 hover:text-indigo-700" href="https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python" target="_blank" rel="noreferrer">查看 Python SDK 接入文档 ↗</a>
                 </details>
               </div>
-            ) : runs.map((run) => (
+            ) : filteredRuns.length === 0 ? (
+              <div className="px-5 py-12 text-center"><p className="text-sm font-medium text-slate-600">没有匹配的运行记录</p><p className="mt-1 text-xs text-slate-400">调整搜索关键词或状态筛选。</p><button onClick={() => { setRunQuery(""); setRunStatus("ALL"); }} className="mt-3 text-xs font-medium text-indigo-600">清除筛选</button></div>
+            ) : filteredRuns.map((run) => (
               <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); setSelectedDetail(null); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium text-slate-800">{run.name || "Agent run"}</span>
