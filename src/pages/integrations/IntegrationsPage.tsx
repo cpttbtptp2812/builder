@@ -137,7 +137,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
   const [promptfooReport, setPromptfooReport] = useState<{ fileName: string; stats: any; rows: any[] } | null>(null);
   const [promptfooError, setPromptfooError] = useState("");
   const guide = guides[active];
-  const bootstrapCommand = "APP_SECURITY_BOOTSTRAP_AGENT_ID=your-existing-agent-id\nAPP_SECURITY_BOOTSTRAP_AGENT_API_KEY=oa_live_$(openssl rand -hex 32)";
+  const bootstrapCommand = "export APP_SECURITY_BOOTSTRAP_AGENT_ID=\"your-existing-agent-id\"\nexport APP_SECURITY_BOOTSTRAP_AGENT_API_KEY=\"oa_live_$(openssl rand -hex 32)\"";
 
   const importPromptfooReport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
