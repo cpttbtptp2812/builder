@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Activity, AlertCircle, CheckCircle2, Clock3, Download, KeyRound, RefreshCw, Search, X, XCircle } from "lucide-react";
 
 type TraceSpan = {
@@ -70,6 +70,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [detailLoading, setDetailLoading] = useState(false);
   const [spanQuery, setSpanQuery] = useState("");
   const [spanErrorsOnly, setSpanErrorsOnly] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<"OFF" | "CONNECTING" | "LIVE">("OFF");
   const detailRequestId = useRef(0);
 
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
@@ -87,6 +88,86 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     ].some((value) => value.toLowerCase().includes(query));
     return matchesQuery && (!spanErrorsOnly || span.status === "ERROR");
   }), [selected, spanQuery, spanErrorsOnly]);
+  useEffect(() => {
+    const run = runs.find((item) => item.runId === selectedRunId);
+    if (!run || !apiKey.trim()) {
+      setLiveStatus("OFF");
+      return;
+    }
+
+    const controller = new AbortController();
+    let active = true;
+    let refreshInFlight = false;
+    setLiveStatus("CONNECTING");
+
+    const refreshDetail = async () => {
+      if (refreshInFlight) return;
+      refreshInFlight = true;
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/runs/${encodeURIComponent(run.runId)}`, {
+          headers: { Authorization: `Bearer ${apiKey.trim()}`, Accept: "application/json" },
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const detail = await response.json() as RunDetail;
+        if (active) setSelectedDetail(detail);
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          console.warn("Run detail refresh failed", cause);
+        }
+      } finally {
+        refreshInFlight = false;
+      }
+    };
+
+    const connect = async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/v1/traces/${encodeURIComponent(run.traceId)}/events`, {
+          headers: { Authorization: `Bearer ${apiKey.trim()}`, Accept: "text/event-stream" },
+          signal: controller.signal,
+        });
+        if (!response.ok || !response.body) {
+          if (active) setLiveStatus("OFF");
+          return;
+        }
+        if (active) setLiveStatus("LIVE");
+        // Re-read persisted state after subscription is established to close the
+        // small gap between the initial Run detail request and SSE subscription.
+        await refreshDetail();
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+        while (active) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+          let boundary = buffer.indexOf("\\n\\n");
+          while (boundary >= 0) {
+            const frame = buffer.slice(0, boundary);
+            buffer = buffer.slice(boundary + 2);
+            if (frame.split("\\n").some((line) => line.startsWith("data:"))) {
+              void refreshDetail();
+            }
+            boundary = buffer.indexOf("\\n\\n");
+          }
+        }
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          console.warn("Run live stream disconnected", cause);
+        }
+      } finally {
+        if (active) setLiveStatus("OFF");
+      }
+    };
+
+    void connect();
+    return () => {
+      active = false;
+      controller.abort();
+      setLiveStatus("OFF");
+    };
+  }, [selectedRunId, apiKey, runs]);
+
   const timelineSpans = selected?.spans ?? [];
   const timelineStart = timelineSpans.length
     ? Math.min(...timelineSpans.map((span) => Date.parse(span.startedAt || "") || 0))
@@ -278,6 +359,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                   <div><h2 className="text-base font-semibold">{selected.run.name || "Agent run"}</h2><p className="mt-1 break-all font-mono text-[11px] text-slate-400">{selected.run.traceId}</p></div>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{statusLabel[selected.run.status]}</span>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${liveStatus === "LIVE" ? "bg-emerald-50 text-emerald-700" : liveStatus === "CONNECTING" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${liveStatus === "LIVE" ? "bg-emerald-500" : liveStatus === "CONNECTING" ? "bg-amber-500" : "bg-slate-400"}`} />{liveStatus === "LIVE" ? "实时监听中" : liveStatus === "CONNECTING" ? "正在连接" : "实时监听已断开"}</span>
                     <button onClick={downloadRunJson} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
                       <Download size={13} /> 导出 JSON
                     </button>
