@@ -381,7 +381,6 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
           <>
-            <ExternalAgentTracePanel />
             <MissionControlTimeline
               timeline={timeline}
               message={message}
@@ -390,6 +389,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               isThinking={message.isThinking}
               onRetryRun={onRetryRun}
             />
+            <div className="mt-4 border-t border-violet-200/10 pt-3">
+              <ExternalAgentTracePanel />
+            </div>
           </>
         )}
 
