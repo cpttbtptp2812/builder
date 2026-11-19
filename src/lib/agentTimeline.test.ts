@@ -202,6 +202,67 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(timeline[1].rightDetail?.tool_arguments, { query: "heartbeat" });
   });
 
+  it("normalizes OpenTelemetry GenAI spans into readable model steps", () => {
+    const timeline = applySseToTimeline([], "otel_span", {
+      spanId: "otel-model-1",
+      name: "chat",
+      startTimeUnixNano: "1700000000000000000",
+      durationNs: 250000000,
+      status: { code: 1 },
+      attributes: {
+        "gen_ai.operation.name": "chat",
+        "gen_ai.request.model": "gpt-test",
+        "gen_ai.usage.input_tokens": 80,
+        "gen_ai.usage.output_tokens": 24,
+      },
+    });
+    assert.equal(timeline.length, 1);
+    assert.equal(timeline[0].stepId, "otel-model-1");
+    assert.equal(timeline[0].phase, "llm");
+    assert.equal(timeline[0].status, "done");
+    assert.equal(timeline[0].durationMs, 250);
+    assert.equal(timeline[0].timestamp, 1700000000000);
+    assert.equal(timeline[0].rightDetail?.attributes?.["gen_ai.request.model"], "gpt-test");
+  });
+
+  it("derives duration and status from standard OTLP span fields", () => {
+    const timeline = applySseToTimeline([], "span", {
+      spanId: "otlp-span-2",
+      name: "repository.lookup",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000125000000",
+      attributes: { "otel.status_code": "ERROR" },
+    });
+    assert.equal(timeline[0].durationMs, 125);
+    assert.equal(timeline[0].status, "failed");
+  });
+
+  it("normalizes MCP tool events using their semantic tool name", () => {
+    const timeline = applySseToTimeline([], "mcp_tool", {
+      spanId: "mcp-call-1",
+      status: { code: 2, message: "permission denied" },
+      attributes: { "mcp.tool.name": "read_file" },
+      start_time_unix_nano: "1700000001000000000",
+      duration_ns: 12000000,
+    });
+    assert.equal(timeline.length, 1);
+    assert.equal(timeline[0].stepId, "mcp-call-1");
+    assert.equal(timeline[0].phase, "skill");
+    assert.equal(timeline[0].status, "failed");
+    assert.equal(timeline[0].rightTitle, "read_file");
+    assert.equal(timeline[0].durationMs, 12);
+    assert.equal(timeline[0].timestamp, 1700000001000);
+    const completed = applySseToTimeline(timeline, "mcp_tool", {
+      spanId: "mcp-call-1",
+      status: { code: 1 },
+      attributes: { "mcp.tool.name": "read_file" },
+      result: { success: true, data: "contents" },
+    });
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0].status, "done");
+    assert.deepEqual(completed[0].rightDetail?.result, { success: true, data: "contents" });
+  });
+
   it("keeps missing execution status unknown after the stream ends", () => {
     const timeline = applySseToTimeline([], "agent_step", {
       stepId: "step-without-status",

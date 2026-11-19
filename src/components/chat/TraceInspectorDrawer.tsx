@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { AgentStep, rebuildTimelineFromMessage } from "@/lib/agentTimeline";
-import { MissionControlTimeline } from "./MissionControlTimeline";
+import { AgentRealityCanvas } from "./AgentRealityCanvas";
 import { ExternalAgentTracePanel } from "./ExternalAgentTracePanel";
 import {
   X,
@@ -388,7 +388,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         {activeTab === "flow" && (
           <div className="flex h-full min-h-0 flex-col">
             <div className="min-h-0 flex-1">
-              <MissionControlTimeline
+              <AgentRealityCanvas
               timeline={timeline}
               message={message}
               activeStepId={activeStepId}
