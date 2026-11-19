@@ -255,9 +255,10 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                   {promptfooReport && (
                     <div className="space-y-3">
                       <div className="text-[10px] text-slate-500">已加载：{promptfooReport.fileName}</div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
                         <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">通过</p><p className="mt-1 text-lg font-semibold text-emerald-700">{promptfooReport.stats.successes ?? promptfooReport.rows.filter((row) => row.success).length}</p></div>
                         <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">失败</p><p className="mt-1 text-lg font-semibold text-rose-700">{promptfooReport.stats.failures ?? promptfooReport.rows.filter((row) => row.success === false).length}</p></div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">错误</p><p className="mt-1 text-lg font-semibold text-amber-700">{promptfooReport.stats.errors ?? promptfooReport.rows.filter((row) => row.error).length}</p></div>
                         <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">用例</p><p className="mt-1 text-lg font-semibold text-slate-900">{promptfooReport.rows.length}</p></div>
                       </div>
                       <div className="max-h-72 space-y-2 overflow-auto">
