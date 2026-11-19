@@ -29,14 +29,16 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(finished[0].rightDetail?.input, { goal: "find docs" });
   });
 
-  it("joins a tool result to the only unresolved same-name call when no call ID exists", () => {
+  it("joins tool lifecycle events when a stable call ID is supplied", () => {
     const started = applySseToTimeline([], "tool", {
       tool: "search_docs",
+      toolCallId: "call-1",
       status: "running",
       arguments: { query: "lease heartbeat" },
     });
     const finished = applySseToTimeline(started, "tool", {
       tool: "search_docs",
+      toolCallId: "call-1",
       status: "success",
       result: ["doc-1"],
     });
