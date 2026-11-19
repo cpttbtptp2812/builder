@@ -4,7 +4,7 @@ import {
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
 } from "lucide-react";
 
-type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp" | "frameworks";
+type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp" | "promptfoo" | "frameworks";
 
 const guides: Record<GuideKey, { title: string; subtitle: string; install: string; code: string }> = {
   sdk: {
@@ -93,6 +93,12 @@ with tracer.start_as_current_span("invoke_agent") as span:
     "install": "pip install openinference-instrumentation-mcp opentelemetry-sdk opentelemetry-exporter-otlp-json-http",
     "code": "import os\nfrom openinference.instrumentation.mcp import MCPInstrumentor\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\n\nprovider = TracerProvider(resource=Resource.create({\n    \"service.name\": \"my-mcp-agent\",\n    \"ownagent.run.id\": os.environ[\"OWNAGENT_RUN_ID\"],\n    \"session.id\": os.environ.get(\"OWNAGENT_SESSION_ID\", \"session-001\"),\n}))\nprovider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(\n    endpoint=os.environ[\"OWNAGENT_OTLP_ENDPOINT\"],\n    headers={\"Authorization\": f\"Bearer {os.environ['OWNAGENT_AGENT_API_KEY']}\"},\n)))\ntrace.set_tracer_provider(provider)\n\n# Call before creating MCP clients/servers. This propagates context;\n# it does not create spans on its own.\nMCPInstrumentor().instrument()\n# Combine with OpenAI / LangChain / OpenAI Agents instrumentors to create spans.\n# Then run your normal MCP client and server processes.\n"
 },
+  promptfoo: {
+    "title": "Promptfoo · 可重复评估与回归",
+    "subtitle": "复用 Promptfoo CLI 管理数据集、断言、模型对比和 CI 质量门禁。OwnAgent 当前提供配置/运行指南和 JSON 报告预览，不在服务端执行第三方 CLI。",
+    "install": "npx promptfoo@latest init --example getting-started\nnpx promptfoo@latest eval -c promptfooconfig.yaml -o results.json -o report.html",
+    "code": "description: OwnAgent Agent regression suite\nprompts:\n  - |\n    You are a careful assistant. Answer the user's question accurately.\n    Question: {{question}}\nproviders:\n  - openai:gpt-4.1-mini\ntests:\n  - vars:\n      question: \"What is a parent span in distributed tracing?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains parent-child trace relationships accurately.\"\n  - vars:\n      question: \"If a tool call fails, what should an Agent do?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains error handling and retry safety without claiming every failure is retryable.\"\n"
+},
   frameworks: {
     title: "Langfuse / Phoenix 等现有观测平台",
     subtitle: "保留现有平台，通过 OTLP 将 Trace 同步到 OwnAgent；具体双写配置需按部署版本验证",
@@ -115,7 +121,7 @@ const statusItems = [
   { name: "OpenInference 自动埋点", detail: "OpenAI、OpenAI Agents、LangChain 与 MCP Trace 传播示例已提供，沿用标准 OTLP/JSON 上报", status: "可直接接入", icon: Workflow },
   { name: "OwnAgent Python SDK", detail: "Run / Span、父子关系、Provider Token Usage", status: "已实现", icon: Code2 },
   { name: "Langfuse / Phoenix 转发", detail: "后端已有可配置 OTLP 导出路径；需按实际部署完成端到端验证", status: "可配置", icon: GitBranch },
-  { name: "Promptfoo / DeepEval", detail: "评估引擎适配候选，尚未接入当前运行链路", status: "待集成", icon: Workflow },
+  { name: "Promptfoo CLI", detail: "可复用上游 CLI；OwnAgent 提供配置指南与 JSON 报告预览，尚无服务端执行器", status: "外部接入", icon: Workflow },
   { name: "MCP Inspector", detail: "MCP 工具调试 UI 候选，尚未嵌入工作台", status: "待集成", icon: PlugZap },
 ];
 
@@ -182,6 +188,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                   ["langchain", "LangChain / LangGraph"],
                   ["agents", "OpenAI Agents SDK"],
                   ["mcp", "MCP Trace 传播"],
+                  ["promptfoo", "Promptfoo 评估"],
                   ["frameworks", "现有平台 / 环境变量"],
                 ] as [GuideKey, string][]).map(([key, label]) => (
                   <button key={key} onClick={() => setActive(key)} className={`rounded-lg px-3 py-2 text-xs font-medium transition ${active === key ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{label}</button>
