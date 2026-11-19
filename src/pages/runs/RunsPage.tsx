@@ -83,8 +83,8 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     const query = spanQuery.trim().toLowerCase();
     const matchesQuery = !query || [
       span.name, span.spanId, span.parentSpanId || "", span.spanKind || "",
-      String(span.attributes?.model ?? span.attributes?.["gen_ai.request.model"] ?? span.attributes?.["gen_ai.response.model"] ?? ""), String(span.attributes?.provider ?? span.attributes?.["gen_ai.system"] ?? ""),
-      String(span.attributes?.["gen_ai.tool.name"] ?? ""),
+      String(span.attributes?.model ?? span.attributes?.["gen_ai.request.model"] ?? span.attributes?.["gen_ai.response.model"] ?? ""), String(span.attributes?.provider ?? span.attributes?.["gen_ai.provider.name"] ?? span.attributes?.["gen_ai.system"] ?? ""),
+      String(span.attributes?.["gen_ai.tool.name"] ?? ""), String(span.attributes?.["gen_ai.operation.name"] ?? ""), String(span.attributes?.["gen_ai.agent.name"] ?? ""),
     ].some((value) => value.toLowerCase().includes(query));
     return matchesQuery && (!spanErrorsOnly || span.status === "ERROR");
   }), [selected, spanQuery, spanErrorsOnly]);
@@ -452,7 +452,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                       <div><p className="text-slate-400">输入 / 输出 Token</p><p className="mt-1 text-slate-700">{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</p></div>
                       <div><p className="text-slate-400">Token 来源</p><p className="mt-1 text-slate-700">{span.usageSource || "MISSING"}</p></div>
                       <div><p className="text-slate-400">模型</p><p className="mt-1 break-all text-slate-700">{String(span.attributes?.model ?? span.attributes?.["gen_ai.request.model"] ?? span.attributes?.["gen_ai.response.model"] ?? "—")}</p></div>
-                      <div><p className="text-slate-400">Provider</p><p className="mt-1 break-all text-slate-700">{String(span.attributes?.provider ?? span.attributes?.["gen_ai.system"] ?? "—")}</p></div>
+                      <div><p className="text-slate-400">Provider</p><p className="mt-1 break-all text-slate-700">{String(span.attributes?.provider ?? span.attributes?.["gen_ai.provider.name"] ?? span.attributes?.["gen_ai.system"] ?? "—")}</p></div>
                     </div>
                     {span.status === "ERROR" && (span.attributes?.error_message || span.attributes?.["exception.message"]) && (
                       <div className="border-t border-rose-100 bg-rose-50/70 px-4 py-3 text-xs text-rose-700">
@@ -471,6 +471,11 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                       ["gen_ai.tool.definitions", "工具定义（OpenTelemetry）"],
                       ["gen_ai.tool.call.arguments", "工具参数（OpenTelemetry）"],
                       ["gen_ai.tool.call.result", "工具结果（OpenTelemetry）"],
+                      ["gen_ai.provider.name", "Provider（OpenTelemetry）"],
+                      ["gen_ai.operation.name", "模型操作类型"],
+                      ["gen_ai.agent.name", "Agent 名称"],
+                      ["gen_ai.conversation.id", "会话 ID"],
+                      ["gen_ai.tool.name", "工具名称"],
                     ] as const).filter(([key]) => span.attributes?.[key] != null).map(([key, label]) => (
                       <details key={key} className="border-t border-slate-100 px-4 py-2">
                         <summary className="cursor-pointer text-xs font-medium text-slate-600">{label}</summary>
