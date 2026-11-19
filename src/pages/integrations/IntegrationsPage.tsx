@@ -10,7 +10,7 @@ const guides: Record<GuideKey, { title: string; subtitle: string; install: strin
   sdk: {
     title: "OwnAgent Python SDK",
     subtitle: "适合自己编写 Agent、需要显式记录模型调用和工具执行的场景",
-    install: "pip install ownagent-sdk",
+    install: "python -m pip install -e ./sdk/python  # 在克隆的 ownsudo 仓库根目录执行",
     code: `import os
 from ownagent import OwnAgentClient
 
