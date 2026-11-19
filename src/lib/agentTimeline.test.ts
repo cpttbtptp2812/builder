@@ -29,6 +29,33 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(finished[0].rightDetail?.input, { goal: "find docs" });
   });
 
+  it("preserves captured payloads from the event envelope and nested rightDetail", () => {
+    const timeline = applySseToTimeline([], "agent_step", {
+      stepId: "llm-42",
+      seq: 42,
+      title: "Model request",
+      attributes: {
+        prompt_messages: [{ role: "system", content: "Use the registered tools only." }],
+        model: "test-model",
+      },
+      rightDetail: {
+        model_response: { role: "assistant", content: "I will call search." },
+        tool_schema: [{ name: "search" }],
+      },
+    });
+
+    assert.equal(timeline.length, 1);
+    assert.deepEqual(timeline[0].rightDetail?.attributes?.prompt_messages, [
+      { role: "system", content: "Use the registered tools only." },
+    ]);
+    assert.equal(timeline[0].rightDetail?.attributes?.model, "test-model");
+    assert.deepEqual(timeline[0].rightDetail?.model_response, {
+      role: "assistant",
+      content: "I will call search.",
+    });
+    assert.deepEqual(timeline[0].rightDetail?.tool_schema, [{ name: "search" }]);
+  });
+
   it("joins tool lifecycle events when a stable call ID is supplied", () => {
     const started = applySseToTimeline([], "tool", {
       tool: "search_docs",
