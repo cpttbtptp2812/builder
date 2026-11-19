@@ -234,6 +234,43 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                 </div>
                 <pre className="max-h-[440px] overflow-auto rounded-lg bg-slate-950 p-4 text-[11px] leading-5 text-slate-200"><code>{guide.code}</code></pre>
               </div>
+              {active === "promptfoo" && (
+                <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <h3 className="text-xs font-semibold text-slate-800">导入 Promptfoo 评估报告</h3>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-500">选择通过 promptfoo eval -o results.json 导出的报告。当前在浏览器内预览，不会上传或持久化到服务器。</p>
+                  </div>
+                  <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-white px-4 py-5 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
+                    <ExternalLink size={14} /> 选择 results.json
+                    <input type="file" accept=".json,application/json" className="sr-only" onChange={importPromptfooReport} />
+                  </label>
+                  {promptfooError && <p className="text-xs text-rose-700">{promptfooError}</p>}
+                  {promptfooReport && (
+                    <div className="space-y-3">
+                      <div className="text-[10px] text-slate-500">已加载：{promptfooReport.fileName}</div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">通过</p><p className="mt-1 text-lg font-semibold text-emerald-700">{promptfooReport.stats.successes ?? promptfooReport.rows.filter((row) => row.success).length}</p></div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">失败</p><p className="mt-1 text-lg font-semibold text-rose-700">{promptfooReport.stats.failures ?? promptfooReport.rows.filter((row) => row.success === false).length}</p></div>
+                        <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">用例</p><p className="mt-1 text-lg font-semibold text-slate-900">{promptfooReport.rows.length}</p></div>
+                      </div>
+                      <div className="max-h-72 space-y-2 overflow-auto">
+                        {promptfooReport.rows.map((row, index) => {
+                          const label = row.testCase?.description || row.vars?.question || row.prompt?.label || row.prompt?.raw || ("Test " + (index + 1));
+                          const reason = row.gradingResult?.reason || row.error || row.response?.error || "";
+                          return <div key={row.id || index} className="rounded-lg border border-slate-200 bg-white p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <p className="min-w-0 text-xs font-medium text-slate-800">{String(label)}</p>
+                              <span className={row.success ? "shrink-0 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] text-emerald-700" : "shrink-0 rounded-full bg-rose-50 px-2 py-0.5 text-[10px] text-rose-700"}>{row.success ? "通过" : "失败"}</span>
+                            </div>
+                            <p className="mt-1 text-[10px] text-slate-500">Score: {typeof row.score === "number" ? row.score.toFixed(2) : "—"}</p>
+                            {reason && <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-slate-600">{String(reason)}</p>}
+                          </div>;
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </section>
+              )}
               <a href="https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python" target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700">完整 SDK 文档 <ExternalLink size={12} /></a>
             </div>
           </div>
