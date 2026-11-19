@@ -89,7 +89,7 @@ with tracer.start_as_current_span("invoke_agent") as span:
 },
   mcp: {
     "title": "MCP 分布式 Trace 上下文",
-    "subtitle": "OpenInference MCP instrumentor 负责跨 stdio / SSE / Streamable HTTP 传递 Trace 上下文，不单独创建 Span；客户端和服务端都需要配置。",
+    "subtitle": "OpenInference MCP instrumentor 负责跨 stdio / SSE / Streamable HTTP 传递 Trace 上下文，不单独创建 Span；客户端和服务端都需要配置，并使用相同 ownagent.run.id 才能归入同一条 Run。",
     "install": "pip install openinference-instrumentation-mcp opentelemetry-sdk opentelemetry-exporter-otlp-json-http",
     "code": "import os\nfrom openinference.instrumentation.mcp import MCPInstrumentor\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\n\nprovider = TracerProvider(resource=Resource.create({\n    \"service.name\": \"my-mcp-agent\",\n    \"ownagent.run.id\": os.environ[\"OWNAGENT_RUN_ID\"],\n    \"session.id\": os.environ.get(\"OWNAGENT_SESSION_ID\", \"session-001\"),\n}))\nprovider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(\n    endpoint=os.environ[\"OWNAGENT_OTLP_ENDPOINT\"],\n    headers={\"Authorization\": f\"Bearer {os.environ['OWNAGENT_AGENT_API_KEY']}\"},\n)))\ntrace.set_tracer_provider(provider)\n\n# Call before creating MCP clients/servers. This propagates context;\n# it does not create spans on its own.\nMCPInstrumentor().instrument()\n# Combine with OpenAI / LangChain / OpenAI Agents instrumentors to create spans.\n# Then run your normal MCP client and server processes.\n"
 },
