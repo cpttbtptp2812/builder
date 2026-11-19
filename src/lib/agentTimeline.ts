@@ -174,7 +174,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     }
 
     if (eventName === "tool" || eventName === "mcp_tool") {
-      const toolName = String(data.tool ?? data.toolName ?? eventAttribute(data, "mcp.tool.name") ?? eventAttribute(data, "gen_ai.tool.name") ?? data.name ?? "Unknown tool");
+      const toolName = String(data.tool ?? data.toolName ?? eventAttribute(data, "mcp.tool.name") ?? eventAttribute(data, "gen_ai.tool.name") ?? data.name ?? "工具名称未上报");
       const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.spanId ?? data.span_id ?? data.id;
       // A tool name is not a call identity: concurrent invocations can use the
       // same tool. Only merge lifecycle events when the producer supplies a
@@ -209,7 +209,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         rightTitle: "Retrieved sources",
         rightSubtitle: "",
         rightDetail: { ...data, items },
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : 0,
+        timestamp: parseEventTimestamp(data) ?? 0,
       });
     }
     return current;
