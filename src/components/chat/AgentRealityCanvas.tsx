@@ -38,7 +38,7 @@ const text = (value:any) => {
 };
 const messageText = realityMessageText;
 const parseStructured = parseRealityPayload;
-const INTERNAL_REASONING_KEYS = new Set(["analysis", "reasoning", "chain_of_thought", "chainofthought", "internal_thought", "thoughts", "scratchpad"]);
+const isInternalReasoningKey = (key: string) => /^(analysis|reasoning|chain_of_thought|chainofthought|internal_thought|thoughts?|scratchpad)/i.test(key);
 const stripInternalReasoning = (value: any): any => {
   if (Array.isArray(value)) {
     return value.map(stripInternalReasoning).filter((item) => item !== undefined);
@@ -51,7 +51,7 @@ const stripInternalReasoning = (value: any): any => {
   }
   return Object.fromEntries(
     Object.entries(value)
-      .filter(([key]) => !INTERNAL_REASONING_KEYS.has(key.toLowerCase()))
+      .filter(([key]) => !isInternalReasoningKey(key))
       .map(([key, item]) => [key, stripInternalReasoning(item)])
       .filter(([, item]) => item !== undefined)
   );
