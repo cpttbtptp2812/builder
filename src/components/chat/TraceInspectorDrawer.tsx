@@ -233,14 +233,14 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: isImmersive ? "100vw" : `${drawerWidth}px`,
+        width: isImmersive ? "100vw" : isSplit ? "60%" : `${drawerWidth}px`,\n        flex: isSplit && !isImmersive ? "1 1 60%" : undefined,\n        minWidth: isSplit && !isImmersive ? 0 : undefined,
         height: isImmersive ? "100dvh" : undefined,
         inset: isImmersive ? 0 : undefined,
         transition: isDragging || isImmersive ? "none" : "width 0.15s ease-out",
       }}
       className={
         isSplit
-          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full border-l shadow-xs z-10"} bg-white border-slate-200 flex flex-col shrink-0 select-auto`
+          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full min-h-0 border-l shadow-xs z-10"} bg-white border-slate-200 flex flex-col shrink-0 select-auto`
           : `trace-cosmos fixed ${isImmersive ? "inset-0 z-[100]" : "inset-y-0 right-0 z-50"} bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto`
       }
     >
@@ -289,7 +289,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             <Compass className="w-4 h-4 text-blue-600" />
           </div>
           <span className="text-xs font-black text-slate-800 tracking-tight shrink-0">
-            执行全景
+            Agent Control Center
           </span>
           <span
             className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
@@ -377,7 +377,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
       </div>
 
       {/* ── 核心内容区：Agent 执行过程观察器 ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 scrollbar-hide">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 scrollbar-hide">
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
           <>
