@@ -246,20 +246,23 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
     >
 
       <style>{`
-        .trace-cosmos{position:relative;isolation:isolate;overflow:hidden!important;color:#1e293b!important;background:#fff!important;border-color:#e8edf4!important}
-        .trace-cosmos:before,.trace-cosmos:after{display:none!important}
-        .trace-cosmos .bg-white{background:#fff!important}
-        .trace-cosmos .border-slate-100,.trace-cosmos .border-slate-200,.trace-cosmos .border-slate-300{border-color:#e8edf4!important}
-        .trace-cosmos .text-slate-900,.trace-cosmos .text-slate-800,.trace-cosmos .text-slate-700{color:#1e293b!important}
-        .trace-cosmos .text-slate-600,.trace-cosmos .text-slate-500,.trace-cosmos .text-slate-400{color:#64748b!important}
-        .trace-cosmos .text-blue-700,.trace-cosmos .text-blue-600{color:#4f46e5!important}
-        .trace-cosmos .text-emerald-700,.trace-cosmos .text-emerald-600{color:#047857!important}
-        .trace-cosmos .shadow-2xl,.trace-cosmos .shadow-xs{box-shadow:0 8px 28px rgba(15,23,42,.08)!important}
+        .trace-cosmos{position:relative;isolation:isolate;overflow:hidden!important;color:#e9ecff!important;background:linear-gradient(155deg,rgba(16,21,55,.94),rgba(8,17,43,.96))!important;border-color:rgba(174,164,255,.18)!important;box-shadow:-18px 0 55px rgba(3,6,24,.18)!important;backdrop-filter:blur(22px)}
+        .trace-cosmos:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(203,195,255,.25) .65px,transparent .9px);background-size:27px 27px;mask-image:linear-gradient(180deg,black,transparent 96%)}
+        .trace-cosmos:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:75%;height:45%;left:8%;top:18%;background:radial-gradient(ellipse,rgba(124,58,237,.12),transparent 70%);filter:blur(36px)}
+        .trace-cosmos .bg-white{background:rgba(255,255,255,.045)!important}
+        .trace-cosmos .bg-slate-50,.trace-cosmos .bg-slate-50\/50{background:rgba(255,255,255,.035)!important}
+        .trace-cosmos .border-slate-100,.trace-cosmos .border-slate-200,.trace-cosmos .border-slate-300{border-color:rgba(174,164,255,.16)!important}
+        .trace-cosmos .text-slate-900,.trace-cosmos .text-slate-800,.trace-cosmos .text-slate-700{color:#edf0ff!important}
+        .trace-cosmos .text-slate-600,.trace-cosmos .text-slate-500,.trace-cosmos .text-slate-400{color:#a8b2d9!important}
+        .trace-cosmos .text-blue-700,.trace-cosmos .text-blue-600{color:#a5b4fc!important}
+        .trace-cosmos .text-emerald-700,.trace-cosmos .text-emerald-600{color:#6ee7b7!important}
+        .trace-cosmos .shadow-2xl,.trace-cosmos .shadow-xs{box-shadow:0 10px 30px rgba(2,6,23,.18)!important}
         .trace-cosmos button{color:inherit}
-        .trace-cosmos button:hover{filter:none}
-        .trace-cosmos .rounded-xl,.trace-cosmos .rounded-2xl,.trace-cosmos .rounded-lg{border-color:#e8edf4}
-        .trace-cosmos .overflow-y-auto{scrollbar-color:#cbd5e1 transparent}
-        .trace-cosmos .overflow-y-auto::-webkit-scrollbar-thumb{background:#cbd5e1}
+        .trace-cosmos button:hover{filter:brightness(1.12)}
+        .trace-cosmos .rounded-xl,.trace-cosmos .rounded-2xl,.trace-cosmos .rounded-lg{border-color:rgba(174,164,255,.16)}
+        .trace-cosmos .overflow-y-auto{scrollbar-color:rgba(165,180,252,.35) transparent}
+        .trace-cosmos .overflow-y-auto::-webkit-scrollbar-thumb{background:rgba(165,180,252,.35)}
+        .trace-cosmos header,.trace-cosmos .border-b{border-color:rgba(174,164,255,.15)!important}
       `}</style>
       {/* ── 左侧边缘可拖拽把手 (鼠标按住左右拖拽即可缩放抽屉大小) ── */}
       <div
