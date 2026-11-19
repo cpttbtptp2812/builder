@@ -48,6 +48,41 @@ const pretty = (value: unknown) => {
   if (typeof value === "string") return value;
   try { return JSON.stringify(value, null, 2); } catch { return String(value); }
 };
+const humanizeKey = (key: string) => {
+  const labels: Record<string, string> = {
+    repoId: "仓库内部编号", repoName: "仓库", branch: "分支", commitCount: "提交数量", sha: "提交编号", author: "提交者",
+    commits: "提交记录", limit: "查询数量", owner: "所有者", path: "文件路径",
+    status: "执行状态", success: "是否成功", message: "说明", error: "错误",
+    tool: "工具", query: "查询内容", url: "地址", total: "总数",
+  };
+  if (labels[key]) return labels[key];
+  return key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/^./, c => c.toUpperCase());
+};
+const readableEntries = (value: unknown): Array<[string, unknown]> => {
+  let parsed: any = value;
+  if (typeof parsed === "string") {
+    try { parsed = JSON.parse(parsed); } catch { return []; }
+  }
+  if (Array.isArray(parsed)) return parsed.slice(0, 8).map((item, index) => ["项目 " + (index + 1), item]);
+  if (!parsed || typeof parsed !== "object") return [];
+  return Object.entries(parsed).filter(([, v]) => v !== undefined && v !== null).slice(0, 8);
+};
+const readableValue = (value: unknown): string => {
+  if (value == null) return "未提供";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    const summaries = value.slice(0, 3).map((item: any) => {
+      if (typeof item === "string" || typeof item === "number") return String(item);
+      if (!item || typeof item !== "object") return String(item);
+      return item.message || item.title || item.name || item.sha || item.status || Object.keys(item).slice(0, 3).join("、");
+    });
+    return summaries.join("；") + (value.length > 3 ? "，另有 " + (value.length - 3) + " 项" : "");
+  }
+  const item = value as Record<string, unknown>;
+  const preferred = ["message", "title", "name", "repoName", "branch", "status", "sha", "url"];
+  const summary = preferred.filter(key => item[key] !== undefined && item[key] !== null).slice(0, 4).map(key => humanizeKey(key) + "：" + readableValue(item[key]));
+  return summary.length ? summary.join(" · ") : Object.keys(item).length + " 个字段（可展开查看）";
+};
 const pick = (detail: Record<string, any>, keys: string[]) => {
   for (const key of keys) if (detail[key] !== undefined && detail[key] !== null) return detail[key];
   return undefined;
@@ -82,7 +117,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
   // Use the same chronological ordering as the SSE reducer. Legacy history
   // without complete timestamps still falls back to sequence order.
   const ordered = useMemo(() => sortTimeline(timeline || []), [timeline]);
-  const selected = ordered.find(s => s.stepId === (activeStepId || selectedId)) || ordered[0];
+  const selected = ordered.find(s => s.stepId === activeStepId) || ordered.find(s => s.stepId === selectedId) || ordered.find(s => s.status === "running") || ordered[ordered.length - 1];
   const completed = ordered.filter(s => s.status === "done" || s.status === "passed").length;
   const failures = ordered.filter(s => s.status === "failed").length;
   const running = ordered.some(s => s.status === "running");
@@ -96,10 +131,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
     waiting:"bg-white/5 text-slate-300 border-white/10",
   };
   const select = (step: AgentStep) => {
-    const next = selected?.stepId === step.stepId ? null : step.stepId;
-    setSelectedId(next);
+    setSelectedId(step.stepId);
     setShowRaw(false);
-    if (next) onSelectStep?.(next);
+    onSelectStep?.(step.stepId);
   };
   const detail = selected?.rightDetail || {};
   const promptMessages = readCaptured(detail, ["prompt_messages","promptMessages","messages","llm_messages"]);
@@ -163,7 +197,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .journey-json{background:rgba(4,9,29,.64);border-color:rgba(177,164,255,.18)}
         .agent-journey header{border-color:rgba(177,164,255,.12)}
         .agent-journey .orbit-node{background:linear-gradient(135deg,rgba(38,37,91,.78),rgba(14,25,59,.82));backdrop-filter:blur(16px)}
-        .agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:72px}
+        .agent-journey .journey-track:before{display:none}.agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:132px;width:100%;min-width:0;max-width:none;flex-direction:column;gap:8px;justify-content:flex-start}.agent-journey .journey-row>span:first-child{margin-top:0}.agent-journey .journey-row>span:nth-last-child(2){font-size:10px;color:rgba(196,205,239,.72)}.agent-journey .journey-row .text-sm{font-size:12px;line-height:1.45}.agent-journey .journey-row .text-xs{font-size:11px;line-height:1.45}.agent-journey .journey-row .text-\\[11px\\]{font-size:10px}
         .agent-journey .journey-row:hover{background:rgba(57,55,118,.48);border-color:rgba(177,164,255,.38)}
         .agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(91,65,173,.42),rgba(21,65,91,.34));border-color:rgba(103,232,249,.62);box-shadow:inset 0 0 0 1px rgba(103,232,249,.12),0 0 22px rgba(124,58,237,.12)}
         .agent-journey .detail-glass{background:rgba(12,17,46,.78);border-color:rgba(177,164,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.16)}
@@ -173,7 +207,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .detail-glass section{color:#e9eaff}
         .agent-journey .detail-glass .text-indigo-100,.agent-journey .detail-glass .text-emerald-100,.agent-journey .detail-glass .text-sky-100,.agent-journey .detail-glass .text-teal-100{color:#e8eaff!important}
         .agent-journey .detail-glass .text-indigo-500{color:#bfc8ff!important}
-        .agent-journey .journey-layout{grid-template-columns:minmax(0,1fr)}
+        .agent-journey .journey-layout{grid-template-columns:minmax(0,1fr)}.agent-journey .detail-glass{margin-top:14px}
       `}</style>
 
       <header className="relative border-b border-violet-200/15 px-4 py-3">
@@ -213,9 +247,8 @@ export const MissionControlTimeline: React.FC<Props> = ({
               </div>
               <span className="text-xs text-violet-200/60">按发生顺序排列 · 选择事件查看详情</span>
             </div>
-            <div className="relative max-h-[min(52vh,560px)] overflow-y-auto pr-1 [scrollbar-width:thin]">
-              <div className="absolute bottom-4 left-[15px] top-4 w-px bg-gradient-to-b from-cyan-300/70 via-violet-400/45 to-transparent"/>
-              <div className="space-y-2">
+            <div className="relative pb-1">
+              <div className="journey-track relative grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-stretch gap-3 px-1 pt-2">
                 {ordered.map((step,index)=>{
                   const info=phaseMeta[step.phase]||phaseMeta.external;
                   const Icon=info.icon;
@@ -223,7 +256,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                   const tone=toneForStep(step.status);
                   const stateLabel=(statusMeta[step.status]||statusMeta.unknown).label;
                   const toneClass=tone==="done"?"text-emerald-300 border-emerald-300/35":tone==="running"?"text-cyan-200 border-cyan-300/45":tone==="failed"?"text-rose-300 border-rose-300/40":tone==="unknown"?"text-amber-200 border-amber-300/40":"text-violet-200 border-violet-300/25";
-                  return <button key={`${step.stepId}-${index}`} type="button" onClick={()=>select(step)} aria-expanded={active} className={`journey-row relative flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${active?"journey-row-active":""}`}>
+                  return <button key={`${step.stepId}-${index}`} type="button" onClick={()=>select(step)} aria-expanded={active} className={`journey-row relative flex items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${active?"journey-row-active":""}`}>
                     <span className={`relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-[#111735] ${toneClass}`}>
                       {tone==="running"?<Loader2 className="h-4 w-4 animate-spin"/>:tone==="done"?<CheckCircle2 className="h-4 w-4"/>:tone==="failed"?<XCircle className="h-4 w-4"/>:tone==="unknown"?<CircleHelp className="h-4 w-4"/>:<Icon className="h-4 w-4"/>}
                     </span>
@@ -239,6 +272,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                     <ChevronRight className={`mt-1 h-4 w-4 shrink-0 ${active?"text-cyan-200":"text-violet-200/40"}`}/>
                   </button>;
                 })}
+                {ordered.length === 0 && <div className="flex min-h-[132px] w-[260px] flex-col justify-center rounded-xl border border-dashed border-violet-300/25 bg-white/[0.035] px-4 py-4"><div className="mb-1 text-sm font-semibold text-violet-100">等待 Agent 开始执行</div><div className="text-xs leading-5 text-violet-200/60">发送一条任务后，真实执行事件会按发生顺序出现在这里。</div></div>}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-violet-200/60">
@@ -276,21 +310,23 @@ export const MissionControlTimeline: React.FC<Props> = ({
                     <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(toolSchema)}</pre>
                   </details>}
                   {toolArguments !== undefined && <section className="rounded-xl border border-sky-300/20 bg-sky-400/10 p-3">
-                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-sky-100"><Terminal className="h-3.5 w-3.5"/>工具实际收到的参数</div>
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-100">{pretty(toolArguments)}</pre>
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-sky-100"><Terminal className="h-3.5 w-3.5"/>这次操作收到了什么</div>
+                    {readableEntries(toolArguments).length > 0 ? <div className="grid grid-cols-2 gap-2">{readableEntries(toolArguments).map(([key,value])=><div key={key} className="min-w-0 rounded-lg bg-slate-950/25 px-2.5 py-2"><div className="text-[10px] text-sky-200/70">{humanizeKey(key)}</div><div className="mt-1 line-clamp-3 break-words text-xs font-medium text-white" title={readableValue(value)}>{readableValue(value)}</div></div>)}</div> : <p className="text-xs leading-5 text-slate-100">{typeof toolArguments==="string"?toolArguments:"已收到工具参数，具体结构可在技术详情中查看。"}</p>}
+                    <details className="mt-2 rounded-lg border border-white/10 bg-slate-950/20 p-2"><summary className="cursor-pointer text-[10px] text-sky-100/80">查看原始参数</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-100">{pretty(toolArguments)}</pre></details>
                   </section>}
                   {toolResult !== undefined && <section className="rounded-xl border border-teal-300/20 bg-teal-400/10 p-3">
-                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-teal-100"><Eye className="h-3.5 w-3.5"/>工具实际执行结果</div>
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-100">{pretty(toolResult)}</pre>
+                    <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-teal-100"><Eye className="h-3.5 w-3.5"/>执行后得到了什么</div>
+                    {readableEntries(toolResult).length > 0 ? <div className="grid grid-cols-2 gap-2">{readableEntries(toolResult).map(([key,value])=><div key={key} className="min-w-0 rounded-lg bg-slate-950/25 px-2.5 py-2"><div className="text-[10px] text-teal-200/70">{humanizeKey(key)}</div><div className="mt-1 break-words text-xs font-medium text-white">{readableValue(value)}</div></div>)}</div> : <p className="text-xs leading-5 text-slate-100">{typeof toolResult==="string"?toolResult:"工具已返回结果，具体结构可在技术详情中查看。"}</p>}
+                    <details className="mt-2 rounded-lg border border-white/10 bg-slate-950/20 p-2"><summary className="cursor-pointer text-[10px] text-teal-100/80">查看原始结果</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-100">{pretty(toolResult)}</pre></details>
                   </section>}
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {why!==undefined&&<div className="min-w-0 rounded-lg border border-violet-300/20 bg-violet-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-violet-200"><Sparkles className="h-3 w-3"/>决策摘要</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-slate-600">{pretty(why)}</div></div>}
                   {error!==undefined&&<div className="min-w-0 rounded-lg border border-rose-300/20 bg-rose-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3"/>错误信息</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-rose-700">{pretty(error)}</div></div>}
-                  {input!==undefined&&<div className="min-w-0 rounded-lg border border-sky-300/20 bg-sky-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-200"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
-                  {output!==undefined&&<div className="min-w-0 rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
+                  {input!==undefined&&toolArguments===undefined&&<div className="min-w-0 rounded-lg border border-sky-300/20 bg-sky-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-200"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
+                  {output!==undefined&&toolResult===undefined&&<div className="min-w-0 rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
                 </div>
-                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-300/25 bg-amber-400/10 px-3 py-2 text-[10px] leading-4 text-amber-100">这条事件没有附带提示词、模型响应或工具 I/O 内容。需要在 Agent 实际调用模型和工具的位置启用内容采集；Studio 不会根据阶段名称补写。</div>}
+                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-300/25 bg-amber-400/10 px-3 py-2 text-[10px] leading-4 text-amber-100">{selected.phase==="llm"?"本次模型调用没有上报提示词或模型响应。":selected.phase==="skill"?"本次工具事件没有上报调用参数或返回结果。":"这条事件目前只包含状态、时间等基础信息。"}</div>}
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <button type="button" onClick={()=>setShowRaw(v=>!v)} className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-indigo-600"><ChevronDown className={`h-3 w-3 transition ${showRaw?"rotate-180":""}`}/>{showRaw?"收起原始事件":"查看原始事件"}</button>
                   <div className="flex items-center gap-2">

@@ -82,6 +82,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<"flow" | "finops">(
     defaultTab === "finops" ? "finops" : "flow"
   );
+  useEffect(() => {
+    setActiveTab(defaultTab === "finops" ? "finops" : "flow");
+  }, [defaultTab, message?.id]);
   const [isImmersive, setIsImmersive] = useState(false);
 
   // 抽屉宽度状态（支持拖拽调整并持久化到本地与数据库）
@@ -233,14 +236,16 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: isImmersive ? "100vw" : `${drawerWidth}px`,
+        width: isImmersive ? "100vw" : isSplit ? "60%" : `${drawerWidth}px`,
+        flex: isSplit && !isImmersive ? "1 1 60%" : undefined,
+        minWidth: isSplit && !isImmersive ? 0 : undefined,
         height: isImmersive ? "100dvh" : undefined,
         inset: isImmersive ? 0 : undefined,
         transition: isDragging || isImmersive ? "none" : "width 0.15s ease-out",
       }}
       className={
         isSplit
-          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full border-l shadow-xs z-10"} bg-white border-slate-200 flex flex-col shrink-0 select-auto`
+          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full min-h-0 border-l shadow-xs z-10"} bg-white border-slate-200 flex flex-col shrink-0 select-auto`
           : `trace-cosmos fixed ${isImmersive ? "inset-0 z-[100]" : "inset-y-0 right-0 z-50"} bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto`
       }
     >
@@ -289,7 +294,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             <Compass className="w-4 h-4 text-blue-600" />
           </div>
           <span className="text-xs font-black text-slate-800 tracking-tight shrink-0">
-            执行全景
+            Agent Control Center
           </span>
           <span
             className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
@@ -304,7 +309,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               ? "⚡ 缓存秒回"
               : message.isThinking
               ? "处理中..."
-              : `✓ ${(totalMs / 1000).toFixed(1)}s`}
+              : message.id === "observer-empty" ? "等待任务" : totalMs > 0 ? (totalMs / 1000).toFixed(1) + "s" : "等待数据"}
           </span>
         </div>
 
@@ -356,7 +361,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             {isImmersive ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
 
-          {onToggleLayout && (
+          {!isSplit && onToggleLayout && (
             <button
               onClick={onToggleLayout}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
@@ -366,18 +371,23 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             </button>
           )}
 
-          <button
+          {!isSplit && <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
             title="关闭 (ESC)"
           >
             <X className="w-3.5 h-3.5" />
-          </button>
+          </button>}
         </div>
       </div>
 
       {/* ── 核心内容区：Agent 执行过程观察器 ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-5 scrollbar-hide">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 scrollbar-hide">
+        {activeTab === "flow" && <div className="mb-3 grid grid-cols-3 gap-2">
+          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">执行事件</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{timeline.length}</div></div>
+          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">总耗时</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{totalMs > 0 ? (totalMs / 1000).toFixed(2) + "s" : "—"}</div></div>
+          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">Token 用量</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{typeof message.tokens === "number" && message.tokens > 0 ? message.tokens.toLocaleString() : "未上报"}</div></div>
+        </div>}
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
           <>

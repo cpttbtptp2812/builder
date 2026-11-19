@@ -943,14 +943,35 @@ export default function ChatPlaygroundPage({
   };
 
   const isChatEmpty = messages.length === 0 && !isGenerating;
+  const latestAssistantTraceMessage = (() => {
+    const target = messages.slice().reverse().find((item) => item.role === "assistant");
+    if (!target) return null;
+    const index = messages.findIndex((item) => item.id === target.id);
+    const previousUser = index > 0 ? messages.slice(0, index).reverse().find((item) => item.role === "user") : null;
+    return {
+      ...target,
+      userPrompt: target.userPrompt || previousUser?.content || "",
+      modelName: target.modelName || currentAgent?.model || systemModel || "模型待连接",
+      sessionId: target.sessionId || currentSessionId,
+      enableRAG,
+      enableThinking,
+      enableWebSearch,
+    };
+  })();
 
   return (
-    <div className="dream-chat-world flex-1 flex h-full w-full overflow-hidden relative font-sans cyber-grid-canvas">
+    <div className="dream-chat-world ownagent-control-workspace flex-1 flex h-full w-full min-w-0 overflow-hidden relative font-sans cyber-grid-canvas">
       <style>{`
         .dream-chat-world{isolation:isolate;background:radial-gradient(ellipse at 18% 18%,rgba(102,78,205,.20),transparent 34%),radial-gradient(ellipse at 78% 78%,rgba(40,116,164,.16),transparent 38%),linear-gradient(135deg,#090d24 0%,#11152f 48%,#0a1730 100%);color:#e9eaff}
         .dream-chat-world:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(210,202,255,.48) .7px,transparent .9px),radial-gradient(rgba(103,232,249,.28) .8px,transparent 1px);background-size:31px 31px,53px 53px;background-position:0 0,17px 23px;mask-image:linear-gradient(180deg,rgba(0,0,0,.9),transparent 94%)}
         .dream-chat-world:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:58%;height:48%;left:20%;top:26%;background:radial-gradient(ellipse,rgba(124,58,237,.12),transparent 70%);filter:blur(42px)}
-        .dream-chat-world .dream-chat-history{background:rgba(12,17,43,.64)!important;border-color:rgba(173,160,255,.16)!important;backdrop-filter:blur(18px)}
+        .ownagent-control-workspace .dream-chat-history{position:absolute;left:0;top:0;bottom:0;z-index:35;box-shadow:18px 0 45px rgba(0,0,0,.28)}
+        .ownagent-control-workspace .dream-chat-main{flex:0 0 40%;width:40%;min-width:340px;border-right:1px solid rgba(174,164,255,.18)}
+        .ownagent-control-workspace .trace-cosmos{flex:1 1 60%;width:60%;min-width:0;max-width:none;height:100%;border-left:1px solid rgba(111,133,255,.22);box-shadow:-20px 0 60px rgba(0,0,0,.18)}
+        .ownagent-control-workspace .dream-chat-toolbar{padding-left:18px;padding-right:18px}
+        .ownagent-control-workspace .dream-chat-scroll{padding-left:16px;padding-right:16px}
+        .ownagent-control-workspace .dream-composer{max-width:none}
+        .ownagent-control-workspace .dream-chat-history{background:rgba(12,17,43,.64)!important;border-color:rgba(173,160,255,.16)!important;backdrop-filter:blur(18px)}
         .dream-chat-world .dream-chat-main{background:transparent}
         .dream-chat-world .dream-chat-toolbar{background:linear-gradient(180deg,rgba(9,13,36,.68),rgba(9,13,36,.12));border-bottom:1px solid rgba(183,173,255,.09)}
         .dream-chat-world .dream-chat-scroll{background:transparent}
@@ -966,12 +987,13 @@ export default function ChatPlaygroundPage({
         .dream-chat-world .dream-toolbar-pill{background:rgba(25,31,70,.56)!important;border-color:rgba(170,164,255,.2)!important;color:#dfe5ff!important;box-shadow:0 5px 18px rgba(2,6,23,.12)}
         .dream-chat-world .dream-muted{color:rgba(204,211,243,.62)!important}
         .dream-chat-world .dream-empty-title{color:#f1efff}
+        @media(max-width:900px){.ownagent-control-workspace{height:auto;min-height:100%;overflow-y:auto;overflow-x:hidden;flex-direction:column}.ownagent-control-workspace .dream-chat-main{flex:0 0 62vh;width:100%;min-width:0;border-right:0;border-bottom:1px solid rgba(174,164,255,.18)}.ownagent-control-workspace .trace-cosmos{flex:0 0 auto;width:100%;height:auto!important;min-height:680px;border-left:0;border-top:1px solid rgba(111,133,255,.22)}.ownagent-control-workspace .dream-chat-history{position:absolute;top:0;bottom:auto;height:62vh;width:256px!important}}
         @media(prefers-reduced-motion:no-preference){.dream-chat-world .dream-user-bubble,.dream-chat-world .dream-assistant-bubble{animation:dreamMessageIn .38s cubic-bezier(.2,.7,.2,1) both}@keyframes dreamMessageIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}}
         @media(prefers-reduced-motion:reduce){.dream-chat-world *{animation:none!important;transition:none!important}}
       `}</style>
       {/* ────────────────── 1. 类似 DeepSeek / 豆包的极轻抽屉历史侧栏 ────────────────── */}
       <div
-        className={`h-full border-r border-slate-200/70 bg-white/95 backdrop-blur-md flex flex-col transition-all duration-300 ease-in-out z-20 shrink-0 ${isHistoryOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none border-r-0"
+        className={`dream-chat-history h-full border-r border-slate-200/70 bg-white/95 backdrop-blur-md flex flex-col transition-all duration-300 ease-in-out z-20 shrink-0 ${isHistoryOpen ? "w-64 opacity-100" : "w-0 opacity-0 pointer-events-none border-r-0"
           }`}
       >
         <div className="p-3.5 border-b border-slate-100 flex items-center justify-between shrink-0">
@@ -1030,9 +1052,9 @@ export default function ChatPlaygroundPage({
       </div>
 
       {/* ────────────────── 2. 主聊天视窗 (DeepSeek/元宝极简风) ────────────────── */}
-      <div className="dream-chat-main flex-1 flex flex-col h-full overflow-hidden relative">
+      <div className="dream-chat-main flex flex-col h-full min-h-0 overflow-hidden relative">
         {/* 顶部极简透明工具条 */}
-        <div className="dream-chat-toolbar h-14 px-6 flex items-center justify-between shrink-0 z-10">
+        <div className="dream-chat-toolbar h-14 px-4 flex items-center justify-between shrink-0 z-10"><div className="hidden sm:flex items-center gap-2 mr-2"><div className="h-8 w-8 rounded-xl border border-violet-300/30 bg-violet-400/10 flex items-center justify-center text-cyan-200"><Sparkles className="h-4 w-4"/></div><div><div className="text-xs font-black tracking-wide text-white">OwnAgent</div><div className="text-[9px] text-violet-200/60">AI Agent Platform</div></div></div>
           <div className="flex items-center gap-2">
             {!isHistoryOpen && (
               <button
@@ -1947,76 +1969,38 @@ export default function ChatPlaygroundPage({
 
       {/* Trace Inspector Drawer (支持 split 分栏与 drawer 抽屉双模式切换) */}
       <TraceInspectorDrawer
-        isOpen={!!activeTraceDrawer}
+        isOpen={true}
         onClose={() => setActiveTraceDrawer(null)}
-        layoutMode={traceLayoutMode}
-        onToggleLayout={() => setTraceLayoutMode((prev) => (prev === "split" ? "drawer" : "split"))}
-        defaultTab={activeTraceDrawer?.defaultTab || "waterfall"}
+        layoutMode="split"
+        onToggleLayout={() => setTraceLayoutMode("split")}
+        defaultTab={activeTraceDrawer?.defaultTab || "flow"}
         highlightCitationIndex={activeTraceDrawer?.highlightCitationIndex}
         activeStepId={focusedStepId}
         onSelectStep={(stepId) => setFocusedStepId(stepId)}
         onRetryRun={() => {
-          const target = activeTraceDrawer
-            ? messages.find((item) => item.id === activeTraceDrawer.messageId)
-            : undefined;
-          if (target?.userPrompt) handleSend(target.userPrompt);
+          const target =
+            (activeTraceDrawer ? messages.find((item) => item.id === activeTraceDrawer.messageId) : undefined) ||
+            messages.slice().reverse().find((item) => item.role === "assistant");
+          const index = target ? messages.findIndex((item) => item.id === target.id) : -1;
+          const previousUser = index > 0 ? messages.slice(0, index).reverse().find((item) => item.role === "user") : null;
+          const prompt = target?.userPrompt || previousUser?.content;
+          if (prompt) handleSend(prompt);
         }}
         message={
           activeTraceDrawer
             ? (() => {
-              if (activeTraceDrawer.messageId === "finops-global") {
-                return {
-                  id: "finops-global",
-                  role: "assistant",
-                  content: "历史问答缓存与开销统计",
-                  userPrompt: "开销与缓存统计",
-                  modelName: currentAgent?.model || systemModel || "系统模型",
-                  sessionId: currentSessionId,
-                  enableRAG,
-                  enableThinking,
-                  enableWebSearch: false,
-                  traceSteps: {},
-                  trace: {
-                    cached: false,
-                    totalMs: 0,
-                    tokens: 0,
-                    savedTokens: 0,
-                    savedMs: 0,
-                  },
-                } as Message;
-              }
+              if (activeTraceDrawer.messageId === "finops-global") return { id: "finops-global", role: "assistant", content: "历史问答缓存与开销统计", userPrompt: "开销与缓存统计", modelName: currentAgent?.model || systemModel || "系统模型", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch: false, traceSteps: {}, trace: { cached: false, totalMs: 0, tokens: 0, savedTokens: 0, savedMs: 0 } } as Message;
               const targetMsg = messages.find((m) => m.id === activeTraceDrawer.messageId);
-              if (!targetMsg) {
-                const lastAsst = messages.slice().reverse().find((m) => m.role === "assistant");
-                if (lastAsst) return lastAsst;
-                return {
-                  id: activeTraceDrawer.messageId,
-                  role: "assistant",
-                  content: "",
-                  userPrompt: "当前会话监控",
-                  modelName: currentAgent?.model || systemModel || "deepseek-chat",
-                  sessionId: currentSessionId,
-                  enableRAG,
-                  enableThinking,
-                  enableWebSearch,
-                  traceSteps: {},
-                } as Message;
+              if (targetMsg) {
+                const msgIdx = messages.findIndex((m) => m.id === activeTraceDrawer.messageId);
+                const prevUserMsg = msgIdx > 0 ? messages.slice(0, msgIdx).reverse().find((m) => m.role === "user") : null;
+                return { ...targetMsg, userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "", modelName: targetMsg.modelName || currentAgent?.model || systemModel || "deepseek-chat", sessionId: targetMsg.sessionId || currentSessionId, enableRAG, enableThinking, enableWebSearch };
               }
-              const msgIdx = messages.findIndex((m) => m.id === activeTraceDrawer.messageId);
-              const prevUserMsg = msgIdx > 0 ? messages.slice(0, msgIdx).reverse().find((m) => m.role === "user") : null;
-              return {
-                ...targetMsg,
-                userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "",
-                modelName: targetMsg.modelName || currentAgent?.model || systemModel || "deepseek-chat",
-                sessionId: targetMsg.sessionId || currentSessionId,
-                enableRAG,
-                enableThinking,
-                enableWebSearch,
-              };
+              return messages.slice().reverse().find((m) => m.role === "assistant") || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message;
             })()
-            : null
+            : latestAssistantTraceMessage || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message
         }
-      />
+            />
 
       {/* 业务流水线执行窗口 */}
       <WorkflowExecutionModal
