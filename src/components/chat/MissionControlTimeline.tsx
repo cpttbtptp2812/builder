@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import { sortTimeline } from "@/lib/agentTimeline";
 import {
   Activity, CheckCircle2, Clock3, Copy, Loader2, RotateCcw, XCircle,
-  ChevronDown, BrainCircuit, Wrench, Database, Search, AlertTriangle,
+  ChevronDown, ChevronRight, BrainCircuit, Wrench, Database, Search, AlertTriangle,
   GitBranch, Eye, Sparkles, Terminal, FileOutput, CircleHelp
 } from "lucide-react";
 import { AgentStep } from "@/lib/agentTimeline";
