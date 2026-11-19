@@ -141,14 +141,14 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
           const { value, done } = await reader.read();
           if (done) break;
           buffer += decoder.decode(value, { stream: true });
-          let boundary = buffer.indexOf("\\n\\n");
+          let boundary = buffer.indexOf("\n\n");
           while (boundary >= 0) {
             const frame = buffer.slice(0, boundary);
             buffer = buffer.slice(boundary + 2);
-            if (frame.split("\\n").some((line) => line.startsWith("data:"))) {
+            if (frame.split("\n").some((line) => line.startsWith("data:"))) {
               void refreshDetail();
             }
-            boundary = buffer.indexOf("\\n\\n");
+            boundary = buffer.indexOf("\n\n");
           }
         }
       } catch (cause) {
