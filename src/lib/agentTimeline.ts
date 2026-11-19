@@ -138,7 +138,9 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         stepId,
         seq: hasSeq ? seq : undefined,
         phase: phaseFromEvent(data),
-        status: data.status == null ? undefined : normalizeStatus(data.status),
+        status: data.status == null && eventAttribute(data, "otel.status_code") == null
+          ? undefined
+          : normalizeStatus(data.status ?? eventAttribute(data, "otel.status_code")),
         leftTitle: data.leftTitle ?? title,
         leftSummary: data.leftSummary ?? data.message,
         rightTitle: title,
@@ -151,7 +153,10 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
           ...(data.rightDetail && typeof data.rightDetail === "object" ? data.rightDetail : {}),
         },
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs) ??
-          (data.durationNs !== undefined || data.duration_ns !== undefined ? Number(data.durationNs ?? data.duration_ns) / 1000000 : undefined),
+          (data.durationNs !== undefined || data.duration_ns !== undefined ? Number(data.durationNs ?? data.duration_ns) / 1000000 : undefined) ??
+          (data.endTimeUnixNano != null && (data.startTimeUnixNano ?? data.start_time_unix_nano) != null
+            ? (Number(data.endTimeUnixNano) - Number(data.startTimeUnixNano ?? data.start_time_unix_nano)) / 1000000
+            : undefined),
         timestamp: parseEventTimestamp(data),
       });
     }
