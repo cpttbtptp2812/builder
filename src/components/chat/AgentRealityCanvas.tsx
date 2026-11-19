@@ -94,6 +94,26 @@ const toolNames:Record<string,string> = {
   get_git_repo_status:"检查仓库状态", get_git_commit_history:"读取提交历史",
   get_git_diff:"查看代码改动", get_git_file:"读取项目文件", search_code:"搜索代码",
 };
+const displayToolName = (name:string):string => {
+  if(!name) return "Agent 行动";
+  if(toolNames[name]) return toolNames[name];
+  const normalized=name.toLowerCase().replace(/[.\\/-]+/g,"_");
+  const verbs:[RegExp,string][]=[
+    [/^(get|read|fetch|load|retrieve)_/,"读取"],
+    [/^(search|find|query)_/,"搜索"],
+    [/^(list|enumerate)_/,"列出"],
+    [/^(create|add|new)_/,"创建"],
+    [/^(update|edit|modify|patch)_/,"修改"],
+    [/^(delete|remove|drop)_/,"删除"],
+    [/^(execute|run|invoke)_/,"执行"],
+    [/^(send|submit|post)_/,"提交"],
+    [/^(check|validate|verify)_/,"检查"],
+  ];
+  const match=verbs.find(([pattern])=>pattern.test(normalized));
+  const remainder=match?normalized.replace(match[0],""):normalized;
+  const readable=remainder.split("_").filter(Boolean).join(" ");
+  return match?match[1]+readable:readable.charAt(0).toUpperCase()+readable.slice(1);
+};
 
 const summarize = (value:any):string => {
   if(value===undefined || value===null) return "执行端尚未提供结果";
@@ -135,7 +155,7 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
       <div className="reality-summary-orb"><Zap size={18}/></div>
       <div className="min-w-0 flex-1">
         <div className="reality-eyebrow">REAL ACTION · {adapterMeta[adapter].label}</div>
-        <div className="reality-summary-title">{toolOf(step)?(toolNames[toolOf(step)]||toolOf(step)):step.rightTitle||step.leftTitle}</div>
+        <div className="reality-summary-title">{toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||step.leftTitle}</div>
         <p>{step.rightSubtitle||step.leftSummary||adapterMeta[adapter].verb}</p>
       </div>
       <div className="reality-duration"><Clock3 size={13}/>{duration}</div>
