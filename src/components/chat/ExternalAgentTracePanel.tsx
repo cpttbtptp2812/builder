@@ -299,7 +299,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
           <div className="max-h-[42vh] space-y-1.5 overflow-y-auto">
             {ordered.map((span, index) => {
               const open = expanded.has(span.spanId);
-              const actionId = span.attributes?.action_id;
+              const attrs = span.attributes || {};
+              const actionId = attrs.action_id;
               return (
                 <div key={span.spanId} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                   <button
@@ -335,7 +336,6 @@ export const ExternalAgentTracePanel: React.FC = () => {
                     {span.parentSpanId && <div className="text-[10px] text-slate-500">父级 Span：<code>{span.parentSpanId}</code></div>}
                     {span.runId && <div className="text-[10px] text-slate-500">Run ID：<code>{span.runId}</code></div>}
                     {(() => {
-                      const attrs = span.attributes || {};
                       const sections: Array<{ label: string; value: unknown; tone: string }> = [
                         { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
                         { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
