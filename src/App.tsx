@@ -8,7 +8,6 @@ import KnowledgePage from "./pages/knowledge/KnowledgePage";
 import AgentsListPage from "./pages/agents/AgentsListPage";
 import ToolsMarketPage from "./pages/tools/ToolsMarketPage";
 import EvaluationPage from "./pages/evaluation/EvaluationPage";
-import RunsPage from "./pages/runs/RunsPage";
 import {
   NavTab,
   AgentItem,
@@ -55,16 +54,15 @@ export type ViewMode =
   | "tools"
   | "settings"
   | "designer"
-  | "evaluation"
-  | "runs";
+  | "evaluation";
 
 export default function App() {
   const toast = useToast();
-  const [currentView, setCurrentView] = useState<ViewMode>("runs");
+  const [currentView, setCurrentView] = useState<ViewMode>("chat");
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
-    const order: Record<string, number> = { home: 0, chat: 1, runs: 2, workflows: 3, designer: 4, knowledge: 5, agents: 6, tools: 7, settings: 8, evaluation: 9 };
+    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7, evaluation: 8 };
     const curIdx = order[currentView] ?? 0;
     const newIdx = order[newView] ?? 0;
     if (newIdx > curIdx) {
@@ -292,7 +290,6 @@ export default function App() {
   const navItems = [
     { label: "首页大盘", value: "home", icon: <DashboardOutlined /> },
     { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
-    { label: "运行记录", value: "runs", icon: <DeploymentUnitOutlined /> },
     { label: "业务流中心", value: "workflows", icon: <AppstoreOutlined /> },
   ];
 
@@ -515,7 +512,6 @@ export default function App() {
             />
           )}
 
-          {currentView === "runs" && <RunsPage />}
 
           {currentView === "workflows" && (
             <WorkflowsListPage
