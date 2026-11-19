@@ -89,16 +89,16 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
       const seq = hasSeq ? Number(rawSeq) : current.length + 1;
       const stepId = String(data.stepId ?? data.spanId ?? data.step_id ?? `event-${seq}`);
-      const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle ?? "Agent event";
+      const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle;
       return timelineReducer(current, {
         stepId,
         seq: hasSeq ? seq : undefined,
-        phase: data.phase ?? "external",
+        phase: data.phase,
         status: data.status == null ? undefined : normalizeStatus(data.status),
         leftTitle: data.leftTitle ?? title,
-        leftSummary: data.leftSummary ?? data.message ?? "",
+        leftSummary: data.leftSummary ?? data.message,
         rightTitle: title,
-        rightSubtitle: data.rightSubtitle ?? data.description ?? "",
+        rightSubtitle: data.rightSubtitle ?? data.description,
         rightDetail: data.rightDetail ?? data,
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
         timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
@@ -118,9 +118,9 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         phase: "skill",
         status,
         leftTitle: `Tool: ${toolName}`,
-        leftSummary: data.message ?? data.status ?? "收到工具调用事件",
+        leftSummary: data.message ?? (data.status == null ? undefined : String(data.status)),
         rightTitle: toolName,
-        rightSubtitle: data.description ?? "",
+        rightSubtitle: data.description,
         rightDetail: data,
         durationMs: parseDuration(data.durationMs ?? data.duration),
         timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
