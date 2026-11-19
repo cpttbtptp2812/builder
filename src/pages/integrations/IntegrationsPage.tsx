@@ -1,4 +1,6 @@
 import React, { useState } from "react";
+
+const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\\/+$/, "");
 import {
   Activity, ArrowUpRight, Check, Code2, Copy, ExternalLink, GitBranch,
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
@@ -114,11 +116,11 @@ with tracer.start_as_current_span("invoke_agent") as span:
 };
 
 const statusItems = [
-  { name: "OpenTelemetry OTLP/JSON", detail: "接收标准 OTLP/HTTP JSON Trace，并保留 GenAI 属性", status: "已实现", icon: Radio },
+  { name: "OpenTelemetry OTLP/HTTP", detail: "接收标准 JSON 与 Protobuf Trace，并保留 GenAI 属性", status: "已实现", icon: Radio },
   { name: "OpenInference 自动埋点", detail: "OpenAI、OpenAI Agents、LangChain 与 MCP Trace 传播示例已提供，沿用标准 OTLP/JSON 上报", status: "可直接接入", icon: Workflow },
   { name: "OwnAgent Python SDK", detail: "Run / Span、父子关系、Provider Token Usage", status: "已实现", icon: Code2 },
   { name: "Langfuse / Phoenix 转发", detail: "后端已有可配置 OTLP 导出路径；需按实际部署完成端到端验证", status: "可配置", icon: GitBranch },
-  { name: "Promptfoo CLI", detail: "可复用上游 CLI；OwnAgent 提供配置指南与 JSON / JSONL 报告预览，尚无服务端执行器", status: "外部接入", icon: Workflow },
+  { name: "Promptfoo CLI", detail: "复用上游 CLI；OwnAgent 支持 JSON / JSONL 报告导入、脱敏与持久化历史", status: "已实现", icon: Workflow },
   { name: "MCP Inspector", detail: "官方 Web / CLI / TUI 可在开发机独立启动；不复制其 UI", status: "外部工具可用", icon: PlugZap },
 ];
 
@@ -127,6 +129,10 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
   const [copied, setCopied] = useState<"install" | "code" | "bootstrap" | null>(null);
   const [promptfooReport, setPromptfooReport] = useState<{ fileName: string; stats: any; rows: any[] } | null>(null);
   const [promptfooError, setPromptfooError] = useState("");
+  const [promptfooApiKey, setPromptfooApiKey] = useState("");
+  const [promptfooSaving, setPromptfooSaving] = useState(false);
+  const [promptfooSaved, setPromptfooSaved] = useState<any>(null);
+  const [promptfooHistory, setPromptfooHistory] = useState<any[]>([]);
   const guide = guides[active];
   const bootstrapCommand = "export APP_SECURITY_BOOTSTRAP_AGENT_ID=\"your-existing-agent-id\"\nexport APP_SECURITY_BOOTSTRAP_AGENT_API_KEY=\"oa_live_$(openssl rand -hex 32)\"";
 
@@ -134,32 +140,43 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
     const file = event.target.files?.[0];
     if (!file) return;
     try {
+      if (!promptfooApiKey.trim()) throw new Error("请先填写目标 Agent 的 API Key。密钥只用于本次请求，不会写入浏览器存储。");
       if (file.size > 20 * 1024 * 1024) throw new Error("报告超过 20 MB，请先导出较小的 JSON / JSONL 文件。");
       const raw = await file.text();
-      if (file.name.toLowerCase().endsWith(".jsonl")) {
-        const rows = raw.split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
-        if (!rows.length) throw new Error("JSONL 文件中没有评估结果。");
-        setPromptfooReport({
-          fileName: file.name,
-          rows,
-          stats: {
-            successes: rows.filter((row) => row.success === true).length,
-            failures: rows.filter((row) => row.success === false && !row.error).length,
-            errors: rows.filter((row) => !!row.error).length,
-          },
-        });
+      const format = file.name.toLowerCase().endsWith(".jsonl") ? "jsonl" : "json";
+      const response = await fetch(API_BASE + "/api/v1/evaluations/promptfoo/import", {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + promptfooApiKey.trim(),
+          "Content-Type": "application/json",
+          "Accept": "application/json",
+        },
+        body: JSON.stringify({ fileName: file.name, format, content: raw }),
+      });
+      const saved = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(saved?.error?.message || "Promptfoo 报告导入失败（HTTP " + response.status + "）");
+      let rows: any[] = [];
+      let stats: any = {};
+      if (format === "jsonl") {
+        rows = raw.split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
       } else {
         const parsed = JSON.parse(raw);
-        const root = parsed.results ?? parsed;
-        const rows = Array.isArray(root.results) ? root.results : [];
-        if (!rows.length && !root.stats) throw new Error("文件中没有找到 Promptfoo results / stats 数据。");
-        setPromptfooReport({ fileName: file.name, stats: root.stats ?? parsed.stats ?? {}, rows });
+        rows = Array.isArray(parsed.results) ? parsed.results : Array.isArray(parsed) ? parsed : [];
+        stats = parsed.stats ?? {};
       }
+      setPromptfooReport({ fileName: file.name, stats, rows });
+      setPromptfooSaved(saved);
       setPromptfooError("");
+      const historyResponse = await fetch(API_BASE + "/api/v1/evaluations/promptfoo", {
+        headers: { "Authorization": "Bearer " + promptfooApiKey.trim(), "Accept": "application/json" },
+      });
+      if (historyResponse.ok) setPromptfooHistory(await historyResponse.json());
     } catch (cause) {
       setPromptfooReport(null);
-      setPromptfooError(cause instanceof Error ? cause.message : "无法读取 Promptfoo JSON 报告。");
+      setPromptfooSaved(null);
+      setPromptfooError(cause instanceof Error ? cause.message : "无法导入 Promptfoo JSON 报告。");
     } finally {
+      setPromptfooSaving(false);
       event.target.value = "";
     }
   };
@@ -252,14 +269,16 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
               {active === "promptfoo" && (
                 <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div>
-                    <h3 className="text-xs font-semibold text-slate-800">导入 Promptfoo 评估报告</h3>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-500">选择通过 promptfoo eval -o results.json 或 -o results.jsonl 导出的报告。当前在浏览器内预览，不会上传或持久化到服务器。</p>
+                    <h3 className="text-xs font-semibold text-slate-800">导入并保存 Promptfoo 评估报告</h3>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-500">报告会按 Agent API Key 归属保存到 OwnAgent；服务端会剔除 analysis / reasoning 等内部字段。导入前仍请检查并脱敏敏感数据。</p>
                   </div>
+                  <input type="password" autoComplete="off" value={promptfooApiKey} onChange={(event) => setPromptfooApiKey(event.target.value)} placeholder="目标 Agent API Key" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-white px-4 py-5 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
-                    <ExternalLink size={14} /> 选择 results.json
-                    <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" className="sr-only" onChange={importPromptfooReport} />
+                    <ExternalLink size={14} /> {promptfooSaving ? "正在导入并保存…" : "选择 JSON / JSONL 报告"}
+                    <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" className="sr-only" disabled={promptfooSaving} onChange={(event) => { setPromptfooSaving(true); void importPromptfooReport(event); }} />
                   </label>
                   {promptfooError && <p className="text-xs text-rose-700">{promptfooError}</p>}
+                  {promptfooSaved && <p className="text-[11px] text-emerald-700">已保存到服务器 · ID {promptfooSaved.reportId} · {promptfooSaved.resultCount} 条用例</p>}
                   {promptfooReport && (
                     <div className="space-y-3">
                       <div className="text-[10px] text-slate-500">已加载：{promptfooReport.fileName}</div>
@@ -283,6 +302,17 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                             {reason && <p className="mt-2 whitespace-pre-wrap text-[11px] leading-5 text-slate-600">{String(reason)}</p>}
                           </div>;
                         })}
+                      </div>
+                    </div>
+                  )}
+                  {promptfooHistory.length > 0 && (
+                    <div className="border-t border-slate-200 pt-3">
+                      <h4 className="mb-2 text-xs font-semibold text-slate-700">已保存的评估历史</h4>
+                      <div className="max-h-36 space-y-1.5 overflow-auto">
+                        {promptfooHistory.map((item) => <div key={item.reportId} className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-[10px]">
+                          <span className="min-w-0 truncate text-slate-700">{item.fileName}</span>
+                          <span className="shrink-0 tabular-nums text-slate-500">{item.successCount} 通过 · {item.failureCount} 失败 · {item.errorCount} 错误</span>
+                        </div>)}
                       </div>
                     </div>
                   )}
