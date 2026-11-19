@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
 import type { TraceDrawerMessage } from "./TraceInspectorDrawer";
+import { classifyRealityAdapter, formatRealityActionLabel, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind } from "@/lib/agentRealityAdapters";
 
 interface Props {
   timeline: AgentStep[];
@@ -16,7 +17,7 @@ interface Props {
   onRetryRun?: () => void;
 }
 
-type AdapterKind = "git" | "browser" | "retrieval" | "code" | "approval" | "agent" | "terminal" | "model" | "generic";
+type AdapterKind = RealityAdapterKind;
 
 const status: Record<string, {label:string; color:string; icon:React.ElementType}> = {
   done:{label:"已完成",color:"emerald",icon:CheckCircle2},
@@ -32,52 +33,24 @@ const phaseLabels:Record<string,string> = {
   skill:"执行能力", delivery:"整理交付", closure:"任务收束", degraded:"异常处理", external:"外部事件"
 };
 
-const get = (source:any, keys:string[]) => {
-  if(!source || typeof source!=="object") return undefined;
-  for(const key of keys) if(source[key]!==undefined && source[key]!==null && source[key]!=="") return source[key];
-  return undefined;
-};
-const read = (detail:any, keys:string[]) => {
-  const attrs=detail?.attributes && typeof detail.attributes==="object" ? detail.attributes : {};
-  const nested=detail?.rightDetail && typeof detail.rightDetail==="object" ? detail.rightDetail : {};
-  return get(detail,keys) ?? get(attrs,keys) ?? get(nested,keys) ?? get(nested.attributes,keys);
-};
+const read = readRealityAttribute;
 const text = (value:any) => {
   if(value===undefined || value===null) return "";
   if(typeof value==="string") return value;
   if(typeof value==="number" || typeof value==="boolean") return String(value);
   try{return JSON.stringify(value,null,2)}catch{return String(value)}
 };
-const messageText = (message:any):string => {
-  if(typeof message==="string") return message;
-  if(message && typeof message==="object") {
-    if(typeof message.content==="string") return message.content;
-    if(typeof message.text==="string") return message.text;
-    if(Array.isArray(message.parts)) return message.parts.map((part:any)=>part?.text??part?.content??"").filter(Boolean).join("\n");
-  }
-  return text(message);
-};
-const parseStructured = (value:any):any => {
-  if(typeof value!=="string") return value;
-  const trimmed=value.trim();
-  if(!trimmed || !["[","{"].includes(trimmed[0])) return value;
-  try{return JSON.parse(trimmed)}catch{return value}
-};
+const messageText = realityMessageText;
+const parseStructured = parseRealityPayload;
 const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","tool","tool_name","toolName","name","mcp.method.name"]) || "");
 const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name","span.name","spanName"]) || "").toLowerCase();
-const adapterOf = (step:AgentStep):AdapterKind => {
-  const name=(toolOf(step)+" "+operationOf(step)+" "+step.rightTitle+" "+step.leftTitle).toLowerCase();
-  const phase=step.phase;
-  if(/git|github|commit|branch|repository/.test(name)) return "git";
-  if(/browser|playwright|navigate|click|screenshot|computer/.test(name)) return "browser";
-  if(/file|code|diff|edit|write|patch/.test(name)) return "code";
-  if(/retriev|search|knowledge|vector|embedding|citation|rag/.test(name) || phase==="context") return "retrieval";
-  if(/approv|permission|policy|risk|authorize/.test(name)) return "approval";
-  if(/agent|delegate|handoff|transfer/.test(name)) return "agent";
-  if(/terminal|shell|command|exec/.test(name)) return "terminal";
-  if(/chat|inference|generate_content|invoke_model|model_call|llm/.test(name) || phase==="llm") return "model";
-  return "generic";
-};
+const adapterOf = (step:AgentStep):AdapterKind => classifyRealityAdapter({
+  tool: toolOf(step),
+  operation: operationOf(step),
+  title: step.rightTitle+" "+step.leftTitle,
+  phase: step.phase,
+});
+
 const adapterMeta:Record<AdapterKind,{label:string;icon:React.ElementType;accent:string;verb:string}> = {
   git:{label:"代码仓库",icon:GitBranch,accent:"violet",verb:"正在读取或改变代码仓库"},
   browser:{label:"浏览器操作",icon:Globe2,accent:"cyan",verb:"正在与网页交互"},
@@ -90,30 +63,7 @@ const adapterMeta:Record<AdapterKind,{label:string;icon:React.ElementType;accent
   generic:{label:"行动事件",icon:Activity,accent:"slate",verb:"收到一条执行事件"},
 };
 
-const toolNames:Record<string,string> = {
-  get_git_repo_status:"检查仓库状态", get_git_commit_history:"读取提交历史",
-  get_git_diff:"查看代码改动", get_git_file:"读取项目文件", search_code:"搜索代码",
-};
-const displayToolName = (name:string):string => {
-  if(!name) return "Agent 行动";
-  if(toolNames[name]) return toolNames[name];
-  const normalized=name.toLowerCase().replace(/[.\\/-]+/g,"_");
-  const verbs:[RegExp,string][]=[
-    [/^(get|read|fetch|load|retrieve)_/,"读取"],
-    [/^(search|find|query)_/,"搜索"],
-    [/^(list|enumerate)_/,"列出"],
-    [/^(create|add|new)_/,"创建"],
-    [/^(update|edit|modify|patch)_/,"修改"],
-    [/^(delete|remove|drop)_/,"删除"],
-    [/^(execute|run|invoke)_/,"执行"],
-    [/^(send|submit|post)_/,"提交"],
-    [/^(check|validate|verify)_/,"检查"],
-  ];
-  const match=verbs.find(([pattern])=>pattern.test(normalized));
-  const remainder=match?normalized.replace(match[0],""):normalized;
-  const readable=remainder.split("_").filter(Boolean).join(" ");
-  return match?match[1]+readable:readable.charAt(0).toUpperCase()+readable.slice(1);
-};
+const displayToolName = formatRealityActionLabel;
 
 const summarize = (value:any):string => {
   if(value===undefined || value===null) return "执行端尚未提供结果";
@@ -146,7 +96,7 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const inputTokens=read(d,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]);
   const outputTokens=read(d,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]);
   const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
-  const visiblePromptMessages=parseStructured(promptMessages);
+  const visiblePromptMessages=toRealityMessageList(promptMessages);
   const visibleModelResponse=parseStructured(modelResponse);
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
@@ -203,9 +153,9 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
       <div className="reality-block-head"><BrainCircuit size={15}/> 模型调用现场 <span>INFERENCE</span></div>
       <div className="reality-git-target"><div><small>模型</small><strong>{model?text(model):"未上报"}</strong></div><div><small>Provider</small><strong>{provider?text(provider):"未上报"}</strong></div></div>
       {decision!==undefined&&<div className="reality-empty-visual mt-3"><strong>显式行动摘要</strong><br/>{text(decision)}</div>}
-      {Array.isArray(visiblePromptMessages)&&<div className="mt-3 grid gap-2">{visiblePromptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{messageText(item?.content??item?.message??item).slice(0,2400)}</span></div>)}</div>}
+      {visiblePromptMessages&&<div className="mt-3 grid gap-2">{visiblePromptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{messageText(item?.content??item?.message??item).slice(0,2400)}</span></div>)}</div>}
       {promptMessages===undefined&&<div className="reality-empty-visual mt-3">模型请求消息未采集。可以在后端启用请求内容采集后显示真实消息。</div>}
-      {modelResponse!==undefined&&<div className="reality-code-preview">{Array.isArray(visibleModelResponse)?visibleModelResponse.map(messageText).join("\n\n"):messageText(visibleModelResponse).slice(0,4000)}</div>}
+      {modelResponse!==undefined&&<div className="reality-code-preview">{(toRealityMessageList(visibleModelResponse)||[visibleModelResponse]).map(messageText).join("\n\n").slice(0,4000)}</div>}
       {(inputTokens!==undefined||outputTokens!==undefined||totalTokens!==undefined)&&<div className="reality-git-target mt-3"><div><small>输入 Token</small><strong>{inputTokens!==undefined?text(inputTokens):"未上报"}</strong></div><div><small>输出 Token</small><strong>{outputTokens!==undefined?text(outputTokens):"未上报"}</strong></div></div>}<div className="mt-3 text-[10px] text-indigo-100/40">展示实际请求与响应，不展示或伪造模型隐藏思维链。</div>
     </div>}
 
