@@ -71,7 +71,10 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const pendingCount = ordered.filter(s => s.status === "pending").length;
   const unknownCount = ordered.filter(s => s.status === "unknown").length;
   const currentStep = ordered.find(s => s.status === "running");
-  const progress = ordered.length ? Math.round((completed / ordered.length) * 100) : 0;
+  // The observer only knows about events it has received; it cannot infer the
+  // total number of planned steps. Show completed/recorded events, not a fake
+  // whole-run progress percentage.
+  const recordedCompletion = ordered.length ? completed / ordered.length : 0;
   const runState = isThinking || runningCount > 0
     ? { label: "正在执行", tone: "running" }
     : pendingCount > 0
@@ -79,9 +82,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
       : unknownCount > 0
         ? { label: "部分步骤状态未知", tone: "unknown" }
         : failures > 0
-          ? { label: "任务结束，存在失败", tone: "failed" }
+          ? { label: "已记录步骤存在失败", tone: "failed" }
           : ordered.length > 0 && completed === ordered.length
-            ? { label: "本轮执行完成", tone: "done" }
+            ? { label: "已记录步骤均已完成", tone: "done" }
             : { label: "尚无完整状态", tone: "unknown" };
   const select = (step: AgentStep) => {
     setSelectedId(step.stepId === selected?.stepId ? null : step.stepId);
@@ -139,18 +142,18 @@ export const MissionControlTimeline: React.FC<Props> = ({
 
         <div className="mt-5 flex items-end justify-between gap-3">
           <div>
-            <div className="text-[10px] tracking-widest text-slate-500">EXECUTION PROGRESS</div>
-            <div className="mt-1 flex items-baseline gap-2"><span className="font-mono text-2xl font-semibold text-white">{completed}<span className="text-sm text-slate-500">/{ordered.length}</span></span><span className="text-xs text-slate-400">步已完成</span></div>
+            <div className="text-[10px] tracking-widest text-slate-500">RECORDED EXECUTION EVENTS</div>
+            <div className="mt-1 flex items-baseline gap-2"><span className="font-mono text-2xl font-semibold text-white">{completed}<span className="text-sm text-slate-500">/{ordered.length}</span></span><span className="text-xs text-slate-400">条已记录事件完成</span></div>
           </div>
-          <div className="text-right"><div className="font-mono text-lg text-cyan-200">{ordered.length ? `${progress}%` : "—"}</div><div className="text-[10px] text-slate-500">基于已记录步骤</div></div>
+          <div className="text-right"><div className="font-mono text-lg text-cyan-200">{ordered.length ? `${Math.round(recordedCompletion * 100)}%` : "—"}</div><div className="text-[10px] text-slate-500">仅统计已收到的事件</div></div>
         </div>
-        <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
-          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 transition-all duration-500" style={{ width: `${progress}%` }} />
+        <div className="relative mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800" aria-label="已记录事件完成比例">
+          <div className="h-full rounded-full bg-gradient-to-r from-cyan-400 via-blue-400 to-violet-400 transition-all duration-500" style={{ width: `${recordedCompletion * 100}%` }} />
           {isThinking && <div className="journey-scan absolute inset-y-0 left-0 w-1/3" />}
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
-          <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">执行步骤</div><div className="mt-0.5 font-mono text-sm text-slate-100">{ordered.length}</div></div>
-          <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">含 Token 步骤</div><div className="mt-0.5 font-mono text-sm text-slate-100">{tokenEvents || "未上报"}</div></div>
+          <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">已记录事件</div><div className="mt-0.5 font-mono text-sm text-slate-100">{ordered.length}</div></div>
+          <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">Token 已上报事件</div><div className="mt-0.5 font-mono text-sm text-slate-100">{tokenEvents || "未上报"}</div></div>
           <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">异常步骤</div><div className={`mt-0.5 font-mono text-sm ${failures ? "text-rose-300" : "text-slate-100"}`}>{failures}</div></div>
         </div>
       </div>
@@ -184,14 +187,14 @@ export const MissionControlTimeline: React.FC<Props> = ({
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="flex flex-wrap items-center gap-x-2 gap-y-1"><span className="font-mono text-[9px] text-slate-500">{String(step.seq).padStart(2,"0")}</span><span className="break-words text-xs font-semibold text-slate-100">{step.rightTitle || step.leftTitle || `步骤 ${index+1}`}</span><span className={`text-[9px] ${step.status==="failed" ? "text-rose-300" : step.status==="running" ? "text-cyan-200" : step.status==="done" || step.status==="passed" ? "text-emerald-300" : "text-slate-500"}`}>{state.label}</span></span>
-                    <span className="mt-1 block break-words text-[11px] leading-4 text-slate-400">{step.rightSubtitle || step.leftSummary || info.verb}</span>
+                    <span className="mt-1 block break-words text-[11px] leading-4 text-slate-400">{step.rightSubtitle || step.leftSummary || (step.status === "running" ? info.verb : step.status === "done" || step.status === "passed" ? "该步骤已完成，未提供更多说明" : step.status === "failed" ? "该步骤失败，展开查看已上报的错误信息" : step.status === "pending" ? "该步骤正在等待执行" : "执行端未提供这一步的具体说明")}</span>
                     <span className="mt-1.5 flex flex-wrap items-center gap-2 text-[9px] text-slate-500"><span className="inline-flex items-center gap-1"><Clock3 className="h-3 w-3"/>{durationText(step.durationMs)}</span><span>{info.label}</span>{tokenText(step.rightDetail) && <span className="font-mono text-cyan-300/80">{tokenText(step.rightDetail)} tokens</span>}</span>
                   </span>
                   <ChevronDown className={`h-3.5 w-3.5 shrink-0 text-slate-500 transition ${active ? "-rotate-90 text-cyan-200" : "-rotate-90 opacity-40"}`}/>
                 </button>;
               })}
             </div>
-            <div className="mt-3 flex items-center gap-2 px-1 text-[9px] text-slate-500"><span className="h-px flex-1 bg-slate-700/70"/><span>{currentStep ? `当前运行到第 ${currentStep.seq} 步` : pendingCount > 0 ? `${pendingCount} 步等待执行` : unknownCount > 0 ? `${unknownCount} 步状态未知` : isThinking ? "等待下一条执行事件" : "已展示本轮已记录步骤"}</span><span className="h-px flex-1 bg-slate-700/70"/></div>
+            <div className="mt-3 flex items-center gap-2 px-1 text-[9px] text-slate-500"><span className="h-px flex-1 bg-slate-700/70"/><span>{currentStep ? `当前运行到第 ${currentStep.seq} 步` : pendingCount > 0 ? `${pendingCount} 步等待执行` : unknownCount > 0 ? `${unknownCount} 步状态未知` : isThinking ? "等待下一条执行事件" : "已展示当前收到的全部事件"}</span><span className="h-px flex-1 bg-slate-700/70"/></div>
           </div>
 
           <div className="min-w-0">
