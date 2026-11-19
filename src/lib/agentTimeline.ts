@@ -165,8 +165,6 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     if (eventName === "tool" || eventName === "mcp_tool") {
       const toolName = String(data.tool ?? data.toolName ?? eventAttribute(data, "mcp.tool.name") ?? eventAttribute(data, "gen_ai.tool.name") ?? data.name ?? "Unknown tool");
       const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.spanId ?? data.span_id ?? data.id;
-      const sameToolSteps = current.filter((step) => step.phase === "skill" && String(step.rightDetail?.tool ?? step.rightDetail?.name ?? "") === toolName);
-      const existingCount = sameToolSteps.length;
       // A tool name is not a call identity: concurrent invocations can use the
       // same tool. Only merge lifecycle events when the producer supplies a
       // stable call ID; otherwise preserve each event separately.
