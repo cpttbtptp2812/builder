@@ -233,7 +233,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: isImmersive ? "100vw" : isSplit ? "60%" : `${drawerWidth}px`,\n        flex: isSplit && !isImmersive ? "1 1 60%" : undefined,\n        minWidth: isSplit && !isImmersive ? 0 : undefined,
+        width: isImmersive ? "100vw" : isSplit ? "60%" : `${drawerWidth}px`,
+        flex: isSplit && !isImmersive ? "1 1 60%" : undefined,
+        minWidth: isSplit && !isImmersive ? 0 : undefined,
         height: isImmersive ? "100dvh" : undefined,
         inset: isImmersive ? 0 : undefined,
         transition: isDragging || isImmersive ? "none" : "width 0.15s ease-out",
