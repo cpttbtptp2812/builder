@@ -22,6 +22,7 @@ type TraceSpan = {
 type Run = {
   traceId: string;
   runId?: string | null;
+  sessionId?: string;
   spans: TraceSpan[];
   startedAt?: string;
   root?: TraceSpan;
@@ -47,10 +48,13 @@ function groupRuns(spans: TraceSpan[]): Run[] {
     const hasError = ordered.some((span) => span.status === "ERROR");
     const allClosed = ordered.every((span) => span.endedAt);
     const tokens = ordered.reduce((sum, span) => sum + (span.totalTokens ?? 0), 0);
+    const sessionId = ordered.map((span) => span.attributes?.["session.id"] ?? span.attributes?.["conversation.id"])
+      .find((value): value is string => typeof value === "string" && value.length > 0);
     const hasTokens = ordered.some((span) => span.totalTokens != null);
     return {
       traceId,
       runId: root?.runId || ordered.find((span) => span.runId)?.runId,
+      sessionId,
       spans: ordered,
       startedAt: root?.startedAt || ordered[0]?.startedAt,
       root,
@@ -165,6 +169,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                 <p className="mt-1 truncate font-mono text-[10px] text-slate-400">{run.traceId}</p>
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
                   <span>{run.spans.length} spans</span>
+                  {run.sessionId && <span className="max-w-28 truncate" title={`Session ${run.sessionId}`}>Session {run.sessionId}</span>}
                   <span>{run.tokens == null ? "Token —" : `${run.tokens.toLocaleString()} tokens`}</span>
                   <span className="ml-auto">{dateLabel(run.startedAt)}</span>
                 </div>
@@ -187,11 +192,12 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                   <div><h2 className="text-base font-semibold">{selected.root?.name || "Agent run"}</h2><p className="mt-1 break-all font-mono text-[11px] text-slate-400">{selected.traceId}</p></div>
                   <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{statusLabel[selected.status]}</span>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
                   <div><p className="text-slate-400">开始时间</p><p className="mt-1 text-slate-700">{dateLabel(selected.startedAt)}</p></div>
                   <div><p className="text-slate-400">Span 数量</p><p className="mt-1 tabular-nums text-slate-700">{selected.spans.length}</p></div>
                   <div><p className="text-slate-400">Token（已上报）</p><p className="mt-1 tabular-nums text-slate-700">{selected.tokens?.toLocaleString() ?? "—"}</p></div>
                   <div><p className="text-slate-400">Run ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.runId || "—"}</p></div>
+                  <div><p className="text-slate-400">Session ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.sessionId || "—"}</p></div>
                 </div>
               </div>
               <div className="max-h-[70vh] space-y-3 overflow-auto p-4">
