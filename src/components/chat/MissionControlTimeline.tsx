@@ -155,6 +155,14 @@ export const MissionControlTimeline: React.FC<Props> = ({
         @keyframes orbitDrift{to{transform:translate(-50%,-50%) rotate(384deg)}}
         @media(max-width:640px){.agent-journey .orbit-stage{min-height:280px}.agent-journey .orbit-node{width:min(48%,126px);padding:6px 7px}.agent-journey .orbit-core{width:60px;height:60px}}
         @media(prefers-reduced-motion:reduce){.agent-journey *{animation:none!important;transition:none!important}}
+        .agent-journey{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:#e9eaff!important}
+        .agent-journey:before{opacity:.48}
+        .agent-journey:after{opacity:.5}
+        .agent-journey .orbit-stage{border-color:rgba(177,164,255,.12);background:radial-gradient(ellipse at 50% 50%,rgba(102,75,196,.14),transparent 48%);box-shadow:inset 0 0 48px rgba(124,58,237,.06)}
+        .agent-journey .detail-glass{background:linear-gradient(145deg,rgba(25,29,73,.74),rgba(9,19,46,.78));border-color:rgba(177,164,255,.2);box-shadow:0 16px 42px rgba(0,0,0,.18),inset 0 1px rgba(255,255,255,.07)}
+        .agent-journey .journey-json{background:rgba(4,9,29,.64);border-color:rgba(177,164,255,.18)}
+        .agent-journey header{border-color:rgba(177,164,255,.12)}
+        .agent-journey .orbit-node{background:linear-gradient(135deg,rgba(38,37,91,.78),rgba(14,25,59,.82));backdrop-filter:blur(16px)}
       `}</style>
 
       <header className="relative border-b border-violet-200/15 px-4 py-3">
