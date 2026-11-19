@@ -80,6 +80,11 @@ const stripInternalReasoning = (value: any): any => {
 
 export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [apiKey, setApiKey] = useState("");
+  const [viewMode, setViewMode] = useState<"external" | "chat">("external");
+  const [chatSessions, setChatSessions] = useState<any[]>([]);
+  const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null);
+  const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatLoading, setChatLoading] = useState(false);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<RunDetail | null>(null);
@@ -320,6 +325,53 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     URL.revokeObjectURL(url);
   };
 
+  const parseStoredJson = (value: any) => {
+    if (typeof value !== "string") return value ?? {};
+    try { return JSON.parse(value); } catch { return {}; }
+  };
+
+  const loadInternalChatMessages = async (sessionId: string) => {
+    setChatLoading(true);
+    try {
+      const response = await fetch(API_BASE + "/api/chat/messages?sessionId=" + encodeURIComponent(sessionId));
+      if (!response.ok) throw new Error("读取内置对话失败（HTTP " + response.status + "）");
+      const rows = await response.json();
+      setChatMessages((Array.isArray(rows) ? rows : []).map((message: any) => ({
+        ...message,
+        traceSteps: parseStoredJson(message.traceStepsJson ?? message.traceSteps),
+        toolCalls: parseStoredJson(message.toolCallsJson ?? message.toolCalls),
+      })));
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "读取内置对话失败");
+      setChatMessages([]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const loadInternalChats = async () => {
+    setChatLoading(true);
+    setError("");
+    try {
+      const response = await fetch(API_BASE + "/api/chat/sessions");
+      if (!response.ok) throw new Error("读取内置会话失败（HTTP " + response.status + "）");
+      const rows = await response.json();
+      const sessions = Array.isArray(rows) ? rows : [];
+      setChatSessions(sessions);
+      const nextId = sessions.some((item: any) => item.id === selectedChatSessionId)
+        ? selectedChatSessionId : sessions[0]?.id ?? null;
+      setSelectedChatSessionId(nextId);
+      if (nextId) await loadInternalChatMessages(nextId);
+      else setChatMessages([]);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "读取内置会话失败");
+      setChatSessions([]);
+      setChatMessages([]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
   const loadRuns = async () => {
     if (!apiKey.trim()) {
       setError("请输入 Agent API Key。密钥只保存在当前页面内存中，不会写入浏览器存储。");
@@ -383,6 +435,12 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         </div>
       </header>
 
+      <div className="mx-auto flex w-full max-w-7xl gap-2 px-4 pt-3">
+        <button onClick={() => setViewMode("external")} className={`rounded-lg px-3 py-2 text-xs font-medium ${viewMode === "external" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>外部 Agent Runs</button>
+        <button onClick={() => { setViewMode("chat"); void loadInternalChats(); }} className={`rounded-lg px-3 py-2 text-xs font-medium ${viewMode === "chat" ? "bg-indigo-600 text-white" : "bg-white text-slate-600 border border-slate-200"}`}>内置聊天记录</button>
+      </div>
+
+      {viewMode === "external" ? (
       <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 gap-4 p-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
         <section className="min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -639,6 +697,64 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
           )}
         </section>
       </div>
+      ) : (
+        <div className="mx-auto grid min-h-0 w-full max-w-7xl flex-1 gap-4 p-4 lg:grid-cols-[minmax(280px,360px)_minmax(0,1fr)]">
+          <section className="min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+              <h2 className="text-sm font-semibold">内置会话</h2>
+              <button onClick={() => void loadInternalChats()} className="text-xs text-indigo-600">刷新</button>
+            </div>
+            <div className="max-h-[70vh] overflow-auto">
+              {chatSessions.length === 0 ? <p className="px-4 py-10 text-center text-xs text-slate-400">{chatLoading ? "读取中…" : "暂无内置会话"}</p> :
+                chatSessions.map((session: any) => <button key={session.id} onClick={() => { setSelectedChatSessionId(session.id); void loadInternalChatMessages(session.id); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${selectedChatSessionId === session.id ? "bg-indigo-50" : "bg-white"}`}>
+                  <p className="truncate text-xs font-medium text-slate-800">{session.title || "未命名会话"}</p>
+                  <p className="mt-1 truncate font-mono text-[10px] text-slate-400">{session.id}</p>
+                  <p className="mt-1 text-[10px] text-slate-400">{dateLabel(session.updatedAt || session.createdAt)}</p>
+                </button>)}
+            </div>
+          </section>
+          <section className="min-h-[420px] min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
+            {!selectedChatSessionId ? <div className="flex h-full items-center justify-center text-xs text-slate-400">选择一条内置会话</div> : (
+              <>
+                <div className="border-b border-slate-100 px-5 py-4">
+                  <h2 className="text-sm font-semibold">内置 Agent 对话</h2>
+                  <p className="mt-1 break-all font-mono text-[10px] text-slate-400">Session ID: {selectedChatSessionId}</p>
+                  <p className="mt-2 text-[11px] text-slate-500">以下内容来自 chat_session / chat_message 持久化记录。它与外部 Agent Trace 使用不同数据模型，不会伪造 Run ID 或 Span。</p>
+                </div>
+                <div className="max-h-[70vh] space-y-3 overflow-auto p-4">
+                  {chatLoading && <p className="text-xs text-slate-400">正在读取会话消息…</p>}
+                  {chatMessages.map((message: any, index: number) => {
+                    const steps = message.traceSteps && typeof message.traceSteps === "object" ? Object.values(message.traceSteps) : [];
+                    const toolCalls = Array.isArray(message.toolCalls) ? message.toolCalls : [];
+                    return <article key={message.id || index} className="rounded-lg border border-slate-200 bg-white">
+                      <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2">
+                        <span className="text-xs font-semibold text-slate-700">{message.role === "user" ? "用户" : "Agent 回复"}</span>
+                        <span className="text-[10px] text-slate-400">{dateLabel(message.createdAt)}</span>
+                      </div>
+                      <div className="whitespace-pre-wrap break-words px-4 py-3 text-xs leading-6 text-slate-700">{String(message.content || "")}</div>
+                      {steps.length > 0 && <details className="border-t border-slate-100 px-4 py-3">
+                        <summary className="cursor-pointer text-xs font-medium text-indigo-600">执行步骤 · {steps.length}</summary>
+                        <div className="mt-2 space-y-2">
+                          {steps.map((step: any, stepIndex: number) => <div key={step?.id || step?.step || stepIndex} className="rounded-md bg-slate-50 p-3">
+                            <div className="flex flex-wrap items-center justify-between gap-2 text-[11px]"><strong>{String(step?.title || step?.name || "步骤 " + (stepIndex + 1))}</strong><span className="text-slate-400">{String(step?.status || "状态未知")}</span></div>
+                            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] text-slate-600">{JSON.stringify(stripInternalReasoning(step), null, 2)}</pre>
+                          </div>)}
+                        </div>
+                      </details>}
+                      {toolCalls.length > 0 && <details className="border-t border-slate-100 px-4 py-3">
+                        <summary className="cursor-pointer text-xs font-medium text-indigo-600">工具调用 · {toolCalls.length}</summary>
+                        <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[10px] text-slate-200">{JSON.stringify(stripInternalReasoning(toolCalls), null, 2)}</pre>
+                      </details>}
+                      {(message.tokens != null || message.duration) && <div className="border-t border-slate-100 px-4 py-2 text-[10px] text-slate-400">消息元数据：{message.tokens != null ? "记录 Token " + message.tokens : "Token 未记录"} · {message.duration || "耗时未记录"}</div>}
+                    </article>;
+                  })}
+                  {!chatLoading && chatMessages.length === 0 && <p className="py-10 text-center text-xs text-slate-400">此会话暂无持久化消息。</p>}
+                </div>
+              </>
+            )}
+          </section>
+        </div>
+      )}
 
       {error && <div className="fixed bottom-5 left-1/2 z-50 flex max-w-[90vw] -translate-x-1/2 items-center gap-2 rounded-lg border border-rose-200 bg-white px-4 py-3 text-sm text-rose-700 shadow-lg"><AlertCircle size={16} />{error}</div>}
     </div>
