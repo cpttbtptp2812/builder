@@ -78,14 +78,18 @@ const stripInternalReasoning = (value: any): any => {
     .filter(([, item]) => item !== undefined));
 };
 
-export default function RunsPage({ onClose }: { onClose?: () => void }) {
+export default function RunsPage({ onClose, initialChatSessionId, initialChatRunId }: {
+  onClose?: () => void;
+  initialChatSessionId?: string | null;
+  initialChatRunId?: string | null;
+}) {
   const [apiKey, setApiKey] = useState("");
-  const [viewMode, setViewMode] = useState<"external" | "chat">("external");
+  const [viewMode, setViewMode] = useState<"external" | "chat">(initialChatSessionId ? "chat" : "external");
   const [chatSessions, setChatSessions] = useState<any[]>([]);
-  const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null);
+  const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(initialChatSessionId ?? null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
   const [chatRuns, setChatRuns] = useState<any[]>([]);
-  const [selectedChatRunId, setSelectedChatRunId] = useState<string | null>(null);
+  const [selectedChatRunId, setSelectedChatRunId] = useState<string | null>(initialChatRunId ?? null);
   const [selectedChatRunDetail, setSelectedChatRunDetail] = useState<any>(null);
   const [chatRunJudge, setChatRunJudge] = useState<any>(null);
   const [chatRunJudgeLoading, setChatRunJudgeLoading] = useState(false);
@@ -351,15 +355,17 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     }
   };
 
-  const loadInternalChatRuns = async (sessionId: string) => {
+  const loadInternalChatRuns = async (sessionId: string, preferredRunId?: string | null) => {
     try {
       const response = await fetch(API_BASE + "/api/chat/runs?sessionId=" + encodeURIComponent(sessionId));
       if (!response.ok) throw new Error("读取内置运行记录失败（HTTP " + response.status + "）");
       const rows = await response.json();
       const nextRuns = Array.isArray(rows) ? rows : [];
       setChatRuns(nextRuns);
-      const nextId = nextRuns.some((run: any) => run.runId === selectedChatRunId)
-        ? selectedChatRunId : nextRuns[0]?.runId ?? null;
+      const nextId = preferredRunId && nextRuns.some((run: any) => run.runId === preferredRunId)
+        ? preferredRunId
+        : nextRuns.some((run: any) => run.runId === selectedChatRunId)
+          ? selectedChatRunId : nextRuns[0]?.runId ?? null;
       setSelectedChatRunId(nextId);
       if (nextId) await loadInternalChatRunDetail(nextId);
       else setSelectedChatRunDetail(null);
@@ -426,7 +432,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     }
   };
 
-  const loadInternalChats = async () => {
+  const loadInternalChats = async (preferredSessionId?: string | null, preferredRunId?: string | null) => {
     setChatLoading(true);
     setError("");
     try {
@@ -435,12 +441,14 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
       const rows = await response.json();
       const sessions = Array.isArray(rows) ? rows : [];
       setChatSessions(sessions);
-      const nextId = sessions.some((item: any) => item.id === selectedChatSessionId)
-        ? selectedChatSessionId : sessions[0]?.id ?? null;
+      const nextId = preferredSessionId && sessions.some((item: any) => item.id === preferredSessionId)
+        ? preferredSessionId
+        : sessions.some((item: any) => item.id === selectedChatSessionId)
+          ? selectedChatSessionId : sessions[0]?.id ?? null;
       setSelectedChatSessionId(nextId);
       if (nextId) {
         await loadInternalChatMessages(nextId);
-        await loadInternalChatRuns(nextId);
+        await loadInternalChatRuns(nextId, preferredRunId);
       } else {
         setChatMessages([]);
         setChatRuns([]);
@@ -478,6 +486,13 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     const timer = window.setInterval(() => void refresh(), 1800);
     return () => { active = false; window.clearInterval(timer); };
   }, [selectedChatRunId, selectedChatRunDetail?.run?.status]);
+
+  useEffect(() => {
+    if (!initialChatSessionId) return;
+    setViewMode("chat");
+    setSelectedChatSessionId(initialChatSessionId);
+    void loadInternalChats(initialChatSessionId, initialChatRunId);
+  }, [initialChatSessionId, initialChatRunId]);
 
   const loadRuns = async () => {
     if (!apiKey.trim()) {
