@@ -65,15 +65,28 @@ const phaseFromEvent = (data: any): StepPhase => {
 };
 
 const parseEventTimestamp = (data: any): number | undefined => {
-  if (typeof data.timestamp === "number") return data.timestamp;
+  if (typeof data.timestamp === "number" && Number.isFinite(data.timestamp)) return data.timestamp;
   const nanos = data.startTimeUnixNano ?? data.start_time_unix_nano;
   if (nanos !== undefined && nanos !== null) {
-    const parsed = Number(nanos);
-    if (Number.isFinite(parsed)) return parsed / 1000000;
+    try { return Number(BigInt(nanos) / 1000000n); } catch { return undefined; }
   }
   const millis = data.startTimeUnixMs ?? data.start_time_unix_ms ?? data.startTime;
   if (typeof millis === "number" && Number.isFinite(millis)) return millis;
   return undefined;
+};
+
+const parseNanoDuration = (value: unknown): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  try {
+    const nanos = BigInt(value as string | number | bigint);
+    return Number(nanos) / 1000000;
+  } catch { return undefined; }
+};
+
+const durationBetweenNanoTimestamps = (start: unknown, end: unknown): number | undefined => {
+  if (start === undefined || start === null || end === undefined || end === null) return undefined;
+  try { return Number(BigInt(end as string | number | bigint) - BigInt(start as string | number | bigint)) / 1000000; }
+  catch { return undefined; }
 };
 
 const parseDuration = (value: unknown): number | undefined => {
@@ -154,10 +167,8 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
           ...(data.rightDetail && typeof data.rightDetail === "object" ? data.rightDetail : {}),
         },
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs) ??
-          (data.durationNs !== undefined || data.duration_ns !== undefined ? Number(data.durationNs ?? data.duration_ns) / 1000000 : undefined) ??
-          (data.endTimeUnixNano != null && (data.startTimeUnixNano ?? data.start_time_unix_nano) != null
-            ? (Number(data.endTimeUnixNano) - Number(data.startTimeUnixNano ?? data.start_time_unix_nano)) / 1000000
-            : undefined),
+          parseNanoDuration(data.durationNs ?? data.duration_ns) ??
+          durationBetweenNanoTimestamps(data.startTimeUnixNano ?? data.start_time_unix_nano, data.endTimeUnixNano ?? data.end_time_unix_nano),
         timestamp: parseEventTimestamp(data),
       });
     }
@@ -181,7 +192,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         rightTitle: toolName,
         rightSubtitle: data.description,
         rightDetail: data,
-        durationMs: parseDuration(data.durationMs ?? data.duration),
+        durationMs: parseDuration(data.durationMs ?? data.duration) ?? parseNanoDuration(data.durationNs ?? data.duration_ns) ?? durationBetweenNanoTimestamps(data.startTimeUnixNano ?? data.start_time_unix_nano, data.endTimeUnixNano ?? data.end_time_unix_nano),
         timestamp: parseEventTimestamp(data),
       });
     }
@@ -189,7 +200,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     if (eventName === "citations") {
       const items = Array.isArray(data.items) ? data.items : [];
       return timelineReducer(current, {
-        stepId: String(data.stepId ?? "event-citations"),
+        stepId: String(data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id ?? `unidentified-citations-${current.length + 1}`),
         seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
         phase: "context",
         status: data.status == null ? "unknown" : normalizeStatus(data.status),
