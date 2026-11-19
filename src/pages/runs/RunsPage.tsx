@@ -850,6 +850,29 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                         {chatRunJudge?.scores && <div className="mt-2 rounded-md bg-indigo-50 p-2 text-[10px] text-indigo-900">评估模型：{chatRunJudge.judgeModel} · 综合分：{chatRunJudge.scores.overall ?? "—"}<p className="mt-1 whitespace-pre-wrap">{chatRunJudge.scores.summary || "评估已保存。"}</p></div>}
                         <details className="mt-3" open>
                           <summary className="cursor-pointer text-[11px] font-semibold text-slate-700">执行 Span · {selectedChatRunDetail.spans?.length ?? 0}</summary>
+                          {(() => {
+                            const spans = selectedChatRunDetail.spans || [];
+                            const timestamps = spans.map((span: any) => Date.parse(span.startedAt || "")).filter((value: number) => Number.isFinite(value));
+                            if (spans.length === 0 || timestamps.length === 0) return <p className="mt-2 text-[10px] text-slate-400">当前 Run 尚未上报可绘制的 Span 时间戳。</p>;
+                            const start = Math.min(...timestamps);
+                            const end = Math.max(...spans.map((span: any) => Date.parse(span.endedAt || span.startedAt || "") || start));
+                            const range = Math.max(1, end - start);
+                            return <div className="mt-3 space-y-2 rounded-md border border-slate-100 bg-slate-50 p-3">
+                              <p className="text-[9px] text-slate-400">执行瀑布流 · 使用实际 Span 起止时间；未结束 Span 不补造结束时间</p>
+                              {spans.map((span: any) => {
+                                const spanStart = Date.parse(span.startedAt || "") || start;
+                                const spanEnd = span.endedAt ? (Date.parse(span.endedAt) || spanStart) : spanStart;
+                                const left = Math.max(0, Math.min(100, ((spanStart - start) / range) * 100));
+                                const width = span.endedAt ? Math.max(0.8, Math.min(100 - left, ((spanEnd - spanStart) / range) * 100)) : 0.8;
+                                const color = span.status === "ERROR" ? "bg-rose-500" : span.status === "OK" ? "bg-emerald-500" : "bg-amber-400";
+                                return <div key={span.spanId + "-waterfall"} className="grid grid-cols-[minmax(100px,180px)_minmax(80px,1fr)_55px] items-center gap-2">
+                                  <span className="truncate text-[9px] text-slate-600" title={span.name}>{span.name}</span>
+                                  <div className="relative h-4 rounded bg-white"><div className={"absolute top-1/2 h-2 -translate-y-1/2 rounded " + color} style={{ left: left + "%", width: width + "%" }} /></div>
+                                  <span className="text-right text-[9px] tabular-nums text-slate-400">{span.durationMs == null ? "—" : span.durationMs + "ms"}</span>
+                                </div>;
+                              })}
+                            </div>;
+                          })()}
                           <div className="mt-2 space-y-2">
                             {(selectedChatRunDetail.spans || []).map((span: any) => <div key={span.spanId} className="rounded-md border border-slate-100 bg-slate-50 p-2">
                               <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-[10px] text-slate-700">{span.name}</strong><span className="text-[10px] text-slate-500">{span.status} · {span.durationMs == null ? "进行中" : span.durationMs + " ms"}</span></div>
