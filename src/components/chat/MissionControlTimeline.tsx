@@ -231,9 +231,8 @@ export const MissionControlTimeline: React.FC<Props> = ({
               </div>
               <span className="text-xs text-violet-200/60">按发生顺序排列 · 选择事件查看详情</span>
             </div>
-            <div className="relative max-h-[min(52vh,560px)] overflow-y-auto pr-1 [scrollbar-width:thin]">
-              <div className="absolute bottom-4 left-[15px] top-4 w-px bg-gradient-to-b from-cyan-300/70 via-violet-400/45 to-transparent"/>
-              <div className="space-y-2">
+            <div className="relative overflow-x-auto pb-3 [scrollbar-width:thin]">
+              <div className="journey-track relative flex min-w-max items-stretch gap-3 px-1 pt-2">
                 {ordered.map((step,index)=>{
                   const info=phaseMeta[step.phase]||phaseMeta.external;
                   const Icon=info.icon;
