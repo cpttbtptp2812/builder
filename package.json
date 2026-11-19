@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "check:production": "npm run build"
+    "check:production": "npm run test:timeline && npm run build",
+    "test:timeline": "tsx --test src/lib/agentTimeline.test.ts"
   },
   "dependencies": {
     "@ai-sdk/openai": "^4.0.96",

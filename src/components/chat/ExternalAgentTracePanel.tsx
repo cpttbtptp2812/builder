@@ -81,7 +81,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [detailsOpen, setDetailsOpen] = useState(true);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -237,7 +237,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
       >
         <span className="flex min-w-0 items-center gap-2">
           <Activity className="h-4 w-4 shrink-0 text-indigo-600" />
-          <b className="truncate text-xs text-slate-800">外部 Agent 实时监控</b>
+          <b className="truncate text-xs text-slate-800">连接外部 Agent 观察执行</b>
           <span className={`rounded-full border px-2 py-0.5 text-[10px] ${connected ? "border-emerald-200 bg-emerald-50 text-emerald-700" : loading ? "border-blue-200 bg-blue-50 text-blue-700" : "border-slate-200 bg-white text-slate-500"}`}>
             {connected ? "实时连接中" : loading ? "正在连接" : "未连接"}
           </span>

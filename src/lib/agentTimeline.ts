@@ -25,10 +25,10 @@ export interface AgentStep {
 
 const normalizeStatus = (value: unknown): StepStatus => {
   const status = typeof value === "string" ? value.toLowerCase() : "";
-  if (["ok", "success", "succeeded", "completed", "done"].includes(status)) return "done";
+  if (["ok", "success", "succeeded", "completed", "complete", "done"].includes(status)) return "done";
   if (["passed", "pass"].includes(status)) return "passed";
   if (["error", "failed", "failure"].includes(status)) return "failed";
-  if (["running", "started", "in_progress"].includes(status)) return "running";
+  if (["running", "started", "in_progress", "in-progress", "in progress"].includes(status)) return "running";
   if (["pending", "queued"].includes(status)) return "pending";
   return "unknown";
 };
@@ -52,9 +52,12 @@ export function timelineReducer(
   if (existingIdx >= 0) {
     const updated = [...current];
     const old = updated[existingIdx];
+    const definedIncoming = Object.fromEntries(
+      Object.entries(incoming).filter(([, value]) => value !== undefined)
+    ) as Partial<AgentStep> & { stepId: string };
     updated[existingIdx] = {
       ...old,
-      ...incoming,
+      ...definedIncoming,
       rightDetail: { ...(old.rightDetail || {}), ...(incoming.rightDetail || {}) },
     };
     return updated.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
@@ -82,42 +85,49 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     if (!data || typeof data !== "object") return current;
 
     if (eventName === "agent_step" || eventName === "trace_step") {
-      const seq = Number.isFinite(Number(data.seq ?? data.step)) ? Number(data.seq ?? data.step) : current.length + 1;
-      const stepId = String(data.stepId ?? data.spanId ?? data.step_id ?? `event-${seq}`);
-      const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle ?? "Agent event";
+      const rawSeq = data.seq ?? data.step;
+      const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
+      const seq = hasSeq ? Number(rawSeq) : current.length + 1;
+      const stepId = String(data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id ?? `event-${seq}`);
+      const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle;
       return timelineReducer(current, {
         stepId,
-        seq,
-        phase: data.phase ?? "external",
-        status: normalizeStatus(data.status),
+        seq: hasSeq ? seq : undefined,
+        phase: data.phase,
+        status: data.status == null ? undefined : normalizeStatus(data.status),
         leftTitle: data.leftTitle ?? title,
-        leftSummary: data.leftSummary ?? data.message ?? "",
+        leftSummary: data.leftSummary ?? data.message,
         rightTitle: title,
-        rightSubtitle: data.rightSubtitle ?? data.description ?? "",
+        rightSubtitle: data.rightSubtitle ?? data.description,
         rightDetail: data.rightDetail ?? data,
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
       });
     }
 
     if (eventName === "tool") {
       const toolName = String(data.tool ?? data.name ?? "Unknown tool");
-      const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.id;
-      const existingCount = current.filter((step) => step.phase === "skill" && step.rightDetail?.tool === toolName).length;
+      const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.id;
+      const sameToolSteps = current.filter((step) => step.phase === "skill" && String(step.rightDetail?.tool ?? step.rightDetail?.name ?? "") === toolName);
+      const existingCount = sameToolSteps.length;
+      // A tool name is not a call identity: concurrent invocations can use the
+      // same tool. Only merge lifecycle events when the producer supplies a
+      // stable call ID; otherwise preserve each event separately.
       const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
-      const status = normalizeStatus(data.status);
+      const hasSeq = data.seq !== undefined && data.seq !== null && data.seq !== "" && Number.isFinite(Number(data.seq));
+      const status = data.status == null ? undefined : normalizeStatus(data.status);
       return timelineReducer(current, {
         stepId,
-        seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
+        seq: hasSeq ? Number(data.seq) : undefined,
         phase: "skill",
         status,
         leftTitle: `Tool: ${toolName}`,
-        leftSummary: data.message ?? data.status ?? "收到工具调用事件",
+        leftSummary: data.message ?? (data.status == null ? undefined : String(data.status)),
         rightTitle: toolName,
-        rightSubtitle: data.description ?? "",
+        rightSubtitle: data.description,
         rightDetail: data,
         durationMs: parseDuration(data.durationMs ?? data.duration),
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
       });
     }
 
