@@ -382,12 +382,8 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
       </div>
 
       {/* ── 核心内容区：Agent 执行过程观察器 ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 scrollbar-hide">
-        {activeTab === "flow" && <div className="mb-3 grid grid-cols-3 gap-2">
-          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">执行事件</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{timeline.length}</div></div>
-          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">总耗时</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{totalMs > 0 ? (totalMs / 1000).toFixed(2) + "s" : "—"}</div></div>
-          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">Token 用量</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{typeof message.tokens === "number" && message.tokens > 0 ? message.tokens.toLocaleString() : "未上报"}</div></div>
-        </div>}
+      <div className="flex-1 min-h-0 overflow-hidden p-0">
+
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
           <>
@@ -399,9 +395,10 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               isThinking={message.isThinking}
               onRetryRun={onRetryRun}
             />
-            <div className="mt-4 border-t border-violet-200/10 pt-3">
-              <ExternalAgentTracePanel />
-            </div>
+            <details className="mx-3 mb-3 shrink-0 rounded-xl border border-indigo-200/10 bg-white/[0.025] p-3">
+              <summary className="cursor-pointer text-xs font-medium text-indigo-100/65">连接外部 Agent 的执行记录（可选）</summary>
+              <div className="mt-3"><ExternalAgentTracePanel /></div>
+            </details>
           </>
         )}
 
