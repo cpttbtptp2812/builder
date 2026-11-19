@@ -2,12 +2,12 @@
 
 OwnAgent is a developer workbench for understanding what an AI Agent actually did. Use the built-in Agent for your own tasks, or connect an Agent you already built and inspect its real execution without moving it into OwnAgent or routing model traffic through OwnAgent.
 
-## Two ways to use one observation system
+## Two ways to use the workbench
 
 - **Built-in Agent:** chat in the OwnAgent workbench. The existing conversation and execution inspector stay together.
 - **External Agent:** add the OwnAgent Python SDK or export OpenTelemetry spans. Your Agent continues to run in its own application; OwnAgent receives telemetry as a side channel.
 
-Both paths are designed to converge on the same concepts: Project → Agent → Conversation / Session → Run → model calls, tool calls, events, and errors.
+**Current preview boundary:** the built-in chat still uses its existing live SSE execution timeline, while external Agent traces are persisted and viewed in the in-workbench external-run panel. These two sources are not yet normalized into one persistent Conversation / Run history. The target shared model is Project → Agent → Conversation / Session → Run → model calls, tool calls, events, and errors; unifying the built-in chat persistence with that model remains a core next phase.
 
 ## What you can inspect
 
