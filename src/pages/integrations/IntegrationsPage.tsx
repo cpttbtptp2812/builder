@@ -210,7 +210,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
       const stored = JSON.parse(payload.reportJson);
       const report = stored.report ?? {};
       const rows = Array.isArray(report.results) ? report.results : Array.isArray(report) ? report : [];
-      setPromptfooReport({ fileName: payload.fileName, stats: report.stats ?? {}, rows });
+      setPromptfooReport({ fileName: payload.fileName, stats: report.stats ?? {}, rows: rows.map(stripInternalReasoning).filter((row) => row !== undefined && row !== null) });
       setPromptfooSaved(payload);
       setPromptfooError("");
     } catch (cause) {
@@ -309,7 +309,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                     <h3 className="text-xs font-semibold text-slate-800">导入并保存 Promptfoo 评估报告</h3>
                     <p className="mt-1 text-[11px] leading-5 text-slate-500">报告会按 Agent API Key 归属保存到 OwnAgent；服务端会剔除 analysis / reasoning 等内部字段。导入前仍请检查并脱敏敏感数据。</p>
                   </div>
-                  <input type="password" autoComplete="off" value={promptfooApiKey} onChange={(event) => setPromptfooApiKey(event.target.value)} placeholder="目标 Agent API Key" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+                  <input type="password" autoComplete="off" value={promptfooApiKey} onChange={(event) => { setPromptfooApiKey(event.target.value); setPromptfooHistory([]); setPromptfooSaved(null); setPromptfooReport(null); }} placeholder="目标 Agent API Key" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-white px-4 py-5 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
                     <ExternalLink size={14} /> {promptfooSaving ? "正在导入并保存…" : "选择 JSON / JSONL 报告"}
                     <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" className="sr-only" disabled={promptfooSaving} onChange={(event) => { setPromptfooSaving(true); void importPromptfooReport(event); }} />
