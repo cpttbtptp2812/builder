@@ -89,11 +89,11 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const unknown = ordered.filter(s => s.status === "unknown").length;
   const state = isThinking || running ? {label:"正在执行",tone:"running"} : failures ? {label:"存在异常",tone:"failed"} : unknown ? {label:"部分状态未知",tone:"unknown"} : ordered.length && completed === ordered.length ? {label:"已完成",tone:"done"} : {label:"等待事件",tone:"waiting"};
   const stateClass: Record<string,string> = {
-    done:"bg-emerald-50 text-emerald-200 border-emerald-200",
-    running:"bg-indigo-50 text-indigo-700 border-indigo-200",
-    failed:"bg-rose-50 text-rose-200 border-rose-200",
-    unknown:"bg-amber-50 text-amber-700 border-amber-200",
-    waiting:"bg-slate-50 text-slate-600 border-slate-200",
+    done:"bg-emerald-400/10 text-emerald-200 border-emerald-300/25",
+    running:"bg-indigo-400/10 text-indigo-200 border-indigo-300/25",
+    failed:"bg-rose-400/10 text-rose-200 border-rose-300/25",
+    unknown:"bg-amber-400/10 text-amber-200 border-amber-300/25",
+    waiting:"bg-white/5 text-slate-300 border-white/10",
   };
   const select = (step: AgentStep) => {
     const next = selected?.stepId === step.stepId ? null : step.stepId;
