@@ -307,7 +307,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
                   >
                     <span className={`h-2 w-2 shrink-0 rounded-full ${span.status === "ERROR" ? "bg-rose-500" : span.status === "OK" ? "bg-emerald-500" : "animate-pulse bg-blue-400"}`} />
                     <span className="text-[10px] font-mono text-slate-400">#{index + 1}</span>
-                    <b className="min-w-0 flex-1 truncate text-xs text-slate-800">{span.name}</b>
+                    <b className="min-w-0 flex-1 truncate text-xs text-slate-800">{span.name === "chat.completions" ? `模型请求 · 第${span.attributes?.model_step ?? index + 1}轮` : span.name === "action.execute" ? `工具执行 · ${span.attributes?.tool_name ?? "未命名工具"}` : span.name === "agent.run" ? "Agent 总任务" : span.name}</b>
                     <span className={`text-[10px] ${span.status === "ERROR" ? "text-rose-600" : span.status === "OK" ? "text-emerald-600" : "text-blue-600"}`}>{statusLabel(span.status)}</span>
                     <span className="text-[10px] text-slate-500">{formatDuration(span.durationMs)}</span>
                     <span className="text-[10px] text-slate-500">{span.totalTokens ?? "—"} tokens</span>
@@ -341,7 +341,19 @@ export const ExternalAgentTracePanel: React.FC = () => {
                           ) : sections.map((item) => (
                             <div key={item.label} className={`overflow-hidden rounded-lg border p-2.5 ${item.tone}`}>
                               <div className="mb-1.5 text-[10px] font-bold text-slate-700">{item.label}</div>
-                              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{typeof item.value === "string" ? item.value : JSON.stringify(item.value, null, 2)}</pre>
+                              {item.label === "实际发送给模型的提示词 / 上下文" && Array.isArray(item.value) ? (
+                                <div className="space-y-2">
+                                  {item.value.map((entry: any, messageIndex: number) => (
+                                    <div key={messageIndex} className="overflow-hidden rounded-md border border-white/80 bg-white/80">
+                                      <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-600">{entry?.role || `消息 ${messageIndex + 1}`}</div>
+                                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 py-1.5 text-[10px] leading-5 text-slate-700">{typeof entry?.content === "string" ? entry.content : JSON.stringify(entry?.content ?? entry, null, 2)}</pre>
+                                      {Array.isArray(entry?.tool_calls) && <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words border-t border-slate-100 px-2 py-1.5 text-[9px] leading-4 text-slate-500">{JSON.stringify(entry.tool_calls, null, 2)}</pre>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{typeof item.value === "string" ? item.value : JSON.stringify(item.value, null, 2)}</pre>
+                              )}
                             </div>
                           ))}
                           <button type="button" onClick={() => setRawExpanded((current) => {
