@@ -82,6 +82,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   const [activeTab, setActiveTab] = useState<"flow" | "finops">(
     defaultTab === "finops" ? "finops" : "flow"
   );
+  useEffect(() => {
+    setActiveTab(defaultTab === "finops" ? "finops" : "flow");
+  }, [defaultTab, message?.id]);
   const [isImmersive, setIsImmersive] = useState(false);
 
   // 抽屉宽度状态（支持拖拽调整并持久化到本地与数据库）
@@ -358,7 +361,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             {isImmersive ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
           </button>
 
-          {onToggleLayout && (
+          {!isSplit && onToggleLayout && (
             <button
               onClick={onToggleLayout}
               className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
@@ -368,13 +371,13 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             </button>
           )}
 
-          <button
+          {!isSplit && <button
             onClick={onClose}
             className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition cursor-pointer"
             title="关闭 (ESC)"
           >
             <X className="w-3.5 h-3.5" />
-          </button>
+          </button>}
         </div>
       </div>
 
