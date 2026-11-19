@@ -60,7 +60,9 @@ const phaseFromEvent = (data: any): StepPhase => {
   const operation = String(eventAttribute(data, "gen_ai.operation.name") ?? "").toLowerCase();
   const tool = eventAttribute(data, "gen_ai.tool.name") ?? eventAttribute(data, "mcp.tool.name");
   if (tool) return "skill";
-  if (operation) return "llm";
+  // Only known GenAI operations identify a model call. An arbitrary operation
+  // string is not enough evidence to label an event as LLM activity.
+  if (["chat", "completion", "generate_content", "embeddings"].includes(operation)) return "llm";
   return "external";
 };
 
