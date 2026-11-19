@@ -4,7 +4,7 @@ import {
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
 } from "lucide-react";
 
-type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "frameworks";
+type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "frameworks";
 
 const guides: Record<GuideKey, { title: string; subtitle: string; install: string; code: string }> = {
   sdk: {
@@ -81,6 +81,12 @@ with tracer.start_as_current_span("invoke_agent") as span:
     "install": "pip install openinference-instrumentation-langchain opentelemetry-sdk opentelemetry-exporter-otlp-json-http langchain langchain-openai",
     "code": "import os, uuid\nfrom langchain_core.prompts import ChatPromptTemplate\nfrom langchain_openai import ChatOpenAI\nfrom openinference.instrumentation import TraceConfig\nfrom openinference.instrumentation.langchain import LangChainInstrumentor\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\n\nrun_id = uuid.uuid4().hex\nsession_id = os.getenv(\"OWNAGENT_SESSION_ID\", \"session-001\")\nprovider = TracerProvider(resource=Resource.create({\n    \"service.name\": \"my-langchain-agent\",\n    \"ownagent.run.id\": run_id,\n    \"session.id\": session_id,\n}))\nprovider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(\n    endpoint=os.environ[\"OWNAGENT_OTLP_ENDPOINT\"],\n    headers={\"Authorization\": f\"Bearer {os.environ['OWNAGENT_AGENT_API_KEY']}\"},\n)))\ncapture = os.getenv(\"OWNAGENT_TRACE_CAPTURE_CONTENT\") == \"1\"\nLangChainInstrumentor().instrument(\n    tracer_provider=provider,\n    config=TraceConfig(hide_inputs=not capture, hide_outputs=not capture),\n)\ntrace.set_tracer_provider(provider)\nprompt = ChatPromptTemplate.from_messages([\n    (\"system\", \"You are a concise assistant.\"),\n    (\"human\", \"{question}\"),\n])\nwith trace.get_tracer(\"my-agent\").start_as_current_span(\"agent.run\"):\n    result = (prompt | ChatOpenAI(model=os.getenv(\"OPENAI_MODEL\", \"gpt-4.1-mini\"))).invoke(\n        {\"question\": \"What is a parent span?\"},\n        config={\"metadata\": {\"session.id\": session_id}},\n    )\n    print(result.content)\nprovider.shutdown()"
 },
+  agents: {
+    "title": "OpenAI Agents SDK 自动埋点",
+    "subtitle": "复用 OpenInference 官方 Agents instrumentor，自动记录 Agent / LLM / Tool 层级；需要 openai-agents 0.11+。",
+    "install": "pip install openinference-instrumentation-openai-agents opentelemetry-sdk opentelemetry-exporter-otlp-json-http openai-agents",
+    "code": "import os, uuid\nfrom agents import Agent, Runner\nfrom openinference.instrumentation import TraceConfig\nfrom openinference.instrumentation.openai_agents import OpenAIAgentsInstrumentor\nfrom opentelemetry import trace\nfrom opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter\nfrom opentelemetry.sdk.resources import Resource\nfrom opentelemetry.sdk.trace import TracerProvider\nfrom opentelemetry.sdk.trace.export import BatchSpanProcessor\n\nrun_id = uuid.uuid4().hex\nsession_id = os.getenv(\"OWNAGENT_SESSION_ID\", \"session-001\")\nprovider = TracerProvider(resource=Resource.create({\n    \"service.name\": \"my-openai-agent\",\n    \"ownagent.run.id\": run_id,\n    \"session.id\": session_id,\n}))\nprovider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(\n    endpoint=os.environ[\"OWNAGENT_OTLP_ENDPOINT\"],\n    headers={\"Authorization\": f\"Bearer {os.environ['OWNAGENT_AGENT_API_KEY']}\"},\n)))\ncapture = os.getenv(\"OWNAGENT_TRACE_CAPTURE_CONTENT\") == \"1\"\nOpenAIAgentsInstrumentor().instrument(\n    tracer_provider=provider,\n    config=TraceConfig(hide_inputs=not capture, hide_outputs=not capture),\n)\ntrace.set_tracer_provider(provider)\nagent = Agent(name=\"Assistant\", instructions=\"Answer briefly and accurately.\")\nwith trace.get_tracer(\"my-agent\").start_as_current_span(\"agent.run\"):\n    result = Runner.run_sync(agent, \"Explain how a tool call appears in a trace.\")\n    print(result.final_output)\nprovider.shutdown()"
+},
   frameworks: {
     title: "Langfuse / Phoenix 等现有观测平台",
     subtitle: "保留现有平台，通过 OTLP 将 Trace 同步到 OwnAgent；具体双写配置需按部署版本验证",
@@ -100,7 +106,7 @@ OWNAGENT_TRACE_CAPTURE_CONTENT=1
 
 const statusItems = [
   { name: "OpenTelemetry OTLP/JSON", detail: "接收标准 OTLP/HTTP JSON Trace，并保留 GenAI 属性", status: "已实现", icon: Radio },
-  { name: "OpenInference 自动埋点", detail: "OpenAI 自动埋点示例已提供，沿用标准 OTLP/JSON 上报", status: "可直接接入", icon: Workflow },
+  { name: "OpenInference 自动埋点", detail: "OpenAI、OpenAI Agents 和 LangChain 示例已提供，沿用标准 OTLP/JSON 上报", status: "可直接接入", icon: Workflow },
   { name: "OwnAgent Python SDK", detail: "Run / Span、父子关系、Provider Token Usage", status: "已实现", icon: Code2 },
   { name: "Langfuse / Phoenix 转发", detail: "后端已有可配置 OTLP 导出路径；需按实际部署完成端到端验证", status: "可配置", icon: GitBranch },
   { name: "Promptfoo / DeepEval", detail: "评估引擎适配候选，尚未接入当前运行链路", status: "待集成", icon: Workflow },
@@ -168,6 +174,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                   ["otel", "OpenTelemetry"],
                   ["openinference", "OpenInference / OpenAI"],
                   ["langchain", "LangChain / LangGraph"],
+                  ["agents", "OpenAI Agents SDK"],
                   ["frameworks", "现有平台 / 环境变量"],
                 ] as [GuideKey, string][]).map(([key, label]) => (
                   <button key={key} onClick={() => setActive(key)} className={`rounded-lg px-3 py-2 text-xs font-medium transition ${active === key ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{label}</button>
