@@ -410,8 +410,8 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4">
           <div className="flex min-w-0 items-start justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Activity size={17} className="text-indigo-600" /> 外部 Agent 执行记录</div>
-              <p className="mt-1 text-xs text-slate-500">查看通过 OwnAgent SDK 或 OTLP 上报的真实 Trace。记录按 Agent API Key 隔离；当前预览版需要先在后端为目标 Agent 配置密钥。</p>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Activity size={17} className="text-indigo-600" /> 运行观测</div>
+              <p className="mt-1 text-xs text-slate-500">在同一工作区查看外部 Agent 的真实 Trace，以及平台内置聊天的持久化执行记录；两类数据保持各自真实来源。</p>
             </div>
             {onClose && <button onClick={onClose} aria-label="关闭外部 Agent 记录" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={17} /></button>}
           </div>
