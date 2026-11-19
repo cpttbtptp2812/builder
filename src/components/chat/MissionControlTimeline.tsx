@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import { sortTimeline } from "@/lib/agentTimeline";
 import {
   Activity, CheckCircle2, Clock3, Copy, Loader2, RotateCcw, XCircle,
   ChevronDown, BrainCircuit, Wrench, Database, Search, AlertTriangle,
@@ -68,7 +69,7 @@ const messageContent = (message: any) => {
   if (message == null) return "未提供";
   if (typeof message === "string") return message;
   if (typeof message.content === "string") return message.content;
-  if (Array.isArray(message.content)) return message.content.map((part: any) => typeof part === "string" ? part : part?.text ?? pretty(part)).join("\\n");
+  if (Array.isArray(message.content)) return message.content.map((part: any) => typeof part === "string" ? part : part?.text ?? pretty(part)).join("\n");
   return pretty(message);
 };
 
@@ -78,7 +79,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
   const [showRaw, setShowRaw] = useState(false);
-  const ordered = useMemo(() => [...(timeline || [])].sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp), [timeline]);
+  // Use the same chronological ordering as the SSE reducer. Legacy history
+  // without complete timestamps still falls back to sequence order.
+  const ordered = useMemo(() => sortTimeline(timeline || []), [timeline]);
   const selected = ordered.find(s => s.stepId === (activeStepId || selectedId));
   const completed = ordered.filter(s => s.status === "done" || s.status === "passed").length;
   const failures = ordered.filter(s => s.status === "failed").length;
