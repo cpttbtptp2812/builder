@@ -57,6 +57,12 @@ const messageText = (message:any):string => {
   }
   return text(message);
 };
+const parseStructured = (value:any):any => {
+  if(typeof value!=="string") return value;
+  const trimmed=value.trim();
+  if(!trimmed || !["[","{"].includes(trimmed[0])) return value;
+  try{return JSON.parse(trimmed)}catch{return value}
+};
 const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","tool","tool_name","toolName","name","mcp.method.name"]) || "");
 const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name","span.name","spanName"]) || "").toLowerCase();
 const adapterOf = (step:AgentStep):AdapterKind => {
@@ -120,6 +126,8 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const inputTokens=read(d,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]);
   const outputTokens=read(d,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]);
   const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
+  const visiblePromptMessages=parseStructured(promptMessages);
+  const visibleModelResponse=parseStructured(modelResponse);
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
   return <div className="reality-inspector">
@@ -175,9 +183,9 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
       <div className="reality-block-head"><BrainCircuit size={15}/> 模型调用现场 <span>INFERENCE</span></div>
       <div className="reality-git-target"><div><small>模型</small><strong>{model?text(model):"未上报"}</strong></div><div><small>Provider</small><strong>{provider?text(provider):"未上报"}</strong></div></div>
       {decision!==undefined&&<div className="reality-empty-visual mt-3"><strong>显式行动摘要</strong><br/>{text(decision)}</div>}
-      {Array.isArray(promptMessages)&&<div className="mt-3 grid gap-2">{promptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{messageText(item?.content??item?.message??item).slice(0,2400)}</span></div>)}</div>}
+      {Array.isArray(visiblePromptMessages)&&<div className="mt-3 grid gap-2">{visiblePromptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{messageText(item?.content??item?.message??item).slice(0,2400)}</span></div>)}</div>}
       {promptMessages===undefined&&<div className="reality-empty-visual mt-3">模型请求消息未采集。可以在后端启用请求内容采集后显示真实消息。</div>}
-      {modelResponse!==undefined&&<div className="reality-code-preview">{Array.isArray(modelResponse)?modelResponse.map(messageText).join("\n\n"):messageText(modelResponse).slice(0,4000)}</div>}
+      {modelResponse!==undefined&&<div className="reality-code-preview">{Array.isArray(visibleModelResponse)?visibleModelResponse.map(messageText).join("\n\n"):messageText(visibleModelResponse).slice(0,4000)}</div>}
       {(inputTokens!==undefined||outputTokens!==undefined||totalTokens!==undefined)&&<div className="reality-git-target mt-3"><div><small>输入 Token</small><strong>{inputTokens!==undefined?text(inputTokens):"未上报"}</strong></div><div><small>输出 Token</small><strong>{outputTokens!==undefined?text(outputTokens):"未上报"}</strong></div></div>}<div className="mt-3 text-[10px] text-indigo-100/40">展示实际请求与响应，不展示或伪造模型隐藏思维链。</div>
     </div>}
 
