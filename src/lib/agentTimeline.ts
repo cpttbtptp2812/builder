@@ -34,6 +34,12 @@ export const sortTimeline = (steps: AgentStep[]) => {
 };
 
 const normalizeStatus = (value: unknown): StepStatus => {
+  if (value && typeof value === "object") {
+    const item = value as Record<string, any>;
+    if (item.code === 2 || String(item.code).toUpperCase() === "ERROR") return "failed";
+    if (item.code === 1 || String(item.code).toUpperCase() === "OK") return "done";
+    value = item.status ?? item.state ?? item.name;
+  }
   const status = typeof value === "string" ? value.toLowerCase() : "";
   if (["ok", "success", "succeeded", "completed", "complete", "done"].includes(status)) return "done";
   if (["passed", "pass"].includes(status)) return "passed";
@@ -41,6 +47,34 @@ const normalizeStatus = (value: unknown): StepStatus => {
   if (["running", "started", "in_progress", "in-progress", "in progress"].includes(status)) return "running";
   if (["pending", "queued"].includes(status)) return "pending";
   return "unknown";
+};
+
+const eventAttribute = (data: any, key: string): any => {
+  const attributes = data?.attributes ?? {};
+  if (attributes[key] !== undefined) return attributes[key];
+  return key.split(".").reduce((value: any, part) => value?.[part], attributes);
+};
+
+const phaseFromEvent = (data: any): StepPhase => {
+  if (data.phase) return data.phase;
+  const operation = String(eventAttribute(data, "gen_ai.operation.name") ?? "").toLowerCase();
+  const tool = eventAttribute(data, "gen_ai.tool.name") ?? eventAttribute(data, "mcp.tool.name");
+  if (tool) return "skill";
+  if (operation || /model|llm|inference/i.test(String(data.name ?? ""))) return "llm";
+  if (/retriev|search|embedding/i.test(String(data.name ?? ""))) return "context";
+  return "external";
+};
+
+const parseEventTimestamp = (data: any): number | undefined => {
+  if (typeof data.timestamp === "number") return data.timestamp;
+  const nanos = data.startTimeUnixNano ?? data.start_time_unix_nano;
+  if (nanos !== undefined && nanos !== null) {
+    const parsed = Number(nanos);
+    if (Number.isFinite(parsed)) return parsed / 1000000;
+  }
+  const millis = data.startTimeUnixMs ?? data.start_time_unix_ms ?? data.startTime;
+  if (typeof millis === "number" && Number.isFinite(millis)) return millis;
+  return undefined;
 };
 
 const parseDuration = (value: unknown): number | undefined => {
