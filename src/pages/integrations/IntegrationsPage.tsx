@@ -182,6 +182,42 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
     }
   };
 
+  const refreshPromptfooHistory = async () => {
+    if (!promptfooApiKey.trim()) {
+      setPromptfooError("请先填写目标 Agent 的 API Key。");
+      return;
+    }
+    try {
+      const response = await fetch(API_BASE + "/api/v1/evaluations/promptfoo", {
+        headers: { "Authorization": "Bearer " + promptfooApiKey.trim(), "Accept": "application/json" },
+      });
+      const payload = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(payload?.error?.message || "读取评估历史失败");
+      setPromptfooHistory(Array.isArray(payload) ? payload : []);
+      setPromptfooError("");
+    } catch (cause) {
+      setPromptfooError(cause instanceof Error ? cause.message : "读取评估历史失败");
+    }
+  };
+
+  const openPromptfooReport = async (reportId: string) => {
+    try {
+      const response = await fetch(API_BASE + "/api/v1/evaluations/promptfoo/" + encodeURIComponent(reportId), {
+        headers: { "Authorization": "Bearer " + promptfooApiKey.trim(), "Accept": "application/json" },
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || "读取评估报告失败");
+      const stored = JSON.parse(payload.reportJson);
+      const report = stored.report ?? {};
+      const rows = Array.isArray(report.results) ? report.results : Array.isArray(report) ? report : [];
+      setPromptfooReport({ fileName: payload.fileName, stats: report.stats ?? {}, rows });
+      setPromptfooSaved(payload);
+      setPromptfooError("");
+    } catch (cause) {
+      setPromptfooError(cause instanceof Error ? cause.message : "读取评估报告失败");
+    }
+  };
+
   const copy = async (value: string, target: "install" | "code" | "bootstrap") => {
     try {
       await navigator.clipboard.writeText(value);
@@ -308,12 +344,15 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                   )}
                   {promptfooHistory.length > 0 && (
                     <div className="border-t border-slate-200 pt-3">
-                      <h4 className="mb-2 text-xs font-semibold text-slate-700">已保存的评估历史</h4>
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <h4 className="text-xs font-semibold text-slate-700">已保存的评估历史</h4>
+                        <button onClick={() => void refreshPromptfooHistory()} className="text-[10px] font-medium text-indigo-600">刷新历史</button>
+                      </div>
                       <div className="max-h-36 space-y-1.5 overflow-auto">
-                        {promptfooHistory.map((item) => <div key={item.reportId} className="flex items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-[10px]">
+                        {promptfooHistory.map((item) => <button key={item.reportId} onClick={() => void openPromptfooReport(item.reportId)} className="flex w-full items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-left text-[10px] hover:bg-indigo-50">
                           <span className="min-w-0 truncate text-slate-700">{item.fileName}</span>
                           <span className="shrink-0 tabular-nums text-slate-500">{item.successCount} 通过 · {item.failureCount} 失败 · {item.errorCount} 错误</span>
-                        </div>)}
+                        </button>)}
                       </div>
                     </div>
                   )}
