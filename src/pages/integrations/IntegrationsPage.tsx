@@ -5,7 +5,7 @@ import {
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
 } from "lucide-react";
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\\/+$/, "");
+const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
 
 type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp" | "mcp-inspector" | "promptfoo" | "frameworks";
 
