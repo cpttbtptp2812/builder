@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { applySseToTimeline, finalizeTimeline } from "./agentTimeline";
+import { applySseToTimeline, finalizeTimeline, rebuildTimelineFromMessage, sortTimeline } from "./agentTimeline";
 
 describe("Agent execution timeline event handling", () => {
   it("preserves known fields when a later SSE event is sparse", () => {
@@ -29,6 +29,54 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(finished[0].rightDetail?.input, { goal: "find docs" });
   });
 
+  it("orders events by real timestamps instead of misleading phase sequence numbers", () => {
+    let timeline = applySseToTimeline([], "agent_step", {
+      stepId: "model-round-1",
+      seq: 44,
+      phase: "llm",
+      status: "done",
+      title: "模型请求",
+      timestamp: 2000,
+    });
+    timeline = applySseToTimeline(timeline, "agent_step", {
+      stepId: "tool-call-1",
+      seq: 5,
+      phase: "skill",
+      status: "done",
+      title: "工具执行",
+      timestamp: 3000,
+    });
+
+    assert.deepEqual(timeline.map((step) => step.stepId), ["model-round-1", "tool-call-1"]);
+  });
+
+  it("preserves captured payloads from the event envelope and nested rightDetail", () => {
+    const timeline = applySseToTimeline([], "agent_step", {
+      stepId: "llm-42",
+      seq: 42,
+      title: "Model request",
+      attributes: {
+        prompt_messages: [{ role: "system", content: "Use the registered tools only." }],
+        model: "test-model",
+      },
+      rightDetail: {
+        model_response: { role: "assistant", content: "I will call search." },
+        tool_schema: [{ name: "search" }],
+      },
+    });
+
+    assert.equal(timeline.length, 1);
+    assert.deepEqual(timeline[0].rightDetail?.attributes?.prompt_messages, [
+      { role: "system", content: "Use the registered tools only." },
+    ]);
+    assert.equal(timeline[0].rightDetail?.attributes?.model, "test-model");
+    assert.deepEqual(timeline[0].rightDetail?.model_response, {
+      role: "assistant",
+      content: "I will call search.",
+    });
+    assert.deepEqual(timeline[0].rightDetail?.tool_schema, [{ name: "search" }]);
+  });
+
   it("joins tool lifecycle events when a stable call ID is supplied", () => {
     const started = applySseToTimeline([], "tool", {
       tool: "search_docs",
@@ -49,6 +97,34 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(finished[0].rightDetail?.result, ["doc-1"]);
   });
 
+  it("merges tool and agent_step notifications for the same stable call ID", () => {
+    const fromToolEvent = applySseToTimeline([], "tool", {
+      tool: "search_docs",
+      toolCallId: "call-stable-7",
+      status: "success",
+      parameters: JSON.stringify({ query: "lease" }),
+      result: ["doc-1"],
+    });
+    const fromAgentStep = applySseToTimeline(fromToolEvent, "agent_step", {
+      stepId: "call-stable-7",
+      seq: 5,
+      phase: "skill",
+      status: "done",
+      title: "Search documents",
+      rightDetail: {
+        toolCallId: "call-stable-7",
+        tool_arguments: { query: "lease" },
+        tool_result: ["doc-1"],
+      },
+    });
+
+    assert.equal(fromAgentStep.length, 1);
+    assert.equal(fromAgentStep[0].stepId, "call-stable-7");
+    assert.deepEqual(fromAgentStep[0].rightDetail?.tool_arguments, { query: "lease" });
+    assert.deepEqual(fromAgentStep[0].rightDetail?.tool_result, ["doc-1"]);
+    assert.deepEqual(fromAgentStep[0].rightDetail?.result, ["doc-1"]);
+  });
+
   it("does not guess which concurrent same-name tool call a result belongs to", () => {
     let timeline = applySseToTimeline([], "tool", { tool: "lookup", status: "running" });
     timeline = applySseToTimeline(timeline, "tool", { tool: "lookup", status: "running" });
@@ -58,6 +134,72 @@ describe("Agent execution timeline event handling", () => {
     assert.equal(timeline[0].status, "running");
     assert.equal(timeline[1].status, "running");
     assert.equal(timeline[2].status, "done");
+  });
+
+  it("rebuilds saved tool arguments and results after refreshing the chat", () => {
+    const timeline = rebuildTimelineFromMessage({
+      toolCalls: [{
+        tool: "search_docs",
+        id: "call-history-9",
+        toolCallId: "call-history-9",
+        modelStep: 2,
+        status: "success",
+        parameters: { query: "heartbeat" },
+        result: ["doc-1"],
+        tool_arguments: { query: "heartbeat" },
+        tool_result: { success: true, data: ["doc-1"] },
+      }],
+    });
+
+    assert.equal(timeline.length, 1);
+    assert.equal(timeline[0].stepId, "call-history-9");
+    assert.deepEqual(timeline[0].rightDetail?.tool_arguments, { query: "heartbeat" });
+    assert.deepEqual(timeline[0].rightDetail?.tool_result, { success: true, data: ["doc-1"] });
+  });
+
+  it("uses timestamp ordering in the same sorter consumed by the observer", () => {
+    const sorted = sortTimeline([
+      { stepId: "tool", seq: 5, phase: "skill", status: "done", leftTitle: "Tool", leftSummary: "", rightTitle: "Tool", rightSubtitle: "", rightDetail: {}, timestamp: 3000 },
+      { stepId: "model", seq: 44, phase: "llm", status: "done", leftTitle: "Model", leftSummary: "", rightTitle: "Model", rightSubtitle: "", rightDetail: {}, timestamp: 2000 },
+    ]);
+    assert.deepEqual(sorted.map((step) => step.stepId), ["model", "tool"]);
+  });
+
+  it("rebuilds the persisted tool step in timestamp order and deduplicates legacy toolCalls", () => {
+    const timeline = rebuildTimelineFromMessage({
+      traceSteps: {
+        "41": {
+          stepId: "model-call-round-1",
+          seq: 41,
+          phase: "llm",
+          status: "done",
+          title: "Model request",
+          timestamp: 1000,
+          rightDetail: { prompt_messages: [{ role: "system", content: "Use tools." }] },
+        },
+        "1001": {
+          stepId: "call-history-9",
+          seq: 5,
+          phase: "skill",
+          status: "done",
+          title: "Search documents",
+          timestamp: 2000,
+          rightDetail: { tool_arguments: { query: "heartbeat" }, tool_result: { success: true } },
+        },
+      },
+      toolCalls: [{
+        tool: "search_docs",
+        id: "call-history-9",
+        toolCallId: "call-history-9",
+        status: "success",
+        parameters: { query: "heartbeat" },
+        result: ["doc-1"],
+      }],
+    });
+
+    assert.deepEqual(timeline.map((step) => step.stepId), ["model-call-round-1", "call-history-9"]);
+    assert.equal(timeline[1].seq, 5);
+    assert.deepEqual(timeline[1].rightDetail?.tool_arguments, { query: "heartbeat" });
   });
 
   it("keeps missing execution status unknown after the stream ends", () => {

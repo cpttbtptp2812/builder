@@ -23,6 +23,16 @@ export interface AgentStep {
   timestamp: number;
 }
 
+export const sortTimeline = (steps: AgentStep[]) => {
+  const hasCompleteTimestamps = steps.length > 0 && steps.every(
+    (step) => Number.isFinite(step.timestamp) && step.timestamp > 0
+  );
+  return [...steps].sort((a, b) => {
+    if (hasCompleteTimestamps && a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.seq - b.seq || a.timestamp - b.timestamp;
+  });
+};
+
 const normalizeStatus = (value: unknown): StepStatus => {
   const status = typeof value === "string" ? value.toLowerCase() : "";
   if (["ok", "success", "succeeded", "completed", "complete", "done"].includes(status)) return "done";
@@ -60,7 +70,7 @@ export function timelineReducer(
       ...definedIncoming,
       rightDetail: { ...(old.rightDetail || {}), ...(incoming.rightDetail || {}) },
     };
-    return updated.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
+    return sortTimeline(updated);
   }
 
   const step: AgentStep = {
@@ -76,7 +86,7 @@ export function timelineReducer(
     durationMs: incoming.durationMs,
     timestamp: incoming.timestamp ?? Date.now(),
   };
-  return [...current, step].sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
+  return sortTimeline([...current, step]);
 }
 
 export function applySseToTimeline(current: AgentStep[], eventName: string, payload: any): AgentStep[] {
@@ -99,7 +109,13 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         leftSummary: data.leftSummary ?? data.message,
         rightTitle: title,
         rightSubtitle: data.rightSubtitle ?? data.description,
-        rightDetail: data.rightDetail ?? data,
+        // Keep envelope-level payloads (notably OpenTelemetry attributes) as well
+        // as the event's explicit rightDetail. The nested detail wins on key
+        // collisions, but neither source is silently discarded.
+        rightDetail: {
+          ...data,
+          ...(data.rightDetail && typeof data.rightDetail === "object" ? data.rightDetail : {}),
+        },
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
         timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
       });
@@ -155,7 +171,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
 /** Legacy history reconstruction is allowed only from persisted event details. */
 export function rebuildTimelineFromMessage(msg: {
   traceSteps?: Record<number, any>;
-  toolCalls?: Array<{ tool: string; duration?: string; status?: string; result?: any; parameters?: any; id?: string }>;
+  toolCalls?: Array<{ tool: string; duration?: string; status?: string; result?: any; parameters?: any; id?: string; tool_arguments?: any; tool_result?: any; toolCallId?: string; modelStep?: number }>;
   agentTimeline?: AgentStep[];
 }): AgentStep[] {
   if (msg.agentTimeline?.length) return msg.agentTimeline;
@@ -163,7 +179,8 @@ export function rebuildTimelineFromMessage(msg: {
 
   Object.entries(msg.traceSteps || {}).forEach(([key, data]) => {
     if (!data) return;
-    const seq = Number(key);
+    const keySeq = Number(key);
+    const seq = Number.isFinite(Number(data.seq)) ? Number(data.seq) : keySeq;
     const title = data.rightTitle ?? data.title ?? data.name ?? `Step ${seq}`;
     steps.push({
       stepId: String(data.stepId ?? data.spanId ?? `trace-step-${seq}`),
@@ -181,9 +198,13 @@ export function rebuildTimelineFromMessage(msg: {
   });
 
   (msg.toolCalls || []).forEach((tool, index) => {
+    const toolId = String(tool.id ?? tool.toolCallId ?? `history-tool-${index + 1}`);
+    // Newer messages persist full tool steps in traceSteps. Avoid duplicating
+    // the same call when the legacy toolCalls list is also present.
+    if (steps.some((step) => step.stepId === toolId)) return;
     const status = normalizeStatus(tool.status);
     steps.push({
-      stepId: String(tool.id ?? `history-tool-${index + 1}`),
+      stepId: toolId,
       seq: steps.length + 1,
       phase: "skill",
       status,
@@ -191,12 +212,19 @@ export function rebuildTimelineFromMessage(msg: {
       leftSummary: "",
       rightTitle: tool.tool,
       rightSubtitle: "",
-      rightDetail: { parameters: tool.parameters, result: tool.result },
+      rightDetail: {
+        parameters: tool.parameters,
+        result: tool.result,
+        tool_arguments: tool.tool_arguments ?? tool.parameters,
+        tool_result: tool.tool_result ?? tool.result,
+        toolCallId: tool.toolCallId ?? tool.id,
+        modelStep: tool.modelStep,
+      },
       durationMs: parseDuration(tool.duration),
       timestamp: 0,
     });
   });
-  return steps.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
+  return sortTimeline(steps);
 }
 
 /** A finished stream does not imply every observed step succeeded. */
