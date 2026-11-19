@@ -81,7 +81,7 @@ describe("Agent execution timeline event handling", () => {
       tool: "search_docs",
       toolCallId: "call-stable-7",
       status: "success",
-      parameters: "{\\"query\\":\\"lease\\"}",
+      parameters: JSON.stringify({ query: "lease" }),
       result: ["doc-1"],
     });
     const fromAgentStep = applySseToTimeline(fromToolEvent, "agent_step", {
