@@ -23,12 +23,15 @@ export interface AgentStep {
   timestamp: number;
 }
 
-const sortTimeline = (steps: AgentStep[]) => [...steps].sort((a, b) => {
-  const aHasTime = Number.isFinite(a.timestamp) && a.timestamp > 0;
-  const bHasTime = Number.isFinite(b.timestamp) && b.timestamp > 0;
-  if (aHasTime && bHasTime && a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
-  return a.seq - b.seq || a.timestamp - b.timestamp;
-});
+const sortTimeline = (steps: AgentStep[]) => {
+  const hasCompleteTimestamps = steps.length > 0 && steps.every(
+    (step) => Number.isFinite(step.timestamp) && step.timestamp > 0
+  );
+  return [...steps].sort((a, b) => {
+    if (hasCompleteTimestamps && a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+    return a.seq - b.seq || a.timestamp - b.timestamp;
+  });
+};
 
 const normalizeStatus = (value: unknown): StepStatus => {
   const status = typeof value === "string" ? value.toLowerCase() : "";
