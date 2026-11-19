@@ -71,6 +71,9 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [spanQuery, setSpanQuery] = useState("");
   const [spanErrorsOnly, setSpanErrorsOnly] = useState(false);
   const [liveStatus, setLiveStatus] = useState<"OFF" | "CONNECTING" | "LIVE">("OFF");
+  const [judgeResult, setJudgeResult] = useState<any>(null);
+  const [judgeLoading, setJudgeLoading] = useState(false);
+  const [judgeError, setJudgeError] = useState("");
   const detailRequestId = useRef(0);
 
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
@@ -211,6 +214,35 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
       }
     } finally {
       if (requestId === detailRequestId.current) setDetailLoading(false);
+    }
+  };
+
+  const runJudge = async () => {
+    if (!selected || !apiKey.trim()) return;
+    setJudgeLoading(true);
+    setJudgeError("");
+    setJudgeResult(null);
+    try {
+      const response = await fetch(\`\${API_BASE}/api/v1/traces/\${encodeURIComponent(selected.run.traceId)}/judge\`, {
+        method: "POST",
+        headers: {
+          Authorization: \`Bearer \${apiKey.trim()}\`,
+          Accept: "application/json",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          task: "请仅根据本次运行 Trace 中实际采集的请求、模型响应、工具调用、工具结果和异常评估 Agent 执行质量。",
+          answer: "",
+          rubric: "任务完成度、指令遵循、回答正确性、工具使用合理性、执行可靠性。只根据 Trace 证据评分；证据不足时明确指出，不得推测未采集内容。",
+        }),
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || \`AI Judge 请求失败（HTTP \${response.status}）\`);
+      setJudgeResult(payload);
+    } catch (cause) {
+      setJudgeError(cause instanceof Error ? cause.message : "AI Judge 请求失败");
+    } finally {
+      setJudgeLoading(false);
     }
   };
 
@@ -360,6 +392,9 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{statusLabel[selected.run.status]}</span>
                     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${liveStatus === "LIVE" ? "bg-emerald-50 text-emerald-700" : liveStatus === "CONNECTING" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${liveStatus === "LIVE" ? "bg-emerald-500" : liveStatus === "CONNECTING" ? "bg-amber-500" : "bg-slate-400"}`} />{liveStatus === "LIVE" ? "实时监听中" : liveStatus === "CONNECTING" ? "正在连接" : "实时监听已断开"}</span>
+                    <button onClick={() => void runJudge()} disabled={judgeLoading} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50">
+                      <Activity size={13} /> {judgeLoading ? "评估中…" : "AI Judge"}
+                    </button>
                     <button onClick={downloadRunJson} className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-600 transition hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-700">
                       <Download size={13} /> 导出 JSON
                     </button>
@@ -406,6 +441,33 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                       <span>{timelineStart ? dateLabel(new Date(timelineStart).toISOString()) : "开始时间未上报"}</span>
                       <span>{timelineEnd > timelineStart ? dateLabel(new Date(timelineEnd).toISOString()) : "结束时间未上报"}</span>
                     </div>
+                  </section>
+                )}
+                {(judgeError || judgeResult) && (
+                  <section className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold text-indigo-900">AI Judge · Trace 证据评估</h3>
+                      {judgeResult?.judgeModel && <span className="text-[10px] text-indigo-500">模型：{judgeResult.judgeModel}</span>}
+                    </div>
+                    {judgeError && <p className="mt-2 text-xs text-rose-700">{judgeError}</p>}
+                    {judgeResult?.scores && (
+                      <>
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+                          {[
+                            ["综合", judgeResult.scores.overall],
+                            ["任务完成", judgeResult.scores.taskCompletion],
+                            ["指令遵循", judgeResult.scores.instructionFollowing],
+                            ["回答正确", judgeResult.scores.answerCorrectness],
+                            ["工具使用", judgeResult.scores.toolUse],
+                          ].map(([label, score]) => <div key={String(label)} className="rounded-lg border border-indigo-100 bg-white p-3">
+                            <p className="text-[10px] text-slate-500">{label}</p>
+                            <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{typeof score === "number" ? score : "—"}</p>
+                          </div>)}
+                        </div>
+                        {judgeResult.scores.summary && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{judgeResult.scores.summary}</p>}
+                        {!!judgeResult.scores.issues?.length && <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-rose-700">{judgeResult.scores.issues.map((issue: unknown, index: number) => <li key={index}>{String(issue)}</li>)}</ul>}
+                      </>
+                    )}
                   </section>
                 )}
                 {selected.events.length > 0 && (
