@@ -951,7 +951,7 @@ export default function ChatPlaygroundPage({
     return {
       ...target,
       userPrompt: target.userPrompt || previousUser?.content || "",
-      modelName: target.modelName || currentAgent?.model || systemModel || "deepseek-chat",
+      modelName: target.modelName || currentAgent?.model || systemModel || "模型待连接",
       sessionId: target.sessionId || currentSessionId,
       enableRAG,
       enableThinking,
@@ -1978,9 +1978,9 @@ export default function ChatPlaygroundPage({
         activeStepId={focusedStepId}
         onSelectStep={(stepId) => setFocusedStepId(stepId)}
         onRetryRun={() => {
-          const target = activeTraceDrawer
-            ? messages.find((item) => item.id === activeTraceDrawer.messageId)
-            : messages.slice().reverse().find((item) => item.role === "assistant");
+          const target =
+            (activeTraceDrawer ? messages.find((item) => item.id === activeTraceDrawer.messageId) : undefined) ||
+            messages.slice().reverse().find((item) => item.role === "assistant");
           const index = target ? messages.findIndex((item) => item.id === target.id) : -1;
           const previousUser = index > 0 ? messages.slice(0, index).reverse().find((item) => item.role === "user") : null;
           const prompt = target?.userPrompt || previousUser?.content;
