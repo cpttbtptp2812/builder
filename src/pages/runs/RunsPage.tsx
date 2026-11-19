@@ -526,7 +526,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                             <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{String(score)}</p>
                           </div>)}
                         </div>
-                        {(judgeResult.scores.summary || judgeResult.scores.explanation) && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{String(judgeResult.scores.summary || judgeResult.scores.explanation)}</p>}
+                        {(judgeResult.scores.summary) && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{String(judgeResult.scores.summary || judgeResult.scores.explanation)}</p>}
 
                         {!!judgeResult.scores.issues?.length && <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-rose-700">{judgeResult.scores.issues.map((issue: unknown, index: number) => <li key={index}>{String(issue)}</li>)}</ul>}
                       </>
