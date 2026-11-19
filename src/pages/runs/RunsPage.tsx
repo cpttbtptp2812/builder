@@ -71,9 +71,9 @@ const stripInternalReasoning = (value: any): any => {
   const channel = String(value.channel ?? value.type ?? value.kind ?? value.message_type ?? "").toLowerCase();
   const role = String(value.role ?? "").toLowerCase();
   if (/(analysis|reasoning|thought|internal)/.test(channel) && (!role || role === "assistant")) return undefined;
-  const hidden = new Set(["analysis", "reasoning", "chain_of_thought", "chainofthought", "internal_thought", "thoughts", "scratchpad"]);
+  const isInternalKey = (key: string) => /^(analysis|reasoning|chain_of_thought|chainofthought|internal_thought|thoughts?|scratchpad)/i.test(key);
   return Object.fromEntries(Object.entries(value)
-    .filter(([key]) => !hidden.has(key.toLowerCase()))
+    .filter(([key]) => !isInternalKey(key))
     .map(([key, item]) => [key, stripInternalReasoning(item)])
     .filter(([, item]) => item !== undefined));
 };
