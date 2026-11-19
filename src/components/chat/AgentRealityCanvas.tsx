@@ -107,11 +107,11 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const url=read(d,["url","pageUrl","page_url","current_url"]);
   const title=read(d,["pageTitle","page_title","title"]);
   const screenshot=read(d,["screenshotUrl","screenshot_url","imageUrl","image_url"]);
-  const sources=read(d,["sources","documents","citations","items"]);
+  const sources=read(d,["gen_ai.retrieval.documents","sources","documents","citations","items"]);
   const files=read(d,["files","changedFiles","changed_files","path"]);
   const diff=read(d,["diff","patch","unified_diff"]);
-  const args=read(d,["arguments","args","parameters","tool_input","input"]);
-  const result=read(d,["result","tool_result","tool_output","output","response"]);
+  const args=read(d,["gen_ai.tool.call.arguments","arguments","args","parameters","tool_input","input"]);
+  const result=read(d,["gen_ai.tool.call.result","result","tool_result","tool_output","output","response"]);
   const approval=read(d,["approvalStatus","approval_status","decision","riskLevel","risk_level"]);
   const model=read(d,["gen_ai.request.model","model","actual_model","modelName"]);
   const provider=read(d,["gen_ai.system","provider","provider_route"]);
@@ -122,7 +122,6 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
-  const dataTone=adapter==="approval"?"amber":adapter==="retrieval"?"blue":"cyan";
   return <div className="reality-inspector">
     <div className="reality-action-summary">
       <div className="reality-summary-orb"><Zap size={18}/></div>
