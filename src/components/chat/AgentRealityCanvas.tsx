@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
 import type { TraceDrawerMessage } from "./TraceInspectorDrawer";
-import { classifyRealityAdapter, formatRealityActionLabel, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind } from "@/lib/agentRealityAdapters";
+import { classifyRealityAdapter, formatRealityActionLabel, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind, summarizeRealityResult } from "@/lib/agentRealityAdapters";
 
 interface Props {
   timeline: AgentStep[];
@@ -65,29 +65,7 @@ const adapterMeta:Record<AdapterKind,{label:string;icon:React.ElementType;accent
 
 const displayToolName = formatRealityActionLabel;
 
-const summarize = (value:any):string => {
-  if(value===undefined || value===null) return "执行端尚未提供结果";
-  if(typeof value==="string") return value.length>180?value.slice(0,180)+"…":value;
-  if(typeof value==="number" || typeof value==="boolean") return String(value);
-  if(Array.isArray(value)) return value.length ? `返回 ${value.length} 项数据` : "返回空列表";
-  if(value.success===false || value.ok===false) return String(value.error||value.message||"操作未成功");
-  const data=value.data && typeof value.data==="object" ? value.data : value;
-  const parts:string[]=[];
-  const repository=data.repository||data.repoName||data.repo_name;
-  const branch=data.branch||data.ref;
-  if(repository) parts.push(`仓库：${repository}`);
-  if(branch) parts.push(`分支：${branch}`);
-  if(typeof data.clean==="boolean") parts.push(data.clean?"工作区干净":"存在未提交修改");
-  if(Array.isArray(data.commits)) parts.push(`读取到 ${data.commits.length} 条提交记录`);
-  if(Array.isArray(data.files)||Array.isArray(data.changedFiles)) parts.push(`涉及 ${(data.files||data.changedFiles).length} 个文件`);
-  if(typeof data.count==="number") parts.push(`共 ${data.count} 项`);
-  if(typeof data.total==="number") parts.push(`共 ${data.total} 项`);
-  if(typeof data.status==="string") parts.push(`状态：${data.status}`);
-  if(typeof data.message==="string" && parts.length<2) parts.push(data.message);
-  if(parts.length) return parts.slice(0,3).join(" · ");
-  if(value.success===true || value.ok===true) return String(value.message||"操作成功，执行端已确认");
-  return `已收到执行结果（${Object.keys(value).length} 个字段）`;
-};
+const summarize = summarizeRealityResult;
 
 const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const d=step.rightDetail||{};
@@ -282,7 +260,7 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
                 </button>
               })}
             </div>
-            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)||current.rightTitle):"等待下一条事件"}</span></div>
+            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)?displayToolName(toolOf(current)):current.rightTitle):"等待下一条事件"}</span></div>
           </div>
           <div className="ar-panel rounded-xl p-3"><div className="flex items-center gap-2 text-xs font-semibold text-indigo-100"><Activity size={14} className="text-cyan-300"/>执行信号</div><div className="mt-2 grid grid-cols-3 gap-2"><div><small className="text-[10px] text-indigo-100/40">实际事件</small><strong className="block text-lg text-white">{total}</strong></div><div><small className="text-[10px] text-indigo-100/40">完成比例</small><strong className="block text-lg text-white">{percent}%</strong></div><div><small className="text-[10px] text-indigo-100/40">本轮耗时</small><strong className="block text-lg text-white">{message?.duration||"未上报"}</strong></div></div></div>
         </div>
