@@ -7,6 +7,7 @@ import {
   readRealityAttribute,
   realityMessageText,
   toRealityMessageList,
+  summarizeRealityResult,
 } from "./agentRealityAdapters";
 
 describe("Agent Reality semantic adapters", () => {
@@ -50,6 +51,15 @@ describe("Agent Reality semantic adapters", () => {
     assert.equal(classifyRealityAdapter({ tool: "search_knowledge_base", phase: "skill" }), "retrieval");
     assert.equal(classifyRealityAdapter({ operation: "chat", phase: "llm" }), "model");
     assert.equal(classifyRealityAdapter({ tool: "browser.navigate", phase: "skill" }), "browser");
+  });
+
+  it("summarizes structured tool results in plain language without inventing facts", () => {
+    assert.equal(
+      summarizeRealityResult({ success: true, data: { repository: "builder", branch: "main", clean: true } }),
+      "仓库：builder · 分支：main · 工作区干净",
+    );
+    assert.equal(summarizeRealityResult({ success: false, error: "permission denied" }), "permission denied");
+    assert.equal(summarizeRealityResult(undefined), "执行端尚未提供结果");
   });
 
   it("turns common tool verbs into readable action labels", () => {
