@@ -225,6 +225,18 @@ describe("Agent execution timeline event handling", () => {
     assert.equal(timeline[0].rightDetail?.attributes?.["gen_ai.request.model"], "gpt-test");
   });
 
+  it("derives duration and status from standard OTLP span fields", () => {
+    const timeline = applySseToTimeline([], "span", {
+      spanId: "otlp-span-2",
+      name: "repository.lookup",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000125000000",
+      attributes: { "otel.status_code": "ERROR" },
+    });
+    assert.equal(timeline[0].durationMs, 125);
+    assert.equal(timeline[0].status, "failed");
+  });
+
   it("normalizes MCP tool events using their semantic tool name", () => {
     const timeline = applySseToTimeline([], "mcp_tool", {
       spanId: "mcp-call-1",
