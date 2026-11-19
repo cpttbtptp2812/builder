@@ -291,6 +291,30 @@ describe("Agent execution timeline event handling", () => {
     assert.equal(second[1].rightDetail?.result, "result");
   });
 
+
+  it("parses OTLP nanosecond duration fields without floating point timestamp loss", () => {
+    const timeline = applySseToTimeline([], "span", {
+      spanId: "otlp-exact",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000125000000",
+    });
+    assert.equal(timeline[0].durationMs, 125);
+  });
+
+  it("parses MCP duration_ns and keeps independent citations events separate", () => {
+    const tool = applySseToTimeline([], "mcp_tool", {
+      spanId: "mcp-duration",
+      duration_ns: 12000000,
+      attributes: { "mcp.tool.name": "read_file" },
+    });
+    assert.equal(tool[0].durationMs, 12);
+
+    const first = applySseToTimeline([], "citations", { items: [{ id: "a" }] });
+    const second = applySseToTimeline(first, "citations", { items: [{ id: "b" }] });
+    assert.equal(second.length, 2);
+    assert.notEqual(second[0].stepId, second[1].stepId);
+  });
+
   it("keeps missing execution status unknown after the stream ends", () => {
     const timeline = applySseToTimeline([], "agent_step", {
       stepId: "step-without-status",
