@@ -2,6 +2,10 @@
 
 OwnAgent is a developer workbench for understanding what an AI Agent actually did. Use the built-in Agent for your own tasks, or connect an Agent you already built and inspect its real execution without moving it into OwnAgent or routing model traffic through OwnAgent.
 
+### Run Explorer data sources
+
+The Run Explorer workspace has two explicit views: **External Agent Runs** are loaded from the authenticated persisted Run / Trace APIs; **Built-in chat history** is loaded from the existing `/api/chat/sessions` and `/api/chat/messages` endpoints and displays the persisted assistant messages, trace steps and tool calls. These remain distinct persistence models: built-in chat sessions are not assigned synthetic Run IDs or Span IDs.
+
 ## Two ways to use the workbench
 
 - **Built-in Agent:** chat in the OwnAgent workbench. The existing conversation and execution inspector stay together.
