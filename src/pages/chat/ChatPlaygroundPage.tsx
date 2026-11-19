@@ -44,7 +44,6 @@ import {
 import { useToast } from "@/context/ToastContext";
 import { TraceInspectorDrawer, ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
-import { ThinkingStream } from "@/components/chat/ThinkingStream";
 import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
 
