@@ -84,6 +84,12 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [chatSessions, setChatSessions] = useState<any[]>([]);
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
+  const [chatRuns, setChatRuns] = useState<any[]>([]);
+  const [selectedChatRunId, setSelectedChatRunId] = useState<string | null>(null);
+  const [selectedChatRunDetail, setSelectedChatRunDetail] = useState<any>(null);
+  const [chatRunJudge, setChatRunJudge] = useState<any>(null);
+  const [chatRunJudgeLoading, setChatRunJudgeLoading] = useState(false);
+  const [chatRunJudgeError, setChatRunJudgeError] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
   const [runs, setRuns] = useState<RunSummary[]>([]);
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
@@ -330,6 +336,66 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     try { return JSON.parse(value); } catch { return {}; }
   };
 
+  const loadInternalChatRunDetail = async (runId: string) => {
+    setSelectedChatRunId(runId);
+    setSelectedChatRunDetail(null);
+    setChatRunJudge(null);
+    setChatRunJudgeError("");
+    try {
+      const response = await fetch(API_BASE + "/api/chat/runs/" + encodeURIComponent(runId));
+      if (!response.ok) throw new Error("读取内置 Run 详情失败（HTTP " + response.status + "）");
+      const detail = await response.json();
+      setSelectedChatRunDetail(detail);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "读取内置 Run 详情失败");
+    }
+  };
+
+  const loadInternalChatRuns = async (sessionId: string) => {
+    try {
+      const response = await fetch(API_BASE + "/api/chat/runs?sessionId=" + encodeURIComponent(sessionId));
+      if (!response.ok) throw new Error("读取内置运行记录失败（HTTP " + response.status + "）");
+      const rows = await response.json();
+      const nextRuns = Array.isArray(rows) ? rows : [];
+      setChatRuns(nextRuns);
+      const nextId = nextRuns.some((run: any) => run.runId === selectedChatRunId)
+        ? selectedChatRunId : nextRuns[0]?.runId ?? null;
+      setSelectedChatRunId(nextId);
+      if (nextId) await loadInternalChatRunDetail(nextId);
+      else setSelectedChatRunDetail(null);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "读取内置运行记录失败");
+      setChatRuns([]);
+      setSelectedChatRunId(null);
+      setSelectedChatRunDetail(null);
+    }
+  };
+
+  const judgeInternalChatRun = async () => {
+    if (!selectedChatRunId) return;
+    setChatRunJudgeLoading(true);
+    setChatRunJudgeError("");
+    try {
+      const response = await fetch(API_BASE + "/api/chat/runs/" + encodeURIComponent(selectedChatRunId) + "/judge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          task: "请仅根据内置 Agent 本次运行中真实持久化的模型请求、模型响应、工具调用、工具结果和错误事件评估执行质量。",
+          answer: "",
+          rubric: "任务完成度、指令遵循、工具使用合理性、执行可靠性。只依据已采集证据评分；证据不足时明确说明，不得推测未采集内容。"
+        })
+      });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(payload?.error?.message || "内置 Run 评估失败（HTTP " + response.status + "）");
+      setChatRunJudge(payload);
+      await loadInternalChatRunDetail(selectedChatRunId);
+    } catch (cause) {
+      setChatRunJudgeError(cause instanceof Error ? cause.message : "内置 Run 评估失败");
+    } finally {
+      setChatRunJudgeLoading(false);
+    }
+  };
+
   const loadInternalChatMessages = async (sessionId: string) => {
     setChatLoading(true);
     try {
@@ -364,8 +430,15 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
       const nextId = sessions.some((item: any) => item.id === selectedChatSessionId)
         ? selectedChatSessionId : sessions[0]?.id ?? null;
       setSelectedChatSessionId(nextId);
-      if (nextId) await loadInternalChatMessages(nextId);
-      else setChatMessages([]);
+      if (nextId) {
+        await loadInternalChatMessages(nextId);
+        await loadInternalChatRuns(nextId);
+      } else {
+        setChatMessages([]);
+        setChatRuns([]);
+        setSelectedChatRunId(null);
+        setSelectedChatRunDetail(null);
+      }
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "读取内置会话失败");
       setChatSessions([]);
@@ -709,7 +782,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
             </div>
             <div className="max-h-[70vh] overflow-auto">
               {chatSessions.length === 0 ? <p className="px-4 py-10 text-center text-xs text-slate-400">{chatLoading ? "读取中…" : "暂无内置会话"}</p> :
-                chatSessions.map((session: any) => <button key={session.id} onClick={() => { setSelectedChatSessionId(session.id); void loadInternalChatMessages(session.id); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${selectedChatSessionId === session.id ? "bg-indigo-50" : "bg-white"}`}>
+                chatSessions.map((session: any) => <button key={session.id} onClick={() => { setSelectedChatSessionId(session.id); void loadInternalChatMessages(session.id); void loadInternalChatRuns(session.id); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${selectedChatSessionId === session.id ? "bg-indigo-50" : "bg-white"}`}>
                   <p className="truncate text-xs font-medium text-slate-800">{session.title || "未命名会话"}</p>
                   <p className="mt-1 truncate font-mono text-[10px] text-slate-400">{session.id}</p>
                   <p className="mt-1 text-[10px] text-slate-400">{dateLabel(session.updatedAt || session.createdAt)}</p>
@@ -722,9 +795,58 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                 <div className="border-b border-slate-100 px-5 py-4">
                   <h2 className="text-sm font-semibold">内置 Agent 对话</h2>
                   <p className="mt-1 break-all font-mono text-[10px] text-slate-400">Session ID: {selectedChatSessionId}</p>
-                  <p className="mt-2 text-[11px] text-slate-500">以下内容来自 chat_session / chat_message 持久化记录。它与外部 Agent Trace 使用不同数据模型，不会伪造 Run ID 或 Span。</p>
+                  <p className="mt-2 text-[11px] text-slate-500">内置 Agent 的每次真实执行都有独立 Run / Trace ID，模型轮次、工具调用、结果和失败事件会实时落库；与外部 Agent 使用不同的数据来源。</p>
                 </div>
                 <div className="max-h-[70vh] space-y-3 overflow-auto p-4">
+                  <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold text-slate-800">内置 Agent 运行记录 · {chatRuns.length}</h3>
+                      <button onClick={() => selectedChatSessionId && void loadInternalChatRuns(selectedChatSessionId)} className="text-[11px] font-medium text-indigo-600">刷新运行记录</button>
+                    </div>
+                    {chatRuns.length === 0 ? <p className="mt-3 text-[11px] text-slate-500">此会话还没有可查询的 Run。新的聊天执行开始后会自动创建。</p> :
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {chatRuns.map((run: any) => <button key={run.runId} onClick={() => void loadInternalChatRunDetail(run.runId)} className={"min-w-[190px] rounded-lg border px-3 py-2 text-left transition " + (selectedChatRunId === run.runId ? "border-indigo-300 bg-white shadow-sm" : "border-slate-200 bg-white/70 hover:border-indigo-200")}>
+                          <div className="flex items-center justify-between gap-2"><strong className="truncate text-[11px] text-slate-800">{run.name || "内置 Agent Run"}</strong><span className={"text-[10px] " + (run.status === "ERROR" ? "text-rose-600" : run.status === "COMPLETED" ? "text-emerald-600" : "text-amber-600")}>{run.status}</span></div>
+                          <p className="mt-1 break-all font-mono text-[9px] text-slate-400">{run.runId}</p>
+                          <p className="mt-1 text-[10px] text-slate-500">{run.spanCount ?? 0} spans · {run.totalTokens == null ? "Token 未上报" : run.totalTokens + " tokens"}</p>
+                        </button>)}
+                      </div>}
+                    {selectedChatRunDetail?.run && (
+                      <div className="mt-3 rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div><p className="text-[11px] font-semibold text-slate-800">Run 详情 · {selectedChatRunDetail.run.status}</p><p className="mt-1 break-all font-mono text-[9px] text-slate-400">Trace {selectedChatRunDetail.run.traceId}</p></div>
+                          <button onClick={() => void judgeInternalChatRun()} disabled={chatRunJudgeLoading} className="rounded-lg bg-indigo-600 px-3 py-1.5 text-[10px] font-medium text-white disabled:opacity-50">{chatRunJudgeLoading ? "评估中…" : "AI Judge"}</button>
+                        </div>
+                        <div className="mt-2 grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
+                          <div><span className="text-slate-400">模型</span><p className="mt-0.5 text-slate-700">{selectedChatRunDetail.run.model || "未记录"}</p></div>
+                          <div><span className="text-slate-400">Provider</span><p className="mt-0.5 text-slate-700">{selectedChatRunDetail.run.provider || "未记录"}</p></div>
+                          <div><span className="text-slate-400">输入 / 输出 Token</span><p className="mt-0.5 text-slate-700">{selectedChatRunDetail.run.inputTokens ?? "—"} / {selectedChatRunDetail.run.outputTokens ?? "—"}</p></div>
+                          <div><span className="text-slate-400">耗时</span><p className="mt-0.5 text-slate-700">{selectedChatRunDetail.run.durationMs == null ? "—" : selectedChatRunDetail.run.durationMs + " ms"}</p></div>
+                        </div>
+                        {chatRunJudgeError && <p className="mt-2 text-[10px] text-rose-600">{chatRunJudgeError}</p>}
+                        {chatRunJudge?.scores && <div className="mt-2 rounded-md bg-indigo-50 p-2 text-[10px] text-indigo-900">评估模型：{chatRunJudge.judgeModel} · 综合分：{chatRunJudge.scores.overall ?? "—"}<p className="mt-1 whitespace-pre-wrap">{chatRunJudge.scores.summary || "评估已保存。"}</p></div>}
+                        <details className="mt-3" open>
+                          <summary className="cursor-pointer text-[11px] font-semibold text-slate-700">执行 Span · {selectedChatRunDetail.spans?.length ?? 0}</summary>
+                          <div className="mt-2 space-y-2">
+                            {(selectedChatRunDetail.spans || []).map((span: any) => <div key={span.spanId} className="rounded-md border border-slate-100 bg-slate-50 p-2">
+                              <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-[10px] text-slate-700">{span.name}</strong><span className="text-[10px] text-slate-500">{span.status} · {span.durationMs == null ? "进行中" : span.durationMs + " ms"}</span></div>
+                              <p className="mt-1 text-[9px] text-slate-400">{span.spanKind} · {span.inputTokens ?? "—"} / {span.outputTokens ?? "—"} tokens · {span.usageSource}</p>
+                              <details className="mt-1"><summary className="cursor-pointer text-[10px] text-indigo-600">查看执行证据</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-950 p-2 text-[9px] text-slate-200">{JSON.stringify(stripInternalReasoning(parseStoredJson(span.attributes)), null, 2)}</pre></details>
+                            </div>)}
+                          </div>
+                        </details>
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-[11px] font-semibold text-slate-700">事件时间线 · {selectedChatRunDetail.events?.length ?? 0}</summary>
+                          <div className="mt-2 space-y-1.5">
+                            {(selectedChatRunDetail.events || []).map((event: any, index: number) => <div key={event.sequence ?? index} className="rounded-md bg-slate-50 p-2">
+                              <div className="flex items-center justify-between gap-2"><strong className="text-[10px] text-slate-700">{event.eventType} · {event.status}</strong><span className="text-[9px] text-slate-400">{dateLabel(event.eventTime)}</span></div>
+                              <details className="mt-1"><summary className="cursor-pointer text-[10px] text-indigo-600">事件内容</summary><pre className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-slate-950 p-2 text-[9px] text-slate-200">{JSON.stringify(stripInternalReasoning(parseStoredJson(event.payload)), null, 2)}</pre></details>
+                            </div>)}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </section>
                   {chatLoading && <p className="text-xs text-slate-400">正在读取会话消息…</p>}
                   {chatMessages.map((message: any, index: number) => {
                     const steps = message.traceSteps && typeof message.traceSteps === "object" ? Object.values(message.traceSteps) : [];
