@@ -69,7 +69,14 @@ function formatDuration(value?: number | null): string {
 function statusLabel(status: string): string {
   if (status === "OK") return "已完成";
   if (status === "ERROR") return "失败";
+  if (status === "UNSET") return "状态未知";
   return "执行中";
+}
+
+function prettyValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  try { return JSON.stringify(value, null, 2); }
+  catch { return String(value); }
 }
 
 export const ExternalAgentTracePanel: React.FC = () => {
@@ -315,10 +322,15 @@ export const ExternalAgentTracePanel: React.FC = () => {
                   </button>
                   {open && <div className="space-y-2 border-t border-slate-100 p-2.5">
                     <div className="grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">状态</div><b>{statusLabel(span.status)} ({span.status})</b></div>
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">输入 / 输出</div><b>{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</b></div>
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">Usage 来源</div><b>{span.usageSource || "MISSING"}</b></div>
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">Span ID</div><b className="break-all font-mono">{span.spanId}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">状态</div><b>{statusLabel(span.status)}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">输入 / 输出 Token</div><b>{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">Token 来源</div><b>{span.usageSource || "未上报"}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">模型 / 轮次</div><b>{String(attrs.model ?? "未上报")} · {attrs.model_step ? `第${attrs.model_step}轮` : "—"}</b></div>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                      <span>Span ID：<code className="break-all">{span.spanId}</code></span>
+                      {typeof attrs.tool_call_id === "string" && <span>Tool Call ID：<code className="break-all">{attrs.tool_call_id}</code></span>}
+                      {typeof attrs.provider === "string" && <span>Provider：{attrs.provider}</span>}
                     </div>
                     {span.parentSpanId && <div className="text-[10px] text-slate-500">父级 Span：<code>{span.parentSpanId}</code></div>}
                     {span.runId && <div className="text-[10px] text-slate-500">Run ID：<code>{span.runId}</code></div>}
@@ -327,6 +339,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
                       const sections: Array<{ label: string; value: unknown; tone: string }> = [
                         { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
                         { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
+                        { label: "本轮可用工具定义", value: attrs.tool_schema ?? attrs.tools ?? attrs.tool_definitions, tone: "border-indigo-200 bg-indigo-50/60" },
                         { label: "模型决定调用的工具", value: attrs.tool_calls ?? attrs.tool_call ?? attrs.function_call, tone: "border-amber-200 bg-amber-50/60" },
                         { label: "工具实际输入参数", value: attrs.tool_arguments ?? attrs.arguments ?? attrs.action_arguments, tone: "border-sky-200 bg-sky-50/60" },
                         { label: "工具实际执行结果", value: attrs.tool_result ?? attrs.action_output ?? attrs.result, tone: "border-emerald-200 bg-emerald-50/60" },
@@ -346,13 +359,13 @@ export const ExternalAgentTracePanel: React.FC = () => {
                                   {item.value.map((entry: any, messageIndex: number) => (
                                     <div key={messageIndex} className="overflow-hidden rounded-md border border-white/80 bg-white/80">
                                       <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-600">{entry?.role || `消息 ${messageIndex + 1}`}</div>
-                                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 py-1.5 text-[10px] leading-5 text-slate-700">{typeof entry?.content === "string" ? entry.content : JSON.stringify(entry?.content ?? entry, null, 2)}</pre>
-                                      {Array.isArray(entry?.tool_calls) && <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words border-t border-slate-100 px-2 py-1.5 text-[9px] leading-4 text-slate-500">{JSON.stringify(entry.tool_calls, null, 2)}</pre>}
+                                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 py-1.5 text-[10px] leading-5 text-slate-700">{prettyValue(entry?.content ?? entry)}</pre>
+                                      {Array.isArray(entry?.tool_calls) && <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words border-t border-slate-100 px-2 py-1.5 text-[9px] leading-4 text-slate-500">{prettyValue(entry.tool_calls)}</pre>}
                                     </div>
                                   ))}
                                 </div>
                               ) : (
-                                <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{typeof item.value === "string" ? item.value : JSON.stringify(item.value, null, 2)}</pre>
+                                <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{prettyValue(item.value)}</pre>
                               )}
                             </div>
                           ))}
