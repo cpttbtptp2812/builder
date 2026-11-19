@@ -105,6 +105,8 @@ interface Message {
   enableWebSearch?: boolean;
   agentTimeline?: AgentStep[];
   createdAt?: string;
+  runId?: string;
+  traceId?: string;
 }
 
 const formatMessageTime = (timeStr?: string) => {
@@ -632,6 +634,11 @@ export default function ChatPlaygroundPage({
           enableRAG,
         },
         {
+          onRun: (run) => {
+            setMessages((prev) => prev.map((m) => m.id === asstMsgId
+              ? { ...m, runId: run.runId, traceId: run.traceId, trace: { ...(m.trace || {}), runId: run.runId, traceId: run.traceId } }
+              : m));
+          },
           onAgentStep: (stepData) => {
             setMessages((prev) =>
               prev.map((m) => {
