@@ -211,7 +211,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   }, [selectedRunId, apiKey, runs]);
 
   const judgeMetrics = judgeResult?.scores
-    ? Object.entries(judgeResult.scores).filter(([key, value]) => key !== "overall" && typeof value === "number")
+    ? Object.entries(judgeResult.scores).filter(([key, value]) => key !== "overall" && !["reasoning", "analysis", "chain_of_thought", "thoughts"].includes(key.toLowerCase()) && typeof value === "number")
     : [];
   const timelineSpans = selected?.spans ?? [];
   const timelineStart = timelineSpans.length
@@ -506,11 +506,8 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                             <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{String(score)}</p>
                           </div>)}
                         </div>
-                        {(judgeResult.scores.summary || judgeResult.scores.reasoning || judgeResult.scores.explanation) && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{String(judgeResult.scores.summary || judgeResult.scores.reasoning || judgeResult.scores.explanation)}</p>}
-                        <details className="mt-3">
-                          <summary className="cursor-pointer text-[11px] text-indigo-700">查看完整评估结果 JSON</summary>
-                          <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-[10px] leading-4 text-slate-200">{JSON.stringify(judgeResult.scores, null, 2)}</pre>
-                        </details>
+                        {(judgeResult.scores.summary || judgeResult.scores.explanation) && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{String(judgeResult.scores.summary || judgeResult.scores.explanation)}</p>}
+
                         {!!judgeResult.scores.issues?.length && <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-rose-700">{judgeResult.scores.issues.map((issue: unknown, index: number) => <li key={index}>{String(issue)}</li>)}</ul>}
                       </>
                     )}
