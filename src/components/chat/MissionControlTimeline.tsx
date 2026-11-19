@@ -99,7 +99,7 @@ export const MissionControlTimeline:React.FC<Props> = ({timeline,message,activeS
   const hasDetail=promptMessages!==undefined||modelResponse!==undefined||args!==undefined||result!==undefined||input!==undefined||output!==undefined||error!==undefined||reason!==undefined;
   return (
     <section className="agent-journey flex h-full min-h-0 flex-col text-slate-100">
-      <style>{\`
+      <style>{`
         .agent-journey{isolation:isolate;background:transparent;color:#e9edff}
         .agent-journey .journey-scroll::-webkit-scrollbar,.agent-journey .detail-scroll::-webkit-scrollbar{width:6px}
         .agent-journey .journey-scroll::-webkit-scrollbar-thumb,.agent-journey .detail-scroll::-webkit-scrollbar-thumb{background:rgba(137,159,231,.28);border-radius:8px}
@@ -109,7 +109,7 @@ export const MissionControlTimeline:React.FC<Props> = ({timeline,message,activeS
         .agent-journey .journey-detail{background:linear-gradient(145deg,rgba(26,37,75,.78),rgba(12,23,53,.82));border:1px solid rgba(151,169,236,.2);box-shadow:inset 0 1px rgba(255,255,255,.045)}
         .agent-journey .tech-data{background:rgba(4,10,27,.62);border:1px solid rgba(151,169,236,.16)}
         @media(prefers-reduced-motion:reduce){.agent-journey *{animation:none!important;transition:none!important}}
-      \`}</style>
+      `}</style>
       <header className="shrink-0 border-b border-indigo-200/10 px-4 py-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
