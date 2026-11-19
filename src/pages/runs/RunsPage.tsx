@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useState } from "react";
 import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, RefreshCw, X, XCircle } from "lucide-react";
 
 type TraceSpan = {
@@ -19,50 +19,31 @@ type TraceSpan = {
   attributes?: Record<string, unknown> | null;
 };
 
-type Run = {
+type RunSummary = {
   traceId: string;
-  runId?: string | null;
-  sessionId?: string;
-  spans: TraceSpan[];
+  runId: string;
+  sessionId?: string | null;
+  conversationId?: string | null;
+  name: string;
+  status: "ERROR" | "COMPLETED" | "RUNNING" | "UNKNOWN";
   startedAt?: string;
-  root?: TraceSpan;
-  status: "ERROR" | "OK" | "RUNNING" | "UNKNOWN";
-  tokens?: number;
+  endedAt?: string | null;
+  durationMs?: number | null;
+  spanCount: number;
+  errorCount: number;
+  inputTokens?: number | null;
+  outputTokens?: number | null;
+  totalTokens?: number | null;
+  usageSource?: string;
+};
+
+type RunDetail = {
+  run: RunSummary;
+  spans: TraceSpan[];
+  events: Array<{ eventType: string; status: string; eventTime: string; spanId?: string; payload?: string }>;
 };
 
 const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
-
-function groupRuns(spans: TraceSpan[]): Run[] {
-  const groups = new Map<string, TraceSpan[]>();
-  for (const span of spans) {
-    if (!span?.traceId || !span?.spanId) continue;
-    const list = groups.get(span.traceId) || [];
-    list.push(span);
-    groups.set(span.traceId, list);
-  }
-  return [...groups.entries()].map(([traceId, items]) => {
-    const ordered = [...items].sort((a, b) =>
-      new Date(a.startedAt || 0).getTime() - new Date(b.startedAt || 0).getTime()
-    );
-    const root = ordered.find((span) => !span.parentSpanId);
-    const hasError = ordered.some((span) => span.status === "ERROR");
-    const allClosed = ordered.every((span) => span.endedAt);
-    const tokens = ordered.reduce((sum, span) => sum + (span.totalTokens ?? 0), 0);
-    const sessionId = ordered.map((span) => span.attributes?.["session.id"] ?? span.attributes?.["conversation.id"])
-      .find((value): value is string => typeof value === "string" && value.length > 0);
-    const hasTokens = ordered.some((span) => span.totalTokens != null);
-    return {
-      traceId,
-      runId: root?.runId || ordered.find((span) => span.runId)?.runId,
-      sessionId,
-      spans: ordered,
-      startedAt: root?.startedAt || ordered[0]?.startedAt,
-      root,
-      status: hasError ? "ERROR" : allClosed && ordered.every((span) => span.status === "OK") ? "OK" : allClosed ? "UNKNOWN" : "RUNNING",
-      tokens: hasTokens ? tokens : undefined,
-    };
-  }).sort((a, b) => new Date(b.startedAt || 0).getTime() - new Date(a.startedAt || 0).getTime());
-}
 
 const dateLabel = (value?: string | null) => {
   if (!value) return "—";
@@ -70,22 +51,34 @@ const dateLabel = (value?: string | null) => {
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
 
-const statusLabel: Record<Run["status"], string> = {
+const statusLabel: Record<RunSummary["status"], string> = {
   ERROR: "失败",
-  OK: "成功",
+  COMPLETED: "已完成",
   RUNNING: "进行中",
   UNKNOWN: "状态未知",
 };
 
 export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [apiKey, setApiKey] = useState("");
-  const [spans, setSpans] = useState<TraceSpan[]>([]);
-  const [selectedTrace, setSelectedTrace] = useState<string | null>(null);
+  const [runs, setRuns] = useState<RunSummary[]>([]);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  const [selectedDetail, setSelectedDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const runs = useMemo(() => groupRuns(spans), [spans]);
-  const selected = runs.find((run) => run.traceId === selectedTrace) || runs[0];
+  const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
+
+  const loadRunDetail = async (runId: string, key = apiKey) => {
+    const response = await fetch(`${API_BASE}/api/v1/runs/${encodeURIComponent(runId)}`, {
+      headers: { Authorization: `Bearer ${key.trim()}`, Accept: "application/json" },
+    });
+    if (!response.ok) {
+      const body = await response.json().catch(() => null);
+      throw new Error(body?.error?.message || `读取运行详情失败（HTTP ${response.status}）`);
+    }
+    const detail = await response.json() as RunDetail;
+    setSelectedDetail(detail);
+  };
 
   const loadRuns = async () => {
     if (!apiKey.trim()) {
@@ -95,22 +88,25 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(`${API_BASE}/api/v1/traces`, {
+      const response = await fetch(`${API_BASE}/api/v1/runs`, {
         headers: { Authorization: `Bearer ${apiKey.trim()}`, Accept: "application/json" },
       });
       if (!response.ok) {
         const body = await response.json().catch(() => null);
         throw new Error(body?.error?.message || `请求失败（HTTP ${response.status}）`);
       }
-      const data = await response.json();
+      const data = await response.json() as RunSummary[];
       if (!Array.isArray(data)) throw new Error("后端返回的数据格式不正确。");
-      setSpans(data);
-      const nextRuns = groupRuns(data);
-      setSelectedTrace((current) => nextRuns.some((run) => run.traceId === current) ? current : nextRuns[0]?.traceId || null);
+      setRuns(data);
+      const nextId = data.some((run) => run.runId === selectedRunId) ? selectedRunId : data[0]?.runId || null;
+      setSelectedRunId(nextId);
+      setSelectedDetail(null);
+      if (nextId) await loadRunDetail(nextId, apiKey);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "读取运行记录失败。");
-      setSpans([]);
-      setSelectedTrace(null);
+      setRuns([]);
+      setSelectedRunId(null);
+      setSelectedDetail(null);
     } finally {
       setLoading(false);
     }
@@ -179,16 +175,16 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                 </details>
               </div>
             ) : runs.map((run) => (
-              <button key={run.traceId} onClick={() => setSelectedTrace(run.traceId)} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.traceId === run.traceId ? "bg-indigo-50/70" : "bg-white"}`}>
+              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="truncate text-sm font-medium text-slate-800">{run.root?.name || run.spans[0]?.name || "Agent run"}</span>
-                  <span className={`shrink-0 text-[11px] ${run.status === "ERROR" ? "text-rose-600" : run.status === "OK" ? "text-emerald-600" : "text-amber-600"}`}>{statusLabel[run.status]}</span>
+                  <span className="truncate text-sm font-medium text-slate-800">{run.name || "Agent run"}</span>
+                  <span className={`shrink-0 text-[11px] ${run.status === "ERROR" ? "text-rose-600" : run.status === "COMPLETED" ? "text-emerald-600" : "text-amber-600"}`}>{statusLabel[run.status]}</span>
                 </div>
-                <p className="mt-1 truncate font-mono text-[10px] text-slate-400">{run.traceId}</p>
+                <p className="mt-1 truncate font-mono text-[10px] text-slate-400">{run.runId}</p>
                 <div className="mt-2 flex items-center gap-3 text-[11px] text-slate-500">
-                  <span>{run.spans.length} spans</span>
+                  <span>{run.spanCount} spans</span>
                   {run.sessionId && <span className="max-w-28 truncate" title={`Session ${run.sessionId}`}>Session {run.sessionId}</span>}
-                  <span>{run.tokens == null ? "Token —" : `${run.tokens.toLocaleString()} tokens`}</span>
+                  <span>{run.totalTokens == null ? "Token —" : `${run.totalTokens.toLocaleString()} tokens`}</span>
                   <span className="ml-auto">{dateLabel(run.startedAt)}</span>
                 </div>
               </button>
@@ -207,18 +203,31 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
             <>
               <div className="border-b border-slate-100 px-5 py-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div><h2 className="text-base font-semibold">{selected.root?.name || "Agent run"}</h2><p className="mt-1 break-all font-mono text-[11px] text-slate-400">{selected.traceId}</p></div>
-                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{statusLabel[selected.status]}</span>
+                  <div><h2 className="text-base font-semibold">{selected.run.name || "Agent run"}</h2><p className="mt-1 break-all font-mono text-[11px] text-slate-400">{selected.run.traceId}</p></div>
+                  <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{statusLabel[selected.run.status]}</span>
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
-                  <div><p className="text-slate-400">开始时间</p><p className="mt-1 text-slate-700">{dateLabel(selected.startedAt)}</p></div>
+                  <div><p className="text-slate-400">开始时间</p><p className="mt-1 text-slate-700">{dateLabel(selected.run.startedAt)}</p></div>
                   <div><p className="text-slate-400">Span 数量</p><p className="mt-1 tabular-nums text-slate-700">{selected.spans.length}</p></div>
-                  <div><p className="text-slate-400">Token（已上报）</p><p className="mt-1 tabular-nums text-slate-700">{selected.tokens?.toLocaleString() ?? "—"}</p></div>
-                  <div><p className="text-slate-400">Run ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.runId || "—"}</p></div>
-                  <div><p className="text-slate-400">Session ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.sessionId || "—"}</p></div>
+                  <div><p className="text-slate-400">Token（已上报）</p><p className="mt-1 tabular-nums text-slate-700">{selected.run.totalTokens?.toLocaleString() ?? "—"}</p></div>
+                  <div><p className="text-slate-400">Run ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.run.runId || "—"}</p></div>
+                  <div><p className="text-slate-400">Session ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.run.sessionId || "—"}</p></div>
                 </div>
               </div>
               <div className="max-h-[70vh] space-y-3 overflow-auto p-4">
+                {selected.events.length > 0 && (
+                  <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <h3 className="text-xs font-semibold text-slate-700">运行事件</h3>
+                    <div className="mt-3 space-y-2">
+                      {selected.events.map((event, index) => (
+                        <div key={`${event.eventType}-${event.spanId || index}`} className="flex items-start justify-between gap-3 text-xs">
+                          <span className="font-medium text-slate-700">{event.eventType} · {event.status}</span>
+                          <span className="text-slate-400">{dateLabel(event.eventTime)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                )}
                 {selected.spans.map((span) => (
                   <article key={span.spanId} className="rounded-lg border border-slate-200 bg-white">
                     <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
