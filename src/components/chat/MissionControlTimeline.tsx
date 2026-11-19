@@ -195,6 +195,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
               })}
             </div>
           </div>
+          </div>
 
           {selected && (
             <div className="min-w-0 order-1 lg:order-2 overflow-hidden rounded-2xl border border-indigo-300/25 bg-slate-950/45 shadow-[0_12px_48px_rgba(0,0,0,.24)] lg:sticky lg:top-3 lg:max-h-[min(72vh,720px)] lg:overflow-y-auto [scrollbar-width:thin]">
