@@ -169,7 +169,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .detail-glass{background:rgba(12,17,46,.78);border-color:rgba(177,164,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.16)}
         .agent-journey .detail-glass .text-slate-800,.agent-journey .detail-glass .text-slate-700{color:#f0efff!important}
         .agent-journey .detail-glass .text-slate-600,.agent-journey .detail-glass .text-slate-500{color:#b8c0e2!important}
-        .agent-journey .detail-glass pre{font-size:11px;line-height:1.65}
+        .agent-journey .detail-glass{font-size:12px}.agent-journey .detail-glass pre{font-size:11px;line-height:1.7}.agent-journey .detail-glass .text-[9px]{font-size:11px}.agent-journey .detail-glass .text-[10px]{font-size:12px}
         .agent-journey .detail-glass section{color:#e9eaff}
         .agent-journey .detail-glass .text-indigo-100,.agent-journey .detail-glass .text-emerald-100,.agent-journey .detail-glass .text-sky-100,.agent-journey .detail-glass .text-teal-100{color:#e8eaff!important}
         .agent-journey .detail-glass .text-indigo-500{color:#bfc8ff!important}
@@ -249,7 +249,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
           {selected && (
             <div className="detail-glass min-w-0 overflow-hidden">
               <div className="flex items-center justify-between gap-2 border-b border-indigo-200/15 bg-indigo-400/10 px-3 py-3">
-                <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/20 bg-indigo-300/10 text-cyan-200 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-cyan-200">STEP {String(selected.seq).padStart(2,"0")}<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
+                <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/20 bg-indigo-300/10 text-cyan-200 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-cyan-200">事件详情<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
                 <div className="flex shrink-0 items-center gap-2 text-[9px] text-slate-500"><span><Clock3 className="mr-1 inline h-3 w-3"/>{durationText(selected.durationMs)}</span><span>Token <b className="font-mono text-slate-700">{tokenText(detail)??"未上报"}</b></span></div>
               </div>
               <div className="px-3 py-3">
