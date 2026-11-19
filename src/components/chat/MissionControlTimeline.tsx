@@ -256,6 +256,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                     <ChevronRight className={`mt-1 h-4 w-4 shrink-0 ${active?"text-cyan-200":"text-violet-200/40"}`}/>
                   </button>;
                 })}
+                {ordered.length === 0 && <div className="flex min-h-[132px] w-[260px] flex-col justify-center rounded-xl border border-dashed border-violet-300/25 bg-white/[0.035] px-4 py-4"><div className="mb-1 text-sm font-semibold text-violet-100">等待 Agent 开始执行</div><div className="text-xs leading-5 text-violet-200/60">发送一条任务后，真实执行事件会按发生顺序出现在这里。</div></div>}
               </div>
             </div>
             <div className="mt-3 flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-violet-200/60">
