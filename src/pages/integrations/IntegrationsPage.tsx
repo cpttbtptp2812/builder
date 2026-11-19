@@ -165,7 +165,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
         rows = Array.isArray(parsed.results) ? parsed.results : Array.isArray(parsed) ? parsed : [];
         stats = parsed.stats ?? {};
       }
-      setPromptfooReport({ fileName: file.name, stats, rows });
+      setPromptfooReport({ fileName: file.name, stats, rows: rows.map(stripInternalReasoning).filter((row) => row !== undefined && row !== null) });
       setPromptfooSaved(saved);
       setPromptfooError("");
       const historyResponse = await fetch(API_BASE + "/api/v1/evaluations/promptfoo", {
@@ -342,7 +342,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                       </div>
                     </div>
                   )}
-                  {promptfooHistory.length > 0 && (
+                  {(
                     <div className="border-t border-slate-200 pt-3">
                       <div className="mb-2 flex items-center justify-between gap-2">
                         <h4 className="text-xs font-semibold text-slate-700">已保存的评估历史</h4>
@@ -353,6 +353,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                           <span className="min-w-0 truncate text-slate-700">{item.fileName}</span>
                           <span className="shrink-0 tabular-nums text-slate-500">{item.successCount} 通过 · {item.failureCount} 失败 · {item.errorCount} 错误</span>
                         </button>)}
+                        {promptfooHistory.length === 0 && <p className="rounded-md bg-white px-3 py-3 text-[10px] text-slate-400">暂无已保存报告。输入 Agent API Key 后点击「刷新历史」即可加载已有记录。</p>}
                       </div>
                     </div>
                   )}
