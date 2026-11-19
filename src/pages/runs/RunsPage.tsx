@@ -74,6 +74,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [judgeResult, setJudgeResult] = useState<any>(null);
   const [judgeLoading, setJudgeLoading] = useState(false);
   const [judgeError, setJudgeError] = useState("");
+  const [judgeHistory, setJudgeHistory] = useState<any[]>([]);
   const detailRequestId = useRef(0);
 
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
@@ -171,6 +172,44 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     };
   }, [selectedRunId, apiKey, runs]);
 
+  useEffect(() => {
+    const run = runs.find((item) => item.runId === selectedRunId);
+    if (!run || !apiKey.trim()) {
+      setJudgeHistory([]);
+      setJudgeResult(null);
+      return;
+    }
+    const controller = new AbortController();
+    setJudgeHistory([]);
+    setJudgeResult(null);
+    const loadHistory = async () => {
+      try {
+        const response = await fetch(API_BASE + "/api/v1/traces/" + encodeURIComponent(run.traceId) + "/evaluations", {
+          headers: { Authorization: "Bearer " + apiKey.trim(), Accept: "application/json" },
+          signal: controller.signal,
+        });
+        if (!response.ok) return;
+        const history = await response.json() as any[];
+        if (controller.signal.aborted) return;
+        setJudgeHistory(history);
+        if (history.length > 0) {
+          setJudgeResult({
+            traceId: run.traceId,
+            judgeModel: history[0].judgeModel,
+            scores: history[0].scores,
+            evaluation: history[0],
+          });
+        }
+      } catch (cause) {
+        if (!(cause instanceof DOMException && cause.name === "AbortError")) {
+          console.warn("Judge history load failed", cause);
+        }
+      }
+    };
+    void loadHistory();
+    return () => controller.abort();
+  }, [selectedRunId, apiKey, runs]);
+
   const judgeMetrics = judgeResult?.scores
     ? Object.entries(judgeResult.scores).filter(([key, value]) => key !== "overall" && typeof value === "number")
     : [];
@@ -242,6 +281,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
       const payload = await response.json().catch(() => null);
       if (!response.ok) throw new Error(payload?.error?.message || `AI Judge 请求失败（HTTP ${response.status}）`);
       setJudgeResult(payload);
+      if (payload?.evaluation) setJudgeHistory((current) => [payload.evaluation, ...current]);
     } catch (cause) {
       setJudgeError(cause instanceof Error ? cause.message : "AI Judge 请求失败");
     } finally {
@@ -363,7 +403,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
             ) : filteredRuns.length === 0 ? (
               <div className="px-5 py-12 text-center"><p className="text-sm font-medium text-slate-600">没有匹配的运行记录</p><p className="mt-1 text-xs text-slate-400">调整搜索关键词或状态筛选。</p><button onClick={() => { setRunQuery(""); setRunStatus("ALL"); }} className="mt-3 text-xs font-medium text-indigo-600">清除筛选</button></div>
             ) : filteredRuns.map((run) => (
-              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); setSelectedDetail(null); setJudgeResult(null); setJudgeError(""); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
+              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); setSelectedDetail(null); setJudgeResult(null); setJudgeError(""); setJudgeHistory([]); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium text-slate-800">{run.name || "Agent run"}</span>
                   <span className={`shrink-0 text-[11px] ${run.status === "ERROR" ? "text-rose-600" : run.status === "COMPLETED" ? "text-emerald-600" : "text-amber-600"}`}>{statusLabel[run.status]}</span>
