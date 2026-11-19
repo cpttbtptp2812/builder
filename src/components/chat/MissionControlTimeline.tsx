@@ -202,9 +202,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
                 const tone=toneForStep(step.status);
                 const stateLabel=(statusMeta[step.status]||statusMeta.unknown).label;
                 const angle=(-90+(index/Math.max(ordered.length,1))*360)*Math.PI/180;
-                const radius=ordered.length>7?(index%2===0?35:43):39;
+                const radius=ordered.length>7?(index%2===0?23:29):26;
                 const x=50+Math.cos(angle)*radius;
-                const y=50+Math.sin(angle)*34;
+                const y=50+Math.sin(angle)*26;
                 return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-expanded={active} title={step.rightTitle||step.leftTitle||`步骤 ${index+1}`} className={`orbit-node ${active?"active":""} ${tone==="running"?"running":""}`} style={{left:`${x}%`,top:`${y}%`}}>
                   <span className={`node-icon ${tone==="done"?"text-emerald-300":tone==="running"?"text-cyan-200":tone==="failed"?"text-rose-300":tone==="unknown"?"text-amber-200":"text-violet-200"}`}>{tone==="running"?<Loader2 className="h-3.5 w-3.5 animate-spin"/>:tone==="done"?<CheckCircle2 className="h-3.5 w-3.5"/>:tone==="failed"?<XCircle className="h-3.5 w-3.5"/>:tone==="unknown"?<CircleHelp className="h-3.5 w-3.5"/>:<Icon className="h-3.5 w-3.5"/>}</span>
                   <span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-semibold leading-4">{step.rightTitle||step.leftTitle||`步骤 ${index+1}`}</span><span className="block text-[8px] text-violet-200/65">{String(step.seq).padStart(2,"0")} · {stateLabel}</span></span>
