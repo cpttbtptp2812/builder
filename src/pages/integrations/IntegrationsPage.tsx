@@ -99,7 +99,7 @@ with tracer.start_as_current_span("invoke_agent") as span:
     "install": "npx promptfoo@latest init --example getting-started\nnpx promptfoo@latest eval -c promptfooconfig.yaml -o results.json -o report.html",
     "code": "description: OwnAgent Agent regression suite\nprompts:\n  - |\n    You are a careful assistant. Answer the user's question accurately.\n    Question: {{question}}\nproviders:\n  - openai:gpt-4.1-mini\ntests:\n  - vars:\n      question: \"What is a parent span in distributed tracing?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains parent-child trace relationships accurately.\"\n  - vars:\n      question: \"If a tool call fails, what should an Agent do?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains error handling and retry safety without claiming every failure is retryable.\"\n"
 },
-  mcpInspector: {
+  "mcp-inspector": {
     "title": "MCP Inspector · 官方工具调试器",
     "subtitle": "复用 MCP 官方 Inspector 的 Web、CLI 和 TUI 客户端调试 MCP Server。OwnAgent 不复制其 UI；Inspector 在开发机本地启动。",
     "install": "npx @modelcontextprotocol/inspector",
