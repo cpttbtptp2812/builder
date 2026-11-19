@@ -99,9 +99,9 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
     <div className="reality-action-summary">
       <div className="reality-summary-orb"><Zap size={18}/></div>
       <div className="min-w-0 flex-1">
-        <div className="reality-eyebrow">REAL ACTION · {adapterMeta[adapter].label}</div>
-        <div className="reality-summary-title">{toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||step.leftTitle}</div>
-        <p>{step.rightSubtitle||step.leftSummary||adapterMeta[adapter].verb}</p>
+        <div className="reality-eyebrow">OBSERVED EVENT · {adapterMeta[adapter].label}</div>
+        <div className="reality-summary-title">{toolOf(step)||step.rightTitle||step.leftTitle}</div>
+        <p>{step.rightSubtitle||step.leftSummary||"执行端未上报说明"}</p>
       </div>
       <div className="reality-duration"><Clock3 size={13}/>{duration}</div>
     </div>
@@ -158,7 +158,7 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
 
     {adapter!=="model" && args!==undefined && <details className="reality-raw"><summary>查看本次动作的真实输入</summary><pre>{text(args)}</pre></details>}
     {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>查看本次动作的真实返回</summary><pre>{text(result)}</pre></details>}
-    <div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 这一步到底做了什么 <span>HUMAN READABLE</span></div><div className="grid gap-3"><div><small className="text-[10px] text-cyan-200/65">执行动作</small><p className="mt-1 text-sm font-semibold text-white">{toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||phaseLabels[step.phase]||"Agent 执行事件"}</p><p className="mt-1 text-xs leading-5 text-indigo-100/65">{step.rightSubtitle||step.leftSummary||adapterMeta[adapter].verb}</p></div><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-indigo-200/10 bg-slate-950/25 p-3"><small className="text-[10px] text-indigo-100/45">为什么执行</small><p className="mt-1 text-xs leading-5 text-indigo-50/85">{why!==undefined?text(why):"Agent 尚未上报这一步的执行原因"}</p></div><div className="rounded-lg border border-indigo-200/10 bg-slate-950/25 p-3"><small className="text-[10px] text-indigo-100/45">执行后得到</small><p className="mt-1 text-xs leading-5 text-indigo-50/85">{result!==undefined?summarize(result):"执行结果尚未上报"}</p></div></div>{nextAction!==undefined&&<div className="rounded-lg border border-cyan-300/15 bg-cyan-300/5 p-3"><small className="text-[10px] text-cyan-200/65">后续行动</small><p className="mt-1 text-xs text-cyan-50">{text(nextAction)}</p></div>}</div></div>
+    <div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 这一步到底做了什么 <span>HUMAN READABLE</span></div><div className="grid gap-3"><div><small className="text-[10px] text-cyan-200/65">执行动作</small><p className="mt-1 text-sm font-semibold text-white">{toolOf(step)||step.rightTitle||"未命名事件"}</p><p className="mt-1 text-xs leading-5 text-indigo-100/65">{step.rightSubtitle||step.leftSummary||"执行端未上报说明"}</p></div><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-indigo-200/10 bg-slate-950/25 p-3"><small className="text-[10px] text-indigo-100/45">为什么执行</small><p className="mt-1 text-xs leading-5 text-indigo-50/85">{why!==undefined?text(why):"Agent 尚未上报这一步的执行原因"}</p></div><div className="rounded-lg border border-indigo-200/10 bg-slate-950/25 p-3"><small className="text-[10px] text-indigo-100/45">执行后得到</small><p className="mt-1 text-xs leading-5 text-indigo-50/85">{result!==undefined?summarize(result):"执行结果尚未上报"}</p></div></div>{nextAction!==undefined&&<div className="rounded-lg border border-cyan-300/15 bg-cyan-300/5 p-3"><small className="text-[10px] text-cyan-200/65">后续行动</small><p className="mt-1 text-xs text-cyan-50">{text(nextAction)}</p></div>}</div></div>
     <div className="reality-result-strip">
       <div><small>真实返回</small><strong>{result!==undefined?summarize(result):"尚未上报"}</strong></div>
       <div><small>Token 用量</small><strong>{totalTokens!==undefined?text(totalTokens):read(d.usage,["total_tokens","totalTokens"])??"未上报"}</strong></div>
