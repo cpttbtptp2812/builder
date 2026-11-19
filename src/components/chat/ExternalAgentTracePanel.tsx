@@ -73,6 +73,26 @@ function statusLabel(status: string): string {
   return "执行中";
 }
 
+function stripInternalReasoning(value: any): any {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try { return stripInternalReasoning(JSON.parse(trimmed)); } catch { return value; }
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(stripInternalReasoning).filter((item) => item !== undefined);
+  if (!value || typeof value !== "object") return value;
+  const channel = String(value.channel ?? value.type ?? value.kind ?? value.message_type ?? "").toLowerCase();
+  const role = String(value.role ?? "").toLowerCase();
+  if (/(analysis|reasoning|thought|internal)/.test(channel) && (!role || role === "assistant")) return undefined;
+  const hidden = new Set(["analysis", "reasoning", "chain_of_thought", "chainofthought", "internal_thought", "thoughts", "scratchpad"]);
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !hidden.has(key.toLowerCase()))
+    .map(([key, item]) => [key, stripInternalReasoning(item)])
+    .filter(([, item]) => item !== undefined));
+}
+
 function prettyValue(value: unknown): string {
   if (typeof value === "string") return value;
   try { return JSON.stringify(value, null, 2); }
@@ -354,8 +374,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
                       const errorValue = attrs.error_message ?? attrs.error ?? attrs.exception;
                       const sections: Array<{ label: string; value: unknown; tone: string }> = [
                         ...(isModelSpan ? [
-                          { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
-                          { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
+                          { label: "实际发送给模型的提示词 / 上下文", value: stripInternalReasoning(attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt), tone: "border-violet-200 bg-violet-50/60" },
+                          { label: "模型实际返回", value: stripInternalReasoning(attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion), tone: "border-blue-200 bg-blue-50/60" },
                           { label: "本轮可用工具定义", value: attrs.tool_schema ?? attrs.tools ?? attrs.tool_definitions, tone: "border-indigo-200 bg-indigo-50/60" },
                           { label: "模型决定调用的工具", value: attrs.tool_calls ?? attrs.tool_call ?? attrs.function_call, tone: "border-amber-200 bg-amber-50/60" },
                         ] : []),
@@ -400,7 +420,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
                           })} className="text-[10px] font-semibold text-slate-500 hover:text-indigo-600">
                             {rawExpanded.has(span.spanId) ? "收起原始 Span 数据" : "查看原始 Span 数据"}
                           </button>
-                          {rawExpanded.has(span.spanId) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(attrs, null, 2)}</pre>}
+                          {rawExpanded.has(span.spanId) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(stripInternalReasoning(attrs), null, 2)}</pre>}
                         </div>
                       );
                     })()}
