@@ -171,6 +171,9 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     };
   }, [selectedRunId, apiKey, runs]);
 
+  const judgeMetrics = judgeResult?.scores
+    ? Object.entries(judgeResult.scores).filter(([key, value]) => key !== "overall" && typeof value === "number")
+    : [];
   const timelineSpans = selected?.spans ?? [];
   const timelineStart = timelineSpans.length
     ? Math.min(...timelineSpans.map((span) => Date.parse(span.startedAt || "") || 0))
@@ -453,19 +456,21 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                     {judgeError && <p className="mt-2 text-xs text-rose-700">{judgeError}</p>}
                     {judgeResult?.scores && (
                       <>
-                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                          {[
-                            ["综合", judgeResult.scores.overall],
-                            ["任务完成", judgeResult.scores.taskCompletion],
-                            ["指令遵循", judgeResult.scores.instructionFollowing],
-                            ["回答正确", judgeResult.scores.answerCorrectness],
-                            ["工具使用", judgeResult.scores.toolUse],
-                          ].map(([label, score]) => <div key={String(label)} className="rounded-lg border border-indigo-100 bg-white p-3">
-                            <p className="text-[10px] text-slate-500">{label}</p>
-                            <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{typeof score === "number" ? score : "—"}</p>
+                        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                          <div className="rounded-lg border border-indigo-100 bg-white p-3">
+                            <p className="text-[10px] text-slate-500">综合</p>
+                            <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{typeof judgeResult.scores.overall === "number" ? judgeResult.scores.overall : "—"}</p>
+                          </div>
+                          {judgeMetrics.map(([key, score]) => <div key={String(key)} className="rounded-lg border border-indigo-100 bg-white p-3">
+                            <p className="text-[10px] text-slate-500">{String(key).replace(/([A-Z])/g, " $1")}</p>
+                            <p className="mt-1 text-xl font-semibold tabular-nums text-slate-900">{String(score)}</p>
                           </div>)}
                         </div>
-                        {judgeResult.scores.summary && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{judgeResult.scores.summary}</p>}
+                        {(judgeResult.scores.summary || judgeResult.scores.reasoning || judgeResult.scores.explanation) && <p className="mt-3 whitespace-pre-wrap text-xs leading-5 text-slate-700">{String(judgeResult.scores.summary || judgeResult.scores.reasoning || judgeResult.scores.explanation)}</p>}
+                        <details className="mt-3">
+                          <summary className="cursor-pointer text-[11px] text-indigo-700">查看完整评估结果 JSON</summary>
+                          <pre className="mt-2 max-h-64 overflow-auto rounded-lg bg-slate-950 p-3 text-[10px] leading-4 text-slate-200">{JSON.stringify(judgeResult.scores, null, 2)}</pre>
+                        </details>
                         {!!judgeResult.scores.issues?.length && <ul className="mt-2 list-disc space-y-1 pl-4 text-xs text-rose-700">{judgeResult.scores.issues.map((issue: unknown, index: number) => <li key={index}>{String(issue)}</li>)}</ul>}
                       </>
                     )}
