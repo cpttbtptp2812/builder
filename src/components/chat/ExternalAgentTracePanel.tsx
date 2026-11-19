@@ -251,8 +251,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
             {connected ? "实时连接中" : loading ? "正在连接" : "未连接"}
           </span>
         </span>
-        <span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-500">
-          {spans.length} spans{failedCount > 0 ? ` · ${failedCount} 失败` : ""} · {knownTokenCount} 条含 Token
+        <span className="flex shrink-0 items-center gap-2 text-[10px] text-slate-400">
+          {connected ? "实时监听" : spans.length ? `${spans.length} 个事件` : "等待连接"}{failedCount > 0 ? ` · ${failedCount} 失败` : ""}{knownTokenCount > 0 ? ` · ${knownTokenCount} 条含 Token` : ""}
           {detailsOpen ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
         </span>
       </button>
