@@ -70,8 +70,8 @@ const adapterOf = (step:AgentStep):AdapterKind => {
   const phase=step.phase;
   if(/git|github|commit|branch|repository/.test(name)) return "git";
   if(/browser|playwright|navigate|click|screenshot|computer/.test(name)) return "browser";
-  if(/retriev|search|knowledge|vector|embedding|citation|rag/.test(name) || phase==="context") return "retrieval";
   if(/file|code|diff|edit|write|patch/.test(name)) return "code";
+  if(/retriev|search|knowledge|vector|embedding|citation|rag/.test(name) || phase==="context") return "retrieval";
   if(/approv|permission|policy|risk|authorize/.test(name)) return "approval";
   if(/agent|delegate|handoff|transfer/.test(name)) return "agent";
   if(/terminal|shell|command|exec/.test(name)) return "terminal";
