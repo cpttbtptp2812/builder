@@ -106,20 +106,11 @@ with tracer.start_as_current_span("invoke_agent") as span:
     "code": "npx @modelcontextprotocol/inspector\n\n# 可脚本化调试 / CI\nnpx @modelcontextprotocol/inspector --cli\n\n# 终端交互界面\nnpx @modelcontextprotocol/inspector --tui"
 },
   frameworks: {
-    title: "Langfuse / Phoenix 等现有观测平台",
-    subtitle: "保留现有平台，通过 OTLP 将 Trace 同步到 OwnAgent；具体双写配置需按部署版本验证",
-    install: "# 保留你现有的 OpenTelemetry / OTLP exporter",
-    code: `# OwnAgent OTLP/HTTP traces endpoint
-OWNAGENT_OTLP_ENDPOINT=https://your-ownagent-host/api/v1/otlp/v1/traces
-
-# Python SDK / Agent 运行身份
-OWNAGENT_BASE_URL=https://your-ownagent-host
-OWNAGENT_AGENT_API_KEY=oa_live_...
-
-# 内容采集默认关闭。仅在脱敏后的测试环境显式开启
-OWNAGENT_TRACE_CAPTURE_CONTENT=1
-`,
-  },
+    "title": "Langfuse / Phoenix 等现有观测平台",
+    "subtitle": "让 OwnAgent 将已接收的 OTLP/JSON Trace 再转发到兼容的 Langfuse / Phoenix 接收端；这是后端转发，不是嵌入第三方 UI。",
+    "install": "# 在 OwnAgent 后端服务环境中配置以下变量",
+    "code": "# Backend -> Langfuse / Phoenix / compatible OTLP-HTTP JSON receiver\nOWNAGENT_OTLP_EXPORT_ENDPOINT=https://your-observability-host/v1/traces\nOWNAGENT_OTLP_EXPORT_AUTHORIZATION=Bearer your-export-token\n\n# Agent -> OwnAgent receiver (configured in the Agent process)\nOWNAGENT_OTLP_ENDPOINT=https://your-ownagent-host/api/v1/otlp/v1/traces\nOWNAGENT_AGENT_API_KEY=oa_live_...\n\n# Prompt / response content capture remains opt-in at the Agent instrumentation layer\nOWNAGENT_TRACE_CAPTURE_CONTENT=1"
+},
 };
 
 const statusItems = [
