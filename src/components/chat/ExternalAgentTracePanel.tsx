@@ -69,7 +69,14 @@ function formatDuration(value?: number | null): string {
 function statusLabel(status: string): string {
   if (status === "OK") return "已完成";
   if (status === "ERROR") return "失败";
+  if (status === "UNSET") return "状态未知";
   return "执行中";
+}
+
+function prettyValue(value: unknown): string {
+  if (typeof value === "string") return value;
+  try { return JSON.stringify(value, null, 2); }
+  catch { return String(value); }
 }
 
 export const ExternalAgentTracePanel: React.FC = () => {
@@ -81,7 +88,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [rawExpanded, setRawExpanded] = useState<Set<string>>(new Set());
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -134,6 +142,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
     setError("");
     setSpans([]);
     setExpanded(new Set());
+    setRawExpanded(new Set());
 
     const headers = { Authorization: `Bearer ${key}` };
     let attempt = 0;
@@ -290,7 +299,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
           <div className="max-h-[42vh] space-y-1.5 overflow-y-auto">
             {ordered.map((span, index) => {
               const open = expanded.has(span.spanId);
-              const actionId = span.attributes?.action_id;
+              const attrs = span.attributes || {};
+              const actionId = attrs.action_id;
               return (
                 <div key={span.spanId} className="overflow-hidden rounded-lg border border-slate-200 bg-white">
                   <button
@@ -305,7 +315,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
                   >
                     <span className={`h-2 w-2 shrink-0 rounded-full ${span.status === "ERROR" ? "bg-rose-500" : span.status === "OK" ? "bg-emerald-500" : "animate-pulse bg-blue-400"}`} />
                     <span className="text-[10px] font-mono text-slate-400">#{index + 1}</span>
-                    <b className="min-w-0 flex-1 truncate text-xs text-slate-800">{span.name}</b>
+                    <b className="min-w-0 flex-1 truncate text-xs text-slate-800">{span.name === "chat.completions" ? `模型请求 · 第${span.attributes?.model_step ?? index + 1}轮` : span.name === "action.execute" ? `工具执行 · ${span.attributes?.tool_name ?? "未命名工具"}` : span.name === "agent.run" ? "Agent 总任务" : span.name}</b>
                     <span className={`text-[10px] ${span.status === "ERROR" ? "text-rose-600" : span.status === "OK" ? "text-emerald-600" : "text-blue-600"}`}>{statusLabel(span.status)}</span>
                     <span className="text-[10px] text-slate-500">{formatDuration(span.durationMs)}</span>
                     <span className="text-[10px] text-slate-500">{span.totalTokens ?? "—"} tokens</span>
@@ -313,14 +323,74 @@ export const ExternalAgentTracePanel: React.FC = () => {
                   </button>
                   {open && <div className="space-y-2 border-t border-slate-100 p-2.5">
                     <div className="grid grid-cols-2 gap-2 text-[10px] sm:grid-cols-4">
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">状态</div><b>{statusLabel(span.status)} ({span.status})</b></div>
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">输入 / 输出</div><b>{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</b></div>
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">Usage 来源</div><b>{span.usageSource || "MISSING"}</b></div>
-                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">Span ID</div><b className="break-all font-mono">{span.spanId}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">状态</div><b>{statusLabel(span.status)}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">输入 / 输出 Token</div><b>{span.inputTokens ?? "—"} / {span.outputTokens ?? "—"}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">Token 来源</div><b>{span.usageSource || "未上报"}</b></div>
+                      <div className="rounded bg-slate-50 p-2"><div className="text-slate-400">模型 / 轮次</div><b>{String(attrs.model ?? "未上报")} · {attrs.model_step ? `第${attrs.model_step}轮` : "—"}</b></div>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[10px] text-slate-500">
+                      <span>Span ID：<code className="break-all">{span.spanId}</code></span>
+                      {typeof attrs.tool_call_id === "string" && <span>Tool Call ID：<code className="break-all">{attrs.tool_call_id}</code></span>}
+                      {typeof attrs.provider === "string" && <span>Provider：{attrs.provider}</span>}
                     </div>
                     {span.parentSpanId && <div className="text-[10px] text-slate-500">父级 Span：<code>{span.parentSpanId}</code></div>}
                     {span.runId && <div className="text-[10px] text-slate-500">Run ID：<code>{span.runId}</code></div>}
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(span.attributes || {}, null, 2)}</pre>
+                    {(() => {
+                      const isModelSpan = span.name === "chat.completions";
+                      const isActionSpan = span.name === "action.execute";
+                      const errorValue = attrs.error_message ?? attrs.error ?? attrs.exception;
+                      const sections: Array<{ label: string; value: unknown; tone: string }> = [
+                        ...(isModelSpan ? [
+                          { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
+                          { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
+                          { label: "本轮可用工具定义", value: attrs.tool_schema ?? attrs.tools ?? attrs.tool_definitions, tone: "border-indigo-200 bg-indigo-50/60" },
+                          { label: "模型决定调用的工具", value: attrs.tool_calls ?? attrs.tool_call ?? attrs.function_call, tone: "border-amber-200 bg-amber-50/60" },
+                        ] : []),
+                        ...(isActionSpan ? [
+                          { label: "工具实际输入参数", value: attrs.tool_arguments ?? attrs.arguments ?? attrs.action_arguments, tone: "border-sky-200 bg-sky-50/60" },
+                          { label: "工具实际执行结果", value: attrs.tool_result ?? attrs.action_output ?? attrs.result, tone: "border-emerald-200 bg-emerald-50/60" },
+                        ] : []),
+                        ...(errorValue != null ? [
+                          { label: "失败信息", value: errorValue, tone: "border-rose-200 bg-rose-50/60" },
+                        ] : []),
+                      ];
+                      return (
+                        <div className="space-y-2">
+                          {sections.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-500">
+                              这条 Span 没有可展示的结构化内容。需要 Agent SDK 显式上报；界面不会根据名称推测提示词或执行结果。
+                            </div>
+                          ) : sections.map((item) => (
+                            <div key={item.label} className={`overflow-hidden rounded-lg border p-2.5 ${item.tone}`}>
+                              <div className="mb-1.5 text-[10px] font-bold text-slate-700">{item.label}</div>
+                              {item.value == null ? (
+                                <div className="text-[10px] text-slate-400">本次未采集该内容</div>
+                              ) : item.label === "实际发送给模型的提示词 / 上下文" && Array.isArray(item.value) ? (
+                                <div className="space-y-2">
+                                  {item.value.map((entry: any, messageIndex: number) => (
+                                    <div key={messageIndex} className="overflow-hidden rounded-md border border-white/80 bg-white/80">
+                                      <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-bold uppercase tracking-wide text-indigo-600">{entry?.role || `消息 ${messageIndex + 1}`}</div>
+                                      <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words px-2 py-1.5 text-[10px] leading-5 text-slate-700">{prettyValue(entry?.content ?? entry)}</pre>
+                                      {Array.isArray(entry?.tool_calls) && <pre className="max-h-32 overflow-auto whitespace-pre-wrap break-words border-t border-slate-100 px-2 py-1.5 text-[9px] leading-4 text-slate-500">{prettyValue(entry.tool_calls)}</pre>}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{prettyValue(item.value)}</pre>
+                              )}
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setRawExpanded((current) => {
+                            const next = new Set(current);
+                            next.has(span.spanId) ? next.delete(span.spanId) : next.add(span.spanId);
+                            return next;
+                          })} className="text-[10px] font-semibold text-slate-500 hover:text-indigo-600">
+                            {rawExpanded.has(span.spanId) ? "收起原始 Span 数据" : "查看原始 Span 数据"}
+                          </button>
+                          {rawExpanded.has(span.spanId) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(attrs, null, 2)}</pre>}
+                        </div>
+                      );
+                    })()}
                     {span.status === "ERROR" && typeof actionId === "string" && actionId && (
                       <button
                         type="button"
