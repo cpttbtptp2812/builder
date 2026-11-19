@@ -96,7 +96,7 @@ with tracer.start_as_current_span("invoke_agent") as span:
   promptfoo: {
     "title": "Promptfoo · 可重复评估与回归",
     "subtitle": "复用 Promptfoo CLI 管理数据集、断言、模型对比和 CI 质量门禁（Node.js 22.22+）。OwnAgent 提供配置指南和 JSON 报告预览，不在服务端执行第三方 CLI；报告可能含 Prompt、响应和配置内容，导入前请先脱敏。",
-    "install": "npx promptfoo@latest init\nnpx promptfoo@latest eval -o results.json -o report.html",
+    "install": "npx promptfoo@latest init\nnpx promptfoo@latest eval -o results.json -o results.jsonl -o report.html",
     "code": "description: OwnAgent Agent regression suite\nprompts:\n  - |\n    You are a careful assistant. Answer the user's question accurately.\n    Question: {{question}}\nproviders:\n  - openai:gpt-4.1-mini\ntests:\n  - vars:\n      question: \"What is a parent span in distributed tracing?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains parent-child trace relationships accurately.\"\n  - vars:\n      question: \"If a tool call fails, what should an Agent do?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains error handling and retry safety without claiming every failure is retryable.\"\n"
 },
   "mcp-inspector": {
