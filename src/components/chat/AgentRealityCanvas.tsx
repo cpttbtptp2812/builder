@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from "react";
 import {
-  Activity, BrainCircuit, CheckCircle2, CircleHelp, Clock3, Code2, Database,
+  Activity, BrainCircuit, CheckCircle2, CircleHelp, Clock3, Code2, Database, Orbit, Sparkles,
   FileCode2, GitBranch, GitCommitHorizontal, Globe2, Layers3, LockKeyhole,
   Network, Radio, ShieldAlert, Terminal, XCircle, Zap
 } from "lucide-react";
@@ -168,106 +168,59 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   </div>;
 };
 
+
 export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepId,onSelectStep,isThinking,onRetryRun}) => {
-  const ordered=useMemo(()=>sortTimeline(timeline||[]),[timeline]);
-  const [localSelected,setLocalSelected]=useState<string|null>(null);
-  const selected=ordered.find(s=>s.stepId===activeStepId)||ordered.find(s=>s.stepId===localSelected)||ordered.find(s=>s.status==="running")||ordered[ordered.length-1];
-  const complete=ordered.filter(s=>s.status==="done"||s.status==="passed").length;
-  const failed=ordered.filter(s=>s.status==="failed").length;
-  const current=ordered.find(s=>s.status==="running");
-  const live=isThinking||!!current;
-  const select=(step:AgentStep)=>{setLocalSelected(step.stepId);onSelectStep?.(step.stepId)};
-  const total=ordered.length;
-  const percent=total?Math.round(complete/total*100):0;
-  return <section className="agent-reality h-full min-h-0 flex flex-col text-slate-100">
-    <style>{`
-      .agent-reality{--ar-line:rgba(116,151,255,.22);background:radial-gradient(ellipse at 48% 0%,rgba(39,75,157,.24),transparent 48%),linear-gradient(155deg,#080f24 0%,#0b1430 52%,#080e20 100%);color:#edf4ff;isolation:isolate;overflow:hidden}
-      .agent-reality .ar-top{background:linear-gradient(100deg,rgba(13,28,61,.9),rgba(11,22,48,.55));border-bottom:1px solid var(--ar-line)}
-      .agent-reality .ar-grid{background-image:linear-gradient(rgba(116,151,255,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(116,151,255,.045) 1px,transparent 1px);background-size:28px 28px}
-      .agent-reality .ar-orbit{position:relative;border:1px solid rgba(108,153,255,.18);background:radial-gradient(ellipse at 50% 50%,rgba(22,68,124,.2),rgba(8,18,42,.2) 70%);box-shadow:inset 0 0 60px rgba(30,85,170,.07)}
-      .agent-reality .ar-orbit:before,.agent-reality .ar-orbit:after{content:"";position:absolute;inset:18px 8%;border:1px solid rgba(93,184,255,.09);border-radius:50%;transform:rotate(-8deg);pointer-events:none}
-      .agent-reality .ar-orbit:after{inset:35px 18%;transform:rotate(12deg);border-color:rgba(153,120,255,.12)}
-      .agent-reality .ar-node{position:relative;z-index:2;min-width:0;border:1px solid rgba(130,157,232,.2);background:linear-gradient(145deg,rgba(22,39,78,.94),rgba(10,22,48,.96));box-shadow:0 8px 24px rgba(0,0,0,.22),inset 0 1px rgba(255,255,255,.04);transition:transform .2s,border-color .2s,box-shadow .2s}
-      .agent-reality .ar-node:hover{transform:translateY(-2px);border-color:rgba(89,210,255,.5)}
-      .agent-reality .ar-node[aria-pressed=true]{border-color:rgba(84,218,255,.78);box-shadow:0 0 0 1px rgba(84,218,255,.16),0 0 28px rgba(36,163,235,.14),inset 0 0 24px rgba(46,160,225,.07)}
-      .agent-reality .ar-node:after{content:"";position:absolute;left:50%;bottom:-17px;height:16px;width:1px;background:linear-gradient(rgba(94,211,255,.6),transparent)}
-      .agent-reality .ar-node:last-child:after{display:none}
-      .agent-reality .ar-pulse{animation:arPulse 1.8s ease-in-out infinite}
-      @keyframes arPulse{0%,100%{box-shadow:0 0 0 0 rgba(55,210,255,.28)}50%{box-shadow:0 0 0 7px rgba(55,210,255,0)}}
-      .agent-reality .ar-panel{border:1px solid rgba(130,157,232,.18);background:linear-gradient(145deg,rgba(16,31,66,.86),rgba(8,18,40,.94));box-shadow:inset 0 1px rgba(255,255,255,.035)}
-      .agent-reality .reality-action-summary{display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid rgba(130,157,232,.14)}
-      .agent-reality .reality-summary-orb{width:40px;height:40px;display:grid;place-items:center;border-radius:12px;color:#8cecff;background:linear-gradient(145deg,rgba(29,144,194,.24),rgba(99,91,217,.18));border:1px solid rgba(90,211,255,.3);box-shadow:0 0 22px rgba(37,170,228,.12)}
-      .agent-reality .reality-eyebrow{font:10px ui-monospace,monospace;letter-spacing:.16em;color:#7ddfff;text-transform:uppercase}
-      .agent-reality .reality-summary-title{font-size:16px;font-weight:750;color:#f4f8ff;margin-top:3px}
-      .agent-reality .reality-action-summary p{font-size:12px;color:#a9badb;margin-top:4px}
-      .agent-reality .reality-duration{display:flex;align-items:center;gap:5px;font:11px ui-monospace,monospace;color:#a9c4e8;white-space:nowrap}
-      .agent-reality .reality-visual-block{margin:14px;padding:14px;border:1px solid rgba(112,160,236,.18);border-radius:14px;background:linear-gradient(145deg,rgba(16,37,75,.55),rgba(9,20,45,.72))}
-      .agent-reality .reality-block-head{display:flex;align-items:center;gap:8px;color:#bcecff;font-size:12px;font-weight:700;margin-bottom:12px}
-      .agent-reality .reality-block-head span{margin-left:auto;color:#6f8dbb;font:9px ui-monospace,monospace;letter-spacing:.12em}
-      .agent-reality .reality-git-target{display:grid;grid-template-columns:1fr 1fr;gap:9px}
-      .agent-reality .reality-git-target>div,.agent-reality .reality-result-strip>div{padding:10px 12px;border:1px solid rgba(127,158,218,.14);border-radius:10px;background:rgba(3,12,30,.45);min-width:0}
-      .agent-reality .reality-git-target small,.agent-reality .reality-result-strip small{display:block;color:#7893bd;font-size:10px;margin-bottom:5px}
-      .agent-reality .reality-git-target strong,.agent-reality .reality-result-strip strong{display:block;color:#e8f4ff;font-size:12px;overflow-wrap:anywhere}
-      .agent-reality .reality-data-list{margin-top:10px;display:grid;gap:6px}
-      .agent-reality .reality-data-row{display:flex;align-items:center;gap:8px;padding:8px;border-radius:8px;background:rgba(7,18,39,.72);color:#c9e7ff;font-size:11px}
-      .agent-reality .reality-data-row span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .agent-reality .reality-data-row small{color:#7691b9}
-      .agent-reality .reality-data-chip{display:flex;align-items:center;gap:7px;margin-top:10px;padding:9px;border-radius:8px;background:rgba(8,22,46,.72);color:#b9d5f7;font-size:11px}
-      .agent-reality .reality-code-preview{max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;padding:12px;border-radius:9px;background:#050d1e;border:1px solid rgba(114,151,221,.15);color:#c5e8ff;font:11px/1.6 ui-monospace,monospace;margin-top:10px}
-      .agent-reality .reality-browser-bar{padding:9px 12px;border-radius:9px;background:#071329;color:#a9c8eb;font:11px ui-monospace,monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-      .agent-reality .reality-browser-bar span{display:inline-block;width:7px;height:7px;border-radius:50%;background:#55dfb3;margin-right:8px}
-      .agent-reality .reality-browser-title{padding:10px 2px;color:#e5efff;font-size:13px;font-weight:650}
-      .agent-reality .reality-screenshot{width:100%;max-height:260px;object-fit:contain;border-radius:9px;border:1px solid rgba(133,166,235,.2);background:#050b18}
-      .agent-reality .reality-empty-visual{padding:13px;border:1px dashed rgba(131,159,220,.2);border-radius:9px;color:#90a7cb;font-size:12px;line-height:1.7}
-      .agent-reality .reality-source-list{display:grid;gap:7px}
-      .agent-reality .reality-source{display:flex;align-items:flex-start;gap:10px;padding:9px;border-radius:9px;background:rgba(5,17,39,.65);border:1px solid rgba(111,164,231,.12)}
-      .agent-reality .reality-source-index{font:11px ui-monospace,monospace;color:#66d8ff;padding-top:2px}
-      .agent-reality .reality-source strong{font-size:11px;color:#d8eaff}.agent-reality .reality-source p{font-size:10px;color:#8fa9ce;margin-top:4px;line-height:1.5}
-      .agent-reality .reality-source>span{margin-left:auto;font:9px ui-monospace,monospace;color:#76b9ef}
-      .agent-reality .reality-approval{display:flex;gap:12px;align-items:center;margin:14px;padding:16px;border-radius:12px;border:1px solid rgba(246,190,83,.28);background:rgba(120,76,14,.12);color:#f9d58a}
-      .agent-reality .reality-approval strong{font-size:13px}.agent-reality .reality-approval p{font-size:12px;margin-top:4px;color:#d9c69e}
-      .agent-reality .reality-result-strip{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:0 14px 12px}
-      .agent-reality .reality-raw{margin:0 14px 14px;border:1px solid rgba(127,158,218,.15);border-radius:10px;background:rgba(4,11,27,.45);padding:10px}
-      .agent-reality .reality-raw summary{cursor:pointer;color:#8da8ce;font-size:11px}.agent-reality .reality-raw pre{max-height:260px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#b6d2f5;font:10px/1.5 ui-monospace,monospace;margin-top:10px}
-      @media(max-width:760px){.agent-reality .ar-orbit{min-height:200px}.agent-reality .reality-result-strip{grid-template-columns:1fr}.agent-reality .reality-action-summary{align-items:flex-start;flex-wrap:wrap}}
-      @media(prefers-reduced-motion:reduce){.agent-reality *{animation:none!important;transition:none!important}}
-    `}</style>
-
-    <header className="ar-top shrink-0 px-5 py-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3"><div className="grid h-10 w-10 place-items-center rounded-xl border border-cyan-300/25 bg-cyan-300/10 text-cyan-200"><Network size={19}/></div><div><div className="flex items-center gap-2"><h2 className="text-sm font-bold tracking-wide text-white">AGENT REALITY ENGINE</h2><span className={`rounded-full border px-2 py-0.5 text-[10px] ${live?"border-cyan-300/30 bg-cyan-300/10 text-cyan-100":"border-indigo-200/15 bg-indigo-200/5 text-indigo-100/65"}`}>{live?"LIVE EXECUTION":"SESSION TRACE"}</span></div><p className="mt-1 text-xs text-indigo-100/55">{message?.userPrompt||"Agent 的真实行动将在这里形成动态执行空间"}</p></div></div>
-        <div className="flex items-center gap-4 text-[11px] text-indigo-100/65"><span><b className="text-white">{complete}</b> / {total} 已完成</span><span><b className="text-white">{failed}</b> 异常</span><span>Token <b className="text-white">{typeof message?.tokens==="number"?message.tokens.toLocaleString():"未上报"}</b></span></div>
-      </div>
-      <div className="mt-4 h-1 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-gradient-to-r from-violet-500 via-blue-400 to-cyan-300 transition-all duration-500" style={{width:percent+"%"}}/></div>
-    </header>
-
-    <div className="min-h-0 flex-1 overflow-y-auto ar-grid p-4">
-      {ordered.length===0 ? <div className="flex min-h-full flex-col items-center justify-center text-center"><div className="ar-orbit grid h-40 w-40 place-items-center rounded-full"><div className="ar-pulse grid h-16 w-16 place-items-center rounded-2xl border border-cyan-300/35 bg-cyan-300/10 text-cyan-100"><BrainCircuit size={30}/></div></div><h3 className="mt-6 text-lg font-bold text-white">{isThinking?"等待 Agent 发出第一条真实行动":"等待任务启动"}</h3><p className="mt-2 max-w-md text-sm leading-6 text-indigo-100/55">这里不会播放预制动画。每个行动节点都来自 Agent 实际发出的事件；事件到达后，行动网络会逐步展开。</p></div> :
-      <div className="grid min-h-full grid-cols-1 gap-4 2xl:grid-cols-[minmax(0,1.02fr)_minmax(390px,0.98fr)]">
-        <div className="flex min-h-0 flex-col gap-3">
-          <div className="flex items-center justify-between"><div><div className="text-[10px] font-mono tracking-[.18em] text-cyan-200/60">LIVE ACTION TOPOLOGY</div><h3 className="mt-1 text-sm font-bold text-white">行动网络 <span className="ml-2 text-xs font-normal text-indigo-100/45">由真实事件动态构建</span></h3></div><div className="flex items-center gap-2 text-[10px] text-indigo-100/45"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_#67e8f9]"/>{total} EVENTS</div></div>
-          <div className="ar-orbit ar-grid rounded-2xl p-4">
-            <div className="relative z-10 grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {ordered.map((step,index)=>{
-                const kind=adapterOf(step), meta=adapterMeta[kind], Icon=meta.icon, state=status[step.status]||status.unknown;
-                const StateIcon=state.icon, active=selected?.stepId===step.stepId;
-                const label=toolOf(step)||step.rightTitle||step.leftTitle||"未命名事件";
-                const summary=step.rightSubtitle||step.leftSummary||"执行端未上报说明";
-                return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-pressed={active} className="ar-node rounded-xl p-3 text-left">
-                  <div className="flex items-center justify-between gap-2"><span className="font-mono text-[9px] tracking-widest text-indigo-200/40">NODE {String(index+1).padStart(2,"0")}</span><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] ${state.color==="emerald"?"border-emerald-300/20 bg-emerald-300/10 text-emerald-200":state.color==="cyan"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-100":state.color==="rose"?"border-rose-300/20 bg-rose-300/10 text-rose-200":state.color==="amber"?"border-amber-300/20 bg-amber-300/10 text-amber-100":"border-white/10 bg-white/5 text-slate-300"}`}><StateIcon size={10}/>{state.label}</span></div>
-                  <div className="mt-2 flex items-center gap-2"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${kind==="git"?"border-violet-300/25 bg-violet-300/10 text-violet-200":kind==="browser"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-200":kind==="retrieval"?"border-blue-300/25 bg-blue-300/10 text-blue-200":kind==="approval"?"border-amber-300/25 bg-amber-300/10 text-amber-200":"border-indigo-300/20 bg-indigo-300/10 text-indigo-100"}`}><Icon size={17}/></span><span className="min-w-0"><strong className="block truncate text-xs text-white">{label}</strong><small className="mt-1 block truncate text-[10px] text-indigo-100/50">{meta.label} · {phaseLabels[step.phase]||"执行事件"}</small></span></div>
-                  <p className="mt-2 line-clamp-2 text-[10px] leading-4 text-indigo-100/60">{summary}</p>
-                </button>
-              })}
-            </div>
-            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)||current.rightTitle||"未命名事件"):"等待下一条事件"}</span></div>
-          </div>
-          <div className="ar-panel rounded-xl p-3"><div className="flex items-center gap-2 text-xs font-semibold text-indigo-100"><Activity size={14} className="text-cyan-300"/>执行信号</div><div className="mt-2 grid grid-cols-3 gap-2"><div><small className="text-[10px] text-indigo-100/40">实际事件</small><strong className="block text-lg text-white">{total}</strong></div><div><small className="text-[10px] text-indigo-100/40">完成比例</small><strong className="block text-lg text-white">{percent}%</strong></div><div><small className="text-[10px] text-indigo-100/40">本轮耗时</small><strong className="block text-lg text-white">{message?.duration||"未上报"}</strong></div></div></div>
-        </div>
-        <div className="ar-panel min-h-[420px] overflow-hidden rounded-2xl">
-          {selected?<><div className="flex items-center justify-between border-b border-indigo-200/10 px-4 py-3"><div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_#67e8f9]"/><span className="text-xs font-bold tracking-wide text-white">SELECTED ACTION / 行动现场</span></div><span className="font-mono text-[9px] text-indigo-100/40">EVENT {ordered.findIndex(step=>step.stepId===selected.stepId)+1}</span></div><div className="max-h-[calc(100%-48px)] overflow-y-auto"><ActionVisual step={selected}/></div></>:<div className="grid h-full place-items-center text-sm text-indigo-100/45">选择一个真实行动节点</div>}
-        </div>
-      </div>}
-    </div>
-  </section>;
+ const ordered=useMemo(()=>sortTimeline(timeline||[]),[timeline]);
+ const [localSelected,setLocalSelected]=useState<string|null>(null);
+ const selected=ordered.find(s=>s.stepId===activeStepId)||ordered.find(s=>s.stepId===localSelected)||ordered.find(s=>s.status==="running")||ordered[ordered.length-1];
+ const running=ordered.find(s=>s.status==="running"), failed=ordered.filter(s=>s.status==="failed").length, completed=ordered.filter(s=>s.status==="done"||s.status==="passed").length;
+ const live=!!isThinking||!!running;
+ const select=(s:AgentStep)=>{setLocalSelected(s.stepId);onSelectStep?.(s.stepId)};
+ const points=ordered.map((step,index)=>{const angle=-Math.PI/2+index*2.399963229728653,r=Math.min(35,12+Math.sqrt(index+1)*8);return {step,x:50+Math.cos(angle)*r,y:50+Math.sin(angle)*r*.72}});
+ const get=(obj:any,keys:string[])=>{for(const k of keys){const v=k.split(".").reduce((a:any,p:string)=>a?.[p],obj);if(v!==undefined&&v!==null)return v}return undefined};
+ const fmt=(v:any)=>v===undefined||v===null?"未上报":typeof v==="string"?v:JSON.stringify(v,null,2);
+ const dur=(v?:number)=>typeof v!=="number"||!Number.isFinite(v)||v<0?"未上报":v>=1000?(v/1000).toFixed(2)+"s":Math.round(v)+"ms";
+ const title=(s:AgentStep)=>String(get(s.rightDetail||{},["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName"])||s.rightTitle||s.leftTitle||phaseLabels[s.phase]||"执行事件");
+ const summary=(s:AgentStep)=>s.rightSubtitle||s.leftSummary||"执行端未上报说明";
+ const colors:Record<string,string>={running:"#67e8f9",done:"#6ee7b7",passed:"#6ee7b7",failed:"#fb7185",pending:"#94a3b8",unknown:"#fbbf24"};
+ const detail=selected?.rightDetail||{};
+ const prompt=get(detail,["gen_ai.input.messages","prompt_messages","promptMessages","messages","llm_messages"]);
+ const response=get(detail,["gen_ai.output.messages","model_response","modelResponse","completion","assistant_message"]);
+ const args=get(detail,["gen_ai.tool.call.arguments","mcp.tool.arguments","arguments","args","parameters","tool_input","input"]);
+ const result=get(detail,["gen_ai.tool.call.result","mcp.tool.result","result","tool_result","tool_output","output","response"]);
+ const model=get(detail,["gen_ai.request.model","model","actual_model","modelName"]), provider=get(detail,["gen_ai.system","provider","provider_route"]);
+ const inputTokens=get(detail,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]), outputTokens=get(detail,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]), totalTokens=get(detail,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
+ const error=get(detail,["error","error.message","error_message","exception"]);
+ const modelEvent=!!selected&&(selected.phase==="llm"||model!==undefined||prompt!==undefined);
+ const Icon=selected?adapterMeta[adapterOf(selected)].icon:BrainCircuit;
+ return <section className="dream-orbit h-full min-h-0 flex flex-col text-slate-100" style={{background:"radial-gradient(ellipse at 50% 40%,rgba(54,77,165,.28),transparent 42%),linear-gradient(145deg,#050817,#0b1028 55%,#09091b)",overflow:"hidden",position:"relative"}}>
+ <style>{".dream-orbit .dream-node{position:absolute;transform:translate(-50%,-50%);width:clamp(92px,13vw,145px);min-height:54px;display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px solid rgba(143,180,255,.25);border-radius:14px;background:linear-gradient(140deg,rgba(22,37,78,.96),rgba(9,16,40,.96));box-shadow:0 10px 30px #0005;color:#e5f0ff;text-align:left;z-index:3;transition:all .25s}.dream-orbit .dream-node[aria-pressed=true]{border-color:#7debff;box-shadow:0 0 0 1px #69ddff44,0 0 30px #4abfff55;background:linear-gradient(140deg,#23517c,#27215e)}.dream-orbit .dream-node:hover{transform:translate(-50%,-50%) scale(1.05)}.dream-orbit .dream-ring{position:absolute;left:50%;top:50%;width:66%;height:55%;border:1px solid #74c9ff28;border-radius:50%;transform:translate(-50%,-50%) rotate(-22deg)}.dream-orbit .dream-ring.r2{width:84%;height:76%;transform:translate(-50%,-50%) rotate(35deg);border-color:#af8fff28}.dream-orbit .dream-ring.r3{width:46%;height:90%;transform:translate(-50%,-50%) rotate(68deg);border-color:#70e7d81c}.dream-orbit .dream-core{position:absolute;left:50%;top:50%;width:112px;height:112px;transform:translate(-50%,-50%);display:grid;place-items:center;border-radius:50%;background:radial-gradient(circle,#80ebff44,#616ee822 50%,transparent 72%);filter:drop-shadow(0 0 28px #53c2ff55)}.dream-orbit .dream-core:before,.dream-orbit .dream-core:after{content:'';position:absolute;inset:12px;border:1px solid #84e1ff88;border-radius:50%;animation:dreamPulse 4s ease-in-out infinite}.dream-orbit .dream-core:after{inset:-9px;border-color:#b392ff55;transform:rotateX(66deg);animation:dreamSpin 22s linear infinite}.dream-orbit .dream-inspector{border:1px solid #95a8ff2b;border-radius:22px;background:linear-gradient(155deg,#111b3df0,#080d21f5);overflow:auto}.dream-orbit .dream-box{margin:10px 14px;padding:11px;border:1px solid #89a5eb2b;border-radius:12px;background:#040a1c99}.dream-orbit .dream-box pre{max-height:190px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#c7d9f5;font:10px/1.6 ui-monospace,monospace}.dream-orbit .dream-label{font-size:10px;color:#8fb9dc;font-weight:700;margin-bottom:7px}.dream-orbit .dream-scroll::-webkit-scrollbar{width:5px}.dream-orbit .dream-scroll::-webkit-scrollbar-thumb{background:#849ee455;border-radius:8px}@keyframes dreamPulse{50%{opacity:1;box-shadow:0 0 35px #60caff66}}@keyframes dreamSpin{to{transform:rotateX(66deg) rotateZ(335deg)}}@media(max-width:1050px){.dream-orbit .dream-layout{grid-template-columns:minmax(0,1fr)!important;overflow:auto}.dream-orbit .dream-world{min-height:430px}.dream-orbit .dream-inspector{min-height:380px}}@media(max-width:640px){.dream-orbit .dream-node{width:92px;padding:6px}.dream-orbit .dream-layout{padding:8px!important}.dream-orbit .dream-world{min-height:380px}}@media(prefers-reduced-motion:reduce){.dream-orbit *{animation:none!important;transition:none!important}}"}
+ </style>
+ <header className="relative z-10 flex items-center gap-4 border-b border-indigo-200/10 bg-indigo-950/30 px-5 py-4">
+  <div className="grid h-11 w-11 place-items-center rounded-2xl border border-cyan-200/30 bg-cyan-300/10 text-cyan-100 shadow-lg shadow-cyan-500/10"><Orbit size={22}/></div>
+  <div className="min-w-0"><div className="text-[9px] font-mono tracking-[.22em] text-cyan-200/80">OWNAGENT · REALITY ENGINE</div><h2 className="text-sm font-black tracking-[.14em] text-white">DREAM ORBIT</h2><p className="mt-1 max-w-[48vw] truncate text-[11px] text-indigo-100/55">{message?.userPrompt||"Agent 的每一次真实行动，都会在这里留下轨迹"}</p></div>
+  <div className="ml-auto flex items-center gap-4 text-[10px] text-indigo-100/55"><span><b className="block text-base text-white">{ordered.length}</b>已采集事件</span><span><b className="block text-base text-white">{completed}</b>已完成</span>{failed>0&&<span><b className="block text-base text-rose-300">{failed}</b>异常</span>}<span className="rounded-full border border-cyan-300/25 bg-cyan-300/10 px-3 py-1.5 font-mono text-cyan-100">{live?"● LIVE":ordered.length?"◉ SESSION":"○ STANDBY"}</span></div>
+ </header>
+ <div className="dream-layout relative z-10 grid min-h-0 flex-1 grid-cols-[minmax(0,1.12fr)_minmax(330px,.88fr)] gap-4 overflow-hidden p-4">
+  <div className="dream-world relative flex min-h-[420px] flex-col overflow-hidden rounded-[24px] border border-indigo-200/15 bg-slate-950/25 shadow-2xl shadow-black/20">
+   <div className="relative z-10 flex items-center justify-between px-5 py-4"><div><div className="text-[9px] font-mono tracking-[.2em] text-cyan-200/70">THE EXECUTION UNIVERSE</div><h3 className="mt-1 text-xs font-bold text-white">行动宇宙</h3><p className="mt-1 text-[10px] text-indigo-100/45">真实事件抵达时，星体才会出现</p></div><span className="font-mono text-[9px] text-indigo-100/45">{String(ordered.length).padStart(2,"0")} SIGNALS</span></div>
+   <div className="relative min-h-[320px] flex-1 overflow-hidden" style={{backgroundImage:"radial-gradient(1px 1px at 20% 20%,#fff8 50%,transparent),radial-gradient(1px 1px at 70% 15%,#b8eaff99 50%,transparent),radial-gradient(1px 1px at 82% 76%,#fff8 50%,transparent)",backgroundSize:"160px 140px"}}>
+    <div className="dream-ring"/><div className="dream-ring r2"/><div className="dream-ring r3"/>
+    <div className="dream-core"><div className="relative z-10 grid h-14 w-14 place-items-center rounded-2xl border border-cyan-100/40 bg-gradient-to-br from-cyan-400/20 to-violet-500/30 text-cyan-100 shadow-xl shadow-cyan-400/20"><BrainCircuit size={27}/></div><span className="absolute top-[calc(100%+10px)] whitespace-nowrap font-mono text-[9px] tracking-[.18em] text-cyan-100/70">AGENT CORE</span></div>
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">{points.map(p=><line key={p.step.stepId} x1="50" y1="50" x2={p.x} y2={p.y} stroke="rgba(116,207,255,.34)" strokeWidth=".22" strokeDasharray="1.2 1.8"/>)}</svg>
+    {points.map(({step,x,y})=>{const I=adapterMeta[adapterOf(step)].icon;return <button key={step.stepId} type="button" className="dream-node" style={{left:x+"%",top:y+"%","--node-color":colors[step.status]||colors.unknown} as React.CSSProperties} onClick={()=>select(step)} aria-pressed={selected?.stepId===step.stepId}><span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg border border-cyan-200/20 bg-cyan-300/10 text-cyan-100"><I size={14}/></span><span className="min-w-0"><b className="block truncate text-[10px]">{title(step)}</b><small className="mt-1 block truncate text-[9px] text-indigo-100/50">{phaseLabels[step.phase]||"执行事件"} · {dur(step.durationMs)}</small></span><i className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full" style={{background:colors[step.status]||colors.unknown,boxShadow:"0 0 9px currentColor"}}/></button>})}
+    {ordered.length===0&&<div className="absolute inset-0 flex flex-col items-center justify-center px-8 text-center"><Sparkles size={34} className="text-cyan-200"/><h3 className="mt-4 text-sm font-semibold text-white">{live?"正在等待第一束信号":"等待 Agent 苏醒"}</h3><p className="mt-3 max-w-xs text-xs leading-6 text-indigo-100/55">当 Agent 真正调用模型、使用工具或执行操作时，这里才会生成对应星体。没有上报的步骤不会被虚构。</p></div>}
+   </div>
+   <div className="relative z-10 flex items-center justify-between border-t border-indigo-200/10 px-5 py-3 text-[10px] text-indigo-100/50"><span>当前聚焦：<b className="text-cyan-100">{active?title(active):"等待任务启动"}</b></span><span>{live?"信号流入中":"事件轨迹已静止"}</span></div>
+  </div>
+  <aside className="dream-inspector dream-scroll min-h-0">
+   {selected?<><div className="flex items-start gap-3 border-b border-indigo-200/10 p-5"><div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl border border-cyan-200/25 bg-cyan-300/10 text-cyan-100">{React.createElement(Icon,{size:21})}</div><div className="min-w-0 flex-1"><div className="text-[9px] font-mono tracking-[.18em] text-cyan-200/70">EVENT DETAIL / {phaseLabels[selected.phase]||"EXECUTION"}</div><h3 className="mt-1 break-words text-sm font-bold text-white">{title(selected)}</h3><p className="mt-1 text-[11px] leading-5 text-indigo-100/55">{summary(selected)}</p></div><span className="text-[10px]" style={{color:colors[selected.status]||colors.unknown}}>{status[selected.status]?.label||"状态未上报"}</span></div>
+    <div className="grid grid-cols-2 gap-2 border-b border-indigo-200/10 p-3 sm:grid-cols-4"><div className="rounded-xl border border-indigo-200/10 bg-black/20 p-2"><small className="text-[9px] text-indigo-100/40">持续时间</small><b className="mt-1 block text-[11px] text-white">{dur(selected.durationMs)}</b></div><div className="rounded-xl border border-indigo-200/10 bg-black/20 p-2"><small className="text-[9px] text-indigo-100/40">模型</small><b className="mt-1 block break-all text-[11px] text-white">{fmt(model)}</b></div><div className="rounded-xl border border-indigo-200/10 bg-black/20 p-2"><small className="text-[9px] text-indigo-100/40">Provider</small><b className="mt-1 block break-all text-[11px] text-white">{fmt(provider)}</b></div><div className="rounded-xl border border-indigo-200/10 bg-black/20 p-2"><small className="text-[9px] text-indigo-100/40">Token 总量</small><b className="mt-1 block text-[11px] text-white">{fmt(totalTokens)}</b></div></div>
+    {modelEvent?<section className="border-b border-indigo-200/10 p-4"><div className="mb-3 flex items-center gap-2 text-[11px] font-bold text-cyan-100"><BrainCircuit size={15}/>模型这一轮实际收到了什么</div>{Array.isArray(prompt)?prompt.map((m:any,i:number)=><div className="dream-box" key={i}><div className="dream-label">{String(m?.role||"message").toUpperCase()}</div><pre>{fmt(m?.content??m?.message??m)}</pre></div>):<div className="dream-box"><div className="dream-label">实际请求消息</div><pre>{fmt(prompt)}</pre></div>}<div className="dream-box"><div className="dream-label">模型实际响应</div><pre>{fmt(response)}</pre></div><div className="flex gap-4 px-1 text-[10px] text-indigo-100/65"><span>↓ 输入 Token：{fmt(inputTokens)}</span><span>↑ 输出 Token：{fmt(outputTokens)}</span></div><p className="mt-3 text-[9px] text-indigo-100/35">这里只展示实际采集到的请求与响应，不展示或推测模型隐藏思维链。</p></section>:<section className="border-b border-indigo-200/10 p-4"><div className="mb-3 flex items-center gap-2 text-[11px] font-bold text-cyan-100"><Zap size={15}/>这次行动的真实输入与结果</div><div className="dream-box"><div className="dream-label">实际输入 / 参数</div><pre>{fmt(args)}</pre></div><div className="dream-box"><div className="dream-label">执行端实际返回</div><pre>{fmt(result)}</pre></div></section>}
+    {error!==undefined&&<div className="dream-box border-rose-300/20"><div className="dream-label text-rose-200">异常详情</div><pre>{fmt(error)}</pre></div>}
+    <details className="m-3 rounded-xl border border-indigo-200/10 bg-black/20 p-3"><summary className="cursor-pointer text-[10px] text-indigo-100/60">展开原始事件数据</summary><pre className="mt-3 max-h-56 overflow-auto whitespace-pre-wrap break-all text-[9px] leading-5 text-indigo-100/60">{fmt(detail)}</pre></details>
+   </>:<div className="flex h-full flex-col items-center justify-center p-8 text-center"><Layers3 size={30} className="text-cyan-200"/><h3 className="mt-4 text-sm font-semibold">等待第一条真实事件</h3><p className="mt-2 text-xs leading-6 text-indigo-100/50">选择星体后，这里会展开它的真实请求、输入、输出、Token 和异常信息。</p></div>}
+  </aside>
+ </div>
+ </section>;
 };
