@@ -208,6 +208,7 @@ export default function ChatPlaygroundPage({
   const [inputMessage, setInputMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [isExternalRunsOpen, setIsExternalRunsOpen] = useState(false);
+  const [runExplorerTarget, setRunExplorerTarget] = useState<{ sessionId: string; runId: string } | null>(null);
   const [sessionBootstrapReady, setSessionBootstrapReady] = useState(false);
   const dreamResponseHandledRef = useRef(false);
   useEffect(() => { dreamResponseHandledRef.current = false; }, [dreamSeed]);
@@ -1831,7 +1832,13 @@ export default function ChatPlaygroundPage({
                                 <>
                                   <span>·</span>
                                   <button
-                                    onClick={() => setIsExternalRunsOpen(true)}
+                                    onClick={() => {
+                                      const runId = String(msg.runId || msg.trace?.runId || "");
+                                      if (runId) {
+                                        setRunExplorerTarget({ sessionId: String(msg.sessionId || currentSessionId), runId });
+                                        setIsExternalRunsOpen(true);
+                                      }
+                                    }}
                                     className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
                                     title={`Run ID: ${msg.runId || msg.trace?.runId} · Trace ID: ${msg.traceId || msg.trace?.traceId || "—"}`}
                                   >
@@ -2006,7 +2013,11 @@ export default function ChatPlaygroundPage({
       {isExternalRunsOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-950/40 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="外部 Agent 执行记录">
           <div className="mx-auto h-full w-full max-w-7xl overflow-hidden rounded-2xl shadow-2xl">
-            <RunsPage onClose={() => setIsExternalRunsOpen(false)} />
+            <RunsPage
+              initialChatSessionId={runExplorerTarget?.sessionId}
+              initialChatRunId={runExplorerTarget?.runId}
+              onClose={() => { setIsExternalRunsOpen(false); setRunExplorerTarget(null); }}
+            />
           </div>
         </div>
       )}
