@@ -205,7 +205,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         phase: "context",
         status: data.status == null ? "unknown" : normalizeStatus(data.status),
         leftTitle: "Knowledge retrieval",
-        leftSummary: `Retrieved ${items.length} source item(s)`,
+        leftSummary: Array.isArray(data.items) ? `Retrieved ${items.length} source item(s)` : "Source list not reported",
         rightTitle: "Retrieved sources",
         rightSubtitle: "",
         rightDetail: { ...data, items },
