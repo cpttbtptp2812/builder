@@ -308,7 +308,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                 <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div>
                     <h3 className="text-xs font-semibold text-slate-800">导入并保存 Promptfoo 评估报告</h3>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-500">报告会按 Agent API Key 归属保存到 OwnAgent；服务端会剔除 analysis / reasoning 等内部字段。导入前仍请检查并脱敏敏感数据。</p>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-500">报告会按 Agent API Key 归属保存；可选关联该 Agent 已存在的 Run ID。服务端会剔除内部推理字段和 analysis 消息。导入前仍请检查并脱敏业务敏感数据。</p>
                   </div>
                   <input type="password" autoComplete="off" value={promptfooApiKey} onChange={(event) => { setPromptfooApiKey(event.target.value); setPromptfooHistory([]); setPromptfooSaved(null); setPromptfooReport(null); }} placeholder="目标 Agent API Key" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                   <input type="text" autoComplete="off" value={promptfooRunId} onChange={(event) => setPromptfooRunId(event.target.value)} placeholder="关联 Run ID（可选；必须属于此 Agent）" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
