@@ -167,7 +167,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         </div>
       ) : (
         <div className="relative grid gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(250px,0.82fr)_minmax(0,1.18fr)] lg:items-start">
-          <div className="min-w-0">
+          <div className="min-w-0 order-2 lg:order-1">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-indigo-500"/>执行路径 <span className="font-normal text-slate-400">· {ordered.length} 个事件</span></div>
             <span className="text-[9px] text-slate-400">选择步骤查看详情</span>
