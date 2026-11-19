@@ -178,7 +178,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         phase: "skill",
         status,
         leftTitle: `Tool: ${toolName}`,
-        leftSummary: data.message ?? (data.status == null ? undefined : String(data.status)),
+        leftSummary: data.message ?? (data.status == null ? undefined : typeof data.status === "object" ? data.status.message ?? data.status.name : String(data.status)),
         rightTitle: toolName,
         rightSubtitle: data.description,
         rightDetail: data,
