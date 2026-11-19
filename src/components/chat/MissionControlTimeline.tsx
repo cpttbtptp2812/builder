@@ -104,6 +104,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const detail = selected?.rightDetail || {};
   const promptMessages = readCaptured(detail, ["prompt_messages","promptMessages","messages","llm_messages"]);
   const modelResponse = readCaptured(detail, ["model_response","modelResponse","completion","assistant_message"]);
+  const modelName = readCaptured(detail, ["actual_model","model"]);
+  const providerName = readCaptured(detail, ["provider","provider_route"]);
+  const modelRound = readCaptured(detail, ["model_step","modelStep"]);
   const toolSchema = readCaptured(detail, ["tool_schema","toolSchema","tools"]);
   const toolArguments = readCaptured(detail, ["tool_arguments","toolArguments","arguments","args","parameters","tool_input"]);
   const toolResult = readCaptured(detail, ["tool_result","toolResult","result","tool_output"]);
@@ -201,6 +204,11 @@ export const MissionControlTimeline: React.FC<Props> = ({
               <div className="px-3 py-2.5">
                 <p className="mb-2 text-[10px] leading-4 text-slate-600">{description}</p>
                 <div className="space-y-2">
+                  {(modelName !== undefined || providerName !== undefined || modelRound !== undefined) && <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[9px] text-slate-600">
+                    {modelName !== undefined && <span><b className="font-semibold text-slate-700">模型</b> {pretty(modelName)}</span>}
+                    {providerName !== undefined && <span><b className="font-semibold text-slate-700">渠道</b> {pretty(providerName)}</span>}
+                    {modelRound !== undefined && <span><b className="font-semibold text-slate-700">轮次</b> {pretty(modelRound)}</span>}
+                  </div>}
                   {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
                     <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-800"><BrainCircuit className="h-3.5 w-3.5"/>实际发送给模型的提示词</div><span className="text-[9px] text-indigo-500">{Array.isArray(promptMessages) ? `${promptMessages.length} 条消息` : "内容预览（已截断）"}</span></div>
                     {Array.isArray(promptMessages) ? <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-md border border-indigo-100 bg-white">
