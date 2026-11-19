@@ -10,7 +10,7 @@
     "noEmit": true,
     "isolatedModules": true,
     "baseUrl": ".",
-    "paths": { "@/*": ["src/*"] }
+    "paths": { "@/*": ["src/*"], "@evilmartians/agent-prism-types": ["src/vendor/agent-prism/packages/types/src/index.ts"] }
   },
   "include": ["src"]
 }

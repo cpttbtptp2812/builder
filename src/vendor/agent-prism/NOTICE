@@ -1,0 +1,5 @@
+AgentPrism data and type source is vendored from https://github.com/evilmartians/agent-prism
+Upstream commit: 4fd371b5e4f25acd04278e94a0d4b21e543eb42c
+License: MIT. The upstream LICENSE is preserved in this directory.
+Only the OpenTelemetry data adapter and its required type/util modules are vendored;
+the AgentPrism UI component package is not included.

@@ -25,6 +25,7 @@ export default defineConfig(({ command }) => ({
   plugins: [skipHeavyModules(), react(), tailwindcss()],
   resolve: {
     alias: [
+      { find: "@evilmartians/agent-prism-types", replacement: path.resolve(root, "src/vendor/agent-prism/packages/types/src/index.ts") },
       { find: "@", replacement: path.resolve(root, "src") },
       {
         find: /^lucide-react\/dynamicIconImports(?:\.mjs|\.js)?$/,
