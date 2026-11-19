@@ -338,8 +338,11 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
       const rows = await response.json();
       setChatMessages((Array.isArray(rows) ? rows : []).map((message: any) => ({
         ...message,
-        traceSteps: parseStoredJson(message.traceStepsJson ?? message.traceSteps),
-        toolCalls: parseStoredJson(message.toolCallsJson ?? message.toolCalls),
+        // The legacy chat entity also stores a "reasoning" field. It is not part
+        // of the observable execution record and must not enter this UI state.
+        reasoning: undefined,
+        traceSteps: stripInternalReasoning(parseStoredJson(message.traceStepsJson ?? message.traceSteps)),
+        toolCalls: stripInternalReasoning(parseStoredJson(message.toolCallsJson ?? message.toolCalls)),
       })));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "读取内置对话失败");
