@@ -179,7 +179,8 @@ export function rebuildTimelineFromMessage(msg: {
 
   Object.entries(msg.traceSteps || {}).forEach(([key, data]) => {
     if (!data) return;
-    const seq = Number(key);
+    const keySeq = Number(key);
+    const seq = Number.isFinite(Number(data.seq)) ? Number(data.seq) : keySeq;
     const title = data.rightTitle ?? data.title ?? data.name ?? `Step ${seq}`;
     steps.push({
       stepId: String(data.stepId ?? data.spanId ?? `trace-step-${seq}`),
@@ -197,9 +198,13 @@ export function rebuildTimelineFromMessage(msg: {
   });
 
   (msg.toolCalls || []).forEach((tool, index) => {
+    const toolId = String(tool.id ?? tool.toolCallId ?? `history-tool-${index + 1}`);
+    // Newer messages persist full tool steps in traceSteps. Avoid duplicating
+    // the same call when the legacy toolCalls list is also present.
+    if (steps.some((step) => step.stepId === toolId)) return;
     const status = normalizeStatus(tool.status);
     steps.push({
-      stepId: String(tool.id ?? `history-tool-${index + 1}`),
+      stepId: toolId,
       seq: steps.length + 1,
       phase: "skill",
       status,
