@@ -69,6 +69,27 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const detailRequestId = useRef(0);
 
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
+  const timelineSpans = selected?.spans ?? [];
+  const timelineStart = timelineSpans.length
+    ? Math.min(...timelineSpans.map((span) => Date.parse(span.startedAt || "") || 0))
+    : 0;
+  const timelineEnd = timelineSpans.length
+    ? Math.max(...timelineSpans.map((span) => Date.parse(span.endedAt || span.startedAt || "") || timelineStart))
+    : timelineStart;
+  const timelineRange = Math.max(1, timelineEnd - timelineStart);
+  const spanDepth = (span: TraceSpan) => {
+    let depth = 0;
+    let parentId = span.parentSpanId || null;
+    const seen = new Set([span.spanId]);
+    while (parentId && depth < 8 && !seen.has(parentId)) {
+      seen.add(parentId);
+      const parent = timelineSpans.find((item) => item.spanId === parentId);
+      if (!parent) break;
+      depth += 1;
+      parentId = parent.parentSpanId || null;
+    }
+    return depth;
+  };
 
   const loadRunDetail = async (runId: string, key = apiKey) => {
     const requestId = ++detailRequestId.current;
@@ -229,6 +250,40 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                 </div>
               </div>
               <div className="max-h-[70vh] space-y-3 overflow-auto p-4">
+                {selected.spans.length > 0 && (
+                  <section className="rounded-lg border border-slate-200 bg-white p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 className="text-xs font-semibold text-slate-700">执行瀑布流</h3>
+                      <span className="text-[10px] text-slate-400">按真实 Span 起止时间排列；未结束的 Span 不补造结束时间</span>
+                    </div>
+                    <div className="mt-3 space-y-2">
+                      {selected.spans.map((span) => {
+                        const start = Date.parse(span.startedAt || "") || timelineStart;
+                        const end = span.endedAt ? (Date.parse(span.endedAt) || start) : start;
+                        const left = Math.max(0, Math.min(100, ((start - timelineStart) / timelineRange) * 100));
+                        const width = span.endedAt ? Math.max(0.8, Math.min(100 - left, ((end - start) / timelineRange) * 100)) : 0.8;
+                        const depth = spanDepth(span);
+                        const barColor = span.status === "ERROR" ? "bg-rose-500" : span.status === "OK" ? "bg-emerald-500" : "bg-amber-400";
+                        return (
+                          <div key={span.spanId} className="grid grid-cols-[minmax(120px,220px)_minmax(100px,1fr)_64px] items-center gap-3">
+                            <div className="min-w-0" style={{ paddingLeft: depth * 12 }}>
+                              <p className="truncate text-[11px] font-medium text-slate-700" title={span.name}>{span.name}</p>
+                              <p className="truncate font-mono text-[9px] text-slate-400">{span.spanKind || "INTERNAL"} · {span.status || "UNSET"}</p>
+                            </div>
+                            <div className="relative h-5 rounded bg-slate-50">
+                              <div className={`absolute top-1/2 h-2 -translate-y-1/2 rounded ${barColor}`} style={{ left: `${left}%`, width: `${width}%` }} title={span.endedAt ? `${span.durationMs ?? "?"} ms` : "结束时间未上报"} />
+                            </div>
+                            <span className="text-right text-[10px] tabular-nums text-slate-500">{span.durationMs == null ? "—" : `${span.durationMs} ms`}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="mt-3 flex justify-between border-t border-slate-100 pt-2 text-[10px] text-slate-400">
+                      <span>{timelineStart ? dateLabel(new Date(timelineStart).toISOString()) : "开始时间未上报"}</span>
+                      <span>{timelineEnd > timelineStart ? dateLabel(new Date(timelineEnd).toISOString()) : "结束时间未上报"}</span>
+                    </div>
+                  </section>
+                )}
                 {selected.events.length > 0 && (
                   <section className="rounded-lg border border-slate-200 bg-slate-50 p-4">
                     <h3 className="text-xs font-semibold text-slate-700">运行事件</h3>
