@@ -118,7 +118,7 @@ const statusItems = [
   { name: "OpenInference 自动埋点", detail: "OpenAI、OpenAI Agents、LangChain 与 MCP Trace 传播示例已提供，沿用标准 OTLP/JSON 上报", status: "可直接接入", icon: Workflow },
   { name: "OwnAgent Python SDK", detail: "Run / Span、父子关系、Provider Token Usage", status: "已实现", icon: Code2 },
   { name: "Langfuse / Phoenix 转发", detail: "后端已有可配置 OTLP 导出路径；需按实际部署完成端到端验证", status: "可配置", icon: GitBranch },
-  { name: "Promptfoo CLI", detail: "可复用上游 CLI；OwnAgent 提供配置指南与 JSON 报告预览，尚无服务端执行器", status: "外部接入", icon: Workflow },
+  { name: "Promptfoo CLI", detail: "可复用上游 CLI；OwnAgent 提供配置指南与 JSON / JSONL 报告预览，尚无服务端执行器", status: "外部接入", icon: Workflow },
   { name: "MCP Inspector", detail: "官方 Web / CLI / TUI 可在开发机独立启动；不复制其 UI", status: "外部工具可用", icon: PlugZap },
 ];
 
