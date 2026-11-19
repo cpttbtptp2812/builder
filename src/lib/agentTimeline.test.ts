@@ -76,6 +76,34 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(finished[0].rightDetail?.result, ["doc-1"]);
   });
 
+  it("merges tool and agent_step notifications for the same stable call ID", () => {
+    const fromToolEvent = applySseToTimeline([], "tool", {
+      tool: "search_docs",
+      toolCallId: "call-stable-7",
+      status: "success",
+      parameters: "{\\"query\\":\\"lease\\"}",
+      result: ["doc-1"],
+    });
+    const fromAgentStep = applySseToTimeline(fromToolEvent, "agent_step", {
+      stepId: "call-stable-7",
+      seq: 5,
+      phase: "skill",
+      status: "done",
+      title: "Search documents",
+      rightDetail: {
+        toolCallId: "call-stable-7",
+        tool_arguments: { query: "lease" },
+        tool_result: ["doc-1"],
+      },
+    });
+
+    assert.equal(fromAgentStep.length, 1);
+    assert.equal(fromAgentStep[0].stepId, "call-stable-7");
+    assert.deepEqual(fromAgentStep[0].rightDetail?.tool_arguments, { query: "lease" });
+    assert.deepEqual(fromAgentStep[0].rightDetail?.tool_result, ["doc-1"]);
+    assert.deepEqual(fromAgentStep[0].rightDetail?.result, ["doc-1"]);
+  });
+
   it("does not guess which concurrent same-name tool call a result belongs to", () => {
     let timeline = applySseToTimeline([], "tool", { tool: "lookup", status: "running" });
     timeline = applySseToTimeline(timeline, "tool", { tool: "lookup", status: "running" });
