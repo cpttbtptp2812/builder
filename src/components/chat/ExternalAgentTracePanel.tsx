@@ -237,7 +237,19 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const failedCount = spans.filter((span) => span.status === "ERROR").length;
 
   return (
-    <section className="mb-2 overflow-hidden rounded-xl border border-indigo-300/20 bg-[#0b1430]/90 shadow-[0_8px_28px_rgba(10,20,55,.12)]">
+    <section className="external-trace-cosmos mb-2 overflow-hidden rounded-xl border border-indigo-300/20 bg-[#0b1430]/90 shadow-[0_8px_28px_rgba(10,20,55,.12)]">
+      <style>{`
+        .external-trace-cosmos{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:#e9ecff}
+        .external-trace-cosmos .bg-\\[\\#0e1938\\]\/80{background:rgba(255,255,255,.025)!important}
+        .external-trace-cosmos .bg-white{background:rgba(255,255,255,.055)!important;border-color:rgba(174,164,255,.16)!important}
+        .external-trace-cosmos .bg-slate-50{background:rgba(255,255,255,.045)!important}
+        .external-trace-cosmos .border-slate-100,.external-trace-cosmos .border-slate-200{border-color:rgba(174,164,255,.16)!important}
+        .external-trace-cosmos .text-slate-800,.external-trace-cosmos .text-slate-700{color:#e8ecff!important}
+        .external-trace-cosmos .text-slate-600,.external-trace-cosmos .text-slate-500,.external-trace-cosmos .text-slate-400{color:#aab5dc!important}
+        .external-trace-cosmos pre{color:#e6ebff!important}
+        .external-trace-cosmos input{color:#f1f3ff!important;background:rgba(255,255,255,.06)!important;border-color:rgba(174,164,255,.2)!important}
+        .external-trace-cosmos input::placeholder{color:rgba(202,208,239,.45)!important}
+      `}</style>
       <button
         type="button"
         onClick={() => setDetailsOpen((value) => !value)}
