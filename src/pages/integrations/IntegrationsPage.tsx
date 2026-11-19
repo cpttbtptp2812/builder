@@ -89,7 +89,7 @@ const statusItems = [
   { name: "MCP Inspector", detail: "MCP 工具调试 UI 候选，尚未嵌入工作台", status: "待集成", icon: PlugZap },
 ];
 
-export default function IntegrationsPage() {
+export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => void }) {
   const [active, setActive] = useState<GuideKey>("sdk");
   const [copied, setCopied] = useState<"install" | "code" | null>(null);
   const guide = guides[active];
@@ -213,7 +213,7 @@ export default function IntegrationsPage() {
             <div className="text-sm font-semibold text-slate-800">接入完成后，去运行观测查看真实 Trace</div>
             <p className="mt-1 text-xs text-slate-500">按 Run、Session、Trace 搜索；展开每个 Span 查看属性、请求内容和错误。</p>
           </div>
-          <button onClick={() => window.dispatchEvent(new CustomEvent("ownagent:navigate", { detail: "runs" }))} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700">打开运行观测 <ArrowUpRight size={14} /></button>
+          <button onClick={onOpenRuns} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white transition hover:bg-indigo-700">打开运行观测 <ArrowUpRight size={14} /></button>
         </div>
       </div>
     </div>
