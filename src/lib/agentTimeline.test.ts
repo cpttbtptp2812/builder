@@ -29,6 +29,27 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(finished[0].rightDetail?.input, { goal: "find docs" });
   });
 
+  it("orders events by real timestamps instead of misleading phase sequence numbers", () => {
+    let timeline = applySseToTimeline([], "agent_step", {
+      stepId: "model-round-1",
+      seq: 44,
+      phase: "llm",
+      status: "done",
+      title: "模型请求",
+      timestamp: 2000,
+    });
+    timeline = applySseToTimeline(timeline, "agent_step", {
+      stepId: "tool-call-1",
+      seq: 5,
+      phase: "skill",
+      status: "done",
+      title: "工具执行",
+      timestamp: 3000,
+    });
+
+    assert.deepEqual(timeline.map((step) => step.stepId), ["model-round-1", "tool-call-1"]);
+  });
+
   it("preserves captured payloads from the event envelope and nested rightDetail", () => {
     const timeline = applySseToTimeline([], "agent_step", {
       stepId: "llm-42",
