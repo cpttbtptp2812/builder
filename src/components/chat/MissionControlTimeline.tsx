@@ -82,18 +82,18 @@ export const MissionControlTimeline: React.FC<Props> = ({
   // Use the same chronological ordering as the SSE reducer. Legacy history
   // without complete timestamps still falls back to sequence order.
   const ordered = useMemo(() => sortTimeline(timeline || []), [timeline]);
-  const selected = ordered.find(s => s.stepId === (activeStepId || selectedId));
+  const selected = ordered.find(s => s.stepId === (activeStepId || selectedId)) || ordered[0];
   const completed = ordered.filter(s => s.status === "done" || s.status === "passed").length;
   const failures = ordered.filter(s => s.status === "failed").length;
   const running = ordered.some(s => s.status === "running");
   const unknown = ordered.filter(s => s.status === "unknown").length;
   const state = isThinking || running ? {label:"正在执行",tone:"running"} : failures ? {label:"存在异常",tone:"failed"} : unknown ? {label:"部分状态未知",tone:"unknown"} : ordered.length && completed === ordered.length ? {label:"已完成",tone:"done"} : {label:"等待事件",tone:"waiting"};
   const stateClass: Record<string,string> = {
-    done:"bg-emerald-50 text-emerald-700 border-emerald-200",
-    running:"bg-indigo-50 text-indigo-700 border-indigo-200",
-    failed:"bg-rose-50 text-rose-700 border-rose-200",
-    unknown:"bg-amber-50 text-amber-700 border-amber-200",
-    waiting:"bg-slate-50 text-slate-600 border-slate-200",
+    done:"bg-emerald-400/10 text-emerald-200 border-emerald-300/25",
+    running:"bg-indigo-400/10 text-indigo-200 border-indigo-300/25",
+    failed:"bg-rose-400/10 text-rose-200 border-rose-300/25",
+    unknown:"bg-amber-400/10 text-amber-200 border-amber-300/25",
+    waiting:"bg-white/5 text-slate-300 border-white/10",
   };
   const select = (step: AgentStep) => {
     const next = selected?.stepId === step.stepId ? null : step.stepId;
@@ -128,8 +128,8 @@ export const MissionControlTimeline: React.FC<Props> = ({
   return (
     <section className="agent-journey relative overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-sm">
       <style>{`
-        .agent-journey{background:linear-gradient(145deg,#fff 0%,#fbfcff 100%);box-shadow:0 5px 22px rgba(35,53,91,.055)}
-        .agent-journey:before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(99,102,241,.075) .7px,transparent .7px);background-size:18px 18px;mask-image:linear-gradient(120deg,rgba(0,0,0,.34),transparent 72%);pointer-events:none}
+        .agent-journey{background:radial-gradient(ellipse at 78% 0%,rgba(129,140,248,.13),transparent 42%),radial-gradient(ellipse at 8% 35%,rgba(34,211,238,.08),transparent 38%),linear-gradient(145deg,#080f25 0%,#111a38 52%,#0b1530 100%);border-color:rgba(129,140,248,.28);color:#e8edff;box-shadow:0 18px 60px rgba(20,30,80,.22)}
+        .agent-journey:before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(165,180,252,.18) .7px,transparent .7px);background-size:24px 24px;mask-image:linear-gradient(120deg,rgba(0,0,0,.7),transparent 82%);pointer-events:none}.agent-journey header{border-color:rgba(165,180,252,.16)}.agent-journey h2,.agent-journey h3,.agent-journey .text-slate-900,.agent-journey .text-slate-800,.agent-journey .text-slate-700{color:#edf2ff}.agent-journey .text-slate-600,.agent-journey .text-slate-500,.agent-journey .text-slate-400{color:#9ba9cf}.agent-journey .journey-row{border-color:rgba(165,180,252,.12);background:rgba(255,255,255,.035)}.agent-journey .journey-row:hover{background:rgba(129,140,248,.12)}.agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(99,102,241,.24),rgba(34,211,238,.08));border-color:rgba(129,140,248,.58);box-shadow:inset 0 0 24px rgba(99,102,241,.08),0 0 24px rgba(99,102,241,.09)}.agent-journey .journey-json{background:rgba(3,8,24,.72);border-color:rgba(165,180,252,.2);color:#dbeafe}.agent-journey pre{color:#dbeafe}.agent-journey details{border-color:rgba(165,180,252,.18);background:rgba(255,255,255,.045)}.agent-journey details summary{color:#dbeafe}.agent-journey .journey-row-active .text-slate-800{color:#fff}.agent-journey .journey-row .text-emerald-600{color:#6ee7b7}.agent-journey .journey-row .text-indigo-600{color:#a5b4fc}.agent-journey .journey-row .text-amber-600{color:#fcd34d}
         .agent-journey .journey-row{transition:background .16s ease,border-color .16s ease}
         .agent-journey .journey-row:hover{background:#f8faff}
         .agent-journey .journey-row-active{background:#f3f5ff;border-color:#c7d2fe}
@@ -139,41 +139,42 @@ export const MissionControlTimeline: React.FC<Props> = ({
         @media(prefers-reduced-motion:reduce){.agent-journey *{animation:none!important;transition:none!important}}
       `}</style>
 
-      <header className="relative border-b border-slate-100 px-4 py-3">
+      <header className="relative border-b border-indigo-200/15 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
-            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Activity className="h-4 w-4"/></span>
+            <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-300/30 bg-indigo-400/15 text-cyan-200"><Activity className="h-4 w-4"/></span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-slate-900">Agent 执行旅程</h2><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stateClass[state.tone]}`}>{state.label}</span></div>
-              <p className="mt-0.5 truncate text-[10px] text-slate-500">{message?.userPrompt || "从任务理解到工具执行，逐步呈现实际发生的过程"}</p>
+              <p className="mt-0.5 truncate text-[10px] text-slate-400">{message?.userPrompt || "从任务理解到工具执行，逐步呈现实际发生的过程"}</p>
             </div>
           </div>
-          <div className="hidden shrink-0 items-center gap-3 text-[10px] text-slate-500 sm:flex">
+          <div className="hidden shrink-0 items-center gap-3 text-[10px] text-slate-400 sm:flex">
             <span><b className="font-mono text-slate-800">{completed}/{ordered.length}</b> 完成</span>
             <span><b className="font-mono text-slate-800">{tokenEvents || "—"}</b> Token 上报</span>
             <span className={failures ? "text-rose-600" : ""}><b className="font-mono">{failures}</b> 异常</span>
           </div>
         </div>
-        <div className="mt-2.5 flex h-1 items-center overflow-hidden rounded-full bg-slate-100">
-          <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-cyan-400 transition-all duration-500" style={{width:`${ordered.length ? completed / ordered.length * 100 : 0}%`}}/>
+        <div className="mt-3 flex h-1 items-center overflow-hidden rounded-full bg-white/10">
+          <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 via-violet-300 to-cyan-300 shadow-[0_0_14px_rgba(103,232,249,.55)] transition-all duration-500" style={{width:`${ordered.length ? completed / ordered.length * 100 : 0}%`}}/>
         </div>
       </header>
 
       {ordered.length === 0 ? (
         <div className="relative flex min-h-48 flex-col items-center justify-center px-6 py-9 text-center">
-          <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-500"><Activity className="h-5 w-5"/></span>
+          <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-300/25 bg-indigo-400/10 text-cyan-200"><Activity className="h-5 w-5"/></span>
           <h3 className="text-sm font-semibold text-slate-800">{isThinking ? "正在等待 Agent 的第一条执行信号" : "这次运行还没有可展示的执行事件"}</h3>
           <p className="mt-1.5 max-w-xs text-xs leading-5 text-slate-500">这里只呈现 Agent 或执行端实际上报的步骤，不会用推测内容补齐过程。</p>
         </div>
       ) : (
-        <div className="relative px-3 py-3 sm:px-4">
+        <div className="relative grid gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(250px,0.82fr)_minmax(0,1.18fr)] lg:items-start">
+          <div className="min-w-0 order-2 lg:order-1">
           <div className="mb-2 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-indigo-500"/>执行路径 <span className="font-normal text-slate-400">· {ordered.length} 个事件</span></div>
             <span className="text-[9px] text-slate-400">选择步骤查看详情</span>
           </div>
-          <div className="relative">
-            <div className="absolute bottom-4 left-[13px] top-4 w-px bg-gradient-to-b from-indigo-300 via-indigo-200 to-slate-100"/>
-            <div className="space-y-1">
+          <div className="relative max-h-[min(68vh,680px)] overflow-y-auto pr-1 [scrollbar-width:thin]">
+            <div className="absolute bottom-4 left-[13px] top-4 w-px bg-gradient-to-b from-indigo-400/80 via-cyan-300/55 to-transparent"/>
+            <div className="space-y-1.5">
               {ordered.map((step,index)=>{
                 const info=phaseMeta[step.phase]||phaseMeta.external;
                 const Icon=info.icon;
@@ -196,62 +197,62 @@ export const MissionControlTimeline: React.FC<Props> = ({
           </div>
 
           {selected && (
-            <div className="mt-2 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-[0_3px_12px_rgba(79,70,229,.05)]">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-indigo-50/50 px-3 py-2">
-                <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-indigo-600">STEP {String(selected.seq).padStart(2,"0")}<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
+            <div className="min-w-0 order-1 lg:order-2 overflow-hidden rounded-2xl border border-indigo-300/25 bg-slate-950/45 shadow-[0_12px_48px_rgba(0,0,0,.24)] lg:sticky lg:top-3 lg:max-h-[min(72vh,720px)] lg:overflow-y-auto [scrollbar-width:thin]">
+              <div className="flex items-center justify-between gap-2 border-b border-indigo-200/15 bg-indigo-400/10 px-3 py-3">
+                <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/20 bg-indigo-300/10 text-cyan-200 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-cyan-200">STEP {String(selected.seq).padStart(2,"0")}<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
                 <div className="flex shrink-0 items-center gap-2 text-[9px] text-slate-500"><span><Clock3 className="mr-1 inline h-3 w-3"/>{durationText(selected.durationMs)}</span><span>Token <b className="font-mono text-slate-700">{tokenText(detail)??"未上报"}</b></span></div>
               </div>
-              <div className="px-3 py-2.5">
+              <div className="px-3 py-3">
                 <p className="mb-2 text-[10px] leading-4 text-slate-600">{description}</p>
                 <div className="space-y-2">
-                  {(modelName !== undefined || providerName !== undefined || modelRound !== undefined) && <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[9px] text-slate-600">
+                  {(modelName !== undefined || providerName !== undefined || modelRound !== undefined) && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200/15 bg-white/[0.045] px-2.5 py-2 text-[9px] text-slate-300">
                     {modelName !== undefined && <span><b className="font-semibold text-slate-700">模型</b> {pretty(modelName)}</span>}
                     {providerName !== undefined && <span><b className="font-semibold text-slate-700">渠道</b> {pretty(providerName)}</span>}
                     {modelRound !== undefined && <span><b className="font-semibold text-slate-700">轮次</b> {pretty(modelRound)}</span>}
                   </div>}
-                  {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
-                    <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-800"><BrainCircuit className="h-3.5 w-3.5"/>实际发送给模型的提示词</div><span className="text-[9px] text-indigo-500">{Array.isArray(promptMessages) ? `${promptMessages.length} 条消息` : "内容预览（已截断）"}</span></div>
-                    {Array.isArray(promptMessages) ? <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-md border border-indigo-100 bg-white">
-                      <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">{messageRoleLabel(msg?.role)}{msg?.name ? ` · ${msg.name}` : ""}</div>
-                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-2 py-2 text-[10px] leading-5 text-slate-700">{messageContent(msg)}</pre>
-                    </div>)}</div> : <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white px-2 py-2 text-[10px] leading-5 text-slate-700">{pretty(promptMessages)}</pre>}
+                  {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-xl border border-indigo-300/20 bg-indigo-400/10 p-3">
+                    <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-100"><BrainCircuit className="h-3.5 w-3.5"/>实际发送给模型的提示词</div><span className="text-[9px] text-indigo-500">{Array.isArray(promptMessages) ? `${promptMessages.length} 条消息` : "内容预览（已截断）"}</span></div>
+                    {Array.isArray(promptMessages) ? <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-lg border border-indigo-200/15 bg-slate-900/80">
+                      <div className="border-b border-indigo-200/10 bg-white/5 px-2 py-1 text-[9px] font-semibold text-indigo-200/70">{messageRoleLabel(msg?.role)}{msg?.name ? ` · ${msg.name}` : ""}</div>
+                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-2 py-2 text-[10px] leading-5 text-slate-100">{messageContent(msg)}</pre>
+                    </div>)}</div> : <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-900/80 px-2 py-2 text-[10px] leading-5 text-slate-100">{pretty(promptMessages)}</pre>}
                   </section>}
-                  {modelResponse !== undefined && <section className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5">
-                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-800"><Sparkles className="h-3.5 w-3.5"/>模型实际返回</div>
-                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{pretty(modelResponse)}</pre>
+                  {modelResponse !== undefined && <section className="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-3">
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-100"><Sparkles className="h-3.5 w-3.5"/>模型实际返回</div>
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-100">{pretty(modelResponse)}</pre>
                   </section>}
-                  {toolSchema !== undefined && <details className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                  {toolSchema !== undefined && <details className="rounded-lg border border-indigo-200/15 bg-white/[0.045] p-2.5">
                     <summary className="cursor-pointer text-[10px] font-semibold text-slate-700">本轮提供给模型的工具定义</summary>
                     <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(toolSchema)}</pre>
                   </details>}
-                  {toolArguments !== undefined && <section className="rounded-lg border border-sky-100 bg-sky-50/40 p-2.5">
-                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-sky-800"><Terminal className="h-3.5 w-3.5"/>工具实际收到的参数</div>
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-700">{pretty(toolArguments)}</pre>
+                  {toolArguments !== undefined && <section className="rounded-xl border border-sky-300/20 bg-sky-400/10 p-3">
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-sky-100"><Terminal className="h-3.5 w-3.5"/>工具实际收到的参数</div>
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-100">{pretty(toolArguments)}</pre>
                   </section>}
-                  {toolResult !== undefined && <section className="rounded-lg border border-teal-100 bg-teal-50/40 p-2.5">
-                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-teal-800"><Eye className="h-3.5 w-3.5"/>工具实际执行结果</div>
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-700">{pretty(toolResult)}</pre>
+                  {toolResult !== undefined && <section className="rounded-xl border border-teal-300/20 bg-teal-400/10 p-3">
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-teal-100"><Eye className="h-3.5 w-3.5"/>工具实际执行结果</div>
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-100">{pretty(toolResult)}</pre>
                   </section>}
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {why!==undefined&&<div className="min-w-0 rounded-lg border border-violet-100 bg-violet-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-violet-700"><Sparkles className="h-3 w-3"/>决策摘要</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-slate-600">{pretty(why)}</div></div>}
-                  {error!==undefined&&<div className="min-w-0 rounded-lg border border-rose-100 bg-rose-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3"/>错误信息</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-rose-700">{pretty(error)}</div></div>}
-                  {input!==undefined&&<div className="min-w-0 rounded-lg border border-sky-100 bg-sky-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-700"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
-                  {output!==undefined&&<div className="min-w-0 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
+                  {why!==undefined&&<div className="min-w-0 rounded-lg border border-violet-300/20 bg-violet-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-violet-200"><Sparkles className="h-3 w-3"/>决策摘要</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-slate-600">{pretty(why)}</div></div>}
+                  {error!==undefined&&<div className="min-w-0 rounded-lg border border-rose-300/20 bg-rose-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3"/>错误信息</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-rose-700">{pretty(error)}</div></div>}
+                  {input!==undefined&&<div className="min-w-0 rounded-lg border border-sky-300/20 bg-sky-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-200"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
+                  {output!==undefined&&<div className="min-w-0 rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
                 </div>
-                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/50 px-3 py-2 text-[10px] leading-4 text-amber-800">这条事件没有附带提示词、模型响应或工具 I/O 内容。需要在 Agent 实际调用模型和工具的位置启用内容采集；Studio 不会根据阶段名称补写。</div>}
+                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-300/25 bg-amber-400/10 px-3 py-2 text-[10px] leading-4 text-amber-100">这条事件没有附带提示词、模型响应或工具 I/O 内容。需要在 Agent 实际调用模型和工具的位置启用内容采集；Studio 不会根据阶段名称补写。</div>}
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <button type="button" onClick={()=>setShowRaw(v=>!v)} className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-indigo-600"><ChevronDown className={`h-3 w-3 transition ${showRaw?"rotate-180":""}`}/>{showRaw?"收起原始事件":"查看原始事件"}</button>
                   <div className="flex items-center gap-2">
-                    {selected.status==="failed"&&onRetryRun&&!isThinking&&<button type="button" onClick={onRetryRun} className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-700"><RotateCcw className="h-3 w-3"/>重新运行</button>}
-                    <button type="button" onClick={()=>void copySelected()} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:border-indigo-200 hover:text-indigo-600"><Copy className="h-3 w-3"/>{copied?"已复制":"复制"}</button>
+                    {selected.status==="failed"&&onRetryRun&&!isThinking&&<button type="button" onClick={onRetryRun} className="inline-flex items-center gap-1 rounded-md border border-rose-300/25 bg-rose-400/10 px-2 py-1 text-[10px] font-semibold text-rose-200"><RotateCcw className="h-3 w-3"/>重新运行</button>}
+                    <button type="button" onClick={()=>void copySelected()} className="inline-flex items-center gap-1 rounded-md border border-indigo-200/20 px-2 py-1 text-[10px] text-slate-300 hover:border-indigo-300/40 hover:text-cyan-200"><Copy className="h-3 w-3"/>{copied?"已复制":"复制"}</button>
                   </div>
                 </div>
                 {showRaw&&<pre className="journey-json mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-lg p-2 text-[9px] leading-4">{pretty(detail)}</pre>}
               </div>
             </div>
           )}
-          <div className="mt-2 flex items-center justify-between px-1 text-[9px] text-slate-400"><span>{running?"Agent 正在推进当前步骤":failures?`${failures} 个步骤执行失败`:unknown?`${unknown} 个步骤状态未知`:"展示已接收的全部执行事件"}</span><span>仅呈现实际上报的数据</span></div>
+          <div className="col-span-full mt-0 flex items-center justify-between px-1 text-[9px] text-slate-400"><span>{running?"Agent 正在推进当前步骤":failures?`${failures} 个步骤执行失败`:unknown?`${unknown} 个步骤状态未知`:"展示已接收的全部执行事件"}</span><span>仅呈现实际上报的数据</span></div>
         </div>
       )}
     </section>
