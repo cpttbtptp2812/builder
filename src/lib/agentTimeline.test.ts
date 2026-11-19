@@ -202,6 +202,16 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(timeline[1].rightDetail?.tool_arguments, { query: "heartbeat" });
   });
 
+  it("does not classify an unknown operation as an LLM event", () => {
+    const timeline = applySseToTimeline([], "otel_span", {
+      spanId: "unknown-operation",
+      name: "custom.operation",
+      attributes: { "gen_ai.operation.name": "custom.operation" },
+    });
+    assert.equal(timeline.length, 1);
+    assert.equal(timeline[0].phase, "external");
+  });
+
   it("normalizes OpenTelemetry GenAI spans into readable model steps", () => {
     const timeline = applySseToTimeline([], "otel_span", {
       spanId: "otel-model-1",
@@ -261,6 +271,58 @@ describe("Agent execution timeline event handling", () => {
     assert.equal(completed.length, 1);
     assert.equal(completed[0].status, "done");
     assert.deepEqual(completed[0].rightDetail?.result, { success: true, data: "contents" });
+  });
+
+
+  it("does not replace missing event timestamps with the current time", () => {
+    const timeline = applySseToTimeline([], "agent_step", {
+      stepId: "no-time",
+      title: "Un-timestamped event",
+    });
+    assert.equal(timeline[0].timestamp, 0);
+  });
+
+  it("does not mark citation events successful without an explicit status", () => {
+    const timeline = applySseToTimeline([], "citations", {
+      stepId: "citations-no-status",
+      items: [{ title: "source" }],
+    });
+    assert.equal(timeline[0].status, "unknown");
+    assert.equal(timeline[0].timestamp, 0);
+  });
+
+  it("keeps same-name tool events separate when no stable call ID exists", () => {
+    const first = applySseToTimeline([], "tool", { tool: "lookup", status: "running" });
+    const second = applySseToTimeline(first, "tool", { tool: "lookup", status: "success", result: "result" });
+    assert.equal(second.length, 2);
+    assert.equal(second[0].status, "running");
+    assert.equal(second[1].status, "done");
+    assert.equal(second[0].rightDetail?.result, undefined);
+    assert.equal(second[1].rightDetail?.result, "result");
+  });
+
+
+  it("parses OTLP nanosecond duration fields without floating point timestamp loss", () => {
+    const timeline = applySseToTimeline([], "span", {
+      spanId: "otlp-exact",
+      startTimeUnixNano: "1700000000000000000",
+      endTimeUnixNano: "1700000000125000000",
+    });
+    assert.equal(timeline[0].durationMs, 125);
+  });
+
+  it("parses MCP duration_ns and keeps independent citations events separate", () => {
+    const tool = applySseToTimeline([], "mcp_tool", {
+      spanId: "mcp-duration",
+      duration_ns: 12000000,
+      attributes: { "mcp.tool.name": "read_file" },
+    });
+    assert.equal(tool[0].durationMs, 12);
+
+    const first = applySseToTimeline([], "citations", { items: [{ id: "a" }] });
+    const second = applySseToTimeline(first, "citations", { items: [{ id: "b" }] });
+    assert.equal(second.length, 2);
+    assert.notEqual(second[0].stepId, second[1].stepId);
   });
 
   it("keeps missing execution status unknown after the stream ends", () => {

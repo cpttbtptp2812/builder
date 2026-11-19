@@ -47,19 +47,20 @@ describe("Agent Reality semantic adapters", () => {
   });
 
   it("classifies concrete actions before broad retrieval terms", () => {
-    assert.equal(classifyRealityAdapter({ tool: "search_code", phase: "skill" }), "code");
-    assert.equal(classifyRealityAdapter({ tool: "search_knowledge_base", phase: "skill" }), "retrieval");
+    assert.equal(classifyRealityAdapter({ tool: "search_code", phase: "skill" }), "generic");
+    assert.equal(classifyRealityAdapter({ tool: "search_knowledge_base", phase: "skill" }), "generic");
     assert.equal(classifyRealityAdapter({ operation: "chat", phase: "llm" }), "model");
-    assert.equal(classifyRealityAdapter({ tool: "browser.navigate", phase: "skill" }), "browser");
+    assert.equal(classifyRealityAdapter({ tool: "browser.navigate", phase: "skill" }), "generic");
+    assert.equal(classifyRealityAdapter({ title: "Browser navigation failed" }), "generic");
   });
 
-  it("summarizes structured tool results in plain language without inventing facts", () => {
+  it("keeps structured results literal instead of inventing semantic summaries", () => {
     assert.equal(
       summarizeRealityResult({ success: true, data: { repository: "builder", branch: "main", clean: true } }),
-      "仓库：builder · 分支：main · 工作区干净",
+      JSON.stringify({ success: true, data: { repository: "builder", branch: "main", clean: true } }, null, 2),
     );
-    assert.equal(summarizeRealityResult({ success: false, error: "permission denied" }), "permission denied");
-    assert.equal(summarizeRealityResult(undefined), "执行端尚未提供结果");
+    assert.equal(summarizeRealityResult({ success: false, error: "permission denied" }), JSON.stringify({ success: false, error: "permission denied" }, null, 2));
+    assert.equal(summarizeRealityResult(undefined), "未上报");
   });
 
   it("turns common tool verbs into readable action labels", () => {

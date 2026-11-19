@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
 import type { TraceDrawerMessage } from "./TraceInspectorDrawer";
-import { classifyRealityAdapter, formatRealityActionLabel, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind, summarizeRealityResult } from "@/lib/agentRealityAdapters";
+import { classifyRealityAdapter, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind, summarizeRealityResult } from "@/lib/agentRealityAdapters";
 
 interface Props {
   timeline: AgentStep[];
@@ -42,11 +42,12 @@ const text = (value:any) => {
 };
 const messageText = realityMessageText;
 const parseStructured = parseRealityPayload;
-const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName","name","mcp.method.name"]) || "");
-const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name","span.name","spanName"]) || "").toLowerCase();
+const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName"]) || "");
+const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name"]) || "").toLowerCase();
 const adapterOf = (step:AgentStep):AdapterKind => classifyRealityAdapter({
   tool: toolOf(step),
   operation: operationOf(step),
+  kind: String(read(step.rightDetail,["adapter_kind","adapterKind"]) ?? ""),
   title: step.rightTitle+" "+step.leftTitle,
   phase: step.phase,
 });
@@ -62,8 +63,6 @@ const adapterMeta:Record<AdapterKind,{label:string;icon:React.ElementType;accent
   model:{label:"模型推理调用",icon:BrainCircuit,accent:"indigo",verb:"正在请求模型处理信息"},
   generic:{label:"行动事件",icon:Activity,accent:"slate",verb:"收到一条执行事件"},
 };
-
-const displayToolName = formatRealityActionLabel;
 
 const summarize = summarizeRealityResult;
 
@@ -92,16 +91,16 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const visiblePromptMessages=toRealityMessageList(promptMessages);
   const visibleModelResponse=parseStructured(modelResponse);
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
-  const why=read(d,["reason","purpose","goal","explanation"]);
+  const why=read(d,["reason","purpose","explanation"]);
   const nextAction=read(d,["next_action","nextAction","next_step","handoff_target"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
   return <div className="reality-inspector">
     <div className="reality-action-summary">
       <div className="reality-summary-orb"><Zap size={18}/></div>
       <div className="min-w-0 flex-1">
-        <div className="reality-eyebrow">REAL ACTION · {adapterMeta[adapter].label}</div>
-        <div className="reality-summary-title">{toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||step.leftTitle}</div>
-        <p>{step.rightSubtitle||step.leftSummary||adapterMeta[adapter].verb}</p>
+        <div className="reality-eyebrow">OBSERVED EVENT · {adapterMeta[adapter].label}</div>
+        <div className="reality-summary-title">{toolOf(step)||step.rightTitle||step.leftTitle}</div>
+        <p>{step.rightSubtitle||step.leftSummary||"执行端未上报说明"}</p>
       </div>
       <div className="reality-duration"><Clock3 size={13}/>{duration}</div>
     </div>
@@ -158,7 +157,8 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
 
     {adapter!=="model" && args!==undefined && <details className="reality-raw"><summary>查看本次动作的真实输入</summary><pre>{text(args)}</pre></details>}
     {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>查看本次动作的真实返回</summary><pre>{text(result)}</pre></details>}
-    <div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 这一步到底做了什么 <span>HUMAN READABLE</span></div><div className="grid gap-3"><div><small className="text-[10px] text-cyan-200/65">执行动作</small><p className="mt-1 text-sm font-semibold text-white">{toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||phaseLabels[step.phase]||"Agent 执行事件"}</p><p className="mt-1 text-xs leading-5 text-indigo-100/65">{step.rightSubtitle||step.leftSummary||adapterMeta[adapter].verb}</p></div><div className="grid grid-cols-2 gap-2"><div className="rounded-lg border border-indigo-200/10 bg-slate-950/25 p-3"><small className="text-[10px] text-indigo-100/45">为什么执行</small><p className="mt-1 text-xs leading-5 text-indigo-50/85">{why!==undefined?text(why):"Agent 尚未上报这一步的执行原因"}</p></div><div className="rounded-lg border border-indigo-200/10 bg-slate-950/25 p-3"><small className="text-[10px] text-indigo-100/45">执行后得到</small><p className="mt-1 text-xs leading-5 text-indigo-50/85">{result!==undefined?summarize(result):"执行结果尚未上报"}</p></div></div>{nextAction!==undefined&&<div className="rounded-lg border border-cyan-300/15 bg-cyan-300/5 p-3"><small className="text-[10px] text-cyan-200/65">后续行动</small><p className="mt-1 text-xs text-cyan-50">{text(nextAction)}</p></div>}</div></div>
+    {why!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的原因</div><div className="reality-empty-visual">{text(why)}</div></div>}
+    {nextAction!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的后续动作</div><div className="reality-empty-visual">{text(nextAction)}</div></div>}
     <div className="reality-result-strip">
       <div><small>真实返回</small><strong>{result!==undefined?summarize(result):"尚未上报"}</strong></div>
       <div><small>Token 用量</small><strong>{totalTokens!==undefined?text(totalTokens):read(d.usage,["total_tokens","totalTokens"])??"未上报"}</strong></div>
@@ -251,8 +251,8 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
               {ordered.map((step,index)=>{
                 const kind=adapterOf(step), meta=adapterMeta[kind], Icon=meta.icon, state=status[step.status]||status.unknown;
                 const StateIcon=state.icon, active=selected?.stepId===step.stepId;
-                const label=toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||step.leftTitle||phaseLabels[step.phase]||"执行事件";
-                const summary=step.rightSubtitle||step.leftSummary||phaseLabels[step.phase]||"收到执行事件";
+                const label=toolOf(step)||step.rightTitle||step.leftTitle||"未命名事件";
+                const summary=step.rightSubtitle||step.leftSummary||"执行端未上报说明";
                 return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-pressed={active} className="ar-node rounded-xl p-3 text-left">
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-[9px] tracking-widest text-indigo-200/40">NODE {String(index+1).padStart(2,"0")}</span><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] ${state.color==="emerald"?"border-emerald-300/20 bg-emerald-300/10 text-emerald-200":state.color==="cyan"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-100":state.color==="rose"?"border-rose-300/20 bg-rose-300/10 text-rose-200":state.color==="amber"?"border-amber-300/20 bg-amber-300/10 text-amber-100":"border-white/10 bg-white/5 text-slate-300"}`}><StateIcon size={10}/>{state.label}</span></div>
                   <div className="mt-2 flex items-center gap-2"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${kind==="git"?"border-violet-300/25 bg-violet-300/10 text-violet-200":kind==="browser"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-200":kind==="retrieval"?"border-blue-300/25 bg-blue-300/10 text-blue-200":kind==="approval"?"border-amber-300/25 bg-amber-300/10 text-amber-200":"border-indigo-300/20 bg-indigo-300/10 text-indigo-100"}`}><Icon size={17}/></span><span className="min-w-0"><strong className="block truncate text-xs text-white">{label}</strong><small className="mt-1 block truncate text-[10px] text-indigo-100/50">{meta.label} · {phaseLabels[step.phase]||"执行事件"}</small></span></div>
@@ -260,12 +260,12 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
                 </button>
               })}
             </div>
-            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)?displayToolName(toolOf(current)):current.rightTitle):"等待下一条事件"}</span></div>
+            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)||current.rightTitle||"未命名事件"):"等待下一条事件"}</span></div>
           </div>
           <div className="ar-panel rounded-xl p-3"><div className="flex items-center gap-2 text-xs font-semibold text-indigo-100"><Activity size={14} className="text-cyan-300"/>执行信号</div><div className="mt-2 grid grid-cols-3 gap-2"><div><small className="text-[10px] text-indigo-100/40">实际事件</small><strong className="block text-lg text-white">{total}</strong></div><div><small className="text-[10px] text-indigo-100/40">完成比例</small><strong className="block text-lg text-white">{percent}%</strong></div><div><small className="text-[10px] text-indigo-100/40">本轮耗时</small><strong className="block text-lg text-white">{message?.duration||"未上报"}</strong></div></div></div>
         </div>
         <div className="ar-panel min-h-[420px] overflow-hidden rounded-2xl">
-          {selected?<><div className="flex items-center justify-between border-b border-indigo-200/10 px-4 py-3"><div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_#67e8f9]"/><span className="text-xs font-bold tracking-wide text-white">SELECTED ACTION / 行动现场</span></div><span className="font-mono text-[9px] text-indigo-100/40">#{selected.seq}</span></div><div className="max-h-[calc(100%-48px)] overflow-y-auto"><ActionVisual step={selected}/></div></>:<div className="grid h-full place-items-center text-sm text-indigo-100/45">选择一个真实行动节点</div>}
+          {selected?<><div className="flex items-center justify-between border-b border-indigo-200/10 px-4 py-3"><div className="flex items-center gap-2"><div className="h-2 w-2 rounded-full bg-cyan-300 shadow-[0_0_10px_#67e8f9]"/><span className="text-xs font-bold tracking-wide text-white">SELECTED ACTION / 行动现场</span></div><span className="font-mono text-[9px] text-indigo-100/40">EVENT {ordered.findIndex(step=>step.stepId===selected.stepId)+1}</span></div><div className="max-h-[calc(100%-48px)] overflow-y-auto"><ActionVisual step={selected}/></div></>:<div className="grid h-full place-items-center text-sm text-indigo-100/45">选择一个真实行动节点</div>}
         </div>
       </div>}
     </div>

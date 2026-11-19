@@ -60,21 +60,35 @@ const phaseFromEvent = (data: any): StepPhase => {
   const operation = String(eventAttribute(data, "gen_ai.operation.name") ?? "").toLowerCase();
   const tool = eventAttribute(data, "gen_ai.tool.name") ?? eventAttribute(data, "mcp.tool.name");
   if (tool) return "skill";
-  if (operation || /model|llm|inference/i.test(String(data.name ?? ""))) return "llm";
-  if (/retriev|search|embedding/i.test(String(data.name ?? ""))) return "context";
+  // Only known GenAI operations identify a model call. An arbitrary operation
+  // string is not enough evidence to label an event as LLM activity.
+  if (["chat", "completion", "generate_content", "embeddings"].includes(operation)) return "llm";
   return "external";
 };
 
 const parseEventTimestamp = (data: any): number | undefined => {
-  if (typeof data.timestamp === "number") return data.timestamp;
+  if (typeof data.timestamp === "number" && Number.isFinite(data.timestamp)) return data.timestamp;
   const nanos = data.startTimeUnixNano ?? data.start_time_unix_nano;
   if (nanos !== undefined && nanos !== null) {
-    const parsed = Number(nanos);
-    if (Number.isFinite(parsed)) return parsed / 1000000;
+    try { return Number(BigInt(nanos) / 1000000n); } catch { return undefined; }
   }
   const millis = data.startTimeUnixMs ?? data.start_time_unix_ms ?? data.startTime;
   if (typeof millis === "number" && Number.isFinite(millis)) return millis;
   return undefined;
+};
+
+const parseNanoDuration = (value: unknown): number | undefined => {
+  if (value === undefined || value === null) return undefined;
+  try {
+    const nanos = BigInt(value as string | number | bigint);
+    return Number(nanos) / 1000000;
+  } catch { return undefined; }
+};
+
+const durationBetweenNanoTimestamps = (start: unknown, end: unknown): number | undefined => {
+  if (start === undefined || start === null || end === undefined || end === null) return undefined;
+  try { return Number(BigInt(end as string | number | bigint) - BigInt(start as string | number | bigint)) / 1000000; }
+  catch { return undefined; }
 };
 
 const parseDuration = (value: unknown): number | undefined => {
@@ -118,7 +132,7 @@ export function timelineReducer(
     rightSubtitle: incoming.rightSubtitle ?? "",
     rightDetail: incoming.rightDetail ?? {},
     durationMs: incoming.durationMs,
-    timestamp: incoming.timestamp ?? Date.now(),
+    timestamp: incoming.timestamp ?? 0,
   };
   return sortTimeline([...current, step]);
 }
@@ -132,7 +146,9 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       const rawSeq = data.seq ?? data.step;
       const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
       const seq = hasSeq ? Number(rawSeq) : current.length + 1;
-      const stepId = String(data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id ?? `event-${seq}`);
+      const suppliedId = data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id;
+      // Do not invent an identity that could merge unrelated events.
+      const stepId = String(suppliedId ?? `unidentified-event-${seq}-${current.length}`);
       const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle;
       return timelineReducer(current, {
         stepId,
@@ -153,23 +169,19 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
           ...(data.rightDetail && typeof data.rightDetail === "object" ? data.rightDetail : {}),
         },
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs) ??
-          (data.durationNs !== undefined || data.duration_ns !== undefined ? Number(data.durationNs ?? data.duration_ns) / 1000000 : undefined) ??
-          (data.endTimeUnixNano != null && (data.startTimeUnixNano ?? data.start_time_unix_nano) != null
-            ? (Number(data.endTimeUnixNano) - Number(data.startTimeUnixNano ?? data.start_time_unix_nano)) / 1000000
-            : undefined),
+          parseNanoDuration(data.durationNs ?? data.duration_ns) ??
+          durationBetweenNanoTimestamps(data.startTimeUnixNano ?? data.start_time_unix_nano, data.endTimeUnixNano ?? data.end_time_unix_nano),
         timestamp: parseEventTimestamp(data),
       });
     }
 
     if (eventName === "tool" || eventName === "mcp_tool") {
-      const toolName = String(data.tool ?? data.toolName ?? eventAttribute(data, "mcp.tool.name") ?? eventAttribute(data, "gen_ai.tool.name") ?? data.name ?? "Unknown tool");
+      const toolName = String(data.tool ?? data.toolName ?? eventAttribute(data, "mcp.tool.name") ?? eventAttribute(data, "gen_ai.tool.name") ?? data.name ?? "工具名称未上报");
       const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.spanId ?? data.span_id ?? data.id;
-      const sameToolSteps = current.filter((step) => step.phase === "skill" && String(step.rightDetail?.tool ?? step.rightDetail?.name ?? "") === toolName);
-      const existingCount = sameToolSteps.length;
       // A tool name is not a call identity: concurrent invocations can use the
       // same tool. Only merge lifecycle events when the producer supplies a
       // stable call ID; otherwise preserve each event separately.
-      const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
+      const stepId = String(stableCallId ?? `unidentified-tool-event-${current.length + 1}`);
       const hasSeq = data.seq !== undefined && data.seq !== null && data.seq !== "" && Number.isFinite(Number(data.seq));
       const status = data.status == null ? undefined : normalizeStatus(data.status);
       return timelineReducer(current, {
@@ -182,7 +194,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         rightTitle: toolName,
         rightSubtitle: data.description,
         rightDetail: data,
-        durationMs: parseDuration(data.durationMs ?? data.duration),
+        durationMs: parseDuration(data.durationMs ?? data.duration) ?? parseNanoDuration(data.durationNs ?? data.duration_ns) ?? durationBetweenNanoTimestamps(data.startTimeUnixNano ?? data.start_time_unix_nano, data.endTimeUnixNano ?? data.end_time_unix_nano),
         timestamp: parseEventTimestamp(data),
       });
     }
@@ -190,16 +202,16 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     if (eventName === "citations") {
       const items = Array.isArray(data.items) ? data.items : [];
       return timelineReducer(current, {
-        stepId: String(data.stepId ?? "event-citations"),
+        stepId: String(data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id ?? `unidentified-citations-${current.length + 1}`),
         seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
         phase: "context",
-        status: "done",
+        status: data.status == null ? "unknown" : normalizeStatus(data.status),
         leftTitle: "Knowledge retrieval",
-        leftSummary: `Retrieved ${items.length} source item(s)`,
+        leftSummary: Array.isArray(data.items) ? `Retrieved ${items.length} source item(s)` : "Source list not reported",
         rightTitle: "Retrieved sources",
         rightSubtitle: "",
         rightDetail: { ...data, items },
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+        timestamp: parseEventTimestamp(data) ?? 0,
       });
     }
     return current;
