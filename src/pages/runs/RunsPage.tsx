@@ -223,10 +223,10 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     setJudgeError("");
     setJudgeResult(null);
     try {
-      const response = await fetch(\`\${API_BASE}/api/v1/traces/\${encodeURIComponent(selected.run.traceId)}/judge\`, {
+      const response = await fetch(`${API_BASE}/api/v1/traces/${encodeURIComponent(selected.run.traceId)}/judge`, {
         method: "POST",
         headers: {
-          Authorization: \`Bearer \${apiKey.trim()}\`,
+          Authorization: `Bearer ${apiKey.trim()}`,
           Accept: "application/json",
           "Content-Type": "application/json",
         },
@@ -237,7 +237,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         }),
       });
       const payload = await response.json().catch(() => null);
-      if (!response.ok) throw new Error(payload?.error?.message || \`AI Judge 请求失败（HTTP \${response.status}）\`);
+      if (!response.ok) throw new Error(payload?.error?.message || `AI Judge 请求失败（HTTP ${response.status}）`);
       setJudgeResult(payload);
     } catch (cause) {
       setJudgeError(cause instanceof Error ? cause.message : "AI Judge 请求失败");
