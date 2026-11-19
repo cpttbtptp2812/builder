@@ -278,8 +278,9 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                         <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">错误</p><p className="mt-1 text-lg font-semibold text-amber-700">{promptfooReport.stats.errors ?? promptfooReport.rows.filter((row) => row.error).length}</p></div>
                         <div className="rounded-lg border border-slate-200 bg-white p-3"><p className="text-[10px] text-slate-500">用例</p><p className="mt-1 text-lg font-semibold text-slate-900">{promptfooReport.rows.length}</p></div>
                       </div>
+                      <div className="text-[10px] text-slate-400">最多预览前 100 条（总计 {promptfooReport.rows.length} 条）</div>
                       <div className="max-h-72 space-y-2 overflow-auto">
-                        {promptfooReport.rows.map((row, index) => {
+                        {promptfooReport.rows.slice(0, 100).map((row, index) => {
                           const label = row.testCase?.description || row.vars?.question || row.prompt?.label || row.prompt?.raw || ("Test " + (index + 1));
                           const reason = row.gradingResult?.reason || row.error || row.response?.error || "";
                           return <div key={row.id || index} className="rounded-lg border border-slate-200 bg-white p-3">
