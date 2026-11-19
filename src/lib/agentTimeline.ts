@@ -192,7 +192,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         stepId: String(data.stepId ?? "event-citations"),
         seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
         phase: "context",
-        status: "done",
+        status: data.status == null ? "unknown" : normalizeStatus(data.status),
         leftTitle: "Knowledge retrieval",
         leftSummary: `Retrieved ${items.length} source item(s)`,
         rightTitle: "Retrieved sources",
