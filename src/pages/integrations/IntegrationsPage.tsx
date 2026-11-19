@@ -4,7 +4,7 @@ import {
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
 } from "lucide-react";
 
-type GuideKey = "sdk" | "otel" | "frameworks";
+type GuideKey = "sdk" | "otel" | "openinference" | "frameworks";
 
 const guides: Record<GuideKey, { title: string; subtitle: string; install: string; code: string }> = {
   sdk: {
@@ -41,13 +41,13 @@ with OwnAgentClient(BASE_URL, API_KEY) as ownagent:
   otel: {
     title: "OpenTelemetry / 任意 Agent 框架",
     subtitle: "适合已经使用 OpenTelemetry、LangChain、LangGraph 或自建埋点的项目",
-    install: "pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http",
+    install: "pip install opentelemetry-sdk opentelemetry-exporter-otlp-json-http",
     code: `import os
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter
 
 provider = TracerProvider(resource=Resource.create({
     "service.name": "my-agent",
