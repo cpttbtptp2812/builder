@@ -252,6 +252,15 @@ describe("Agent execution timeline event handling", () => {
     assert.equal(timeline[0].rightTitle, "read_file");
     assert.equal(timeline[0].durationMs, 12);
     assert.equal(timeline[0].timestamp, 1700000001000);
+    const completed = applySseToTimeline(timeline, "mcp_tool", {
+      spanId: "mcp-call-1",
+      status: { code: 1 },
+      attributes: { "mcp.tool.name": "read_file" },
+      result: { success: true, data: "contents" },
+    });
+    assert.equal(completed.length, 1);
+    assert.equal(completed[0].status, "done");
+    assert.deepEqual(completed[0].rightDetail?.result, { success: true, data: "contents" });
   });
 
   it("keeps missing execution status unknown after the stream ends", () => {
