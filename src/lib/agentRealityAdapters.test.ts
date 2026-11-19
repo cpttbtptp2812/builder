@@ -59,7 +59,7 @@ describe("Agent Reality semantic adapters", () => {
       summarizeRealityResult({ success: true, data: { repository: "builder", branch: "main", clean: true } }),
       JSON.stringify({ success: true, data: { repository: "builder", branch: "main", clean: true } }, null, 2),
     );
-    assert.equal(summarizeRealityResult({ success: false, error: "permission denied" }), "permission denied");
+    assert.equal(summarizeRealityResult({ success: false, error: "permission denied" }), JSON.stringify({ success: false, error: "permission denied" }, null, 2));
     assert.equal(summarizeRealityResult(undefined), "未上报");
   });
 
