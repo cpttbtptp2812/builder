@@ -99,11 +99,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const meta = selected ? (phaseMeta[selected.phase] || phaseMeta.external) : phaseMeta.external;
   const SelectedIcon = meta.icon;
   const selectedStatus = selected ? (statusMeta[selected.status] || statusMeta.unknown) : statusMeta.unknown;
-  const knownTokens = ordered.reduce((sum, step) => {
-    const n = step.rightDetail?.totalTokens ?? step.rightDetail?.total_tokens;
-    return sum + (typeof n === "number" ? n : 0);
-  }, 0);
-  const tokenEvents = ordered.filter(step => typeof (step.rightDetail?.totalTokens ?? step.rightDetail?.total_tokens) === "number").length;
+  const tokenEvents = ordered.filter(step => tokenText(step.rightDetail) !== null).length;
 
   return (
     <section className="journey-shell relative space-y-4 overflow-hidden rounded-2xl text-slate-100">
