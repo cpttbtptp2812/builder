@@ -143,11 +143,26 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
     const file = event.target.files?.[0];
     if (!file) return;
     try {
-      const parsed = JSON.parse(await file.text());
-      const root = parsed.results ?? parsed;
-      const rows = Array.isArray(root.results) ? root.results : [];
-      if (!rows.length && !root.stats) throw new Error("文件中没有找到 Promptfoo results / stats 数据。");
-      setPromptfooReport({ fileName: file.name, stats: root.stats ?? parsed.stats ?? {}, rows });
+      const raw = await file.text();
+      if (file.name.toLowerCase().endsWith(".jsonl")) {
+        const rows = raw.split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
+        if (!rows.length) throw new Error("JSONL 文件中没有评估结果。");
+        setPromptfooReport({
+          fileName: file.name,
+          rows,
+          stats: {
+            successes: rows.filter((row) => row.success === true).length,
+            failures: rows.filter((row) => row.success === false && !row.error).length,
+            errors: rows.filter((row) => !!row.error).length,
+          },
+        });
+      } else {
+        const parsed = JSON.parse(raw);
+        const root = parsed.results ?? parsed;
+        const rows = Array.isArray(root.results) ? root.results : [];
+        if (!rows.length && !root.stats) throw new Error("文件中没有找到 Promptfoo results / stats 数据。");
+        setPromptfooReport({ fileName: file.name, stats: root.stats ?? parsed.stats ?? {}, rows });
+      }
       setPromptfooError("");
     } catch (cause) {
       setPromptfooReport(null);
@@ -246,11 +261,11 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                 <section className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-4">
                   <div>
                     <h3 className="text-xs font-semibold text-slate-800">导入 Promptfoo 评估报告</h3>
-                    <p className="mt-1 text-[11px] leading-5 text-slate-500">选择通过 promptfoo eval -o results.json 导出的报告。当前在浏览器内预览，不会上传或持久化到服务器。</p>
+                    <p className="mt-1 text-[11px] leading-5 text-slate-500">选择通过 promptfoo eval -o results.json 或 -o results.jsonl 导出的报告。当前在浏览器内预览，不会上传或持久化到服务器。</p>
                   </div>
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-white px-4 py-5 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
                     <ExternalLink size={14} /> 选择 results.json
-                    <input type="file" accept=".json,application/json" className="sr-only" onChange={importPromptfooReport} />
+                    <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" className="sr-only" onChange={importPromptfooReport} />
                   </label>
                   {promptfooError && <p className="text-xs text-rose-700">{promptfooError}</p>}
                   {promptfooReport && (
