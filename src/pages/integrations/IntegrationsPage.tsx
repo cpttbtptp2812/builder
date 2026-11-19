@@ -95,13 +95,13 @@ with tracer.start_as_current_span("invoke_agent") as span:
 },
   promptfoo: {
     "title": "Promptfoo · 可重复评估与回归",
-    "subtitle": "复用 Promptfoo CLI 管理数据集、断言、模型对比和 CI 质量门禁。OwnAgent 当前提供配置/运行指南和 JSON 报告预览，不在服务端执行第三方 CLI。",
+    "subtitle": "复用 Promptfoo CLI 管理数据集、断言、模型对比和 CI 质量门禁（Node.js 22.22+）。OwnAgent 提供配置指南和 JSON 报告预览，不在服务端执行第三方 CLI；报告可能含 Prompt、响应和配置内容，导入前请先脱敏。",
     "install": "npx promptfoo@latest init --example getting-started\nnpx promptfoo@latest eval -c promptfooconfig.yaml -o results.json -o report.html",
     "code": "description: OwnAgent Agent regression suite\nprompts:\n  - |\n    You are a careful assistant. Answer the user's question accurately.\n    Question: {{question}}\nproviders:\n  - openai:gpt-4.1-mini\ntests:\n  - vars:\n      question: \"What is a parent span in distributed tracing?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains parent-child trace relationships accurately.\"\n  - vars:\n      question: \"If a tool call fails, what should an Agent do?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains error handling and retry safety without claiming every failure is retryable.\"\n"
 },
   "mcp-inspector": {
     "title": "MCP Inspector · 官方工具调试器",
-    "subtitle": "复用 MCP 官方 Inspector 的 Web、CLI 和 TUI 客户端调试 MCP Server。OwnAgent 不复制其 UI；Inspector 在开发机本地启动。",
+    "subtitle": "复用 MCP 官方 Inspector 的 Web、CLI 和 TUI 客户端调试 MCP Server。OwnAgent 不复制其 UI；Inspector 在开发机本地启动。注意：无系统密钥链的无头环境可能把密钥写入未加密的本地 secrets.json。",
     "install": "npx @modelcontextprotocol/inspector",
     "code": "npx @modelcontextprotocol/inspector\n\n# 可脚本化调试 / CI\nnpx @modelcontextprotocol/inspector --cli\n\n# 终端交互界面\nnpx @modelcontextprotocol/inspector --tui"
 },
