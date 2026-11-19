@@ -128,24 +128,42 @@ export const MissionControlTimeline: React.FC<Props> = ({
   return (
     <section className="agent-journey relative overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-sm">
       <style>{`
-        .agent-journey{background:radial-gradient(ellipse at 78% 0%,rgba(129,140,248,.13),transparent 42%),radial-gradient(ellipse at 8% 35%,rgba(34,211,238,.08),transparent 38%),linear-gradient(145deg,#080f25 0%,#111a38 52%,#0b1530 100%);border-color:rgba(129,140,248,.28);color:#e8edff;box-shadow:0 18px 60px rgba(20,30,80,.22)}
-        .agent-journey:before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(165,180,252,.18) .7px,transparent .7px);background-size:24px 24px;mask-image:linear-gradient(120deg,rgba(0,0,0,.7),transparent 82%);pointer-events:none}.agent-journey header{border-color:rgba(165,180,252,.16)}.agent-journey h2,.agent-journey h3,.agent-journey .text-slate-900,.agent-journey .text-slate-800,.agent-journey .text-slate-700{color:#edf2ff}.agent-journey .text-slate-600,.agent-journey .text-slate-500,.agent-journey .text-slate-400{color:#9ba9cf}.agent-journey .journey-row{border-color:rgba(165,180,252,.12);background:rgba(255,255,255,.035)}.agent-journey .journey-row:hover{background:rgba(129,140,248,.12)}.agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(99,102,241,.24),rgba(34,211,238,.08));border-color:rgba(129,140,248,.58);box-shadow:inset 0 0 24px rgba(99,102,241,.08),0 0 24px rgba(99,102,241,.09)}.agent-journey .journey-json{background:rgba(3,8,24,.72);border-color:rgba(165,180,252,.2);color:#dbeafe}.agent-journey pre{color:#dbeafe}.agent-journey details{border-color:rgba(165,180,252,.18);background:rgba(255,255,255,.045)}.agent-journey details summary{color:#dbeafe}.agent-journey .journey-row-active .text-slate-800{color:#fff}.agent-journey .journey-row .text-emerald-600{color:#6ee7b7}.agent-journey .journey-row .text-indigo-600{color:#a5b4fc}.agent-journey .journey-row .text-amber-600{color:#fcd34d}
-        .agent-journey .journey-row{transition:background .16s ease,border-color .16s ease}
-        .agent-journey .journey-row:hover{background:#f8faff}
-        .agent-journey .journey-row-active{background:#f3f5ff;border-color:#c7d2fe}
-        .agent-journey .journey-pulse{animation:journeyPulse 1.8s ease-in-out infinite}
-        @keyframes journeyPulse{0%,100%{box-shadow:0 0 0 0 rgba(79,70,229,.16)}50%{box-shadow:0 0 0 5px rgba(79,70,229,0)}}
-        .agent-journey .journey-json{background:#f8fafc;border:1px solid #e2e8f0;color:#334155}
+        .agent-journey{isolation:isolate;background:radial-gradient(ellipse at 48% 38%,rgba(111,74,255,.19),transparent 38%),radial-gradient(ellipse at 95% 0%,rgba(34,211,238,.12),transparent 34%),linear-gradient(150deg,#08091f 0%,#111338 48%,#090d27 100%);border-color:rgba(167,139,250,.32);color:#e8eaff;box-shadow:0 24px 70px rgba(7,8,35,.34),inset 0 1px rgba(255,255,255,.08)}
+        .agent-journey:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(205,190,255,.48) .65px,transparent .9px),radial-gradient(rgba(103,232,249,.28) .8px,transparent 1px);background-size:29px 29px,47px 47px;background-position:0 0,13px 19px;mask-image:linear-gradient(180deg,black,transparent 96%)}
+        .agent-journey:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:65%;height:48%;left:18%;top:20%;background:radial-gradient(ellipse,rgba(124,58,237,.16),transparent 68%);filter:blur(28px)}
+        .agent-journey header{border-color:rgba(196,181,253,.16)}
+        .agent-journey h2,.agent-journey h3,.agent-journey .text-slate-900,.agent-journey .text-slate-800,.agent-journey .text-slate-700{color:#f1efff}
+        .agent-journey .text-slate-600,.agent-journey .text-slate-500,.agent-journey .text-slate-400{color:#a5add2}
+        .agent-journey .journey-json{background:rgba(3,5,24,.86);border:1px solid rgba(167,139,250,.22);color:#e3e7ff}
+        .agent-journey pre{color:#e3e7ff}.agent-journey details{border-color:rgba(196,181,253,.2);background:rgba(255,255,255,.045)}.agent-journey details summary{color:#e7e5ff}
+        .agent-journey .orbit-stage{position:relative;min-height:310px;overflow:hidden;border:1px solid rgba(167,139,250,.16);border-radius:22px;background:radial-gradient(ellipse at 50% 50%,rgba(91,55,180,.2),transparent 42%),linear-gradient(145deg,rgba(19,20,58,.72),rgba(7,12,39,.5));box-shadow:inset 0 0 42px rgba(124,58,237,.08)}
+        .agent-journey .orbit-stage:before{content:"";position:absolute;inset:0;background:radial-gradient(rgba(196,181,253,.28) .7px,transparent .9px);background-size:19px 19px;opacity:.32;mask-image:radial-gradient(ellipse,black,transparent 78%)}
+        .agent-journey .orbit-ring{position:absolute;left:50%;top:50%;width:69%;height:58%;border:1px solid rgba(167,139,250,.32);border-radius:50%;transform:translate(-50%,-50%) rotate(-19deg);box-shadow:0 0 22px rgba(124,58,237,.12),inset 0 0 18px rgba(34,211,238,.05)}
+        .agent-journey .orbit-ring.ring-two{width:88%;height:76%;border-color:rgba(103,232,249,.15);transform:translate(-50%,-50%) rotate(24deg);border-style:dashed;animation:orbitDrift 46s linear infinite}
+        .agent-journey .orbit-core{position:absolute;left:50%;top:50%;width:74px;height:74px;transform:translate(-50%,-50%);display:grid;place-items:center;border-radius:50%;border:1px solid rgba(196,181,253,.62);background:radial-gradient(circle at 34% 28%,rgba(255,255,255,.95),rgba(196,181,253,.78) 9%,rgba(124,58,237,.55) 33%,rgba(19,20,70,.95) 72%);box-shadow:0 0 18px rgba(167,139,250,.7),0 0 48px rgba(124,58,237,.46),inset 0 0 18px rgba(255,255,255,.32);animation:coreBreathe 4s ease-in-out infinite}
+        .agent-journey .orbit-core:after{content:"";position:absolute;inset:-12px;border:1px solid rgba(103,232,249,.34);border-radius:50%;box-shadow:0 0 24px rgba(34,211,238,.16);animation:coreHalo 3.2s ease-out infinite}
+        .agent-journey .orbit-node{position:absolute;z-index:2;width:min(46%,132px);min-height:43px;transform:translate(-50%,-50%);display:flex;align-items:center;gap:7px;padding:7px 9px;border:1px solid rgba(196,181,253,.28);border-radius:14px;background:linear-gradient(135deg,rgba(38,36,91,.92),rgba(14,21,57,.92));color:#e9e8ff;text-align:left;box-shadow:0 7px 22px rgba(0,0,0,.24),inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(12px);transition:transform .22s,border-color .22s,box-shadow .22s}
+        .agent-journey .orbit-node:hover{transform:translate(-50%,-50%) scale(1.055);border-color:rgba(196,181,253,.72);box-shadow:0 0 22px rgba(139,92,246,.28)}
+        .agent-journey .orbit-node.active{border-color:rgba(103,232,249,.86);background:linear-gradient(135deg,rgba(91,57,177,.96),rgba(19,53,91,.96));box-shadow:0 0 0 1px rgba(103,232,249,.2),0 0 28px rgba(139,92,246,.48),inset 0 0 18px rgba(103,232,249,.12)}
+        .agent-journey .orbit-node.running{border-color:rgba(103,232,249,.75);box-shadow:0 0 22px rgba(34,211,238,.32);animation:nodeGlow 2.4s ease-in-out infinite}
+        .agent-journey .orbit-node .node-icon{width:22px;height:22px;flex:0 0 auto;display:grid;place-items:center;border-radius:50%;background:rgba(255,255,255,.08)}
+        .agent-journey .detail-glass{border:1px solid rgba(167,139,250,.28);border-radius:18px;background:linear-gradient(145deg,rgba(24,25,65,.91),rgba(8,14,42,.94));box-shadow:0 16px 42px rgba(0,0,0,.25),inset 0 1px rgba(255,255,255,.08);backdrop-filter:blur(16px)}
+        .agent-journey .journey-progress{background:linear-gradient(90deg,#8b5cf6,#c084fc,#67e8f9);box-shadow:0 0 14px rgba(103,232,249,.6)}
+        @keyframes coreBreathe{0%,100%{filter:brightness(.92);transform:translate(-50%,-50%) scale(.96)}50%{filter:brightness(1.22);transform:translate(-50%,-50%) scale(1.04)}}
+        @keyframes coreHalo{0%{transform:scale(.86);opacity:.8}100%{transform:scale(1.45);opacity:0}}
+        @keyframes nodeGlow{0%,100%{box-shadow:0 0 12px rgba(34,211,238,.18)}50%{box-shadow:0 0 27px rgba(34,211,238,.42)}}
+        @keyframes orbitDrift{to{transform:translate(-50%,-50%) rotate(384deg)}}
+        @media(max-width:640px){.agent-journey .orbit-stage{min-height:280px}.agent-journey .orbit-node{width:min(48%,126px);padding:6px 7px}.agent-journey .orbit-core{width:60px;height:60px}}
         @media(prefers-reduced-motion:reduce){.agent-journey *{animation:none!important;transition:none!important}}
       `}</style>
 
-      <header className="relative border-b border-indigo-200/15 px-4 py-3">
+      <header className="relative border-b border-violet-200/15 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-300/30 bg-indigo-400/15 text-cyan-200"><Activity className="h-4 w-4"/></span>
             <div className="min-w-0">
-              <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-slate-900">Agent 执行旅程</h2><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stateClass[state.tone]}`}>{state.label}</span></div>
-              <p className="mt-0.5 truncate text-[10px] text-slate-400">{message?.userPrompt || "从任务理解到工具执行，逐步呈现实际发生的过程"}</p>
+              <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-slate-900">梦境星轨</h2><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stateClass[state.tone]}`}>{state.label}</span></div>
+              <p className="mt-0.5 truncate text-[10px] text-slate-400">{message?.userPrompt || "每一步真实执行，都在星海中留下轨迹"}</p>
             </div>
           </div>
           <div className="hidden shrink-0 items-center gap-3 text-[10px] text-slate-400 sm:flex">
@@ -155,7 +173,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
           </div>
         </div>
         <div className="mt-3 flex h-1 items-center overflow-hidden rounded-full bg-white/10">
-          <div className="h-full rounded-full bg-gradient-to-r from-indigo-400 via-violet-300 to-cyan-300 shadow-[0_0_14px_rgba(103,232,249,.55)] transition-all duration-500" style={{width:`${ordered.length ? completed / ordered.length * 100 : 0}%`}}/>
+          <div className="journey-progress h-full rounded-full transition-all duration-500" style={{width:`${ordered.length ? completed / ordered.length * 100 : 0}%`}}/>
         </div>
       </header>
 
@@ -166,39 +184,38 @@ export const MissionControlTimeline: React.FC<Props> = ({
           <p className="mt-1.5 max-w-xs text-xs leading-5 text-slate-500">这里只呈现 Agent 或执行端实际上报的步骤，不会用推测内容补齐过程。</p>
         </div>
       ) : (
-        <div className="relative grid gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(250px,0.82fr)_minmax(0,1.18fr)] lg:items-start">
-          <div className="min-w-0 order-2 lg:order-1">
-          <div className="mb-2 flex items-center justify-between gap-2">
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-700"><GitBranch className="h-3.5 w-3.5 text-indigo-500"/>执行路径 <span className="font-normal text-slate-400">· {ordered.length} 个事件</span></div>
-            <span className="text-[9px] text-slate-400">选择步骤查看详情</span>
-          </div>
-          <div className="relative max-h-[min(68vh,680px)] overflow-y-auto pr-1 [scrollbar-width:thin]">
-            <div className="absolute bottom-4 left-[13px] top-4 w-px bg-gradient-to-b from-indigo-400/80 via-cyan-300/55 to-transparent"/>
-            <div className="space-y-1.5">
+        <div className="relative grid gap-3 px-3 py-3 sm:px-4 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:items-start">
+          <div className="min-w-0 order-1">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-[11px] font-semibold text-violet-100"><Sparkles className="h-3.5 w-3.5 text-cyan-200"/>梦境轨迹 <span className="font-normal text-violet-200/65">· {ordered.length} 个节点</span></div>
+              <span className="text-[9px] text-violet-200/60">点亮节点查看旅程</span>
+            </div>
+            <div className="orbit-stage">
+              <div className="absolute left-3 top-3 z-[1] flex items-center gap-1.5 text-[9px] tracking-[.18em] text-violet-200/50"><span className="h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_#67e8f9]"/>{state.label.toUpperCase()}</div>
+              <div className="orbit-ring"/>
+              <div className="orbit-ring ring-two"/>
+              <div className="orbit-core"><Sparkles className="h-8 w-8 text-white drop-shadow-[0_0_10px_rgba(255,255,255,.9)]"/></div>
               {ordered.map((step,index)=>{
                 const info=phaseMeta[step.phase]||phaseMeta.external;
                 const Icon=info.icon;
                 const active=selected?.stepId===step.stepId;
                 const tone=toneForStep(step.status);
                 const stateLabel=(statusMeta[step.status]||statusMeta.unknown).label;
-                const token=tokenText(step.rightDetail);
-                return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-expanded={active} className={`journey-row relative flex w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-left ${active?"journey-row-active":"border-transparent"}`}>
-                  <span className={`relative z-[1] flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border bg-white ${tone==="running"?"journey-pulse border-indigo-300 text-indigo-600":tone==="done"?"border-emerald-200 text-emerald-600":tone==="failed"?"border-rose-200 text-rose-600":tone==="unknown"?"border-amber-200 text-amber-600":"border-slate-200 text-slate-400"}`}>
-                    {tone==="running"?<Loader2 className="h-3.5 w-3.5 animate-spin"/>:tone==="done"?<CheckCircle2 className="h-3.5 w-3.5"/>:tone==="failed"?<XCircle className="h-3.5 w-3.5"/>:tone==="unknown"?<CircleHelp className="h-3.5 w-3.5"/>:<Icon className="h-3.5 w-3.5"/>}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="flex min-w-0 items-center gap-1.5"><span className="font-mono text-[9px] text-slate-400">{String(step.seq).padStart(2,"0")}</span><span className="truncate text-[11px] font-semibold text-slate-800">{step.rightTitle||step.leftTitle||`步骤 ${index+1}`}</span><span className={`shrink-0 text-[9px] font-medium ${tone==="done"?"text-emerald-600":tone==="running"?"text-indigo-600":tone==="failed"?"text-rose-600":tone==="unknown"?"text-amber-600":"text-slate-400"}`}>{stateLabel}</span></span>
-                    <span className="mt-0.5 block truncate text-[10px] leading-4 text-slate-500">{step.rightSubtitle||step.leftSummary||(step.status==="running"?info.verb:step.status==="done"||step.status==="passed"?"步骤已完成":step.status==="failed"?"执行失败":step.status==="pending"?"等待执行":"执行端未提供说明")}</span>
-                  </span>
-                  <span className="flex shrink-0 items-center gap-2 text-[9px] text-slate-400"><span>{durationText(step.durationMs)}</span>{token&&<span className="hidden font-mono text-indigo-500 sm:inline">{token} tok</span>}<ChevronDown className={`h-3 w-3 transition ${active?"rotate-180 text-indigo-500":"text-slate-300"}`}/></span>
+                const angle=(-90+(index/Math.max(ordered.length,1))*360)*Math.PI/180;
+                const radius=ordered.length>7?(index%2===0?35:43):39;
+                const x=50+Math.cos(angle)*radius;
+                const y=50+Math.sin(angle)*34;
+                return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-expanded={active} title={step.rightTitle||step.leftTitle||`步骤 ${index+1}`} className={`orbit-node ${active?"active":""} ${tone==="running"?"running":""}`} style={{left:`${x}%`,top:`${y}%`}}>
+                  <span className={`node-icon ${tone==="done"?"text-emerald-300":tone==="running"?"text-cyan-200":tone==="failed"?"text-rose-300":tone==="unknown"?"text-amber-200":"text-violet-200"}`}>{tone==="running"?<Loader2 className="h-3.5 w-3.5 animate-spin"/>:tone==="done"?<CheckCircle2 className="h-3.5 w-3.5"/>:tone==="failed"?<XCircle className="h-3.5 w-3.5"/>:tone==="unknown"?<CircleHelp className="h-3.5 w-3.5"/>:<Icon className="h-3.5 w-3.5"/>}</span>
+                  <span className="min-w-0 flex-1"><span className="block truncate text-[9px] font-semibold leading-4">{step.rightTitle||step.leftTitle||`步骤 ${index+1}`}</span><span className="block text-[8px] text-violet-200/65">{String(step.seq).padStart(2,"0")} · {stateLabel}</span></span>
                 </button>;
               })}
+              <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between text-[8px] text-violet-200/45"><span>OWNAGENT · DREAM ORBIT</span><span>{completed}/{ordered.length} 已完成</span></div>
             </div>
+            <div className="mt-2 flex items-center justify-between px-1 text-[9px] text-violet-200/55"><span>{running?"星轨正在延伸，Agent 仍在执行":failures?`${failures} 个节点出现异常`:unknown?`${unknown} 个节点状态未知`:"旅程已记录"}</span><span>仅呈现实际上报的数据</span></div>
           </div>
-          </div>
-
           {selected && (
-            <div className="min-w-0 order-1 lg:order-2 overflow-hidden rounded-2xl border border-indigo-300/25 bg-slate-950/45 shadow-[0_12px_48px_rgba(0,0,0,.24)] lg:sticky lg:top-3 lg:max-h-[min(72vh,720px)] lg:overflow-y-auto [scrollbar-width:thin]">
+            <div className="detail-glass min-w-0 order-2 overflow-hidden lg:sticky lg:top-3 lg:max-h-[min(72vh,720px)] lg:overflow-y-auto [scrollbar-width:thin]">
               <div className="flex items-center justify-between gap-2 border-b border-indigo-200/15 bg-indigo-400/10 px-3 py-3">
                 <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/20 bg-indigo-300/10 text-cyan-200 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-cyan-200">STEP {String(selected.seq).padStart(2,"0")}<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
                 <div className="flex shrink-0 items-center gap-2 text-[9px] text-slate-500"><span><Clock3 className="mr-1 inline h-3 w-3"/>{durationText(selected.durationMs)}</span><span>Token <b className="font-mono text-slate-700">{tokenText(detail)??"未上报"}</b></span></div>
