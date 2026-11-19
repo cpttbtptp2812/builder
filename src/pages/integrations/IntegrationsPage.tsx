@@ -109,7 +109,7 @@ with tracer.start_as_current_span("invoke_agent") as span:
     "title": "Langfuse / Phoenix 等现有观测平台",
     "subtitle": "让 OwnAgent 将已接收的 OTLP/JSON Trace 再转发到兼容的 Langfuse / Phoenix 接收端；这是后端转发，不是嵌入第三方 UI。",
     "install": "# 在 OwnAgent 后端服务环境中配置以下变量",
-    "code": "# Backend -> Langfuse / Phoenix / compatible OTLP-HTTP JSON receiver\nOWNAGENT_OTLP_EXPORT_ENDPOINT=https://your-observability-host/v1/traces\nOWNAGENT_OTLP_EXPORT_AUTHORIZATION=Bearer your-export-token\n\n# Agent -> OwnAgent receiver (configured in the Agent process)\nOWNAGENT_OTLP_ENDPOINT=https://your-ownagent-host/api/v1/otlp/v1/traces\nOWNAGENT_AGENT_API_KEY=oa_live_...\n\n# Prompt / response content capture remains opt-in at the Agent instrumentation layer\nOWNAGENT_TRACE_CAPTURE_CONTENT=1"
+    "code": "# Backend -> Langfuse / Phoenix / compatible OTLP-HTTP JSON receiver\nOWNAGENT_OTLP_EXPORT_ENDPOINT=https://your-observability-host/v1/traces\nOWNAGENT_OTLP_EXPORT_AUTHORIZATION=Bearer your-export-token  # or Basic base64(public:secret) for Langfuse\n\n# Agent -> OwnAgent receiver (configured in the Agent process)\nOWNAGENT_OTLP_ENDPOINT=https://your-ownagent-host/api/v1/otlp/v1/traces\nOWNAGENT_AGENT_API_KEY=oa_live_...\n\n# Prompt / response content capture remains opt-in at the Agent instrumentation layer\nOWNAGENT_TRACE_CAPTURE_CONTENT=1"
 },
 };
 
