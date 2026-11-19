@@ -245,8 +245,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
         aria-expanded={detailsOpen}
       >
         <span className="flex min-w-0 items-center gap-2">
-          <Activity className="h-4 w-4 shrink-0 text-indigo-600" />
-          <b className="truncate text-xs text-slate-100">连接外部 Agent 观察执行</b>
+          <Activity className="h-4 w-4 shrink-0 text-cyan-200" />
+          <b className="truncate text-xs text-slate-100">外部 Agent Trace</b>
           <span className={`rounded-full border px-2 py-0.5 text-[10px] ${connected ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-200" : loading ? "border-sky-300/30 bg-sky-400/10 text-sky-200" : "border-white/10 bg-white/5 text-slate-400"}`}>
             {connected ? "实时连接中" : loading ? "正在连接" : "未连接"}
           </span>
