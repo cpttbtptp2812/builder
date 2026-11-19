@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from "react";
-import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, RefreshCw, XCircle } from "lucide-react";
+import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, RefreshCw, X, XCircle } from "lucide-react";
 
 type TraceSpan = {
   traceId: string;
@@ -73,7 +73,7 @@ const statusLabel: Record<Run["status"], string> = {
   UNKNOWN: "状态未知",
 };
 
-export default function RunsPage() {
+export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [apiKey, setApiKey] = useState("");
   const [spans, setSpans] = useState<TraceSpan[]>([]);
   const [selectedTrace, setSelectedTrace] = useState<string | null>(null);
@@ -116,9 +116,12 @@ export default function RunsPage() {
     <div className="flex h-full min-h-0 flex-col overflow-auto bg-slate-50 text-slate-900">
       <header className="border-b border-slate-200 bg-white px-6 py-5">
         <div className="mx-auto flex w-full max-w-7xl flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Activity size={17} className="text-indigo-600" /> Agent 运行记录</div>
-            <p className="mt-1 text-xs text-slate-500">查看通过 OwnAgent SDK 或 OTLP 上报的真实 Trace。此页面不会生成示例记录。</p>
+          <div className="flex min-w-0 items-start justify-between gap-3">
+            <div>
+              <div className="flex items-center gap-2 text-sm font-semibold text-slate-900"><Activity size={17} className="text-indigo-600" /> 外部 Agent 执行记录</div>
+              <p className="mt-1 text-xs text-slate-500">查看通过 OwnAgent SDK 或 OTLP 上报的真实 Trace。此处记录与当前内置聊天分开，按 Agent API Key 隔离。</p>
+            </div>
+            {onClose && <button onClick={onClose} aria-label="关闭外部 Agent 记录" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={17} /></button>}
           </div>
           <div className="flex w-full max-w-xl items-center gap-2 sm:w-auto">
             <div className="relative min-w-0 flex-1">
