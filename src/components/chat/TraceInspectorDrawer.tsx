@@ -304,7 +304,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               ? "⚡ 缓存秒回"
               : message.isThinking
               ? "处理中..."
-              : `✓ ${(totalMs / 1000).toFixed(1)}s`}
+              : message.id === "observer-empty" ? "等待任务" : totalMs > 0 ? (totalMs / 1000).toFixed(1) + "s" : "等待数据"}
           </span>
         </div>
 
@@ -378,6 +378,11 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
 
       {/* ── 核心内容区：Agent 执行过程观察器 ── */}
       <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 scrollbar-hide">
+        {activeTab === "flow" && <div className="mb-3 grid grid-cols-3 gap-2">
+          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">执行事件</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{timeline.length}</div></div>
+          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">总耗时</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{totalMs > 0 ? (totalMs / 1000).toFixed(2) + "s" : "—"}</div></div>
+          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">Token 用量</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{typeof message.tokens === "number" && message.tokens > 0 ? message.tokens.toLocaleString() : "未上报"}</div></div>
+        </div>}
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
           <>
