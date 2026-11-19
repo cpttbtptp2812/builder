@@ -4,7 +4,7 @@ import {
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
 } from "lucide-react";
 
-type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp" | "promptfoo" | "frameworks";
+type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp" | "mcp-inspector" | "promptfoo" | "frameworks";
 
 const guides: Record<GuideKey, { title: string; subtitle: string; install: string; code: string }> = {
   sdk: {
@@ -99,6 +99,12 @@ with tracer.start_as_current_span("invoke_agent") as span:
     "install": "npx promptfoo@latest init --example getting-started\nnpx promptfoo@latest eval -c promptfooconfig.yaml -o results.json -o report.html",
     "code": "description: OwnAgent Agent regression suite\nprompts:\n  - |\n    You are a careful assistant. Answer the user's question accurately.\n    Question: {{question}}\nproviders:\n  - openai:gpt-4.1-mini\ntests:\n  - vars:\n      question: \"What is a parent span in distributed tracing?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains parent-child trace relationships accurately.\"\n  - vars:\n      question: \"If a tool call fails, what should an Agent do?\"\n    assert:\n      - type: llm-rubric\n        value: \"Explains error handling and retry safety without claiming every failure is retryable.\"\n"
 },
+  mcpInspector: {
+    "title": "MCP Inspector · 官方工具调试器",
+    "subtitle": "复用 MCP 官方 Inspector 的 Web、CLI 和 TUI 客户端调试 MCP Server。OwnAgent 不复制其 UI；Inspector 在开发机本地启动。",
+    "install": "npx @modelcontextprotocol/inspector",
+    "code": "npx @modelcontextprotocol/inspector\n\n# 可脚本化调试 / CI\nnpx @modelcontextprotocol/inspector --cli\n\n# 终端交互界面\nnpx @modelcontextprotocol/inspector --tui"
+},
   frameworks: {
     title: "Langfuse / Phoenix 等现有观测平台",
     subtitle: "保留现有平台，通过 OTLP 将 Trace 同步到 OwnAgent；具体双写配置需按部署版本验证",
@@ -122,7 +128,7 @@ const statusItems = [
   { name: "OwnAgent Python SDK", detail: "Run / Span、父子关系、Provider Token Usage", status: "已实现", icon: Code2 },
   { name: "Langfuse / Phoenix 转发", detail: "后端已有可配置 OTLP 导出路径；需按实际部署完成端到端验证", status: "可配置", icon: GitBranch },
   { name: "Promptfoo CLI", detail: "可复用上游 CLI；OwnAgent 提供配置指南与 JSON 报告预览，尚无服务端执行器", status: "外部接入", icon: Workflow },
-  { name: "MCP Inspector", detail: "MCP 工具调试 UI 候选，尚未嵌入工作台", status: "待集成", icon: PlugZap },
+  { name: "MCP Inspector", detail: "官方 Web / CLI / TUI 可在开发机独立启动；不复制其 UI", status: "外部工具可用", icon: PlugZap },
 ];
 
 export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => void }) {
@@ -209,6 +215,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                   ["agents", "OpenAI Agents SDK"],
                   ["mcp", "MCP Trace 传播"],
                   ["promptfoo", "Promptfoo 评估"],
+                  ["mcp-inspector", "MCP Inspector"],
                   ["frameworks", "现有平台 / 环境变量"],
                 ] as [GuideKey, string][]).map(([key, label]) => (
                   <button key={key} onClick={() => setActive(key)} className={`rounded-lg px-3 py-2 text-xs font-medium transition ${active === key ? "bg-indigo-600 text-white" : "bg-slate-100 text-slate-600 hover:bg-slate-200"}`}>{label}</button>
