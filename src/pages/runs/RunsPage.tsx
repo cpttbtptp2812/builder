@@ -380,9 +380,9 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         <section className="min-h-[420px] min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
           {!selected ? (
             <div className="flex h-full min-h-[420px] flex-col items-center justify-center px-6 text-center">
-              <Activity size={28} className="text-slate-300" />
-              <p className="mt-3 text-sm font-medium text-slate-700">选择一条运行记录</p>
-              <p className="mt-1 text-xs text-slate-500">每个 Span 都来自后端已保存的 Trace 数据。</p>
+              {detailLoading ? <RefreshCw size={26} className="animate-spin text-indigo-400" /> : <Activity size={28} className="text-slate-300" />}
+              <p className="mt-3 text-sm font-medium text-slate-700">{detailLoading ? "正在读取运行详情…" : "选择一条运行记录"}</p>
+              <p className="mt-1 text-xs text-slate-500">{detailLoading ? "正在从后端加载真实 Span 和事件。" : "每个 Span 都来自后端已保存的 Trace 数据。"}</p>
             </div>
           ) : (
             <>
@@ -400,10 +400,11 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                     </button>
                   </div>
                 </div>
-                <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-5">
+                <div className="mt-3 grid grid-cols-2 gap-3 text-xs sm:grid-cols-6">
                   <div><p className="text-slate-400">开始时间</p><p className="mt-1 text-slate-700">{dateLabel(selected.run.startedAt)}</p></div>
                   <div><p className="text-slate-400">Span 数量</p><p className="mt-1 tabular-nums text-slate-700">{selected.spans.length}</p></div>
-                  <div><p className="text-slate-400">Token（已上报）</p><p className="mt-1 tabular-nums text-slate-700">{selected.run.totalTokens?.toLocaleString() ?? "—"}</p></div>
+                  <div><p className="text-slate-400">输入 / 输出 Token</p><p className="mt-1 tabular-nums text-slate-700">{selected.run.inputTokens?.toLocaleString() ?? "—"} / {selected.run.outputTokens?.toLocaleString() ?? "—"}</p></div>
+                  <div><p className="text-slate-400">失败 Span</p><p className="mt-1 tabular-nums text-slate-700">{selected.run.errorCount}</p></div>
                   <div><p className="text-slate-400">Run ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.run.runId || "—"}</p></div>
                   <div><p className="text-slate-400">Session ID</p><p className="mt-1 break-all font-mono text-slate-700">{selected.run.sessionId || "—"}</p></div>
                 </div>
