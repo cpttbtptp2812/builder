@@ -5,7 +5,7 @@ import {
   Network, Radio, ShieldAlert, Terminal, XCircle, Zap
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
-import { TraceDrawerMessage } from "./TraceInspectorDrawer";
+import type { TraceDrawerMessage } from "./TraceInspectorDrawer";
 
 interface Props {
   timeline: AgentStep[];
@@ -48,9 +48,19 @@ const text = (value:any) => {
   if(typeof value==="number" || typeof value==="boolean") return String(value);
   try{return JSON.stringify(value,null,2)}catch{return String(value)}
 };
-const toolOf = (step:AgentStep) => String(read(step.rightDetail,["tool","tool_name","toolName","name"]) || "");
+const messageText = (message:any):string => {
+  if(typeof message==="string") return message;
+  if(message && typeof message==="object") {
+    if(typeof message.content==="string") return message.content;
+    if(typeof message.text==="string") return message.text;
+    if(Array.isArray(message.parts)) return message.parts.map((part:any)=>part?.text??part?.content??"").filter(Boolean).join("\n");
+  }
+  return text(message);
+};
+const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","tool","tool_name","toolName","name","mcp.method.name"]) || "");
+const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name","span.name","spanName"]) || "").toLowerCase();
 const adapterOf = (step:AgentStep):AdapterKind => {
-  const name=toolOf(step).toLowerCase();
+  const name=(toolOf(step)+" "+operationOf(step)+" "+step.rightTitle+" "+step.leftTitle).toLowerCase();
   const phase=step.phase;
   if(/git|github|commit|branch|repository/.test(name)) return "git";
   if(/browser|playwright|navigate|click|screenshot|computer/.test(name)) return "browser";
@@ -59,7 +69,7 @@ const adapterOf = (step:AgentStep):AdapterKind => {
   if(/approv|permission|policy|risk|authorize/.test(name)) return "approval";
   if(/agent|delegate|handoff|transfer/.test(name)) return "agent";
   if(/terminal|shell|command|exec/.test(name)) return "terminal";
-  if(phase==="llm") return "model";
+  if(/chat|inference|generate_content|invoke_model|model_call|llm/.test(name) || phase==="llm") return "model";
   return "generic";
 };
 const adapterMeta:Record<AdapterKind,{label:string;icon:React.ElementType;accent:string;verb:string}> = {
@@ -103,10 +113,13 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const args=read(d,["arguments","args","parameters","tool_input","input"]);
   const result=read(d,["result","tool_result","tool_output","output","response"]);
   const approval=read(d,["approvalStatus","approval_status","decision","riskLevel","risk_level"]);
-  const model=read(d,["model","actual_model","modelName"]);
-  const provider=read(d,["provider","provider_route"]);
-  const promptMessages=read(d,["prompt_messages","promptMessages","messages","llm_messages"]);
-  const modelResponse=read(d,["model_response","modelResponse","completion","assistant_message"]);
+  const model=read(d,["gen_ai.request.model","model","actual_model","modelName"]);
+  const provider=read(d,["gen_ai.system","provider","provider_route"]);
+  const promptMessages=read(d,["gen_ai.input.messages","prompt_messages","promptMessages","messages","llm_messages"]);
+  const modelResponse=read(d,["gen_ai.output.messages","model_response","modelResponse","completion","assistant_message"]);
+  const inputTokens=read(d,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]);
+  const outputTokens=read(d,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]);
+  const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
   const dataTone=adapter==="approval"?"amber":adapter==="retrieval"?"blue":"cyan";
@@ -163,10 +176,10 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
       <div className="reality-block-head"><BrainCircuit size={15}/> 模型调用现场 <span>INFERENCE</span></div>
       <div className="reality-git-target"><div><small>模型</small><strong>{model?text(model):"未上报"}</strong></div><div><small>Provider</small><strong>{provider?text(provider):"未上报"}</strong></div></div>
       {decision!==undefined&&<div className="reality-empty-visual mt-3"><strong>显式行动摘要</strong><br/>{text(decision)}</div>}
-      {Array.isArray(promptMessages)&&<div className="mt-3 grid gap-2">{promptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{text(item?.content??item).slice(0,2400)}</span></div>)}</div>}
+      {Array.isArray(promptMessages)&&<div className="mt-3 grid gap-2">{promptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{messageText(item?.content??item?.message??item).slice(0,2400)}</span></div>)}</div>}
       {promptMessages===undefined&&<div className="reality-empty-visual mt-3">模型请求消息未采集。可以在后端启用请求内容采集后显示真实消息。</div>}
-      {modelResponse!==undefined&&<div className="reality-code-preview">{text(modelResponse).slice(0,4000)}</div>}
-      <div className="mt-3 text-[10px] text-indigo-100/40">展示实际请求与响应，不展示或伪造模型隐藏思维链。</div>
+      {modelResponse!==undefined&&<div className="reality-code-preview">{Array.isArray(modelResponse)?modelResponse.map(messageText).join("\n\n"):messageText(modelResponse).slice(0,4000)}</div>}
+      {(inputTokens!==undefined||outputTokens!==undefined||totalTokens!==undefined)&&<div className="reality-git-target mt-3"><div><small>输入 Token</small><strong>{inputTokens!==undefined?text(inputTokens):"未上报"}</strong></div><div><small>输出 Token</small><strong>{outputTokens!==undefined?text(outputTokens):"未上报"}</strong></div></div>}<div className="mt-3 text-[10px] text-indigo-100/40">展示实际请求与响应，不展示或伪造模型隐藏思维链。</div>
     </div>}
 
     {adapter==="generic" && <div className="reality-visual-block"><div className="reality-block-head"><Layers3 size={15}/> 执行现场 <span>EVENT DATA</span></div><div className="reality-empty-visual">{step.rightSubtitle||step.leftSummary||"执行端只上报了事件基础信息。"}</div></div>}
@@ -175,7 +188,7 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
     {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>查看本次动作的真实返回</summary><pre>{text(result)}</pre></details>}
     <div className="reality-result-strip">
       <div><small>真实返回</small><strong>{result!==undefined?summarize(result):"尚未上报"}</strong></div>
-      <div><small>Token 用量</small><strong>{read(d,["total_tokens","totalTokens"])??read(d.usage,["total_tokens","totalTokens"])??"未上报"}</strong></div>
+      <div><small>Token 用量</small><strong>{totalTokens!==undefined?text(totalTokens):read(d.usage,["total_tokens","totalTokens"])??"未上报"}</strong></div>
       <div><small>耗时</small><strong>{duration}</strong></div>
     </div>
     <details className="reality-raw"><summary>开发者视图 · 原始事件数据</summary><pre>{text(d)}</pre></details>
