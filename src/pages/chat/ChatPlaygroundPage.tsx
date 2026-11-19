@@ -966,10 +966,10 @@ export default function ChatPlaygroundPage({
         .dream-chat-world:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(210,202,255,.48) .7px,transparent .9px),radial-gradient(rgba(103,232,249,.28) .8px,transparent 1px);background-size:31px 31px,53px 53px;background-position:0 0,17px 23px;mask-image:linear-gradient(180deg,rgba(0,0,0,.9),transparent 94%)}
         .dream-chat-world:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:58%;height:48%;left:20%;top:26%;background:radial-gradient(ellipse,rgba(124,58,237,.12),transparent 70%);filter:blur(42px)}
         .ownagent-control-workspace .dream-chat-history{position:absolute;left:0;top:0;bottom:0;z-index:35;box-shadow:18px 0 45px rgba(0,0,0,.28)}
-        .ownagent-control-workspace .dream-chat-main{flex:0 0 40%;width:40%;min-width:340px;border-right:1px solid rgba(174,164,255,.18)}
-        .ownagent-control-workspace .trace-cosmos{flex:1 1 60%;width:60%;min-width:0;max-width:none;height:100%;border-left:1px solid rgba(111,133,255,.22);box-shadow:-20px 0 60px rgba(0,0,0,.18)}
+        .ownagent-control-workspace .dream-chat-main{flex:0 0 34%;width:34%;min-width:320px;border-right:1px solid rgba(174,164,255,.18)}
+        .ownagent-control-workspace .trace-cosmos{flex:1 1 66%;width:66%;min-width:0;max-width:none;height:100%;border-left:1px solid rgba(111,133,255,.22);box-shadow:-20px 0 60px rgba(0,0,0,.18)}
         .ownagent-control-workspace .dream-chat-toolbar{padding-left:18px;padding-right:18px}
-        .ownagent-control-workspace .dream-chat-scroll{padding-left:16px;padding-right:16px}
+        .ownagent-control-workspace .dream-chat-scroll{padding-left:14px;padding-right:14px}
         .ownagent-control-workspace .dream-composer{max-width:none}
         .ownagent-control-workspace .dream-chat-history{background:rgba(12,17,43,.64)!important;border-color:rgba(173,160,255,.16)!important;backdrop-filter:blur(18px)}
         .dream-chat-world .dream-chat-main{background:transparent}
@@ -1605,20 +1605,6 @@ export default function ChatPlaygroundPage({
                         </div>
 
                         <div className="flex-1 space-y-2 min-w-0">
-                          {/* 智能体中枢决策与思考流 (Thinking & Action Stream) */}
-                          <ThinkingStream
-                            timeline={msg.agentTimeline && msg.agentTimeline.length > 0 ? msg.agentTimeline : rebuildTimelineFromMessage(msg)}
-                            isThinking={msg.isThinking}
-                            activeStepId={focusedStepId}
-                            onSelectStep={(stepId) => {
-                              setFocusedStepId(stepId);
-                              setActiveTraceDrawer({ messageId: msg.id, defaultTab: "flow" });
-                            }}
-                            reasoning={msg.reasoning}
-                            userPrompt={msg.userPrompt}
-                            duration={msg.duration}
-                          />
-
                           {/* 文本回复泡 */}
                           <div className="dream-assistant-bubble rounded-2xl rounded-tl-sm p-4.5 text-sm leading-relaxed font-sans">
                             {msg.content ? (
