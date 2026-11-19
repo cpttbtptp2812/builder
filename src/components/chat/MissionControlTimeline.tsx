@@ -52,6 +52,26 @@ const pick = (detail: Record<string, any>, keys: string[]) => {
   return undefined;
 };
 
+// Agent SDKs may place captured payloads directly on the event or inside
+// OpenTelemetry-style attributes. Read both shapes without inventing content.
+const readCaptured = (detail: Record<string, any>, keys: string[]) => {
+  const attrs = detail.attributes && typeof detail.attributes === "object" ? detail.attributes : {};
+  const nested = detail.rightDetail && typeof detail.rightDetail === "object" ? detail.rightDetail : {};
+  const nestedAttrs = nested.attributes && typeof nested.attributes === "object" ? nested.attributes : {};
+  return pick(detail, keys) ?? pick(attrs, keys) ?? pick(nested, keys) ?? pick(nestedAttrs, keys);
+};
+const messageRoleLabel = (role: unknown) => {
+  const labels: Record<string, string> = { system: "系统提示词", developer: "开发者指令", user: "用户消息", assistant: "模型回复", tool: "工具返回" };
+  return typeof role === "string" ? labels[role] || role : "消息";
+};
+const messageContent = (message: any) => {
+  if (message == null) return "未提供";
+  if (typeof message === "string") return message;
+  if (typeof message.content === "string") return message.content;
+  if (Array.isArray(message.content)) return message.content.map((part: any) => typeof part === "string" ? part : part?.text ?? pretty(part)).join("\\n");
+  return pretty(message);
+};
+
 export const MissionControlTimeline: React.FC<Props> = ({
   timeline, message, activeStepId, onSelectStep, isThinking, onRetryRun
 }) => {
@@ -79,10 +99,15 @@ export const MissionControlTimeline: React.FC<Props> = ({
     if (next) onSelectStep?.(next);
   };
   const detail = selected?.rightDetail || {};
-  const input = pick(detail, ["arguments","args","input","parameters","request","tool_input","toolArguments","tool_arguments","prompt"]);
+  const promptMessages = readCaptured(detail, ["prompt_messages","promptMessages","messages","llm_messages"]);
+  const modelResponse = readCaptured(detail, ["model_response","modelResponse","completion","assistant_message"]);
+  const toolSchema = readCaptured(detail, ["tool_schema","toolSchema","tools"]);
+  const toolArguments = readCaptured(detail, ["tool_arguments","toolArguments","arguments","args","parameters","tool_input"]);
+  const toolResult = readCaptured(detail, ["tool_result","toolResult","result","tool_output"]);
+  const input = pick(detail, ["arguments","args","input","parameters","request","tool_input","toolArguments","tool_arguments","prompt"]) ?? readCaptured(detail, ["prompt"]);
   const output = pick(detail, ["result","output","response","content","tool_output","toolResult","tool_result"]);
   const why = pick(detail, ["reason","why","rationale","decision_summary","decisionSummary","reasoning_summary","reasoningSummary"]);
-  const error = pick(detail, ["error","errorMessage","error_message","exception"]);
+  const error = pick(detail, ["error","errorMessage","error_message","exception"]) ?? readCaptured(detail, ["error_message","errorMessage"]);
   const meta = selected ? (phaseMeta[selected.phase] || phaseMeta.external) : phaseMeta.external;
   const SelectedIcon = meta.icon;
   const selectedStatus = selected ? statusMeta[selected.status] || statusMeta.unknown : statusMeta.unknown;
@@ -172,13 +197,38 @@ export const MissionControlTimeline: React.FC<Props> = ({
               </div>
               <div className="px-3 py-2.5">
                 <p className="mb-2 text-[10px] leading-4 text-slate-600">{description}</p>
+                <div className="space-y-2">
+                  {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
+                    <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-800"><BrainCircuit className="h-3.5 w-3.5"/>实际发送给模型的提示词</div><span className="text-[9px] text-indigo-500">{promptMessages.length} 条消息</span></div>
+                    <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-md border border-indigo-100 bg-white">
+                      <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">{messageRoleLabel(msg?.role)}{msg?.name ? ` · ${msg.name}` : ""}</div>
+                      <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-2 py-2 text-[10px] leading-5 text-slate-700">{messageContent(msg)}</pre>
+                    </div>)}</div>
+                  </section>}
+                  {modelResponse !== undefined && <section className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5">
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-800"><Sparkles className="h-3.5 w-3.5"/>模型实际返回</div>
+                    <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{pretty(modelResponse)}</pre>
+                  </section>}
+                  {toolSchema !== undefined && <details className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                    <summary className="cursor-pointer text-[10px] font-semibold text-slate-700">本轮提供给模型的工具定义</summary>
+                    <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(toolSchema)}</pre>
+                  </details>}
+                  {toolArguments !== undefined && <section className="rounded-lg border border-sky-100 bg-sky-50/40 p-2.5">
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-sky-800"><Terminal className="h-3.5 w-3.5"/>工具实际收到的参数</div>
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-700">{pretty(toolArguments)}</pre>
+                  </section>}
+                  {toolResult !== undefined && <section className="rounded-lg border border-teal-100 bg-teal-50/40 p-2.5">
+                    <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-teal-800"><Eye className="h-3.5 w-3.5"/>工具实际执行结果</div>
+                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-700">{pretty(toolResult)}</pre>
+                  </section>}
+                </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {why!==undefined&&<div className="min-w-0 rounded-lg border border-violet-100 bg-violet-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-violet-700"><Sparkles className="h-3 w-3"/>决策摘要</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-slate-600">{pretty(why)}</div></div>}
                   {error!==undefined&&<div className="min-w-0 rounded-lg border border-rose-100 bg-rose-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3"/>错误信息</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-rose-700">{pretty(error)}</div></div>}
                   {input!==undefined&&<div className="min-w-0 rounded-lg border border-sky-100 bg-sky-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-700"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
                   {output!==undefined&&<div className="min-w-0 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
                 </div>
-                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&<div className="rounded-lg border border-dashed border-slate-200 px-3 py-2 text-[10px] leading-4 text-slate-500">该事件未单独上报输入、返回或决策摘要。</div>}
+                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/50 px-3 py-2 text-[10px] leading-4 text-amber-800">这条事件没有附带提示词、模型响应或工具 I/O 内容。需要在 Agent 实际调用模型和工具的位置启用内容采集；Studio 不会根据阶段名称补写。</div>}
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <button type="button" onClick={()=>setShowRaw(v=>!v)} className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-indigo-600"><ChevronDown className={`h-3 w-3 transition ${showRaw?"rotate-180":""}`}/>{showRaw?"收起原始事件":"查看原始事件"}</button>
                   <div className="flex items-center gap-2">
