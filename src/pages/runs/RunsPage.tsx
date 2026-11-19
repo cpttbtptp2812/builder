@@ -381,7 +381,9 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
           task: "请仅根据内置 Agent 本次运行中真实持久化的模型请求、模型响应、工具调用、工具结果和错误事件评估执行质量。",
-          answer: "",
+          answer: String(chatMessages.find((message: any) =>
+            message.role === "assistant" && (message.trace?.runId === selectedChatRunId || message.traceId === selectedChatRunDetail?.run?.traceId)
+          )?.content || ""),
           rubric: "任务完成度、指令遵循、工具使用合理性、执行可靠性。只依据已采集证据评分；证据不足时明确说明，不得推测未采集内容。"
         })
       });
@@ -409,6 +411,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         reasoning: undefined,
         traceSteps: stripInternalReasoning(parseStoredJson(message.traceStepsJson ?? message.traceSteps)),
         toolCalls: stripInternalReasoning(parseStoredJson(message.toolCallsJson ?? message.toolCalls)),
+        trace: stripInternalReasoning(parseStoredJson(message.traceJson ?? message.trace)),
       })));
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "读取内置对话失败");
@@ -848,6 +851,19 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                         </div>
                         {chatRunJudgeError && <p className="mt-2 text-[10px] text-rose-600">{chatRunJudgeError}</p>}
                         {chatRunJudge?.scores && <div className="mt-2 rounded-md bg-indigo-50 p-2 text-[10px] text-indigo-900">评估模型：{chatRunJudge.judgeModel} · 综合分：{chatRunJudge.scores.overall ?? "—"}<p className="mt-1 whitespace-pre-wrap">{chatRunJudge.scores.summary || "评估已保存。"}</p></div>}
+                        {(selectedChatRunDetail.evaluations || []).length > 0 && <details className="mt-3">
+                          <summary className="cursor-pointer text-[10px] font-semibold text-slate-700">历史评估 · {selectedChatRunDetail.evaluations.length}</summary>
+                          <div className="mt-2 space-y-1.5">
+                            {selectedChatRunDetail.evaluations.map((evaluation: any) => {
+                              const scores = parseStoredJson(evaluation.scores);
+                              return <div key={evaluation.evaluationId} className="rounded-md bg-slate-50 p-2 text-[10px]">
+                                <div className="flex items-center justify-between gap-2"><strong>{evaluation.judgeModel || "Judge"}</strong><span className="text-slate-400">综合分 {scores?.overall ?? "—"}</span></div>
+                                <p className="mt-1 whitespace-pre-wrap text-slate-600">{scores?.summary || evaluation.rubric || "已保存评估结果"}</p>
+                                <p className="mt-1 text-[9px] text-slate-400">{dateLabel(evaluation.createdAt)}</p>
+                              </div>;
+                            })}
+                          </div>
+                        </details>}
                         <details className="mt-3" open>
                           <summary className="cursor-pointer text-[11px] font-semibold text-slate-700">执行 Span · {selectedChatRunDetail.spans?.length ?? 0}</summary>
                           {(() => {
