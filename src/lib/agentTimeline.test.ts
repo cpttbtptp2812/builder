@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { applySseToTimeline, finalizeTimeline } from "./agentTimeline";
+import { applySseToTimeline, finalizeTimeline, rebuildTimelineFromMessage, sortTimeline } from "./agentTimeline";
 
 describe("Agent execution timeline event handling", () => {
   it("preserves known fields when a later SSE event is sparse", () => {
@@ -134,6 +134,35 @@ describe("Agent execution timeline event handling", () => {
     assert.equal(timeline[0].status, "running");
     assert.equal(timeline[1].status, "running");
     assert.equal(timeline[2].status, "done");
+  });
+
+  it("rebuilds saved tool arguments and results after refreshing the chat", () => {
+    const timeline = rebuildTimelineFromMessage({
+      toolCalls: [{
+        tool: "search_docs",
+        id: "call-history-9",
+        toolCallId: "call-history-9",
+        modelStep: 2,
+        status: "success",
+        parameters: { query: "heartbeat" },
+        result: ["doc-1"],
+        tool_arguments: { query: "heartbeat" },
+        tool_result: { success: true, data: ["doc-1"] },
+      }],
+    });
+
+    assert.equal(timeline.length, 1);
+    assert.equal(timeline[0].stepId, "call-history-9");
+    assert.deepEqual(timeline[0].rightDetail?.tool_arguments, { query: "heartbeat" });
+    assert.deepEqual(timeline[0].rightDetail?.tool_result, { success: true, data: ["doc-1"] });
+  });
+
+  it("uses timestamp ordering in the same sorter consumed by the observer", () => {
+    const sorted = sortTimeline([
+      { stepId: "tool", seq: 5, phase: "skill", status: "done", leftTitle: "Tool", leftSummary: "", rightTitle: "Tool", rightSubtitle: "", rightDetail: {}, timestamp: 3000 },
+      { stepId: "model", seq: 44, phase: "llm", status: "done", leftTitle: "Model", leftSummary: "", rightTitle: "Model", rightSubtitle: "", rightDetail: {}, timestamp: 2000 },
+    ]);
+    assert.deepEqual(sorted.map((step) => step.stepId), ["model", "tool"]);
   });
 
   it("keeps missing execution status unknown after the stream ends", () => {
