@@ -1,9 +1,8 @@
 import React, { useMemo, useState } from "react";
 import {
   Activity, BrainCircuit, CheckCircle2, CircleHelp, Clock3, Code2, Database,
-  Eye, FileCode2, GitBranch, GitCommitHorizontal, Globe2, Layers3, LockKeyhole,
-  Network, Play, Radio, RefreshCw, Search, ShieldAlert, Sparkles, Terminal,
-  Wrench, XCircle, Zap
+  FileCode2, GitBranch, GitCommitHorizontal, Globe2, Layers3, LockKeyhole,
+  Network, Radio, ShieldAlert, Terminal, XCircle, Zap
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
 import { TraceDrawerMessage } from "./TraceInspectorDrawer";
@@ -106,6 +105,9 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const approval=read(d,["approvalStatus","approval_status","decision","riskLevel","risk_level"]);
   const model=read(d,["model","actual_model","modelName"]);
   const provider=read(d,["provider","provider_route"]);
+  const promptMessages=read(d,["prompt_messages","promptMessages","messages","llm_messages"]);
+  const modelResponse=read(d,["model_response","modelResponse","completion","assistant_message"]);
+  const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
   const dataTone=adapter==="approval"?"amber":adapter==="retrieval"?"blue":"cyan";
   return <div className="reality-inspector">
@@ -157,10 +159,20 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
 
     {adapter==="terminal" && <div className="reality-visual-block"><div className="reality-block-head"><Terminal size={15}/> 命令执行 <span>RUNTIME</span></div><pre className="reality-code-preview">{text(args??"命令参数未上报")}</pre>{result!==undefined&&<pre className="reality-code-preview">{text(result).slice(0,1800)}</pre>}</div>}
 
-    {adapter==="model" && <div className="reality-visual-block"><div className="reality-block-head"><BrainCircuit size={15}/> 模型调用 <span>INFERENCE</span></div><div className="reality-git-target"><div><small>模型</small><strong>{model?text(model):"未上报"}</strong></div><div><small>Provider</small><strong>{provider?text(provider):"未上报"}</strong></div></div><div className="reality-empty-visual">这里只展示实际采集到的请求与响应，不展示或伪造模型隐藏思维链。</div></div>}
+    {adapter==="model" && <div className="reality-visual-block">
+      <div className="reality-block-head"><BrainCircuit size={15}/> 模型调用现场 <span>INFERENCE</span></div>
+      <div className="reality-git-target"><div><small>模型</small><strong>{model?text(model):"未上报"}</strong></div><div><small>Provider</small><strong>{provider?text(provider):"未上报"}</strong></div></div>
+      {decision!==undefined&&<div className="reality-empty-visual mt-3"><strong>显式行动摘要</strong><br/>{text(decision)}</div>}
+      {Array.isArray(promptMessages)&&<div className="mt-3 grid gap-2">{promptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{text(item?.content??item).slice(0,2400)}</span></div>)}</div>}
+      {promptMessages===undefined&&<div className="reality-empty-visual mt-3">模型请求消息未采集。可以在后端启用请求内容采集后显示真实消息。</div>}
+      {modelResponse!==undefined&&<div className="reality-code-preview">{text(modelResponse).slice(0,4000)}</div>}
+      <div className="mt-3 text-[10px] text-indigo-100/40">展示实际请求与响应，不展示或伪造模型隐藏思维链。</div>
+    </div>}
 
     {adapter==="generic" && <div className="reality-visual-block"><div className="reality-block-head"><Layers3 size={15}/> 执行现场 <span>EVENT DATA</span></div><div className="reality-empty-visual">{step.rightSubtitle||step.leftSummary||"执行端只上报了事件基础信息。"}</div></div>}
 
+    {adapter!=="model" && args!==undefined && <details className="reality-raw"><summary>查看本次动作的真实输入</summary><pre>{text(args)}</pre></details>}
+    {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>查看本次动作的真实返回</summary><pre>{text(result)}</pre></details>}
     <div className="reality-result-strip">
       <div><small>真实返回</small><strong>{result!==undefined?summarize(result):"尚未上报"}</strong></div>
       <div><small>Token 用量</small><strong>{read(d,["total_tokens","totalTokens"])??read(d.usage,["total_tokens","totalTokens"])??"未上报"}</strong></div>
