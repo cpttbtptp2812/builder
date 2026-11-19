@@ -47,6 +47,7 @@ export interface TraceStepData {
 }
 
 export interface StreamEventHandlers {
+  onRun?: (run: { runId: string; traceId: string; sessionId: string; source: string; status: string }) => void;
   onReasoning?: (reasoning: string) => void;
   onToolCall?: (tool: { tool: string; displayName?: string; status?: string; duration?: string; result?: any }) => void;
   onApprovalRequired?: (ticket: { ticketId: string; sql?: string; warning?: string; status: string }) => void;
@@ -255,7 +256,9 @@ export async function streamChatFromBackend(
     }
 
     const data = dataLines.join("\n");
-    if (event === "agent_step" && handlers.onAgentStep) {
+    if (event === "run" && handlers.onRun) {
+      try { handlers.onRun(JSON.parse(data)); } catch { console.warn("[api] Invalid run SSE payload", data); }
+    } else if (event === "agent_step" && handlers.onAgentStep) {
       try { handlers.onAgentStep(JSON.parse(data)); } catch { console.warn("[api] Invalid agent_step SSE payload", data); }
     } else if (event === "trace_step" && handlers.onTraceStep) {
       try { handlers.onTraceStep(JSON.parse(data)); } catch { console.warn("[api] Invalid trace_step SSE payload", data); }
