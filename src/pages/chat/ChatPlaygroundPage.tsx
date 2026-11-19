@@ -1827,16 +1827,16 @@ export default function ChatPlaygroundPage({
                                   </button>
                                 </>
                               )}
-                              {msg.runId && (
+                              {(msg.runId || msg.trace?.runId) && (
                                 <>
                                   <span>·</span>
                                   <button
                                     onClick={() => setIsExternalRunsOpen(true)}
                                     className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
-                                    title={`Run ID: ${msg.runId} · Trace ID: ${msg.traceId || "—"}`}
+                                    title={`Run ID: ${msg.runId || msg.trace?.runId} · Trace ID: ${msg.traceId || msg.trace?.traceId || "—"}`}
                                   >
                                     <Activity className="h-3 w-3" />
-                                    <span>运行记录 {msg.runId.slice(0, 12)} ↗</span>
+                                    <span>运行记录 {String(msg.runId || msg.trace?.runId).slice(0, 12)} ↗</span>
                                   </button>
                                 </>
                               )}
