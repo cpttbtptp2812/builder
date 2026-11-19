@@ -131,6 +131,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
   const [promptfooReport, setPromptfooReport] = useState<{ fileName: string; stats: any; rows: any[] } | null>(null);
   const [promptfooError, setPromptfooError] = useState("");
   const [promptfooApiKey, setPromptfooApiKey] = useState("");
+  const [promptfooRunId, setPromptfooRunId] = useState("");
   const [promptfooSaving, setPromptfooSaving] = useState(false);
   const [promptfooSaved, setPromptfooSaved] = useState<any>(null);
   const [promptfooHistory, setPromptfooHistory] = useState<any[]>([]);
@@ -152,7 +153,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
-        body: JSON.stringify({ fileName: file.name, format, content: raw }),
+        body: JSON.stringify({ fileName: file.name, format, content: raw, runId: promptfooRunId.trim() || null }),
       });
       const saved = await response.json().catch(() => null);
       if (!response.ok) throw new Error(saved?.error?.message || "Promptfoo 报告导入失败（HTTP " + response.status + "）");
@@ -310,6 +311,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                     <p className="mt-1 text-[11px] leading-5 text-slate-500">报告会按 Agent API Key 归属保存到 OwnAgent；服务端会剔除 analysis / reasoning 等内部字段。导入前仍请检查并脱敏敏感数据。</p>
                   </div>
                   <input type="password" autoComplete="off" value={promptfooApiKey} onChange={(event) => { setPromptfooApiKey(event.target.value); setPromptfooHistory([]); setPromptfooSaved(null); setPromptfooReport(null); }} placeholder="目标 Agent API Key" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+                  <input type="text" autoComplete="off" value={promptfooRunId} onChange={(event) => setPromptfooRunId(event.target.value)} placeholder="关联 Run ID（可选；必须属于此 Agent）" className="h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                   <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg border border-dashed border-indigo-300 bg-white px-4 py-5 text-xs font-medium text-indigo-700 hover:bg-indigo-50">
                     <ExternalLink size={14} /> {promptfooSaving ? "正在导入并保存…" : "选择 JSON / JSONL 报告"}
                     <input type="file" accept=".json,.jsonl,application/json,application/x-ndjson" className="sr-only" disabled={promptfooSaving} onChange={(event) => { setPromptfooSaving(true); void importPromptfooReport(event); }} />
@@ -350,7 +352,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                       </div>
                       <div className="max-h-36 space-y-1.5 overflow-auto">
                         {promptfooHistory.map((item) => <button key={item.reportId} onClick={() => void openPromptfooReport(item.reportId)} className="flex w-full items-center justify-between gap-3 rounded-md bg-white px-3 py-2 text-left text-[10px] hover:bg-indigo-50">
-                          <span className="min-w-0 truncate text-slate-700">{item.fileName}</span>
+                          <span className="min-w-0 truncate text-slate-700">{item.fileName}{item.runId ? <span className="ml-2 text-indigo-500">Run {item.runId}</span> : null}</span>
                           <span className="shrink-0 tabular-nums text-slate-500">{item.successCount} 通过 · {item.failureCount} 失败 · {item.errorCount} 错误</span>
                         </button>)}
                         {promptfooHistory.length === 0 && <p className="rounded-md bg-white px-3 py-3 text-[10px] text-slate-400">暂无已保存报告。输入 Agent API Key 后点击「刷新历史」即可加载已有记录。</p>}
