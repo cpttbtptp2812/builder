@@ -133,10 +133,11 @@ const statusItems = [
 
 export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => void }) {
   const [active, setActive] = useState<GuideKey>("sdk");
-  const [copied, setCopied] = useState<"install" | "code" | null>(null);
+  const [copied, setCopied] = useState<"install" | "code" | "bootstrap" | null>(null);
   const [promptfooReport, setPromptfooReport] = useState<{ fileName: string; stats: any; rows: any[] } | null>(null);
   const [promptfooError, setPromptfooError] = useState("");
   const guide = guides[active];
+  const bootstrapCommand = "APP_SECURITY_BOOTSTRAP_AGENT_ID=your-existing-agent-id\nAPP_SECURITY_BOOTSTRAP_AGENT_API_KEY=oa_live_$(openssl rand -hex 32)";
 
   const importPromptfooReport = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -156,7 +157,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
     }
   };
 
-  const copy = async (value: string, target: "install" | "code") => {
+  const copy = async (value: string, target: "install" | "code" | "bootstrap") => {
     try {
       await navigator.clipboard.writeText(value);
       setCopied(target);
@@ -310,6 +311,14 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                 <li>没有采集到的 Prompt、工具结果或结束时间会明确显示缺失，不会补造。</li>
                 <li>Langfuse / Phoenix 当前是 OTLP 转发路径，不代表已嵌入完整第三方 UI。</li>
               </ul>
+              <div className="mt-4 rounded-lg border border-amber-200 bg-white/70 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-semibold text-amber-950">后端首次绑定 Agent API Key</span>
+                  <button onClick={() => void copy(bootstrapCommand, "bootstrap")} className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 hover:text-amber-950">{copied === "bootstrap" ? <Check size={11} /> : <Copy size={11} />}{copied === "bootstrap" ? "已复制" : "复制命令"}</button>
+                </div>
+                <pre className="mt-2 overflow-auto rounded-md bg-slate-950 p-3 text-[10px] leading-5 text-slate-200">{bootstrapCommand}</pre>
+                <p className="mt-2 text-[10px] leading-4 text-amber-900/70">Agent ID 必须是后端已有的 Agent。将这两个变量配置到后端启动环境并重启；API Key 只显示/保存于你自己的部署环境，切勿提交到仓库。</p>
+              </div>
             </section>
           </div>
         </section>
