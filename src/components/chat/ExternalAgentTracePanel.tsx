@@ -418,7 +418,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
                             next.has(span.spanId) ? next.delete(span.spanId) : next.add(span.spanId);
                             return next;
                           })} className="text-[10px] font-semibold text-slate-500 hover:text-indigo-600">
-                            {rawExpanded.has(span.spanId) ? "收起原始 Span 数据" : "查看原始 Span 数据"}
+                            {rawExpanded.has(span.spanId) ? "收起 Span 数据" : "查看 Span 数据（已过滤内部推理字段）"}
                           </button>
                           {rawExpanded.has(span.spanId) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(stripInternalReasoning(attrs), null, 2)}</pre>}
                         </div>
