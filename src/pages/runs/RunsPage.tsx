@@ -158,7 +158,18 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
               <div className="px-5 py-12 text-center">
                 <Activity size={25} className="mx-auto text-slate-300" />
                 <p className="mt-3 text-sm font-medium text-slate-700">还没有运行记录</p>
-                <p className="mx-auto mt-2 max-w-xs text-xs leading-5 text-slate-500">输入 Agent API Key 并读取记录。若仍为空，请先用 Python SDK 或 OTLP 向这个 Agent 上报 Span。</p>
+                <p className="mx-auto mt-2 max-w-xs text-xs leading-5 text-slate-500">输入目标 Agent 的 API Key 并读取记录。若仍为空，请先用 Python SDK 或 OTLP 向这个 Agent 上报 Span。</p>
+                <details className="mx-auto mt-5 max-w-lg rounded-lg border border-slate-200 bg-slate-50 p-4 text-left">
+                  <summary className="cursor-pointer text-xs font-semibold text-slate-700">如何连接自己的 Agent？</summary>
+                  <ol className="mt-3 list-decimal space-y-2 pl-4 text-xs leading-5 text-slate-600">
+                    <li>在后端为目标 Agent 配置 API Key（当前预览版使用服务端 bootstrap 配置）。</li>
+                    <li>在 Agent 项目安装 <code>ownagent-sdk</code>，并设置 <code>OWNAGENT_BASE_URL</code> 和 <code>OWNAGENT_AGENT_API_KEY</code>。</li>
+                    <li>用 <code>agent_run()</code> 包住一次任务，用 <code>run.span()</code> 记录真实模型调用和工具执行。</li>
+                    <li>模型 Token 必须使用 Provider 实际返回值；Prompt 和响应内容默认不采集。</li>
+                  </ol>
+                  <pre className="mt-3 overflow-auto rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{'with OwnAgentClient(BASE_URL, API_KEY) as client:\\n    with client.agent_run("my-agent", session_id="conversation-1") as run:\\n        with run.span("llm.chat.completions", span_kind="CLIENT") as span:\\n            response = call_your_model()\\n            span.set_usage(input_tokens=usage.prompt_tokens,\\n                           output_tokens=usage.completion_tokens)'}</pre>
+                  <a className="mt-3 inline-flex text-xs font-medium text-indigo-600 hover:text-indigo-700" href="https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python" target="_blank" rel="noreferrer">查看 Python SDK 接入文档 ↗</a>
+                </details>
               </div>
             ) : runs.map((run) => (
               <button key={run.traceId} onClick={() => setSelectedTrace(run.traceId)} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.traceId === run.traceId ? "bg-indigo-50/70" : "bg-white"}`}>
