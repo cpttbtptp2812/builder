@@ -38,11 +38,21 @@ const statusMeta: Record<string, { label: string; color: string }> = {
 };
 const durationText = (ms?: number) => typeof ms !== "number" || !Number.isFinite(ms) || ms < 0 ? "未记录" : ms >= 1000 ? `${(ms / 1000).toFixed(2)} 秒` : `${Math.round(ms)} 毫秒`;
 const tokenText = (detail?: Record<string, any>) => {
-  const total = detail?.totalTokens ?? detail?.total_tokens;
-  const input = detail?.inputTokens ?? detail?.input_tokens;
-  const output = detail?.outputTokens ?? detail?.output_tokens;
-  if (typeof total === "number") return total.toLocaleString();
-  if (typeof input === "number" || typeof output === "number") return `${typeof input === "number" ? input.toLocaleString() : "—"} / ${typeof output === "number" ? output.toLocaleString() : "—"}`;
+  // Provider adapters commonly nest usage under usage or response.
+  const usage = detail?.usage ?? detail?.tokenUsage ?? detail?.token_usage
+    ?? detail?.response?.usage ?? detail?.metadata?.usage;
+  const total = detail?.totalTokens ?? detail?.total_tokens
+    ?? usage?.totalTokens ?? usage?.total_tokens;
+  const input = detail?.inputTokens ?? detail?.input_tokens
+    ?? detail?.promptTokens ?? detail?.prompt_tokens
+    ?? usage?.inputTokens ?? usage?.input_tokens ?? usage?.promptTokens ?? usage?.prompt_tokens;
+  const output = detail?.outputTokens ?? detail?.output_tokens
+    ?? detail?.completionTokens ?? detail?.completion_tokens
+    ?? usage?.outputTokens ?? usage?.output_tokens ?? usage?.completionTokens ?? usage?.completion_tokens;
+  if (typeof total === "number" && Number.isFinite(total)) return total.toLocaleString();
+  if (typeof input === "number" || typeof output === "number") {
+    return `${typeof input === "number" ? input.toLocaleString() : "—"} / ${typeof output === "number" ? output.toLocaleString() : "—"}`;
+  }
   return null;
 };
 const pretty = (value: unknown) => {
@@ -96,11 +106,15 @@ export const MissionControlTimeline: React.FC<Props> = ({
   };
 
   const detail = selected?.rightDetail || {};
-  const input = pick(detail, ["arguments", "input", "parameters", "request", "tool_input", "prompt"]);
-  const output = pick(detail, ["result", "output", "response", "content", "tool_output"]);
-  const why = pick(detail, ["reason", "why", "rationale", "decision", "thought"]);
+  const input = pick(detail, ["arguments", "args", "input", "parameters", "request", "tool_input", "toolArguments", "tool_arguments", "prompt"]);
+  const output = pick(detail, ["result", "output", "response", "content", "tool_output", "toolResult", "tool_result"]);
+  const why = pick(detail, ["reason", "why", "rationale", "decision", "decision_summary", "decisionSummary", "reasoning_summary", "reasoningSummary"]);
+  const error = pick(detail, ["error", "errorMessage", "error_message", "exception"]);
   const meta = selected ? (phaseMeta[selected.phase] || phaseMeta.external) : phaseMeta.external;
   const SelectedIcon = meta.icon;
+  const selectedDescription = selected
+    ? selected.rightSubtitle || selected.leftSummary || (selected.status === "running" ? meta.verb : selected.status === "done" || selected.status === "passed" ? "该步骤已完成，未提供更多说明" : selected.status === "failed" ? "该步骤失败，展开查看已上报的错误信息" : selected.status === "pending" ? "该步骤正在等待执行" : "执行端未提供这一步的具体说明")
+    : "";
   const selectedStatus = selected ? (statusMeta[selected.status] || statusMeta.unknown) : statusMeta.unknown;
   const tokenEvents = ordered.filter(step => tokenText(step.rightDetail) !== null).length;
 
@@ -207,7 +221,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2"><span className="text-[9px] font-bold tracking-[.18em] text-cyan-300">STEP {String(selected.seq).padStart(2,"0")}</span><span className={`rounded-full border px-2 py-0.5 text-[9px] ${selectedStatus.color==="emerald" ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200" : selectedStatus.color==="rose" ? "border-rose-400/25 bg-rose-400/10 text-rose-200" : selectedStatus.color==="cyan" ? "border-cyan-400/25 bg-cyan-400/10 text-cyan-200" : "border-slate-600 bg-slate-800 text-slate-300"}`}>{selectedStatus.label}</span></div>
                     <h3 className="mt-1 break-words text-base font-semibold text-white">{selected.rightTitle || selected.leftTitle}</h3>
-                    <p className="mt-1 break-words text-xs leading-5 text-slate-400">{selected.rightSubtitle || selected.leftSummary || meta.verb}</p>
+                    <p className="mt-1 break-words text-xs leading-5 text-slate-400">{selectedDescription}</p>
                   </div>
                 </div>
                 <div className="mt-4 grid grid-cols-2 gap-2">
@@ -217,9 +231,10 @@ export const MissionControlTimeline: React.FC<Props> = ({
               </div>
               <div className="journey-scroll max-h-[42vh] space-y-3 overflow-y-auto p-3.5">
                 {why !== undefined && <div><div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-violet-200"><Sparkles className="h-3 w-3"/>决策依据（事件有提供时显示）</div><div className="rounded-lg border border-violet-400/20 bg-violet-400/5 p-3 text-xs leading-5 text-slate-300">{pretty(why)}</div></div>}
+                {error !== undefined && <div><div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-rose-200"><AlertTriangle className="h-3 w-3"/>错误信息</div><pre className="journey-code max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-rose-400/25 p-3 text-[10px] leading-5">{pretty(error)}</pre></div>}
                 {input !== undefined && <div><div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-cyan-200"><Terminal className="h-3 w-3"/>实际输入</div><pre className="journey-code max-h-44 overflow-auto whitespace-pre-wrap break-words rounded-lg p-3 text-[10px] leading-5">{pretty(input)}</pre></div>}
                 {output !== undefined && <div><div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-200"><Eye className="h-3 w-3"/>实际返回</div><pre className="journey-code max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg p-3 text-[10px] leading-5">{pretty(output)}</pre></div>}
-                {input === undefined && output === undefined && why === undefined && <div className="rounded-lg border border-dashed border-slate-700 p-3 text-xs leading-5 text-slate-400">当前事件没有单独提供输入、返回或决策依据。不会用推测内容补齐；可在下方查看原始事件数据。</div>}
+                {input === undefined && output === undefined && why === undefined && error === undefined && <div className="rounded-lg border border-dashed border-slate-700 p-3 text-xs leading-5 text-slate-400">当前事件没有单独提供输入、返回或决策依据。不会用推测内容补齐；可在下方查看原始事件数据。</div>}
                 <div>
                   <div className="mb-1.5 flex items-center justify-between gap-2"><span className="text-[10px] font-semibold text-slate-400">事件原始数据</span><button type="button" onClick={() => void copySelected()} className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[10px] text-slate-400 hover:bg-slate-800 hover:text-white"><Copy className="h-3 w-3"/>{copied ? "已复制" : "复制"}</button></div>
                   <pre className="journey-code max-h-52 overflow-auto whitespace-pre-wrap break-words rounded-lg p-3 text-[9px] leading-4">{pretty(detail)}</pre>
