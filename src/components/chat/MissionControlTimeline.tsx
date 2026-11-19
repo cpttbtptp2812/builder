@@ -89,9 +89,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const unknown = ordered.filter(s => s.status === "unknown").length;
   const state = isThinking || running ? {label:"正在执行",tone:"running"} : failures ? {label:"存在异常",tone:"failed"} : unknown ? {label:"部分状态未知",tone:"unknown"} : ordered.length && completed === ordered.length ? {label:"已完成",tone:"done"} : {label:"等待事件",tone:"waiting"};
   const stateClass: Record<string,string> = {
-    done:"bg-emerald-50 text-emerald-700 border-emerald-200",
+    done:"bg-emerald-50 text-emerald-200 border-emerald-200",
     running:"bg-indigo-50 text-indigo-700 border-indigo-200",
-    failed:"bg-rose-50 text-rose-700 border-rose-200",
+    failed:"bg-rose-50 text-rose-200 border-rose-200",
     unknown:"bg-amber-50 text-amber-700 border-amber-200",
     waiting:"bg-slate-50 text-slate-600 border-slate-200",
   };
@@ -205,7 +205,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
               <div className="px-3 py-3">
                 <p className="mb-2 text-[10px] leading-4 text-slate-600">{description}</p>
                 <div className="space-y-2">
-                  {(modelName !== undefined || providerName !== undefined || modelRound !== undefined) && <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[9px] text-slate-600">
+                  {(modelName !== undefined || providerName !== undefined || modelRound !== undefined) && <div className="flex flex-wrap items-center gap-2 rounded-lg border border-indigo-200/15 bg-white/[0.045] px-2.5 py-2 text-[9px] text-slate-300">
                     {modelName !== undefined && <span><b className="font-semibold text-slate-700">模型</b> {pretty(modelName)}</span>}
                     {providerName !== undefined && <span><b className="font-semibold text-slate-700">渠道</b> {pretty(providerName)}</span>}
                     {modelRound !== undefined && <span><b className="font-semibold text-slate-700">轮次</b> {pretty(modelRound)}</span>}
@@ -215,13 +215,13 @@ export const MissionControlTimeline: React.FC<Props> = ({
                     {Array.isArray(promptMessages) ? <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-lg border border-indigo-200/15 bg-slate-900/80">
                       <div className="border-b border-indigo-200/10 bg-white/5 px-2 py-1 text-[9px] font-semibold text-indigo-200/70">{messageRoleLabel(msg?.role)}{msg?.name ? ` · ${msg.name}` : ""}</div>
                       <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-2 py-2 text-[10px] leading-5 text-slate-100">{messageContent(msg)}</pre>
-                    </div>)}</div> : <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white px-2 py-2 text-[10px] leading-5 text-slate-700">{pretty(promptMessages)}</pre>}
+                    </div>)}</div> : <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-900/80 px-2 py-2 text-[10px] leading-5 text-slate-100">{pretty(promptMessages)}</pre>}
                   </section>}
                   {modelResponse !== undefined && <section className="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-3">
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-100"><Sparkles className="h-3.5 w-3.5"/>模型实际返回</div>
                     <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-100">{pretty(modelResponse)}</pre>
                   </section>}
-                  {toolSchema !== undefined && <details className="rounded-lg border border-slate-200 bg-slate-50 p-2.5">
+                  {toolSchema !== undefined && <details className="rounded-lg border border-indigo-200/15 bg-white/[0.045] p-2.5">
                     <summary className="cursor-pointer text-[10px] font-semibold text-slate-700">本轮提供给模型的工具定义</summary>
                     <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(toolSchema)}</pre>
                   </details>}
@@ -235,17 +235,17 @@ export const MissionControlTimeline: React.FC<Props> = ({
                   </section>}
                 </div>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                  {why!==undefined&&<div className="min-w-0 rounded-lg border border-violet-100 bg-violet-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-violet-700"><Sparkles className="h-3 w-3"/>决策摘要</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-slate-600">{pretty(why)}</div></div>}
-                  {error!==undefined&&<div className="min-w-0 rounded-lg border border-rose-100 bg-rose-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3"/>错误信息</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-rose-700">{pretty(error)}</div></div>}
-                  {input!==undefined&&<div className="min-w-0 rounded-lg border border-sky-100 bg-sky-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-700"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
-                  {output!==undefined&&<div className="min-w-0 rounded-lg border border-emerald-100 bg-emerald-50/50 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
+                  {why!==undefined&&<div className="min-w-0 rounded-lg border border-violet-300/20 bg-violet-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-violet-200"><Sparkles className="h-3 w-3"/>决策摘要</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-slate-600">{pretty(why)}</div></div>}
+                  {error!==undefined&&<div className="min-w-0 rounded-lg border border-rose-300/20 bg-rose-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-rose-700"><AlertTriangle className="h-3 w-3"/>错误信息</div><div className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-4 text-rose-700">{pretty(error)}</div></div>}
+                  {input!==undefined&&<div className="min-w-0 rounded-lg border border-sky-300/20 bg-sky-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-sky-200"><Terminal className="h-3 w-3"/>实际输入</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(input)}</pre></div>}
+                  {output!==undefined&&<div className="min-w-0 rounded-lg border border-emerald-300/20 bg-emerald-400/10 p-2"><div className="mb-1 flex items-center gap-1 text-[10px] font-semibold text-emerald-700"><Eye className="h-3 w-3"/>实际返回</div><pre className="max-h-20 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(output)}</pre></div>}
                 </div>
-                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-200 bg-amber-50/50 px-3 py-2 text-[10px] leading-4 text-amber-800">这条事件没有附带提示词、模型响应或工具 I/O 内容。需要在 Agent 实际调用模型和工具的位置启用内容采集；Studio 不会根据阶段名称补写。</div>}
+                {input===undefined&&output===undefined&&why===undefined&&error===undefined&&promptMessages===undefined&&modelResponse===undefined&&toolSchema===undefined&&toolArguments===undefined&&toolResult===undefined&&<div className="rounded-lg border border-dashed border-amber-300/25 bg-amber-400/10 px-3 py-2 text-[10px] leading-4 text-amber-100">这条事件没有附带提示词、模型响应或工具 I/O 内容。需要在 Agent 实际调用模型和工具的位置启用内容采集；Studio 不会根据阶段名称补写。</div>}
                 <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                   <button type="button" onClick={()=>setShowRaw(v=>!v)} className="inline-flex items-center gap-1 text-[10px] font-medium text-slate-500 hover:text-indigo-600"><ChevronDown className={`h-3 w-3 transition ${showRaw?"rotate-180":""}`}/>{showRaw?"收起原始事件":"查看原始事件"}</button>
                   <div className="flex items-center gap-2">
-                    {selected.status==="failed"&&onRetryRun&&!isThinking&&<button type="button" onClick={onRetryRun} className="inline-flex items-center gap-1 rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-[10px] font-semibold text-rose-700"><RotateCcw className="h-3 w-3"/>重新运行</button>}
-                    <button type="button" onClick={()=>void copySelected()} className="inline-flex items-center gap-1 rounded-md border border-slate-200 px-2 py-1 text-[10px] text-slate-500 hover:border-indigo-200 hover:text-indigo-600"><Copy className="h-3 w-3"/>{copied?"已复制":"复制"}</button>
+                    {selected.status==="failed"&&onRetryRun&&!isThinking&&<button type="button" onClick={onRetryRun} className="inline-flex items-center gap-1 rounded-md border border-rose-300/25 bg-rose-400/10 px-2 py-1 text-[10px] font-semibold text-rose-200"><RotateCcw className="h-3 w-3"/>重新运行</button>}
+                    <button type="button" onClick={()=>void copySelected()} className="inline-flex items-center gap-1 rounded-md border border-indigo-200/20 px-2 py-1 text-[10px] text-slate-300 hover:border-indigo-300/40 hover:text-cyan-200"><Copy className="h-3 w-3"/>{copied?"已复制":"复制"}</button>
                   </div>
                 </div>
                 {showRaw&&<pre className="journey-json mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-lg p-2 text-[9px] leading-4">{pretty(detail)}</pre>}
