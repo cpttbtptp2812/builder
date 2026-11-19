@@ -943,6 +943,21 @@ export default function ChatPlaygroundPage({
   };
 
   const isChatEmpty = messages.length === 0 && !isGenerating;
+  const latestAssistantTraceMessage = (() => {
+    const target = messages.slice().reverse().find((item) => item.role === "assistant");
+    if (!target) return null;
+    const index = messages.findIndex((item) => item.id === target.id);
+    const previousUser = index > 0 ? messages.slice(0, index).reverse().find((item) => item.role === "user") : null;
+    return {
+      ...target,
+      userPrompt: target.userPrompt || previousUser?.content || "",
+      modelName: target.modelName || currentAgent?.model || systemModel || "deepseek-chat",
+      sessionId: target.sessionId || currentSessionId,
+      enableRAG,
+      enableThinking,
+      enableWebSearch,
+    };
+  })();
 
   return (
     <div className="dream-chat-world ownagent-control-workspace flex-1 flex h-full w-full min-w-0 overflow-hidden relative font-sans cyber-grid-canvas">
@@ -1965,8 +1980,11 @@ export default function ChatPlaygroundPage({
         onRetryRun={() => {
           const target = activeTraceDrawer
             ? messages.find((item) => item.id === activeTraceDrawer.messageId)
-            : undefined;
-          if (target?.userPrompt) handleSend(target.userPrompt);
+            : messages.slice().reverse().find((item) => item.role === "assistant");
+          const index = target ? messages.findIndex((item) => item.id === target.id) : -1;
+          const previousUser = index > 0 ? messages.slice(0, index).reverse().find((item) => item.role === "user") : null;
+          const prompt = target?.userPrompt || previousUser?.content;
+          if (prompt) handleSend(prompt);
         }}
         message={
           activeTraceDrawer
@@ -1980,7 +1998,7 @@ export default function ChatPlaygroundPage({
               }
               return messages.slice().reverse().find((m) => m.role === "assistant") || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message;
             })()
-            : messages.slice().reverse().find((m) => m.role === "assistant") || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message
+            : latestAssistantTraceMessage || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message
         }
             />
 
