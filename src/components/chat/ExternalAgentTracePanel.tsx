@@ -81,7 +81,8 @@ export const ExternalAgentTracePanel: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [rawExpanded, setRawExpanded] = useState<Set<string>>(new Set());
+  const [detailsOpen, setDetailsOpen] = useState(true);
   const abortRef = useRef<AbortController | null>(null);
 
   const stop = useCallback(() => {
@@ -134,6 +135,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
     setError("");
     setSpans([]);
     setExpanded(new Set());
+    setRawExpanded(new Set());
 
     const headers = { Authorization: `Bearer ${key}` };
     let attempt = 0;
@@ -320,7 +322,39 @@ export const ExternalAgentTracePanel: React.FC = () => {
                     </div>
                     {span.parentSpanId && <div className="text-[10px] text-slate-500">父级 Span：<code>{span.parentSpanId}</code></div>}
                     {span.runId && <div className="text-[10px] text-slate-500">Run ID：<code>{span.runId}</code></div>}
-                    <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(span.attributes || {}, null, 2)}</pre>
+                    {(() => {
+                      const attrs = span.attributes || {};
+                      const sections: Array<{ label: string; value: unknown; tone: string }> = [
+                        { label: "实际发送给模型的提示词 / 上下文", value: attrs.prompt_messages ?? attrs.messages_sent ?? attrs.messages ?? attrs.prompt, tone: "border-violet-200 bg-violet-50/60" },
+                        { label: "模型实际返回", value: attrs.model_response ?? attrs.response_message ?? attrs.assistant_message ?? attrs.completion, tone: "border-blue-200 bg-blue-50/60" },
+                        { label: "模型决定调用的工具", value: attrs.tool_calls ?? attrs.tool_call ?? attrs.function_call, tone: "border-amber-200 bg-amber-50/60" },
+                        { label: "工具实际输入参数", value: attrs.tool_arguments ?? attrs.arguments ?? attrs.action_arguments, tone: "border-sky-200 bg-sky-50/60" },
+                        { label: "工具实际执行结果", value: attrs.tool_result ?? attrs.action_output ?? attrs.result, tone: "border-emerald-200 bg-emerald-50/60" },
+                        { label: "失败信息", value: attrs.error_message ?? attrs.error ?? attrs.exception, tone: "border-rose-200 bg-rose-50/60" },
+                      ].filter((item) => item.value !== undefined && item.value !== null);
+                      return (
+                        <div className="space-y-2">
+                          {sections.length === 0 ? (
+                            <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 p-3 text-[11px] leading-5 text-slate-500">
+                              这条 Span 只记录了名称、状态和耗时，没有采集提示词、模型响应或工具参数。需要在 Agent SDK 中显式开启内容采集并上报，不能从 Span 名称还原真实提示词。
+                            </div>
+                          ) : sections.map((item) => (
+                            <div key={item.label} className={`overflow-hidden rounded-lg border p-2.5 ${item.tone}`}>
+                              <div className="mb-1.5 text-[10px] font-bold text-slate-700">{item.label}</div>
+                              <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{typeof item.value === "string" ? item.value : JSON.stringify(item.value, null, 2)}</pre>
+                            </div>
+                          ))}
+                          <button type="button" onClick={() => setRawExpanded((current) => {
+                            const next = new Set(current);
+                            next.has(span.spanId) ? next.delete(span.spanId) : next.add(span.spanId);
+                            return next;
+                          })} className="text-[10px] font-semibold text-slate-500 hover:text-indigo-600">
+                            {rawExpanded.has(span.spanId) ? "收起原始 Span 数据" : "查看原始 Span 数据"}
+                          </button>
+                          {rawExpanded.has(span.spanId) && <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-all rounded-lg bg-slate-950 p-2 text-[10px] text-slate-100">{JSON.stringify(attrs, null, 2)}</pre>}
+                        </div>
+                      );
+                    })()}
                     {span.status === "ERROR" && typeof actionId === "string" && actionId && (
                       <button
                         type="button"
