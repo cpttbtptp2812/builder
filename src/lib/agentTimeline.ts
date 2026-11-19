@@ -23,6 +23,13 @@ export interface AgentStep {
   timestamp: number;
 }
 
+const sortTimeline = (steps: AgentStep[]) => [...steps].sort((a, b) => {
+  const aHasTime = Number.isFinite(a.timestamp) && a.timestamp > 0;
+  const bHasTime = Number.isFinite(b.timestamp) && b.timestamp > 0;
+  if (aHasTime && bHasTime && a.timestamp !== b.timestamp) return a.timestamp - b.timestamp;
+  return a.seq - b.seq || a.timestamp - b.timestamp;
+});
+
 const normalizeStatus = (value: unknown): StepStatus => {
   const status = typeof value === "string" ? value.toLowerCase() : "";
   if (["ok", "success", "succeeded", "completed", "complete", "done"].includes(status)) return "done";
@@ -60,7 +67,7 @@ export function timelineReducer(
       ...definedIncoming,
       rightDetail: { ...(old.rightDetail || {}), ...(incoming.rightDetail || {}) },
     };
-    return updated.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
+    return sortTimeline(updated);
   }
 
   const step: AgentStep = {
@@ -76,7 +83,7 @@ export function timelineReducer(
     durationMs: incoming.durationMs,
     timestamp: incoming.timestamp ?? Date.now(),
   };
-  return [...current, step].sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
+  return sortTimeline([...current, step]);
 }
 
 export function applySseToTimeline(current: AgentStep[], eventName: string, payload: any): AgentStep[] {
@@ -202,7 +209,7 @@ export function rebuildTimelineFromMessage(msg: {
       timestamp: 0,
     });
   });
-  return steps.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
+  return sortTimeline(steps);
 }
 
 /** A finished stream does not imply every observed step succeeded. */
