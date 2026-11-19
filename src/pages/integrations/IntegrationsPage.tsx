@@ -128,7 +128,27 @@ const statusItems = [
 export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => void }) {
   const [active, setActive] = useState<GuideKey>("sdk");
   const [copied, setCopied] = useState<"install" | "code" | null>(null);
+  const [promptfooReport, setPromptfooReport] = useState<{ fileName: string; stats: any; rows: any[] } | null>(null);
+  const [promptfooError, setPromptfooError] = useState("");
   const guide = guides[active];
+
+  const importPromptfooReport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const root = parsed.results ?? parsed;
+      const rows = Array.isArray(root.results) ? root.results : [];
+      if (!rows.length && !root.stats) throw new Error("文件中没有找到 Promptfoo results / stats 数据。");
+      setPromptfooReport({ fileName: file.name, stats: root.stats ?? parsed.stats ?? {}, rows });
+      setPromptfooError("");
+    } catch (cause) {
+      setPromptfooReport(null);
+      setPromptfooError(cause instanceof Error ? cause.message : "无法读取 Promptfoo JSON 报告。");
+    } finally {
+      event.target.value = "";
+    }
+  };
 
   const copy = async (value: string, target: "install" | "code") => {
     try {
