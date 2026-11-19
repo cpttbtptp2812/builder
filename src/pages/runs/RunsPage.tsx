@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { Activity, AlertCircle, CheckCircle2, Clock3, KeyRound, RefreshCw, X, XCircle } from "lucide-react";
 
 type TraceSpan = {
@@ -65,10 +65,15 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [selectedDetail, setSelectedDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [detailLoading, setDetailLoading] = useState(false);
+  const detailRequestId = useRef(0);
 
   const selected = selectedDetail?.run.runId === selectedRunId ? selectedDetail : null;
 
   const loadRunDetail = async (runId: string, key = apiKey) => {
+    const requestId = ++detailRequestId.current;
+    setDetailLoading(true);
+    setError("");
     try {
       const response = await fetch(`${API_BASE}/api/v1/runs/${encodeURIComponent(runId)}`, {
         headers: { Authorization: `Bearer ${key.trim()}`, Accept: "application/json" },
@@ -78,10 +83,14 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         throw new Error(body?.error?.message || `读取运行详情失败（HTTP ${response.status}）`);
       }
       const detail = await response.json() as RunDetail;
-      setSelectedDetail(detail);
+      if (requestId === detailRequestId.current) setSelectedDetail(detail);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : "读取运行详情失败。");
-      setSelectedDetail(null);
+      if (requestId === detailRequestId.current) {
+        setError(cause instanceof Error ? cause.message : "读取运行详情失败。");
+        setSelectedDetail(null);
+      }
+    } finally {
+      if (requestId === detailRequestId.current) setDetailLoading(false);
     }
   };
 
@@ -180,7 +189,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                 </details>
               </div>
             ) : runs.map((run) => (
-              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
+              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); setSelectedDetail(null); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium text-slate-800">{run.name || "Agent run"}</span>
                   <span className={`shrink-0 text-[11px] ${run.status === "ERROR" ? "text-rose-600" : run.status === "COMPLETED" ? "text-emerald-600" : "text-amber-600"}`}>{statusLabel[run.status]}</span>
@@ -225,9 +234,16 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                     <h3 className="text-xs font-semibold text-slate-700">运行事件</h3>
                     <div className="mt-3 space-y-2">
                       {selected.events.map((event, index) => (
-                        <div key={`${event.eventType}-${event.spanId || index}`} className="flex items-start justify-between gap-3 text-xs">
-                          <span className="font-medium text-slate-700">{event.eventType} · {event.status}</span>
-                          <span className="text-slate-400">{dateLabel(event.eventTime)}</span>
+                        <div key={`${event.eventType}-${event.spanId || index}`} className="rounded-md border border-slate-200 bg-white px-3 py-2">
+                          <div className="flex items-start justify-between gap-3 text-xs">
+                            <span className="font-medium text-slate-700">{event.eventType} · {event.status}</span>
+                            <span className="shrink-0 text-slate-400">{dateLabel(event.eventTime)}</span>
+                          </div>
+                          {event.spanId && <p className="mt-1 break-all font-mono text-[10px] text-slate-400">Span {event.spanId}</p>}
+                          {event.payload && <details className="mt-2">
+                            <summary className="cursor-pointer text-[11px] text-indigo-600">查看事件详情</summary>
+                            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-200">{(() => { try { return JSON.stringify(JSON.parse(event.payload), null, 2); } catch { return event.payload; } })()}</pre>
+                          </details>}
                         </div>
                       ))}
                     </div>
