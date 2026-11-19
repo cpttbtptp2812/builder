@@ -93,7 +93,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
   }), [selected, spanQuery, spanErrorsOnly]);
   useEffect(() => {
     const run = runs.find((item) => item.runId === selectedRunId);
-    if (!run || !apiKey.trim()) {
+    if (!run || !apiKey.trim() || !["RUNNING", "UNKNOWN"].includes(run.status)) {
       setLiveStatus("OFF");
       return;
     }
@@ -143,7 +143,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
         while (active) {
           const { value, done } = await reader.read();
           if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+          buffer += decoder.decode(value, { stream: true }).replace(/\\r\\n/g, "\\n");
           let boundary = buffer.indexOf("\n\n");
           while (boundary >= 0) {
             const frame = buffer.slice(0, boundary);
@@ -360,7 +360,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
             ) : filteredRuns.length === 0 ? (
               <div className="px-5 py-12 text-center"><p className="text-sm font-medium text-slate-600">没有匹配的运行记录</p><p className="mt-1 text-xs text-slate-400">调整搜索关键词或状态筛选。</p><button onClick={() => { setRunQuery(""); setRunStatus("ALL"); }} className="mt-3 text-xs font-medium text-indigo-600">清除筛选</button></div>
             ) : filteredRuns.map((run) => (
-              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); setSelectedDetail(null); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
+              <button key={run.runId} onClick={() => { setSelectedRunId(run.runId); setSelectedDetail(null); setJudgeResult(null); setJudgeError(""); void loadRunDetail(run.runId); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left transition hover:bg-slate-50 ${selected?.run.runId === run.runId ? "bg-indigo-50/70" : "bg-white"}`}>
                 <div className="flex items-center justify-between gap-2">
                   <span className="truncate text-sm font-medium text-slate-800">{run.name || "Agent run"}</span>
                   <span className={`shrink-0 text-[11px] ${run.status === "ERROR" ? "text-rose-600" : run.status === "COMPLETED" ? "text-emerald-600" : "text-amber-600"}`}>{statusLabel[run.status]}</span>
@@ -391,7 +391,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                   <div><h2 className="text-base font-semibold">{selected.run.name || "Agent run"}</h2><p className="mt-1 break-all font-mono text-[11px] text-slate-400">{selected.run.traceId}</p></div>
                   <div className="flex items-center gap-2">
                     <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-600">{statusLabel[selected.run.status]}</span>
-                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${liveStatus === "LIVE" ? "bg-emerald-50 text-emerald-700" : liveStatus === "CONNECTING" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${liveStatus === "LIVE" ? "bg-emerald-500" : liveStatus === "CONNECTING" ? "bg-amber-500" : "bg-slate-400"}`} />{liveStatus === "LIVE" ? "实时监听中" : liveStatus === "CONNECTING" ? "正在连接" : "实时监听已断开"}</span>
+                    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] ${liveStatus === "LIVE" ? "bg-emerald-50 text-emerald-700" : liveStatus === "CONNECTING" ? "bg-amber-50 text-amber-700" : "bg-slate-100 text-slate-500"}`}><span className={`h-1.5 w-1.5 rounded-full ${liveStatus === "LIVE" ? "bg-emerald-500" : liveStatus === "CONNECTING" ? "bg-amber-500" : "bg-slate-400"}`} />{liveStatus === "LIVE" ? "实时监听中" : liveStatus === "CONNECTING" ? "正在连接" : selected.run.status === "RUNNING" || selected.run.status === "UNKNOWN" ? "实时监听已断开" : "历史记录"}</span>
                     <button onClick={() => void runJudge()} disabled={judgeLoading} className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-1.5 text-xs font-medium text-indigo-700 transition hover:bg-indigo-100 disabled:opacity-50">
                       <Activity size={13} /> {judgeLoading ? "评估中…" : "AI Judge"}
                     </button>
