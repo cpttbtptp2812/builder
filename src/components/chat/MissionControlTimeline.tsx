@@ -200,10 +200,10 @@ export const MissionControlTimeline: React.FC<Props> = ({
                 <div className="space-y-2">
                   {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
                     <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-800"><BrainCircuit className="h-3.5 w-3.5"/>实际发送给模型的提示词</div><span className="text-[9px] text-indigo-500">{promptMessages.length} 条消息</span></div>
-                    <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-md border border-indigo-100 bg-white">
+                    {Array.isArray(promptMessages) ? <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-md border border-indigo-100 bg-white">
                       <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">{messageRoleLabel(msg?.role)}{msg?.name ? ` · ${msg.name}` : ""}</div>
                       <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-2 py-2 text-[10px] leading-5 text-slate-700">{messageContent(msg)}</pre>
-                    </div>)}</div>
+                    </div>)}</div> : <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white px-2 py-2 text-[10px] leading-5 text-slate-700">{pretty(promptMessages)}</pre>}
                   </section>}
                   {modelResponse !== undefined && <section className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5">
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-800"><Sparkles className="h-3.5 w-3.5"/>模型实际返回</div>
