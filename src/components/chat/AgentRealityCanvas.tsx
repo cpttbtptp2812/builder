@@ -38,6 +38,24 @@ const text = (value:any) => {
 };
 const messageText = realityMessageText;
 const parseStructured = parseRealityPayload;
+const INTERNAL_REASONING_KEYS = new Set(["analysis", "reasoning", "chain_of_thought", "chainofthought", "internal_thought", "thoughts", "scratchpad"]);
+const stripInternalReasoning = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(stripInternalReasoning).filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== "object") return value;
+  const channel = String(value.channel ?? value.type ?? value.kind ?? value.message_type ?? "").toLowerCase();
+  const role = String(value.role ?? "").toLowerCase();
+  if (/(analysis|reasoning|thought|internal)/.test(channel) && (!role || role === "assistant")) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !INTERNAL_REASONING_KEYS.has(key.toLowerCase()))
+      .map(([key, item]) => [key, stripInternalReasoning(item)])
+      .filter(([, item]) => item !== undefined)
+  );
+};
 const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName"]) || "");
 const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name"]) || "").toLowerCase();
 const adapterOf = (step:AgentStep):AdapterKind => classifyRealityAdapter({
@@ -84,8 +102,8 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const inputTokens=read(d,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]);
   const outputTokens=read(d,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]);
   const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
-  const visiblePromptMessages=toRealityMessageList(promptMessages);
-  const visibleModelResponse=parseStructured(modelResponse);
+  const visiblePromptMessages=toRealityMessageList(stripInternalReasoning(promptMessages));
+  const visibleModelResponse=parseStructured(stripInternalReasoning(modelResponse));
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const why=read(d,["reason","purpose","explanation"]);
   const nextAction=read(d,["next_action","nextAction","next_step","handoff_target"]);
@@ -153,14 +171,14 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
 
     {adapter!=="model" && args!==undefined && <details className="reality-raw"><summary>查看本次动作的真实输入</summary><pre>{text(args)}</pre></details>}
     {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>工具返回</summary><pre>{text(result)}</pre></details>}
-    {why!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的原因</div><div className="reality-empty-visual">{text(why)}</div></div>}
+    {adapter!=="model"&&why!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的原因</div><div className="reality-empty-visual">{text(why)}</div></div>}
     {nextAction!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的后续动作</div><div className="reality-empty-visual">{text(nextAction)}</div></div>}
     {(result!==undefined||totalTokens!==undefined||read(d.usage,["total_tokens","totalTokens"])!==undefined||typeof step.durationMs==="number")&&<div className="reality-result-strip">
       {result!==undefined&&<div><small>工具返回</small><strong>{summarize(result)}</strong></div>}
       {(totalTokens!==undefined||read(d.usage,["total_tokens","totalTokens"])!==undefined)&&<div><small>Token</small><strong>{text(totalTokens??read(d.usage,["total_tokens","totalTokens"]))}</strong></div>}
       {typeof step.durationMs==="number"&&<div><small>耗时</small><strong>{duration}</strong></div>}
     </div>}
-    <details className="reality-raw"><summary>原始事件数据</summary><pre>{text(d)}</pre></details>
+    <details className="reality-raw"><summary>原始事件数据（已隐藏内部推理字段）</summary><pre>{text(stripInternalReasoning(d))}</pre></details>
   </div>;
 };
 
