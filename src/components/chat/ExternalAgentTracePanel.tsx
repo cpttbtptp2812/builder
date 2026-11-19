@@ -241,6 +241,7 @@ export const ExternalAgentTracePanel: React.FC = () => {
       <style>{`
         .external-trace-cosmos{background:transparent!important;border-color:transparent!important;box-shadow:none!important;color:#e9ecff}
         .external-trace-cosmos .bg-\\[\\#0e1938\\]\/80{background:rgba(255,255,255,.025)!important}
+        .external-trace-cosmos .trace-connect-form{background:rgba(255,255,255,.035)!important;border-color:rgba(174,164,255,.16)!important}
         .external-trace-cosmos .bg-white{background:rgba(255,255,255,.055)!important;border-color:rgba(174,164,255,.16)!important}
         .external-trace-cosmos .bg-slate-50{background:rgba(255,255,255,.045)!important}
         .external-trace-cosmos .border-slate-100,.external-trace-cosmos .border-slate-200{border-color:rgba(174,164,255,.16)!important}
