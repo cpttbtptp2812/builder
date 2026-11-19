@@ -109,12 +109,11 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       const toolName = String(data.tool ?? data.name ?? "Unknown tool");
       const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.id;
       const sameToolSteps = current.filter((step) => step.phase === "skill" && String(step.rightDetail?.tool ?? step.rightDetail?.name ?? "") === toolName);
-      const openCandidates = sameToolSteps.filter((step) => step.status === "running" || step.status === "pending" || step.status === "unknown");
       const existingCount = sameToolSteps.length;
-      // Without a provider call ID, correlate only when there is exactly one
-      // unresolved call for this tool. Multiple candidates are ambiguous.
-      const inferredOpenStep = openCandidates.length === 1 ? openCandidates[0] : undefined;
-      const stepId = String(stableCallId ?? inferredOpenStep?.stepId ?? `tool-${toolName}-${existingCount + 1}`);
+      // A tool name is not a call identity: concurrent invocations can use the
+      // same tool. Only merge lifecycle events when the producer supplies a
+      // stable call ID; otherwise preserve each event separately.
+      const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
       const hasSeq = data.seq !== undefined && data.seq !== null && data.seq !== "" && Number.isFinite(Number(data.seq));
       const status = data.status == null ? undefined : normalizeStatus(data.status);
       return timelineReducer(current, {
