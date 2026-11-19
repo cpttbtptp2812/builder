@@ -6,7 +6,7 @@ import {
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
 import type { TraceDrawerMessage } from "./TraceInspectorDrawer";
-import { classifyRealityAdapter, formatRealityActionLabel, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind, summarizeRealityResult } from "@/lib/agentRealityAdapters";
+import { classifyRealityAdapter, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind, summarizeRealityResult } from "@/lib/agentRealityAdapters";
 
 interface Props {
   timeline: AgentStep[];
@@ -62,8 +62,6 @@ const adapterMeta:Record<AdapterKind,{label:string;icon:React.ElementType;accent
   model:{label:"模型推理调用",icon:BrainCircuit,accent:"indigo",verb:"正在请求模型处理信息"},
   generic:{label:"行动事件",icon:Activity,accent:"slate",verb:"收到一条执行事件"},
 };
-
-const displayToolName = formatRealityActionLabel;
 
 const summarize = summarizeRealityResult;
 
