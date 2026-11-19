@@ -60,8 +60,7 @@ const phaseFromEvent = (data: any): StepPhase => {
   const operation = String(eventAttribute(data, "gen_ai.operation.name") ?? "").toLowerCase();
   const tool = eventAttribute(data, "gen_ai.tool.name") ?? eventAttribute(data, "mcp.tool.name");
   if (tool) return "skill";
-  if (operation || /model|llm|inference/i.test(String(data.name ?? ""))) return "llm";
-  if (/retriev|search|embedding/i.test(String(data.name ?? ""))) return "context";
+  if (operation) return "llm";
   return "external";
 };
 
@@ -118,7 +117,7 @@ export function timelineReducer(
     rightSubtitle: incoming.rightSubtitle ?? "",
     rightDetail: incoming.rightDetail ?? {},
     durationMs: incoming.durationMs,
-    timestamp: incoming.timestamp ?? Date.now(),
+    timestamp: incoming.timestamp ?? 0,
   };
   return sortTimeline([...current, step]);
 }
@@ -132,7 +131,9 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       const rawSeq = data.seq ?? data.step;
       const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
       const seq = hasSeq ? Number(rawSeq) : current.length + 1;
-      const stepId = String(data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id ?? `event-${seq}`);
+      const suppliedId = data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id;
+      // Do not invent an identity that could merge unrelated events.
+      const stepId = String(suppliedId ?? `unidentified-event-${seq}-${current.length}`);
       const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle;
       return timelineReducer(current, {
         stepId,
@@ -169,7 +170,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       // A tool name is not a call identity: concurrent invocations can use the
       // same tool. Only merge lifecycle events when the producer supplies a
       // stable call ID; otherwise preserve each event separately.
-      const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
+      const stepId = String(stableCallId ?? `unidentified-tool-event-${current.length + 1}`);
       const hasSeq = data.seq !== undefined && data.seq !== null && data.seq !== "" && Number.isFinite(Number(data.seq));
       const status = data.status == null ? undefined : normalizeStatus(data.status);
       return timelineReducer(current, {
@@ -199,7 +200,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         rightTitle: "Retrieved sources",
         rightSubtitle: "",
         rightDetail: { ...data, items },
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : 0,
       });
     }
     return current;
