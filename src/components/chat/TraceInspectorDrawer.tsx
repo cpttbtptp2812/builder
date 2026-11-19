@@ -236,8 +236,8 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: isImmersive ? "100vw" : isSplit ? "60%" : `${drawerWidth}px`,
-        flex: isSplit && !isImmersive ? "1 1 60%" : undefined,
+        width: isImmersive ? "100vw" : isSplit ? "66%" : `${drawerWidth}px`,
+        flex: isSplit && !isImmersive ? "1 1 66%" : undefined,
         minWidth: isSplit && !isImmersive ? 0 : undefined,
         height: isImmersive ? "100dvh" : undefined,
         inset: isImmersive ? 0 : undefined,
@@ -270,7 +270,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         .trace-cosmos header,.trace-cosmos .border-b{border-color:rgba(174,164,255,.15)!important}
       `}</style>
       {/* ── 左侧边缘可拖拽把手 (鼠标按住左右拖拽即可缩放抽屉大小) ── */}
-      <div
+      {!isSplit && <div
         onMouseDown={handleMouseDown}
         className={`absolute -left-2 top-0 bottom-0 w-4 cursor-col-resize group flex items-center justify-center z-50 select-none ${
           isDragging ? "bg-blue-500/15" : "hover:bg-blue-400/10"
@@ -284,7 +284,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               : "bg-slate-300 group-hover:bg-blue-500 group-hover:scale-y-125"
           }`}
         />
-      </div>
+      </div>}
 
       {/* ── 顶栏：极简 48px，仅保留 [流程图] 与 [成本效能] 两个 Tab ── */}
       <div className="h-12 px-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 gap-3">
