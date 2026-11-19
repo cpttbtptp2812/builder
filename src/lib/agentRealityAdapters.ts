@@ -93,9 +93,10 @@ export function classifyRealityAdapter(input: {
   operation?: string;
   title?: string;
   phase?: string;
+  kind?: string;
 }): RealityAdapterKind {
   // Specialized views require explicit semantic evidence, never title keywords.
-  const explicitKind = String((input as any).kind ?? "").toLowerCase();
+  const explicitKind = String(input.kind ?? "").toLowerCase();
   const knownKinds: RealityAdapterKind[] = ["git", "browser", "retrieval", "code", "approval", "agent", "terminal", "model"];
   if (knownKinds.includes(explicitKind as RealityAdapterKind)) return explicitKind as RealityAdapterKind;
   if (input.operation && ["chat", "completion", "generate_content", "embeddings"].includes(input.operation.toLowerCase())) return "model";
