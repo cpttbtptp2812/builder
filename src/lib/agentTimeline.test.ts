@@ -165,6 +165,43 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(sorted.map((step) => step.stepId), ["model", "tool"]);
   });
 
+  it("rebuilds the persisted tool step in timestamp order and deduplicates legacy toolCalls", () => {
+    const timeline = rebuildTimelineFromMessage({
+      traceSteps: {
+        "41": {
+          stepId: "model-call-round-1",
+          seq: 41,
+          phase: "llm",
+          status: "done",
+          title: "Model request",
+          timestamp: 1000,
+          rightDetail: { prompt_messages: [{ role: "system", content: "Use tools." }] },
+        },
+        "1001": {
+          stepId: "call-history-9",
+          seq: 5,
+          phase: "skill",
+          status: "done",
+          title: "Search documents",
+          timestamp: 2000,
+          rightDetail: { tool_arguments: { query: "heartbeat" }, tool_result: { success: true } },
+        },
+      },
+      toolCalls: [{
+        tool: "search_docs",
+        id: "call-history-9",
+        toolCallId: "call-history-9",
+        status: "success",
+        parameters: { query: "heartbeat" },
+        result: ["doc-1"],
+      }],
+    });
+
+    assert.deepEqual(timeline.map((step) => step.stepId), ["model-call-round-1", "call-history-9"]);
+    assert.equal(timeline[1].seq, 5);
+    assert.deepEqual(timeline[1].rightDetail?.tool_arguments, { query: "heartbeat" });
+  });
+
   it("keeps missing execution status unknown after the stream ends", () => {
     const timeline = applySseToTimeline([], "agent_step", {
       stepId: "step-without-status",
