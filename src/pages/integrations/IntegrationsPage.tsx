@@ -143,6 +143,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
     const file = event.target.files?.[0];
     if (!file) return;
     try {
+      if (file.size > 20 * 1024 * 1024) throw new Error("报告超过 20 MB，请先导出较小的 JSON / JSONL 文件。");
       const raw = await file.text();
       if (file.name.toLowerCase().endsWith(".jsonl")) {
         const rows = raw.split(/\r?\n/).filter((line) => line.trim()).map((line) => JSON.parse(line));
