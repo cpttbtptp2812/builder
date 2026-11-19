@@ -305,7 +305,7 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
               {ordered.map((step,index)=>{
                 const kind=adapterOf(step), meta=adapterMeta[kind], Icon=meta.icon, state=status[step.status]||status.unknown;
                 const StateIcon=state.icon, active=selected?.stepId===step.stepId;
-                const label=toolOf(step)?(toolNames[toolOf(step)]||toolOf(step)):step.rightTitle||step.leftTitle||phaseLabels[step.phase]||"执行事件";
+                const label=toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||step.leftTitle||phaseLabels[step.phase]||"执行事件";
                 const summary=step.rightSubtitle||step.leftSummary||phaseLabels[step.phase]||"收到执行事件";
                 return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-pressed={active} className="ar-node rounded-xl p-3 text-left">
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-[9px] tracking-widest text-indigo-200/40">NODE {String(index+1).padStart(2,"0")}</span><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] ${state.color==="emerald"?"border-emerald-300/20 bg-emerald-300/10 text-emerald-200":state.color==="cyan"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-100":state.color==="rose"?"border-rose-300/20 bg-rose-300/10 text-rose-200":state.color==="amber"?"border-amber-300/20 bg-amber-300/10 text-amber-100":"border-white/10 bg-white/5 text-slate-300"}`}><StateIcon size={10}/>{state.label}</span></div>
