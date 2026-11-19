@@ -42,15 +42,19 @@ with OwnAgentClient(BASE_URL, API_KEY) as ownagent:
     title: "OpenTelemetry / 任意 Agent 框架",
     subtitle: "适合已经使用 OpenTelemetry、LangChain、LangGraph 或自建埋点的项目",
     install: "pip install opentelemetry-sdk opentelemetry-exporter-otlp-json-http",
-    code: `import os
+    code: `import os, uuid
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter
 
+run_id = uuid.uuid4().hex
+session_id = os.getenv("OWNAGENT_SESSION_ID", "session-001")
 provider = TracerProvider(resource=Resource.create({
     "service.name": "my-agent",
+    "ownagent.run.id": run_id,
+    "session.id": session_id,
 }))
 provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(
     endpoint=os.environ["OWNAGENT_OTLP_ENDPOINT"],
@@ -60,6 +64,7 @@ trace.set_tracer_provider(provider)
 tracer = trace.get_tracer("my-agent")
 
 with tracer.start_as_current_span("invoke_agent") as span:
+    span.set_attribute("ownagent.run.id", run_id)
     span.set_attribute("gen_ai.operation.name", "invoke_agent")
     span.set_attribute("gen_ai.agent.name", "my-agent")
     # 在模型调用与工具执行处继续创建子 Span`,
