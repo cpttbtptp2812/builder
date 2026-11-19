@@ -562,7 +562,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                           {event.spanId && <p className="mt-1 break-all font-mono text-[10px] text-slate-400">Span {event.spanId}</p>}
                           {event.payload && <details className="mt-2">
                             <summary className="cursor-pointer text-[11px] text-indigo-600">查看事件详情</summary>
-                            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-200">{(() => { try { return JSON.stringify(stripInternalReasoning(JSON.parse(event.payload)), null, 2); } catch { return event.payload; } })()}</pre>
+                            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-200">{(() => { try { return JSON.stringify(stripInternalReasoning(JSON.parse(event.payload)), null, 2); } catch { return "非 JSON 事件内容已隐藏"; } })()}</pre>
                           </details>}
                         </div>
                       ))}
@@ -629,7 +629,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                         <p className="border-t border-slate-100 px-4 py-2 text-xs text-slate-400">模型消息内容未采集（默认关闭）；可在 Agent 接入端显式开启并脱敏后上报。</p>
                       )}
                     <details className="border-t border-slate-100 px-4 py-2">
-                      <summary className="cursor-pointer text-xs font-medium text-slate-500">Span 属性与原始数据</summary>
+                      <summary className="cursor-pointer text-xs font-medium text-slate-500">Span 属性（已过滤内部推理字段）</summary>
                       <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify(stripInternalReasoning({ traceId: span.traceId, spanId: span.spanId, parentSpanId: span.parentSpanId, runId: span.runId, spanKind: span.spanKind, attributes: span.attributes }), null, 2)}</pre>
                     </details>
                   </article>
