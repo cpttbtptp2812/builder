@@ -49,7 +49,7 @@ The example sends model traffic directly to an OpenAI-compatible provider and se
 
 ## Where to find external runs in Studio
 
-Open the **智能工作台** and select **外部 Agent** in its toolbar. Enter the Agent API key and load the persisted traces. The panel is part of the existing workbench rather than a separate top-level workspace. External traces are scoped to the Agent identity represented by that key; they are not automatically merged into the built-in chat history unless the integration supplies matching session identifiers.
+Open **运行观测** from the Studio top navigation, enter the Agent API key, and load persisted Runs. The **智能工作台** also retains the external Agent entry point. External traces are scoped to the Agent identity represented by that key; they are not automatically merged into the built-in chat history unless the integration supplies matching session identifiers.
 
 ## Local Studio development
 
