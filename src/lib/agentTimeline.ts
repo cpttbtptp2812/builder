@@ -99,7 +99,13 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         leftSummary: data.leftSummary ?? data.message,
         rightTitle: title,
         rightSubtitle: data.rightSubtitle ?? data.description,
-        rightDetail: data.rightDetail ?? data,
+        // Keep envelope-level payloads (notably OpenTelemetry attributes) as well
+        // as the event's explicit rightDetail. The nested detail wins on key
+        // collisions, but neither source is silently discarded.
+        rightDetail: {
+          ...data,
+          ...(data.rightDetail && typeof data.rightDetail === "object" ? data.rightDetail : {}),
+        },
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
         timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
       });
