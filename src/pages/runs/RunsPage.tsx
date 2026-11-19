@@ -167,7 +167,14 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                     <li>用 <code>agent_run()</code> 包住一次任务，用 <code>run.span()</code> 记录真实模型调用和工具执行。</li>
                     <li>模型 Token 必须使用 Provider 实际返回值；Prompt 和响应内容默认不采集。</li>
                   </ol>
-                  <pre className="mt-3 overflow-auto rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{'with OwnAgentClient(BASE_URL, API_KEY) as client:\\n    with client.agent_run("my-agent", session_id="conversation-1") as run:\\n        with run.span("llm.chat.completions", span_kind="CLIENT") as span:\\n            response = call_your_model()\\n            span.set_usage(input_tokens=usage.prompt_tokens,\\n                           output_tokens=usage.completion_tokens)'}</pre>
+                  <pre className="mt-3 overflow-auto rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{[
+                    "with OwnAgentClient(BASE_URL, API_KEY) as client:",
+                    '    with client.agent_run("my-agent", session_id="conversation-1") as run:',
+                    '        with run.span("llm.chat.completions", span_kind="CLIENT") as span:',
+                    "            response = call_your_model()",
+                    "            span.set_usage(input_tokens=usage.prompt_tokens,",
+                    "                           output_tokens=usage.completion_tokens)",
+                  ].join("\n")}</pre>
                   <a className="mt-3 inline-flex text-xs font-medium text-indigo-600 hover:text-indigo-700" href="https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python" target="_blank" rel="noreferrer">查看 Python SDK 接入文档 ↗</a>
                 </details>
               </div>
