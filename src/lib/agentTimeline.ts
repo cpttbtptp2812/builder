@@ -25,10 +25,10 @@ export interface AgentStep {
 
 const normalizeStatus = (value: unknown): StepStatus => {
   const status = typeof value === "string" ? value.toLowerCase() : "";
-  if (["ok", "success", "succeeded", "completed", "done"].includes(status)) return "done";
+  if (["ok", "success", "succeeded", "completed", "complete", "done"].includes(status)) return "done";
   if (["passed", "pass"].includes(status)) return "passed";
   if (["error", "failed", "failure"].includes(status)) return "failed";
-  if (["running", "started", "in_progress"].includes(status)) return "running";
+  if (["running", "started", "in_progress", "in-progress", "in progress"].includes(status)) return "running";
   if (["pending", "queued"].includes(status)) return "pending";
   return "unknown";
 };
@@ -88,7 +88,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       const rawSeq = data.seq ?? data.step;
       const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
       const seq = hasSeq ? Number(rawSeq) : current.length + 1;
-      const stepId = String(data.stepId ?? data.spanId ?? data.step_id ?? `event-${seq}`);
+      const stepId = String(data.stepId ?? data.step_id ?? data.spanId ?? data.span_id ?? data.eventId ?? data.event_id ?? data.id ?? `event-${seq}`);
       const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle;
       return timelineReducer(current, {
         stepId,
@@ -107,9 +107,14 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
 
     if (eventName === "tool") {
       const toolName = String(data.tool ?? data.name ?? "Unknown tool");
-      const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.id;
-      const existingCount = current.filter((step) => step.phase === "skill" && step.rightDetail?.tool === toolName).length;
-      const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
+      const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.call_id ?? data.id;
+      const sameToolSteps = current.filter((step) => step.phase === "skill" && String(step.rightDetail?.tool ?? step.rightDetail?.name ?? "") === toolName);
+      const openCandidates = sameToolSteps.filter((step) => step.status === "running" || step.status === "pending" || step.status === "unknown");
+      const existingCount = sameToolSteps.length;
+      // Without a provider call ID, correlate only when there is exactly one
+      // unresolved call for this tool. Multiple candidates are ambiguous.
+      const inferredOpenStep = openCandidates.length === 1 ? openCandidates[0] : undefined;
+      const stepId = String(stableCallId ?? inferredOpenStep?.stepId ?? `tool-${toolName}-${existingCount + 1}`);
       const hasSeq = data.seq !== undefined && data.seq !== null && data.seq !== "" && Number.isFinite(Number(data.seq));
       const status = data.status == null ? undefined : normalizeStatus(data.status);
       return timelineReducer(current, {
