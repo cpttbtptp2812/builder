@@ -48,9 +48,13 @@ export interface TraceDrawerMessage {
     savedTokens?: number;
     savedMs?: number;
     hashKey?: string;
+    runId?: string;
+    traceId?: string;
   };
   agentTimeline?: AgentStep[];
 }
+
+export type ExecutionTraceData = NonNullable<TraceDrawerMessage["trace"]>;
 
 interface TraceInspectorDrawerProps {
   isOpen: boolean;
