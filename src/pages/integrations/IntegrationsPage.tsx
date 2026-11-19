@@ -317,7 +317,7 @@ export default function IntegrationsPage({ onOpenRuns }: { onOpenRuns: () => voi
                   <button onClick={() => void copy(bootstrapCommand, "bootstrap")} className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-800 hover:text-amber-950">{copied === "bootstrap" ? <Check size={11} /> : <Copy size={11} />}{copied === "bootstrap" ? "已复制" : "复制命令"}</button>
                 </div>
                 <pre className="mt-2 overflow-auto rounded-md bg-slate-950 p-3 text-[10px] leading-5 text-slate-200">{bootstrapCommand}</pre>
-                <p className="mt-2 text-[10px] leading-4 text-amber-900/70">Agent ID 必须是后端已有的 Agent。将这两个变量配置到后端启动环境并重启；API Key 只显示/保存于你自己的部署环境，切勿提交到仓库。</p>
+                <p className="mt-2 text-[10px] leading-4 text-amber-900/70">Agent ID 必须是后端已有的 Agent。将这两个变量配置到后端启动环境并重启（Docker Compose 部署时写入 backend 服务的 environment）；API Key 只保存在你自己的部署环境，切勿提交到仓库。</p>
               </div>
             </section>
           </div>
