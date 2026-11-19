@@ -197,7 +197,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .journey-json{background:rgba(4,9,29,.64);border-color:rgba(177,164,255,.18)}
         .agent-journey header{border-color:rgba(177,164,255,.12)}
         .agent-journey .orbit-node{background:linear-gradient(135deg,rgba(38,37,91,.78),rgba(14,25,59,.82));backdrop-filter:blur(16px)}
-        .agent-journey .journey-track:before{content:"";position:absolute;left:34px;right:34px;top:31px;height:2px;background:linear-gradient(90deg,rgba(52,211,153,.8),rgba(56,189,248,.7),rgba(139,92,246,.24));z-index:0}.agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:132px;width:168px;min-width:168px;max-width:168px;flex-direction:column;gap:8px;justify-content:flex-start}.agent-journey .journey-row>span:first-child{margin-top:0}.agent-journey .journey-row>span:nth-last-child(2){font-size:10px;color:rgba(196,205,239,.72)}.agent-journey .journey-row .text-sm{font-size:12px;line-height:1.45}.agent-journey .journey-row .text-xs{font-size:11px;line-height:1.45}.agent-journey .journey-row .text-\\[11px\\]{font-size:10px}
+        .agent-journey .journey-track:before{display:none}.agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:132px;width:100%;min-width:0;max-width:none;flex-direction:column;gap:8px;justify-content:flex-start}.agent-journey .journey-row>span:first-child{margin-top:0}.agent-journey .journey-row>span:nth-last-child(2){font-size:10px;color:rgba(196,205,239,.72)}.agent-journey .journey-row .text-sm{font-size:12px;line-height:1.45}.agent-journey .journey-row .text-xs{font-size:11px;line-height:1.45}.agent-journey .journey-row .text-\\[11px\\]{font-size:10px}
         .agent-journey .journey-row:hover{background:rgba(57,55,118,.48);border-color:rgba(177,164,255,.38)}
         .agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(91,65,173,.42),rgba(21,65,91,.34));border-color:rgba(103,232,249,.62);box-shadow:inset 0 0 0 1px rgba(103,232,249,.12),0 0 22px rgba(124,58,237,.12)}
         .agent-journey .detail-glass{background:rgba(12,17,46,.78);border-color:rgba(177,164,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.16)}
@@ -247,8 +247,8 @@ export const MissionControlTimeline: React.FC<Props> = ({
               </div>
               <span className="text-xs text-violet-200/60">按发生顺序排列 · 选择事件查看详情</span>
             </div>
-            <div className="relative overflow-x-auto pb-3 [scrollbar-width:thin]">
-              <div className="journey-track relative flex min-w-max items-stretch gap-3 px-1 pt-2">
+            <div className="relative pb-1">
+              <div className="journey-track relative grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] items-stretch gap-3 px-1 pt-2">
                 {ordered.map((step,index)=>{
                   const info=phaseMeta[step.phase]||phaseMeta.external;
                   const Icon=info.icon;
