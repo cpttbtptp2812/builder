@@ -202,6 +202,16 @@ describe("Agent execution timeline event handling", () => {
     assert.deepEqual(timeline[1].rightDetail?.tool_arguments, { query: "heartbeat" });
   });
 
+  it("does not classify an unknown operation as an LLM event", () => {
+    const timeline = applySseToTimeline([], "otel_span", {
+      spanId: "unknown-operation",
+      name: "custom.operation",
+      attributes: { "gen_ai.operation.name": "custom.operation" },
+    });
+    assert.equal(timeline.length, 1);
+    assert.equal(timeline[0].phase, "external");
+  });
+
   it("normalizes OpenTelemetry GenAI spans into readable model steps", () => {
     const timeline = applySseToTimeline([], "otel_span", {
       spanId: "otel-model-1",
