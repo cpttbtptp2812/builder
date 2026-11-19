@@ -52,9 +52,12 @@ export function timelineReducer(
   if (existingIdx >= 0) {
     const updated = [...current];
     const old = updated[existingIdx];
+    const definedIncoming = Object.fromEntries(
+      Object.entries(incoming).filter(([, value]) => value !== undefined)
+    ) as Partial<AgentStep> & { stepId: string };
     updated[existingIdx] = {
       ...old,
-      ...incoming,
+      ...definedIncoming,
       rightDetail: { ...(old.rightDetail || {}), ...(incoming.rightDetail || {}) },
     };
     return updated.sort((a, b) => a.seq - b.seq || a.timestamp - b.timestamp);
@@ -82,21 +85,23 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
     if (!data || typeof data !== "object") return current;
 
     if (eventName === "agent_step" || eventName === "trace_step") {
-      const seq = Number.isFinite(Number(data.seq ?? data.step)) ? Number(data.seq ?? data.step) : current.length + 1;
+      const rawSeq = data.seq ?? data.step;
+      const hasSeq = rawSeq !== undefined && rawSeq !== null && rawSeq !== "" && Number.isFinite(Number(rawSeq));
+      const seq = hasSeq ? Number(rawSeq) : current.length + 1;
       const stepId = String(data.stepId ?? data.spanId ?? data.step_id ?? `event-${seq}`);
       const title = data.rightTitle ?? data.title ?? data.name ?? data.leftTitle ?? "Agent event";
       return timelineReducer(current, {
         stepId,
-        seq,
+        seq: hasSeq ? seq : undefined,
         phase: data.phase ?? "external",
-        status: normalizeStatus(data.status),
+        status: data.status == null ? undefined : normalizeStatus(data.status),
         leftTitle: data.leftTitle ?? title,
         leftSummary: data.leftSummary ?? data.message ?? "",
         rightTitle: title,
         rightSubtitle: data.rightSubtitle ?? data.description ?? "",
         rightDetail: data.rightDetail ?? data,
         durationMs: parseDuration(data.durationMs ?? data.duration ?? data.totalMs),
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
       });
     }
 
@@ -105,10 +110,11 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
       const stableCallId = data.toolCallId ?? data.tool_call_id ?? data.callId ?? data.id;
       const existingCount = current.filter((step) => step.phase === "skill" && step.rightDetail?.tool === toolName).length;
       const stepId = String(stableCallId ?? `tool-${toolName}-${existingCount + 1}`);
-      const status = normalizeStatus(data.status);
+      const hasSeq = data.seq !== undefined && data.seq !== null && data.seq !== "" && Number.isFinite(Number(data.seq));
+      const status = data.status == null ? undefined : normalizeStatus(data.status);
       return timelineReducer(current, {
         stepId,
-        seq: Number.isFinite(Number(data.seq)) ? Number(data.seq) : current.length + 1,
+        seq: hasSeq ? Number(data.seq) : undefined,
         phase: "skill",
         status,
         leftTitle: `Tool: ${toolName}`,
@@ -117,7 +123,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
         rightSubtitle: data.description ?? "",
         rightDetail: data,
         durationMs: parseDuration(data.durationMs ?? data.duration),
-        timestamp: typeof data.timestamp === "number" ? data.timestamp : Date.now(),
+        timestamp: typeof data.timestamp === "number" ? data.timestamp : undefined,
       });
     }
 
