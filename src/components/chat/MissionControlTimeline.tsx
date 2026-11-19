@@ -145,10 +145,10 @@ export const MissionControlTimeline: React.FC<Props> = ({
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-300/30 bg-indigo-400/15 text-cyan-200"><Activity className="h-4 w-4"/></span>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2"><h2 className="text-sm font-bold text-slate-900">Agent 执行旅程</h2><span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${stateClass[state.tone]}`}>{state.label}</span></div>
-              <p className="mt-0.5 truncate text-[10px] text-slate-500">{message?.userPrompt || "从任务理解到工具执行，逐步呈现实际发生的过程"}</p>
+              <p className="mt-0.5 truncate text-[10px] text-slate-400">{message?.userPrompt || "从任务理解到工具执行，逐步呈现实际发生的过程"}</p>
             </div>
           </div>
-          <div className="hidden shrink-0 items-center gap-3 text-[10px] text-slate-500 sm:flex">
+          <div className="hidden shrink-0 items-center gap-3 text-[10px] text-slate-400 sm:flex">
             <span><b className="font-mono text-slate-800">{completed}/{ordered.length}</b> 完成</span>
             <span><b className="font-mono text-slate-800">{tokenEvents || "—"}</b> Token 上报</span>
             <span className={failures ? "text-rose-600" : ""}><b className="font-mono">{failures}</b> 异常</span>
@@ -161,7 +161,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
 
       {ordered.length === 0 ? (
         <div className="relative flex min-h-48 flex-col items-center justify-center px-6 py-9 text-center">
-          <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-100 bg-indigo-50 text-indigo-500"><Activity className="h-5 w-5"/></span>
+          <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl border border-indigo-300/25 bg-indigo-400/10 text-cyan-200"><Activity className="h-5 w-5"/></span>
           <h3 className="text-sm font-semibold text-slate-800">{isThinking ? "正在等待 Agent 的第一条执行信号" : "这次运行还没有可展示的执行事件"}</h3>
           <p className="mt-1.5 max-w-xs text-xs leading-5 text-slate-500">这里只呈现 Agent 或执行端实际上报的步骤，不会用推测内容补齐过程。</p>
         </div>
@@ -196,7 +196,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
           </div>
 
           {selected && (
-            <div className="min-w-0 overflow-hidden rounded-2xl border border-indigo-300/25 bg-slate-950/45 shadow-[0_12px_48px_rgba(0,0,0,.24)] lg:sticky lg:top-3 lg:max-h-[min(72vh,720px)] lg:overflow-y-auto [scrollbar-width:thin]">
+            <div className="min-w-0 order-1 lg:order-2 overflow-hidden rounded-2xl border border-indigo-300/25 bg-slate-950/45 shadow-[0_12px_48px_rgba(0,0,0,.24)] lg:sticky lg:top-3 lg:max-h-[min(72vh,720px)] lg:overflow-y-auto [scrollbar-width:thin]">
               <div className="flex items-center justify-between gap-2 border-b border-indigo-200/15 bg-indigo-400/10 px-3 py-3">
                 <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-indigo-200/20 bg-indigo-300/10 text-cyan-200 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-cyan-200">STEP {String(selected.seq).padStart(2,"0")}<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
                 <div className="flex shrink-0 items-center gap-2 text-[9px] text-slate-500"><span><Clock3 className="mr-1 inline h-3 w-3"/>{durationText(selected.durationMs)}</span><span>Token <b className="font-mono text-slate-700">{tokenText(detail)??"未上报"}</b></span></div>
