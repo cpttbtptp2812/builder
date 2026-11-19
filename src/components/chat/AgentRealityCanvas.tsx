@@ -42,11 +42,12 @@ const text = (value:any) => {
 };
 const messageText = realityMessageText;
 const parseStructured = parseRealityPayload;
-const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName","name","mcp.method.name"]) || "");
+const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName"]) || "");
 const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name","span.name","spanName"]) || "").toLowerCase();
 const adapterOf = (step:AgentStep):AdapterKind => classifyRealityAdapter({
   tool: toolOf(step),
   operation: operationOf(step),
+  kind: String(read(step.rightDetail,["adapter_kind","adapterKind"]) ?? ""),
   title: step.rightTitle+" "+step.leftTitle,
   phase: step.phase,
 });
@@ -90,7 +91,7 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const visiblePromptMessages=toRealityMessageList(promptMessages);
   const visibleModelResponse=parseStructured(modelResponse);
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
-  const why=read(d,["reason","purpose","goal","explanation"]);
+  const why=read(d,["reason","purpose","explanation"]);
   const nextAction=read(d,["next_action","nextAction","next_step","handoff_target"]);
   const duration=typeof step.durationMs==="number" ? (step.durationMs>=1000?(step.durationMs/1000).toFixed(2)+" 秒":Math.round(step.durationMs)+" 毫秒") : "未上报";
   return <div className="reality-inspector">
@@ -249,8 +250,8 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
               {ordered.map((step,index)=>{
                 const kind=adapterOf(step), meta=adapterMeta[kind], Icon=meta.icon, state=status[step.status]||status.unknown;
                 const StateIcon=state.icon, active=selected?.stepId===step.stepId;
-                const label=toolOf(step)?displayToolName(toolOf(step)):step.rightTitle||step.leftTitle||phaseLabels[step.phase]||"执行事件";
-                const summary=step.rightSubtitle||step.leftSummary||phaseLabels[step.phase]||"收到执行事件";
+                const label=toolOf(step)||step.rightTitle||step.leftTitle||"未命名事件";
+                const summary=step.rightSubtitle||step.leftSummary||"执行端未上报说明";
                 return <button key={step.stepId} type="button" onClick={()=>select(step)} aria-pressed={active} className="ar-node rounded-xl p-3 text-left">
                   <div className="flex items-center justify-between gap-2"><span className="font-mono text-[9px] tracking-widest text-indigo-200/40">NODE {String(index+1).padStart(2,"0")}</span><span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] ${state.color==="emerald"?"border-emerald-300/20 bg-emerald-300/10 text-emerald-200":state.color==="cyan"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-100":state.color==="rose"?"border-rose-300/20 bg-rose-300/10 text-rose-200":state.color==="amber"?"border-amber-300/20 bg-amber-300/10 text-amber-100":"border-white/10 bg-white/5 text-slate-300"}`}><StateIcon size={10}/>{state.label}</span></div>
                   <div className="mt-2 flex items-center gap-2"><span className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border ${kind==="git"?"border-violet-300/25 bg-violet-300/10 text-violet-200":kind==="browser"?"border-cyan-300/25 bg-cyan-300/10 text-cyan-200":kind==="retrieval"?"border-blue-300/25 bg-blue-300/10 text-blue-200":kind==="approval"?"border-amber-300/25 bg-amber-300/10 text-amber-200":"border-indigo-300/20 bg-indigo-300/10 text-indigo-100"}`}><Icon size={17}/></span><span className="min-w-0"><strong className="block truncate text-xs text-white">{label}</strong><small className="mt-1 block truncate text-[10px] text-indigo-100/50">{meta.label} · {phaseLabels[step.phase]||"执行事件"}</small></span></div>
@@ -258,7 +259,7 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
                 </button>
               })}
             </div>
-            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)?displayToolName(toolOf(current)):current.rightTitle):"等待下一条事件"}</span></div>
+            <div className="relative z-10 mt-3 flex flex-wrap items-center justify-between gap-2 border-t border-indigo-200/10 pt-3 text-[10px] text-indigo-100/45"><span>节点仅对应已采集事件，不推测隐藏步骤</span><span>{current?"正在运行："+(toolOf(current)||current.rightTitle||"未命名事件"):"等待下一条事件"}</span></div>
           </div>
           <div className="ar-panel rounded-xl p-3"><div className="flex items-center gap-2 text-xs font-semibold text-indigo-100"><Activity size={14} className="text-cyan-300"/>执行信号</div><div className="mt-2 grid grid-cols-3 gap-2"><div><small className="text-[10px] text-indigo-100/40">实际事件</small><strong className="block text-lg text-white">{total}</strong></div><div><small className="text-[10px] text-indigo-100/40">完成比例</small><strong className="block text-lg text-white">{percent}%</strong></div><div><small className="text-[10px] text-indigo-100/40">本轮耗时</small><strong className="block text-lg text-white">{message?.duration||"未上报"}</strong></div></div></div>
         </div>
