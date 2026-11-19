@@ -375,15 +375,20 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     if (!selectedChatRunId) return;
     setChatRunJudgeLoading(true);
     setChatRunJudgeError("");
+    const assistantIndex = chatMessages.findIndex((message: any) =>
+      message.role === "assistant" && (message.trace?.runId === selectedChatRunId || message.traceId === selectedChatRunDetail?.run?.traceId)
+    );
+    const answerMessage = assistantIndex >= 0 ? chatMessages[assistantIndex] : null;
+    const taskMessage = assistantIndex >= 0
+      ? [...chatMessages.slice(0, assistantIndex)].reverse().find((message: any) => message.role === "user")
+      : null;
     try {
       const response = await fetch(API_BASE + "/api/chat/runs/" + encodeURIComponent(selectedChatRunId) + "/judge", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
-          task: "请仅根据内置 Agent 本次运行中真实持久化的模型请求、模型响应、工具调用、工具结果和错误事件评估执行质量。",
-          answer: String(chatMessages.find((message: any) =>
-            message.role === "assistant" && (message.trace?.runId === selectedChatRunId || message.traceId === selectedChatRunDetail?.run?.traceId)
-          )?.content || ""),
+          task: String(taskMessage?.content || "请根据本次运行的实际目标评估 Agent 执行质量。"),
+          answer: String(answerMessage?.content || ""),
           rubric: "任务完成度、指令遵循、工具使用合理性、执行可靠性。只依据已采集证据评分；证据不足时明确说明，不得推测未采集内容。"
         })
       });
