@@ -48,6 +48,24 @@ const pretty = (value: unknown) => {
   if (typeof value === "string") return value;
   try { return JSON.stringify(value, null, 2); } catch { return String(value); }
 };
+const humanizeKey = (key: string) => {
+  const labels: Record<string, string> = {
+    repoId: "仓库标识", repoName: "仓库", branch: "分支", commitCount: "提交数量",
+    commits: "提交记录", limit: "查询数量", owner: "所有者", path: "文件路径",
+    status: "执行状态", success: "是否成功", message: "说明", error: "错误",
+    tool: "工具", query: "查询内容", url: "地址", total: "总数",
+  };
+  if (labels[key]) return labels[key];
+  return key.replace(/([a-z0-9])([A-Z])/g, "$1 $2").replace(/[_-]/g, " ").replace(/^./, c => c.toUpperCase());
+};
+const readableEntries = (value: unknown): Array<[string, unknown]> => {
+  let parsed: any = value;
+  if (typeof parsed === "string") {
+    try { parsed = JSON.parse(parsed); } catch { return []; }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  return Object.entries(parsed).filter(([, v]) => v !== undefined && v !== null).slice(0, 8);
+};
 const pick = (detail: Record<string, any>, keys: string[]) => {
   for (const key of keys) if (detail[key] !== undefined && detail[key] !== null) return detail[key];
   return undefined;
@@ -163,7 +181,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .journey-json{background:rgba(4,9,29,.64);border-color:rgba(177,164,255,.18)}
         .agent-journey header{border-color:rgba(177,164,255,.12)}
         .agent-journey .orbit-node{background:linear-gradient(135deg,rgba(38,37,91,.78),rgba(14,25,59,.82));backdrop-filter:blur(16px)}
-        .agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:72px}
+        .agent-journey .journey-track:before{content:"";position:absolute;left:34px;right:34px;top:31px;height:2px;background:linear-gradient(90deg,rgba(52,211,153,.8),rgba(56,189,248,.7),rgba(139,92,246,.24));z-index:0}.agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:132px;width:168px;min-width:168px;max-width:168px;flex-direction:column;gap:8px;justify-content:flex-start}.agent-journey .journey-row>span:first-child{margin-top:0}.agent-journey .journey-row>span:last-child{display:none}.agent-journey .journey-row .text-sm{font-size:12px;line-height:1.45}.agent-journey .journey-row .text-xs{font-size:11px;line-height:1.45}.agent-journey .journey-row .text-\\[11px\\]{font-size:10px}
         .agent-journey .journey-row:hover{background:rgba(57,55,118,.48);border-color:rgba(177,164,255,.38)}
         .agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(91,65,173,.42),rgba(21,65,91,.34));border-color:rgba(103,232,249,.62);box-shadow:inset 0 0 0 1px rgba(103,232,249,.12),0 0 22px rgba(124,58,237,.12)}
         .agent-journey .detail-glass{background:rgba(12,17,46,.78);border-color:rgba(177,164,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.16)}
@@ -173,7 +191,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .detail-glass section{color:#e9eaff}
         .agent-journey .detail-glass .text-indigo-100,.agent-journey .detail-glass .text-emerald-100,.agent-journey .detail-glass .text-sky-100,.agent-journey .detail-glass .text-teal-100{color:#e8eaff!important}
         .agent-journey .detail-glass .text-indigo-500{color:#bfc8ff!important}
-        .agent-journey .journey-layout{grid-template-columns:minmax(0,1fr)}
+        .agent-journey .journey-layout{grid-template-columns:minmax(0,1fr)}.agent-journey .detail-glass{margin-top:14px}
       `}</style>
 
       <header className="relative border-b border-violet-200/15 px-4 py-3">
@@ -223,7 +241,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                   const tone=toneForStep(step.status);
                   const stateLabel=(statusMeta[step.status]||statusMeta.unknown).label;
                   const toneClass=tone==="done"?"text-emerald-300 border-emerald-300/35":tone==="running"?"text-cyan-200 border-cyan-300/45":tone==="failed"?"text-rose-300 border-rose-300/40":tone==="unknown"?"text-amber-200 border-amber-300/40":"text-violet-200 border-violet-300/25";
-                  return <button key={`${step.stepId}-${index}`} type="button" onClick={()=>select(step)} aria-expanded={active} className={`journey-row relative flex w-full items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${active?"journey-row-active":""}`}>
+                  return <button key={`${step.stepId}-${index}`} type="button" onClick={()=>select(step)} aria-expanded={active} className={`journey-row relative flex items-start gap-3 rounded-xl border px-3 py-3 text-left transition ${active?"journey-row-active":""}`}>
                     <span className={`relative z-[1] mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border bg-[#111735] ${toneClass}`}>
                       {tone==="running"?<Loader2 className="h-4 w-4 animate-spin"/>:tone==="done"?<CheckCircle2 className="h-4 w-4"/>:tone==="failed"?<XCircle className="h-4 w-4"/>:tone==="unknown"?<CircleHelp className="h-4 w-4"/>:<Icon className="h-4 w-4"/>}
                     </span>
