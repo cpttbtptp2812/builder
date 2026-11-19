@@ -448,6 +448,29 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
     }
   };
 
+  useEffect(() => {
+    if (!selectedChatRunId || selectedChatRunDetail?.run?.status !== "RUNNING") return;
+    let active = true;
+    const refresh = async () => {
+      try {
+        const response = await fetch(API_BASE + "/api/chat/runs/" + encodeURIComponent(selectedChatRunId));
+        if (!response.ok) return;
+        const detail = await response.json();
+        if (!active) return;
+        setSelectedChatRunDetail(detail);
+        if (detail?.run) {
+          setChatRuns((current) => current.map((run) => run.runId === selectedChatRunId
+            ? { ...run, ...detail.run, spanCount: detail.spans?.length ?? run.spanCount }
+            : run));
+        }
+      } catch (cause) {
+        console.warn("Built-in Run refresh failed", cause);
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), 1800);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [selectedChatRunId, selectedChatRunDetail?.run?.status]);
+
   const loadRuns = async () => {
     if (!apiKey.trim()) {
       setError("请输入 Agent API Key。密钥只保存在当前页面内存中，不会写入浏览器存储。");
