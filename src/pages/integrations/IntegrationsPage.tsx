@@ -1,10 +1,11 @@
 import React, { useState } from "react";
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\\/+$/, "");
 import {
   Activity, ArrowUpRight, Check, Code2, Copy, ExternalLink, GitBranch,
   Layers3, PlugZap, Radio, ShieldCheck, Terminal, Workflow
 } from "lucide-react";
+
+const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\\/+$/, "");
 
 type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp" | "mcp-inspector" | "promptfoo" | "frameworks";
 
@@ -42,14 +43,14 @@ with OwnAgentClient(BASE_URL, API_KEY) as ownagent:
   },
   otel: {
     title: "OpenTelemetry / 任意 Agent 框架",
-    subtitle: "适合已经使用 OpenTelemetry、LangChain、LangGraph 或自建埋点的项目",
-    install: "pip install opentelemetry-sdk opentelemetry-exporter-otlp-json-http",
+    subtitle: "适合已经使用 OpenTelemetry、LangChain、LangGraph 或自建埋点的项目。OwnAgent 接收 OTLP/HTTP JSON 与 Protobuf；推荐使用标准 Protobuf exporter。",
+    install: "pip install opentelemetry-sdk opentelemetry-exporter-otlp-proto-http",
     code: `import os, uuid
 from opentelemetry import trace
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from opentelemetry.exporter.otlp.json.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
 
 run_id = uuid.uuid4().hex
 session_id = os.getenv("OWNAGENT_SESSION_ID", "session-001")
