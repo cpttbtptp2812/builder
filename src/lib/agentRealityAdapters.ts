@@ -105,3 +105,28 @@ export function classifyRealityAdapter(input: {
   if (/chat|inference|generate_content|invoke_model|model_call|llm/.test(name) || input.phase === "llm") return "model";
   return "generic";
 }
+
+/** Convert common structured tool results into concise, factual UI copy. */
+export function summarizeRealityResult(value: any): string {
+  if (value === undefined || value === null) return "执行端尚未提供结果";
+  if (typeof value === "string") return value.length > 180 ? value.slice(0, 180) + "…" : value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) return value.length ? `返回 ${value.length} 项数据` : "返回空列表";
+  if (value.success === false || value.ok === false) return String(value.error || value.message || "操作未成功");
+  const data = isObject(value.data) ? value.data : value;
+  const parts: string[] = [];
+  const repository = data.repository || data.repoName || data.repo_name;
+  const branch = data.branch || data.ref;
+  if (repository) parts.push(`仓库：${repository}`);
+  if (branch) parts.push(`分支：${branch}`);
+  if (typeof data.clean === "boolean") parts.push(data.clean ? "工作区干净" : "存在未提交修改");
+  if (Array.isArray(data.commits)) parts.push(`读取到 ${data.commits.length} 条提交记录`);
+  if (Array.isArray(data.files) || Array.isArray(data.changedFiles)) parts.push(`涉及 ${(data.files || data.changedFiles).length} 个文件`);
+  if (typeof data.count === "number") parts.push(`共 ${data.count} 项`);
+  if (typeof data.total === "number") parts.push(`共 ${data.total} 项`);
+  if (typeof data.status === "string") parts.push(`状态：${data.status}`);
+  if (typeof data.message === "string" && parts.length < 2) parts.push(data.message);
+  if (parts.length) return parts.slice(0, 3).join(" · ");
+  if (value.success === true || value.ok === true) return String(value.message || "操作成功，执行端已确认");
+  return `已收到执行结果（${Object.keys(value).length} 个字段）`;
+}
