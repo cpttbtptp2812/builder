@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { AgentStep, sortTimeline } from "@/lib/agentTimeline";
 import type { TraceDrawerMessage } from "./TraceInspectorDrawer";
+import { AgentPrismTraceTree } from "./AgentPrismTraceTree";
 import { classifyRealityAdapter, parseRealityPayload, readRealityAttribute, realityMessageText, toRealityMessageList, type RealityAdapterKind, summarizeRealityResult } from "@/lib/agentRealityAdapters";
 
 interface Props {
@@ -205,6 +206,7 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
       <div className="min-w-0 flex-1"><div className="text-[9px] font-mono tracking-[.2em] text-cyan-200/65">OWNAGENT / EXECUTION SPACE</div><h2 className="mt-1 text-sm font-bold tracking-wide text-white">任务执行现场</h2><p className="mt-1 truncate text-[11px] text-slate-400">{message?.userPrompt||"从 Agent 的真实事件中，还原任务如何一步步完成"}</p></div>
       <div className="flex items-center gap-4 text-center text-[10px] text-slate-400"><span><b className="block text-base text-white">{ordered.length}</b>已采集事件</span><span><b className="block text-base text-emerald-300">{completed}</b>已完成</span>{failed>0&&<span><b className="block text-base text-rose-300">{failed}</b>异常</span>}<span className={`rounded-full border px-3 py-1.5 font-mono ${live?"border-cyan-300/30 bg-cyan-300/10 text-cyan-100":"border-slate-400/20 bg-slate-400/5 text-slate-400"}`}>{live?"● LIVE":ordered.length?"◉ RECORDED":"○ STANDBY"}</span></div>
     </header>
+    <AgentPrismTraceTree timeline={ordered}/>
     <div className="flow-layout relative z-10 grid min-h-0 flex-1 grid-cols-[minmax(0,1.05fr)_minmax(300px,.95fr)] gap-4 overflow-hidden p-4">
       <section className="flow-scroll min-h-0 overflow-y-auto pr-2">
         <div className="mb-4 flex items-end justify-between"><div><div className="text-[9px] font-mono tracking-[.2em] text-cyan-200/55">TASK NARRATIVE</div><h3 className="mt-1 text-xs font-semibold text-white">发生了什么</h3></div><span className="text-[10px] text-slate-500">按采集顺序呈现 · 非隐藏思维链</span></div>
