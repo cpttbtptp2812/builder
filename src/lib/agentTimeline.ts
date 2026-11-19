@@ -23,7 +23,7 @@ export interface AgentStep {
   timestamp: number;
 }
 
-const sortTimeline = (steps: AgentStep[]) => {
+export const sortTimeline = (steps: AgentStep[]) => {
   const hasCompleteTimestamps = steps.length > 0 && steps.every(
     (step) => Number.isFinite(step.timestamp) && step.timestamp > 0
   );
@@ -171,7 +171,7 @@ export function applySseToTimeline(current: AgentStep[], eventName: string, payl
 /** Legacy history reconstruction is allowed only from persisted event details. */
 export function rebuildTimelineFromMessage(msg: {
   traceSteps?: Record<number, any>;
-  toolCalls?: Array<{ tool: string; duration?: string; status?: string; result?: any; parameters?: any; id?: string }>;
+  toolCalls?: Array<{ tool: string; duration?: string; status?: string; result?: any; parameters?: any; id?: string; tool_arguments?: any; tool_result?: any; toolCallId?: string; modelStep?: number }>;
   agentTimeline?: AgentStep[];
 }): AgentStep[] {
   if (msg.agentTimeline?.length) return msg.agentTimeline;
@@ -207,7 +207,14 @@ export function rebuildTimelineFromMessage(msg: {
       leftSummary: "",
       rightTitle: tool.tool,
       rightSubtitle: "",
-      rightDetail: { parameters: tool.parameters, result: tool.result },
+      rightDetail: {
+        parameters: tool.parameters,
+        result: tool.result,
+        tool_arguments: tool.tool_arguments ?? tool.parameters,
+        tool_result: tool.tool_result ?? tool.result,
+        toolCallId: tool.toolCallId ?? tool.id,
+        modelStep: tool.modelStep,
+      },
       durationMs: parseDuration(tool.duration),
       timestamp: 0,
     });
