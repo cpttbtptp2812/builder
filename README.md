@@ -1,42 +1,94 @@
-# OwnAgent · 企业级智能体平台
+# OwnAgent — AI Agent Observability & Debugging
 
-**打通大模型与企业核心业务协同**。提供极简三屏架构：在【首页】洞悉业务大盘，在【工作台】实现代码查验与实时链路协同，在【业务流】以 4 步精确向导配置 Git 协同智能体与全域业务规则，支持代码库内置工具与轻量增量微调。
+OwnAgent helps developers inspect what their AI Agents actually did: model calls, tool calls, returned results, errors, timing, and provider-reported token usage.
 
-| 模块 | 说明 |
-|------|------|
-| **01. 平台首页 (Overview)** | 全局业务健康度感知、生产业务流速览与核心业务智能体快速启动入口 |
-| **02. 智能工作台 (Workbench)** | 左右分屏深度协同、左侧推演业务步骤，右侧实时联动 APM 毫秒级瀑布流链路追踪 |
-| **03. 业务流中心 (Workflows)** | 4 步精确向导，自由配置代码库、智能体提示词人设、检查门禁规则与代码库内置 MCP |
+It is an engineering tool for Agents you build elsewhere. You do not need to move your Agent into OwnAgent or use OwnAgent as your model gateway.
 
----
+## What you can inspect
 
-## 核心标杆业务流
+- **Runs:** group persisted spans by trace ID and inspect each run.
+- **Execution timeline:** see model and tool spans in start-time order.
+- **Span details:** inspect trace/span IDs, parent relationships, status, timestamps, duration, token counts, and attributes.
+- **Live updates:** subscribe to trace events while a run is in progress.
+- **Action lifecycle:** when using the OwnAgent Action Runtime, inspect persisted Action events and outcomes.
 
-1. **Git 仓库实时监控与代码智能体 (v1.2.0)**
-   - 配置 Git 仓库地址后，智能体在对话中实时解析代码库状态，自动监控每次 Commit 与改动，深度排查代码 Bug、安全漏洞与潜在合并隐患。
-   - 标签：`#Git 监控` `#仓库凭证配置` `#视觉排查` `#安全漏洞` `#协同任务`
-2. **企业全域数据清洗与智能分析流 (v2.0.0)**
-   - 面向企业核心运营与财务数据的端到端智能流水线，涵盖多源数据抽取脱敏、合规性清洗与阈值校验、高风险账目人工校验复核，以及大模型智能 BI 指标分析与决策简报生成。
-   - 标签：`#数据清洗` `#脱敏规则` `#规则合规` `#BI 分析` `#审计存证`
+The Studio reads backend data. It does not create sample runs or fill missing fields with estimated values.
 
----
+## Connect an Agent
 
-## 本地开发与运行
+The backend and Python SDK live in [cpttbtptp2812/ownsudo](https://github.com/cpttbtptp2812/ownsudo).
 
-```bash
-# 安装依赖
+~~~bash
+git clone https://github.com/cpttbtptp2812/ownsudo.git
+cd ownsudo/sdk/python
+python -m pip install -e .
+~~~
+
+Configure your OwnAgent backend URL and an Agent API key issued by your OwnAgent installation:
+
+~~~bash
+export OWNAGENT_BASE_URL="http://localhost:8080"
+export OWNAGENT_AGENT_API_KEY="your-agent-api-key"
+~~~
+
+For the complete model-driven Agent example, also configure an OpenAI-compatible provider key and model:
+
+~~~bash
+export OPENAI_API_KEY="your-provider-key"
+export OPENAI_MODEL="your-tool-calling-model"
+# Optional: export OPENAI_BASE_URL="https://api.openai.com/v1"
+python examples/demo_agent.py
+~~~
+
+The example sends model requests directly to the configured provider, executes its registered Python tool through OwnAgent, and submits trace spans separately. It uses provider-returned token usage; it does not estimate token counts.
+
+To capture exact prompt messages, tool schemas, model responses, arguments, and results, explicitly opt in:
+
+~~~bash
+export OWNAGENT_TRACE_CAPTURE_CONTENT=1
+python examples/demo_agent.py
+~~~
+
+Content capture is disabled by default because prompts and tool results may contain sensitive data. Review the SDK guide before enabling it.
+
+For your own synchronous Python Agent, use the context-managed trace helper and attach token counts returned by your provider. For framework instrumentation and OTLP/HTTP JSON ingestion, see the [backend Python SDK and trace documentation](https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python).
+
+## Open the Runs view
+
+1. Start the OwnAgent backend and Studio.
+2. Open **运行记录** in the Studio navigation.
+3. Enter the Agent API key used by your Agent and select **读取记录**.
+
+The key is held in page memory only; this page does not persist it to browser storage. The Runs view calls the authenticated GET /api/v1/traces endpoint and groups the returned spans by trace ID. It shows only records stored by the backend.
+
+If the list is empty, run an instrumented Agent with the same Agent identity. The Studio will not insert a demo trace.
+
+## Local Studio development
+
+Requirements: Node.js 20+.
+
+~~~bash
 npm install
-
-# 启动开发服务器
 npm run dev
-```
+~~~
 
-浏览器访问 `http://localhost:5173` 即可进入 OwnAgent 平台。
+Set VITE_API_BASE if the backend is not served from the same origin. Then open the Vite URL shown in the terminal.
 
-## 生产构建
-
-```bash
+~~~bash
+npm run test:timeline
 npm run build
-```
+~~~
 
-构建产物将输出至 `dist/` 目录。
+## Data and privacy boundaries
+
+- OwnAgent does not automatically intercept arbitrary provider calls. Your Agent or framework integration must submit trace spans.
+- Token usage is displayed only when supplied by the provider/instrumentation. Missing values stay missing.
+- Prompt and response bodies are not captured by default. Enable content capture only when you understand the data-retention implications.
+- The Studio displays explicit request/response and tool I/O attributes. It does not expose or fabricate hidden model chain-of-thought.
+- A trace ID groups spans; parent span IDs express causal relationships. Missing IDs are not invented.
+- This project is an early developer preview. Framework-specific automatic instrumentation, async SDK support, replay, and side-effect-safe retries are not complete.
+
+## Repositories
+
+- [Studio frontend](https://github.com/cpttbtptp2812/builder)
+- [Backend, Python SDK, and examples](https://github.com/cpttbtptp2812/ownsudo)
