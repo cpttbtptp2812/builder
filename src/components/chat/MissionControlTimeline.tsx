@@ -128,8 +128,8 @@ export const MissionControlTimeline: React.FC<Props> = ({
   return (
     <section className="agent-journey relative overflow-hidden rounded-2xl border border-slate-200 bg-white text-slate-800 shadow-sm">
       <style>{`
-        .agent-journey{background:linear-gradient(145deg,#fff 0%,#fbfcff 100%);box-shadow:0 5px 22px rgba(35,53,91,.055)}
-        .agent-journey:before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(99,102,241,.075) .7px,transparent .7px);background-size:18px 18px;mask-image:linear-gradient(120deg,rgba(0,0,0,.34),transparent 72%);pointer-events:none}
+        .agent-journey{background:radial-gradient(ellipse at 78% 0%,rgba(129,140,248,.13),transparent 42%),radial-gradient(ellipse at 8% 35%,rgba(34,211,238,.08),transparent 38%),linear-gradient(145deg,#080f25 0%,#111a38 52%,#0b1530 100%);border-color:rgba(129,140,248,.28);color:#e8edff;box-shadow:0 18px 60px rgba(20,30,80,.22)}
+        .agent-journey:before{content:"";position:absolute;inset:0;background-image:radial-gradient(rgba(165,180,252,.18) .7px,transparent .7px);background-size:24px 24px;mask-image:linear-gradient(120deg,rgba(0,0,0,.7),transparent 82%);pointer-events:none}.agent-journey header{border-color:rgba(165,180,252,.16)}.agent-journey h2,.agent-journey h3,.agent-journey .text-slate-900,.agent-journey .text-slate-800,.agent-journey .text-slate-700{color:#edf2ff}.agent-journey .text-slate-600,.agent-journey .text-slate-500,.agent-journey .text-slate-400{color:#9ba9cf}.agent-journey .journey-row{border-color:rgba(165,180,252,.12);background:rgba(255,255,255,.035)}.agent-journey .journey-row:hover{background:rgba(129,140,248,.12)}.agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(99,102,241,.24),rgba(34,211,238,.08));border-color:rgba(129,140,248,.58);box-shadow:inset 0 0 24px rgba(99,102,241,.08),0 0 24px rgba(99,102,241,.09)}.agent-journey .journey-json{background:rgba(3,8,24,.72);border-color:rgba(165,180,252,.2);color:#dbeafe}
         .agent-journey .journey-row{transition:background .16s ease,border-color .16s ease}
         .agent-journey .journey-row:hover{background:#f8faff}
         .agent-journey .journey-row-active{background:#f3f5ff;border-color:#c7d2fe}
@@ -139,7 +139,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         @media(prefers-reduced-motion:reduce){.agent-journey *{animation:none!important;transition:none!important}}
       `}</style>
 
-      <header className="relative border-b border-slate-100 px-4 py-3">
+      <header className="relative border-b border-indigo-200/15 px-4 py-3">
         <div className="flex items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-2.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl border border-indigo-100 bg-indigo-50 text-indigo-600"><Activity className="h-4 w-4"/></span>
@@ -197,11 +197,11 @@ export const MissionControlTimeline: React.FC<Props> = ({
 
           {selected && (
             <div className="mt-2 overflow-hidden rounded-xl border border-indigo-100 bg-white shadow-[0_3px_12px_rgba(79,70,229,.05)]">
-              <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-indigo-50/50 px-3 py-2">
+              <div className="flex items-center justify-between gap-2 border-b border-indigo-200/15 bg-indigo-400/10 px-3 py-3">
                 <div className="flex min-w-0 items-center gap-2"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white text-indigo-600 shadow-sm"><SelectedIcon className="h-3.5 w-3.5"/></span><div className="min-w-0"><div className="flex items-center gap-1.5 text-[9px] font-bold tracking-wide text-indigo-600">STEP {String(selected.seq).padStart(2,"0")}<span className={`rounded-full border px-1.5 py-0.5 font-medium tracking-normal ${stateClass[selectedStatus.tone]}`}>{selectedStatus.label}</span></div><div className="truncate text-xs font-semibold text-slate-800">{selected.rightTitle||selected.leftTitle}</div></div></div>
                 <div className="flex shrink-0 items-center gap-2 text-[9px] text-slate-500"><span><Clock3 className="mr-1 inline h-3 w-3"/>{durationText(selected.durationMs)}</span><span>Token <b className="font-mono text-slate-700">{tokenText(detail)??"未上报"}</b></span></div>
               </div>
-              <div className="px-3 py-2.5">
+              <div className="px-3 py-3">
                 <p className="mb-2 text-[10px] leading-4 text-slate-600">{description}</p>
                 <div className="space-y-2">
                   {(modelName !== undefined || providerName !== undefined || modelRound !== undefined) && <div className="flex flex-wrap items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-[9px] text-slate-600">
@@ -209,14 +209,14 @@ export const MissionControlTimeline: React.FC<Props> = ({
                     {providerName !== undefined && <span><b className="font-semibold text-slate-700">渠道</b> {pretty(providerName)}</span>}
                     {modelRound !== undefined && <span><b className="font-semibold text-slate-700">轮次</b> {pretty(modelRound)}</span>}
                   </div>}
-                  {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-lg border border-indigo-100 bg-indigo-50/40 p-2.5">
+                  {Array.isArray(promptMessages) && promptMessages.length > 0 && <section className="rounded-xl border border-indigo-300/20 bg-indigo-400/10 p-3">
                     <div className="mb-2 flex items-center justify-between"><div className="flex items-center gap-1.5 text-[10px] font-semibold text-indigo-800"><BrainCircuit className="h-3.5 w-3.5"/>实际发送给模型的提示词</div><span className="text-[9px] text-indigo-500">{Array.isArray(promptMessages) ? `${promptMessages.length} 条消息` : "内容预览（已截断）"}</span></div>
                     {Array.isArray(promptMessages) ? <div className="space-y-2">{promptMessages.map((msg: any, index: number) => <div key={index} className="overflow-hidden rounded-md border border-indigo-100 bg-white">
                       <div className="border-b border-slate-100 px-2 py-1 text-[9px] font-semibold text-slate-500">{messageRoleLabel(msg?.role)}{msg?.name ? ` · ${msg.name}` : ""}</div>
                       <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words px-2 py-2 text-[10px] leading-5 text-slate-700">{messageContent(msg)}</pre>
                     </div>)}</div> : <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words rounded-md bg-white px-2 py-2 text-[10px] leading-5 text-slate-700">{pretty(promptMessages)}</pre>}
                   </section>}
-                  {modelResponse !== undefined && <section className="rounded-lg border border-emerald-100 bg-emerald-50/40 p-2.5">
+                  {modelResponse !== undefined && <section className="rounded-xl border border-emerald-300/20 bg-emerald-400/10 p-3">
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-emerald-800"><Sparkles className="h-3.5 w-3.5"/>模型实际返回</div>
                     <pre className="max-h-56 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-700">{pretty(modelResponse)}</pre>
                   </section>}
@@ -224,11 +224,11 @@ export const MissionControlTimeline: React.FC<Props> = ({
                     <summary className="cursor-pointer text-[10px] font-semibold text-slate-700">本轮提供给模型的工具定义</summary>
                     <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-600">{pretty(toolSchema)}</pre>
                   </details>}
-                  {toolArguments !== undefined && <section className="rounded-lg border border-sky-100 bg-sky-50/40 p-2.5">
+                  {toolArguments !== undefined && <section className="rounded-xl border border-sky-300/20 bg-sky-400/10 p-3">
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-sky-800"><Terminal className="h-3.5 w-3.5"/>工具实际收到的参数</div>
                     <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-700">{pretty(toolArguments)}</pre>
                   </section>}
-                  {toolResult !== undefined && <section className="rounded-lg border border-teal-100 bg-teal-50/40 p-2.5">
+                  {toolResult !== undefined && <section className="rounded-xl border border-teal-300/20 bg-teal-400/10 p-3">
                     <div className="mb-1 flex items-center gap-1.5 text-[10px] font-semibold text-teal-800"><Eye className="h-3.5 w-3.5"/>工具实际执行结果</div>
                     <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words text-[9px] leading-4 text-slate-700">{pretty(toolResult)}</pre>
                   </section>}
