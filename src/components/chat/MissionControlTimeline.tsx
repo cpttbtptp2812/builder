@@ -67,8 +67,22 @@ export const MissionControlTimeline: React.FC<Props> = ({
   const filtered = ordered.filter(s => filter === "all" || (filter === "llm" && s.phase === "llm") || (filter === "tools" && s.phase === "skill") || (filter === "errors" && s.status === "failed"));
   const failures = ordered.filter(s => s.status === "failed").length;
   const completed = ordered.filter(s => s.status === "done" || s.status === "passed").length;
-  const currentIndex = ordered.findIndex(s => s.status === "running");
+  const runningCount = ordered.filter(s => s.status === "running").length;
+  const pendingCount = ordered.filter(s => s.status === "pending").length;
+  const unknownCount = ordered.filter(s => s.status === "unknown").length;
+  const currentStep = ordered.find(s => s.status === "running");
   const progress = ordered.length ? Math.round((completed / ordered.length) * 100) : 0;
+  const runState = isThinking || runningCount > 0
+    ? { label: "正在执行", tone: "running" }
+    : pendingCount > 0
+      ? { label: "仍有步骤等待执行", tone: "pending" }
+      : unknownCount > 0
+        ? { label: "部分步骤状态未知", tone: "unknown" }
+        : failures > 0
+          ? { label: "任务结束，存在失败", tone: "failed" }
+          : ordered.length > 0 && completed === ordered.length
+            ? { label: "本轮执行完成", tone: "done" }
+            : { label: "尚无完整状态", tone: "unknown" };
   const select = (step: AgentStep) => {
     setSelectedId(step.stepId === selected?.stepId ? null : step.stepId);
     onSelectStep?.(step.stepId);
@@ -121,9 +135,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
             <h2 className="mt-2 text-lg font-semibold tracking-tight text-white sm:text-xl">看见 Agent 的每一步</h2>
             <p className="mt-1 max-w-2xl break-words text-xs leading-5 text-slate-400">{message?.userPrompt || "当前任务"} </p>
           </div>
-          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold ${isThinking ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200" : failures ? "border-rose-400/30 bg-rose-400/10 text-rose-200" : "border-emerald-400/30 bg-emerald-400/10 text-emerald-200"}`}>
-            <span className={`h-1.5 w-1.5 rounded-full ${isThinking ? "bg-cyan-300 animate-pulse" : failures ? "bg-rose-300" : "bg-emerald-300"}`} />
-            {isThinking ? "正在执行" : failures ? "执行中存在失败" : "本轮已结束"}
+          <div className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[10px] font-semibold ${runState.tone === "running" ? "border-cyan-400/30 bg-cyan-400/10 text-cyan-200" : runState.tone === "failed" ? "border-rose-400/30 bg-rose-400/10 text-rose-200" : runState.tone === "done" ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-amber-400/30 bg-amber-400/10 text-amber-200"}`}>
+            <span className={`h-1.5 w-1.5 rounded-full ${runState.tone === "running" ? "bg-cyan-300 animate-pulse" : runState.tone === "failed" ? "bg-rose-300" : runState.tone === "done" ? "bg-emerald-300" : "bg-amber-300"}`} />
+            {runState.label}
           </div>
         </div>
 
@@ -140,7 +154,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         </div>
         <div className="mt-3 grid grid-cols-3 gap-2">
           <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">执行步骤</div><div className="mt-0.5 font-mono text-sm text-slate-100">{ordered.length}</div></div>
-          <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">已知 Token</div><div className="mt-0.5 font-mono text-sm text-slate-100">{tokenEvents ? knownTokens.toLocaleString() : "未上报"}</div></div>
+          <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">含 Token 步骤</div><div className="mt-0.5 font-mono text-sm text-slate-100">{tokenEvents || "未上报"}</div></div>
           <div className="rounded-lg border border-slate-700/60 bg-slate-900/45 px-2.5 py-2"><div className="text-[9px] tracking-wider text-slate-500">异常步骤</div><div className={`mt-0.5 font-mono text-sm ${failures ? "text-rose-300" : "text-slate-100"}`}>{failures}</div></div>
         </div>
       </div>
@@ -181,7 +195,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                 </button>;
               })}
             </div>
-            <div className="mt-3 flex items-center gap-2 px-1 text-[9px] text-slate-500"><span className="h-px flex-1 bg-slate-700/70"/><span>{currentIndex >= 0 ? `当前运行到第 ${currentIndex + 1} 步` : isThinking ? "等待下一条执行事件" : "已展示本轮全部已记录步骤"}</span><span className="h-px flex-1 bg-slate-700/70"/></div>
+            <div className="mt-3 flex items-center gap-2 px-1 text-[9px] text-slate-500"><span className="h-px flex-1 bg-slate-700/70"/><span>{currentStep ? `当前运行到第 ${currentStep.seq} 步` : pendingCount > 0 ? `${pendingCount} 步等待执行` : unknownCount > 0 ? `${unknownCount} 步状态未知` : isThinking ? "等待下一条执行事件" : "已展示本轮已记录步骤"}</span><span className="h-px flex-1 bg-slate-700/70"/></div>
           </div>
 
           <div className="min-w-0">
