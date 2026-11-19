@@ -236,8 +236,8 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: isImmersive ? "100vw" : isSplit ? "60%" : `${drawerWidth}px`,
-        flex: isSplit && !isImmersive ? "1 1 60%" : undefined,
+        width: isImmersive ? "100vw" : isSplit ? "66%" : `${drawerWidth}px`,
+        flex: isSplit && !isImmersive ? "1 1 66%" : undefined,
         minWidth: isSplit && !isImmersive ? 0 : undefined,
         height: isImmersive ? "100dvh" : undefined,
         inset: isImmersive ? 0 : undefined,
@@ -270,7 +270,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
         .trace-cosmos header,.trace-cosmos .border-b{border-color:rgba(174,164,255,.15)!important}
       `}</style>
       {/* ── 左侧边缘可拖拽把手 (鼠标按住左右拖拽即可缩放抽屉大小) ── */}
-      <div
+      {!isSplit && <div
         onMouseDown={handleMouseDown}
         className={`absolute -left-2 top-0 bottom-0 w-4 cursor-col-resize group flex items-center justify-center z-50 select-none ${
           isDragging ? "bg-blue-500/15" : "hover:bg-blue-400/10"
@@ -284,7 +284,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               : "bg-slate-300 group-hover:bg-blue-500 group-hover:scale-y-125"
           }`}
         />
-      </div>
+      </div>}
 
       {/* ── 顶栏：极简 48px，仅保留 [流程图] 与 [成本效能] 两个 Tab ── */}
       <div className="h-12 px-4 border-b border-slate-100 flex items-center justify-between bg-white shrink-0 gap-3">
@@ -382,16 +382,13 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
       </div>
 
       {/* ── 核心内容区：Agent 执行过程观察器 ── */}
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-4 scrollbar-hide">
-        {activeTab === "flow" && <div className="mb-3 grid grid-cols-3 gap-2">
-          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">执行事件</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{timeline.length}</div></div>
-          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">总耗时</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{totalMs > 0 ? (totalMs / 1000).toFixed(2) + "s" : "—"}</div></div>
-          <div className="rounded-xl border border-indigo-200/15 bg-indigo-300/[0.07] px-3 py-2"><div className="text-[10px] text-violet-200/60">Token 用量</div><div className="mt-1 text-xl font-bold text-white tabular-nums">{typeof message.tokens === "number" && message.tokens > 0 ? message.tokens.toLocaleString() : "未上报"}</div></div>
-        </div>}
+      <div className="flex-1 min-h-0 overflow-hidden p-0">
+
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
-          <>
-            <MissionControlTimeline
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="min-h-0 flex-1">
+              <MissionControlTimeline
               timeline={timeline}
               message={message}
               activeStepId={activeStepId}
@@ -399,10 +396,12 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               isThinking={message.isThinking}
               onRetryRun={onRetryRun}
             />
-            <div className="mt-4 border-t border-violet-200/10 pt-3">
-              <ExternalAgentTracePanel />
             </div>
-          </>
+            <details className="mx-3 mb-3 shrink-0 rounded-xl border border-indigo-200/10 bg-white/[0.025] p-3">
+              <summary className="cursor-pointer text-xs font-medium text-indigo-100/65">连接外部 Agent 的执行记录（可选）</summary>
+              <div className="mt-3"><ExternalAgentTracePanel /></div>
+            </details>
+          </div>
         )}
 
         {/* TAB 2: 成本效能 (Tokens 与缓存指标) */}
