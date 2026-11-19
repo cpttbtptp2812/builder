@@ -1,0 +1,26 @@
+import {
+  type DeepReadonly,
+  OPENINFERENCE_ATTRIBUTES,
+  OPENINFERENCE_MAPPINGS,
+  type OpenTelemetrySpan,
+  type TraceSpanCategory,
+} from "@evilmartians/agent-prism-types";
+
+import { getOpenTelemetryAttributeValue } from "./get-open-telemetry-attribute-value.js";
+
+export function categorizeOpenInference(
+  span: DeepReadonly<OpenTelemetrySpan>,
+): TraceSpanCategory {
+  const spanKind = getOpenTelemetryAttributeValue(
+    span,
+    OPENINFERENCE_ATTRIBUTES.SPAN_KIND,
+  );
+
+  if (typeof spanKind === "string") {
+    const category = OPENINFERENCE_MAPPINGS[spanKind];
+
+    if (category) return category;
+  }
+
+  return "unknown";
+}
