@@ -386,8 +386,9 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
 
         {/* TAB 1: Agent 执行过程 */}
         {activeTab === "flow" && (
-          <>
-            <MissionControlTimeline
+          <div className="flex h-full min-h-0 flex-col">
+            <div className="min-h-0 flex-1">
+              <MissionControlTimeline
               timeline={timeline}
               message={message}
               activeStepId={activeStepId}
@@ -395,11 +396,12 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               isThinking={message.isThinking}
               onRetryRun={onRetryRun}
             />
+            </div>
             <details className="mx-3 mb-3 shrink-0 rounded-xl border border-indigo-200/10 bg-white/[0.025] p-3">
               <summary className="cursor-pointer text-xs font-medium text-indigo-100/65">连接外部 Agent 的执行记录（可选）</summary>
               <div className="mt-3"><ExternalAgentTracePanel /></div>
             </details>
-          </>
+          </div>
         )}
 
         {/* TAB 2: 成本效能 (Tokens 与缓存指标) */}
