@@ -236,8 +236,8 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
   return (
     <div
       style={{
-        width: isImmersive ? "100vw" : isSplit ? "66%" : `${drawerWidth}px`,
-        flex: isSplit && !isImmersive ? "1 1 66%" : undefined,
+        width: isImmersive ? "100vw" : isSplit ? "54%" : `${drawerWidth}px`,
+        flex: isSplit && !isImmersive ? "1 1 54%" : undefined,
         minWidth: isSplit && !isImmersive ? 0 : undefined,
         height: isImmersive ? "100dvh" : undefined,
         inset: isImmersive ? 0 : undefined,
@@ -245,7 +245,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
       }}
       className={
         isSplit
-          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full min-h-0 border-l shadow-xs z-10"} bg-white border-slate-200 flex flex-col shrink-0 select-auto`
+          ? `trace-cosmos ${isImmersive ? "fixed inset-0 z-[100] shadow-2xl" : "relative h-full min-h-0 border-l shadow-xs z-10"} bg-slate-950 border-slate-800 flex flex-col shrink-0 select-auto`
           : `trace-cosmos fixed ${isImmersive ? "inset-0 z-[100]" : "inset-y-0 right-0 z-50"} bg-white border-l border-slate-200 shadow-2xl flex flex-col animate-in slide-in-from-right duration-250 ease-out select-auto`
       }
     >
@@ -294,7 +294,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
             <Compass className="w-4 h-4 text-blue-600" />
           </div>
           <span className="text-xs font-black text-slate-800 tracking-tight shrink-0">
-            Agent Control Center
+            OwnAgent · 任务执行现场
           </span>
           <span
             className={`text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full border shrink-0 ${
@@ -325,7 +325,7 @@ export const TraceInspectorDrawer: React.FC<TraceInspectorDrawerProps> = ({
               }`}
             >
               <Compass className="w-3.5 h-3.5" />
-              <span>执行过程</span>
+              <span>任务现场</span>
             </button>
             <button
               onClick={() => setActiveTab("finops")}
