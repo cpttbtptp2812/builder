@@ -50,7 +50,7 @@ const pretty = (value: unknown) => {
 };
 const humanizeKey = (key: string) => {
   const labels: Record<string, string> = {
-    repoId: "仓库标识", repoName: "仓库", branch: "分支", commitCount: "提交数量",
+    repoId: "仓库内部编号", repoName: "仓库", branch: "分支", commitCount: "提交数量", sha: "提交编号", author: "提交者",
     commits: "提交记录", limit: "查询数量", owner: "所有者", path: "文件路径",
     status: "执行状态", success: "是否成功", message: "说明", error: "错误",
     tool: "工具", query: "查询内容", url: "地址", total: "总数",
@@ -63,8 +63,25 @@ const readableEntries = (value: unknown): Array<[string, unknown]> => {
   if (typeof parsed === "string") {
     try { parsed = JSON.parse(parsed); } catch { return []; }
   }
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return [];
+  if (Array.isArray(parsed)) return parsed.slice(0, 8).map((item, index) => ["项目 " + (index + 1), item]);
+  if (!parsed || typeof parsed !== "object") return [];
   return Object.entries(parsed).filter(([, v]) => v !== undefined && v !== null).slice(0, 8);
+};
+const readableValue = (value: unknown): string => {
+  if (value == null) return "未提供";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  if (Array.isArray(value)) {
+    const summaries = value.slice(0, 3).map((item: any) => {
+      if (typeof item === "string" || typeof item === "number") return String(item);
+      if (!item || typeof item !== "object") return String(item);
+      return item.message || item.title || item.name || item.sha || item.status || Object.keys(item).slice(0, 3).join("、");
+    });
+    return summaries.join("；") + (value.length > 3 ? "，另有 " + (value.length - 3) + " 项" : "");
+  }
+  const item = value as Record<string, unknown>;
+  const preferred = ["message", "title", "name", "repoName", "branch", "status", "sha", "url"];
+  const summary = preferred.filter(key => item[key] !== undefined && item[key] !== null).slice(0, 4).map(key => humanizeKey(key) + "：" + readableValue(item[key]));
+  return summary.length ? summary.join(" · ") : Object.keys(item).length + " 个字段（可展开查看）";
 };
 const pick = (detail: Record<string, any>, keys: string[]) => {
   for (const key of keys) if (detail[key] !== undefined && detail[key] !== null) return detail[key];
@@ -100,7 +117,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
   // Use the same chronological ordering as the SSE reducer. Legacy history
   // without complete timestamps still falls back to sequence order.
   const ordered = useMemo(() => sortTimeline(timeline || []), [timeline]);
-  const selected = ordered.find(s => s.stepId === (activeStepId || selectedId)) || ordered[0];
+  const selected = ordered.find(s => s.stepId === activeStepId) || ordered.find(s => s.stepId === selectedId) || ordered.find(s => s.status === "running") || ordered[ordered.length - 1];
   const completed = ordered.filter(s => s.status === "done" || s.status === "passed").length;
   const failures = ordered.filter(s => s.status === "failed").length;
   const running = ordered.some(s => s.status === "running");
@@ -114,10 +131,9 @@ export const MissionControlTimeline: React.FC<Props> = ({
     waiting:"bg-white/5 text-slate-300 border-white/10",
   };
   const select = (step: AgentStep) => {
-    const next = selected?.stepId === step.stepId ? null : step.stepId;
-    setSelectedId(next);
+    setSelectedId(step.stepId);
     setShowRaw(false);
-    if (next) onSelectStep?.(next);
+    onSelectStep?.(step.stepId);
   };
   const detail = selected?.rightDetail || {};
   const promptMessages = readCaptured(detail, ["prompt_messages","promptMessages","messages","llm_messages"]);
@@ -181,7 +197,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
         .agent-journey .journey-json{background:rgba(4,9,29,.64);border-color:rgba(177,164,255,.18)}
         .agent-journey header{border-color:rgba(177,164,255,.12)}
         .agent-journey .orbit-node{background:linear-gradient(135deg,rgba(38,37,91,.78),rgba(14,25,59,.82));backdrop-filter:blur(16px)}
-        .agent-journey .journey-track:before{content:"";position:absolute;left:34px;right:34px;top:31px;height:2px;background:linear-gradient(90deg,rgba(52,211,153,.8),rgba(56,189,248,.7),rgba(139,92,246,.24));z-index:0}.agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:132px;width:168px;min-width:168px;max-width:168px;flex-direction:column;gap:8px;justify-content:flex-start}.agent-journey .journey-row>span:first-child{margin-top:0}.agent-journey .journey-row>span:last-child{display:none}.agent-journey .journey-row .text-sm{font-size:12px;line-height:1.45}.agent-journey .journey-row .text-xs{font-size:11px;line-height:1.45}.agent-journey .journey-row .text-\\[11px\\]{font-size:10px}
+        .agent-journey .journey-track:before{content:"";position:absolute;left:34px;right:34px;top:31px;height:2px;background:linear-gradient(90deg,rgba(52,211,153,.8),rgba(56,189,248,.7),rgba(139,92,246,.24));z-index:0}.agent-journey .journey-row{border-color:rgba(177,164,255,.18);background:rgba(18,22,58,.56);min-height:132px;width:168px;min-width:168px;max-width:168px;flex-direction:column;gap:8px;justify-content:flex-start}.agent-journey .journey-row>span:first-child{margin-top:0}.agent-journey .journey-row>span:nth-last-child(2){font-size:10px;color:rgba(196,205,239,.72)}.agent-journey .journey-row .text-sm{font-size:12px;line-height:1.45}.agent-journey .journey-row .text-xs{font-size:11px;line-height:1.45}.agent-journey .journey-row .text-\\[11px\\]{font-size:10px}
         .agent-journey .journey-row:hover{background:rgba(57,55,118,.48);border-color:rgba(177,164,255,.38)}
         .agent-journey .journey-row-active{background:linear-gradient(110deg,rgba(91,65,173,.42),rgba(21,65,91,.34));border-color:rgba(103,232,249,.62);box-shadow:inset 0 0 0 1px rgba(103,232,249,.12),0 0 22px rgba(124,58,237,.12)}
         .agent-journey .detail-glass{background:rgba(12,17,46,.78);border-color:rgba(177,164,255,.22);box-shadow:0 12px 32px rgba(0,0,0,.16)}
@@ -295,7 +311,7 @@ export const MissionControlTimeline: React.FC<Props> = ({
                   </details>}
                   {toolArguments !== undefined && <section className="rounded-xl border border-sky-300/20 bg-sky-400/10 p-3">
                     <div className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-sky-100"><Terminal className="h-3.5 w-3.5"/>这次操作收到了什么</div>
-                    {readableEntries(toolArguments).length > 0 ? <div className="grid grid-cols-2 gap-2">{readableEntries(toolArguments).map(([key,value])=><div key={key} className="min-w-0 rounded-lg bg-slate-950/25 px-2.5 py-2"><div className="text-[10px] text-sky-200/70">{humanizeKey(key)}</div><div className="mt-1 break-words text-xs font-medium text-white">{typeof value==="object"?pretty(value):String(value)}</div></div>)}</div> : <p className="text-xs leading-5 text-slate-100">{typeof toolArguments==="string"?toolArguments:"已收到工具参数，具体结构可在技术详情中查看。"}</p>}
+                    {readableEntries(toolArguments).length > 0 ? <div className="grid grid-cols-2 gap-2">{readableEntries(toolArguments).map(([key,value])=><div key={key} className="min-w-0 rounded-lg bg-slate-950/25 px-2.5 py-2"><div className="text-[10px] text-sky-200/70">{humanizeKey(key)}</div><div className="mt-1 line-clamp-3 break-words text-xs font-medium text-white" title={readableValue(value)}>{readableValue(value)}</div></div>)}</div> : <p className="text-xs leading-5 text-slate-100">{typeof toolArguments==="string"?toolArguments:"已收到工具参数，具体结构可在技术详情中查看。"}</p>}
                     <details className="mt-2 rounded-lg border border-white/10 bg-slate-950/20 p-2"><summary className="cursor-pointer text-[10px] text-sky-100/80">查看原始参数</summary><pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-[10px] leading-5 text-slate-100">{pretty(toolArguments)}</pre></details>
                   </section>}
                   {toolResult !== undefined && <section className="rounded-xl border border-teal-300/20 bg-teal-400/10 p-3">
