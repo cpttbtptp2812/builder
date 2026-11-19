@@ -58,6 +58,26 @@ const statusLabel: Record<RunSummary["status"], string> = {
   UNKNOWN: "状态未知",
 };
 
+const stripInternalReasoning = (value: any): any => {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+      try { return stripInternalReasoning(JSON.parse(trimmed)); } catch { return value; }
+    }
+    return value;
+  }
+  if (Array.isArray(value)) return value.map(stripInternalReasoning).filter((item) => item !== undefined);
+  if (!value || typeof value !== "object") return value;
+  const channel = String(value.channel ?? value.type ?? value.kind ?? value.message_type ?? "").toLowerCase();
+  const role = String(value.role ?? "").toLowerCase();
+  if (/(analysis|reasoning|thought|internal)/.test(channel) && (!role || role === "assistant")) return undefined;
+  const hidden = new Set(["analysis", "reasoning", "chain_of_thought", "chainofthought", "internal_thought", "thoughts", "scratchpad"]);
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !hidden.has(key.toLowerCase()))
+    .map(([key, item]) => [key, stripInternalReasoning(item)])
+    .filter(([, item]) => item !== undefined));
+};
+
 export default function RunsPage({ onClose }: { onClose?: () => void }) {
   const [apiKey, setApiKey] = useState("");
   const [runs, setRuns] = useState<RunSummary[]>([]);
@@ -291,7 +311,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
 
   const downloadRunJson = () => {
     if (!selected) return;
-    const blob = new Blob([JSON.stringify(selected, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(stripInternalReasoning(selected), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
@@ -542,7 +562,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                           {event.spanId && <p className="mt-1 break-all font-mono text-[10px] text-slate-400">Span {event.spanId}</p>}
                           {event.payload && <details className="mt-2">
                             <summary className="cursor-pointer text-[11px] text-indigo-600">查看事件详情</summary>
-                            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-200">{(() => { try { return JSON.stringify(JSON.parse(event.payload), null, 2); } catch { return event.payload; } })()}</pre>
+                            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-2 text-[10px] leading-4 text-slate-200">{(() => { try { return JSON.stringify(stripInternalReasoning(JSON.parse(event.payload)), null, 2); } catch { return event.payload; } })()}</pre>
                           </details>}
                         </div>
                       ))}
@@ -600,7 +620,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                     ] as const).filter(([key]) => span.attributes?.[key] != null).map(([key, label]) => (
                       <details key={key} className="border-t border-slate-100 px-4 py-2">
                         <summary className="cursor-pointer text-xs font-medium text-slate-600">{label}</summary>
-                        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify(span.attributes?.[key], null, 2)}</pre>
+                        <pre className="mt-2 max-h-96 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify(stripInternalReasoning(span.attributes?.[key]), null, 2)}</pre>
                       </details>
                     ))}
                     {(span.name.toLowerCase().includes("llm") || span.name.toLowerCase().includes("chat.completions") || span.attributes?.model || span.attributes?.["gen_ai.request.model"] || span.attributes?.["gen_ai.response.model"]) &&
@@ -610,7 +630,7 @@ export default function RunsPage({ onClose }: { onClose?: () => void }) {
                       )}
                     <details className="border-t border-slate-100 px-4 py-2">
                       <summary className="cursor-pointer text-xs font-medium text-slate-500">Span 属性与原始数据</summary>
-                      <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify({ traceId: span.traceId, spanId: span.spanId, parentSpanId: span.parentSpanId, runId: span.runId, spanKind: span.spanKind, attributes: span.attributes }, null, 2)}</pre>
+                      <pre className="mt-2 max-h-80 overflow-auto whitespace-pre-wrap break-words rounded-md bg-slate-950 p-3 text-[11px] leading-5 text-slate-200">{JSON.stringify(stripInternalReasoning({ traceId: span.traceId, spanId: span.spanId, parentSpanId: span.parentSpanId, runId: span.runId, spanKind: span.spanKind, attributes: span.attributes }), null, 2)}</pre>
                     </details>
                   </article>
                 ))}
