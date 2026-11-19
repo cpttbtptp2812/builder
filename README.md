@@ -83,3 +83,7 @@ npm run check:production
 
 - [Studio frontend](https://github.com/cpttbtptp2812/builder)
 - [Backend, Python SDK, and examples](https://github.com/cpttbtptp2812/ownsudo)
+
+### Promptfoo report history
+
+The Integration Hub imports exported Promptfoo JSON / JSONL reports using an Agent API key. You may optionally provide a Run ID; the backend verifies that it belongs to the same Agent before linking the report. Saved reports can be listed and reopened later. OwnAgent does not run arbitrary Promptfoo CLI projects on the server.
