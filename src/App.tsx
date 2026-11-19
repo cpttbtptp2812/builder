@@ -60,7 +60,7 @@ export type ViewMode =
 
 export default function App() {
   const toast = useToast();
-  const [currentView, setCurrentView] = useState<ViewMode>("home");
+  const [currentView, setCurrentView] = useState<ViewMode>("runs");
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
