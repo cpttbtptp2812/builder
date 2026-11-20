@@ -78,7 +78,6 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  reasoning?: string;
   isThinking?: boolean;
   activeToolName?: string | null;
   citations?: CitationItem[];
@@ -211,7 +210,6 @@ export default function ChatPlaygroundPage({
 
   // 历史侧栏收起/展开 (类似 DeepSeek / 豆包默认轻巧贴边)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [expandedReasoning, setExpandedReasoning] = useState<{ [key: string]: boolean }>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // 系统模型配置（优先读取持久化缓存，杜绝加载瞬间闪烁沙箱）
@@ -271,7 +269,14 @@ export default function ChatPlaygroundPage({
   const sessionMessagesCacheRef = useRef<Record<string, Message[]>>((() => {
     try {
       const raw = localStorage.getItem(LOCAL_CACHE_KEY);
-      return raw ? JSON.parse(raw) : {};
+      const stored = raw ? JSON.parse(raw) : {};
+      return Object.fromEntries(Object.entries(stored).map(([sessionId, entries]) => [
+        sessionId,
+        Array.isArray(entries) ? entries.map((entry: any) => {
+          const { reasoning: _hiddenReasoning, ...safeMessage } = entry || {};
+          return safeMessage;
+        }) : [],
+      ]));
     } catch {
       return {};
     }
@@ -386,14 +391,18 @@ export default function ChatPlaygroundPage({
             return;
           }
           const cached = sessionMessagesCacheRef.current[currentSessionId];
+          const safeHistory = (history || []).map((message: any) => {
+            const { reasoning: _hiddenReasoning, ...safeMessage } = message || {};
+            return safeMessage as Message;
+          });
           if (cached && cached.length > 0) {
-            const merged = (history && history.length > 0 ? history : cached).map((h) => {
+            const merged = (safeHistory.length > 0 ? safeHistory : cached).map((h) => {
               const hit = cached.find((c) => c.id === h.id || c.content === h.content);
               return hit ? { ...h, ...hit } : h;
             });
             setMessages(merged);
           } else {
-            setMessages(history || []);
+            setMessages(safeHistory);
           }
         })
         .catch((error: any) => {
@@ -591,7 +600,6 @@ export default function ChatPlaygroundPage({
     };
 
     setMessages((prev) => [...prev, userMsg, asstMsg]);
-    setExpandedReasoning((p) => ({ ...p, [asstMsgId]: false }));
 
     // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同，默认呈现决策瀑布流)
     setActiveTraceDrawer({
@@ -729,24 +737,6 @@ export default function ChatPlaygroundPage({
                   : m
               )
             );
-          },
-          onReasoning: (rawReasoning) => {
-            try {
-              const parsed = JSON.parse(rawReasoning);
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === asstMsgId ? { ...m, reasoning: parsed.content } : m
-                )
-              );
-            } catch {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === asstMsgId
-                    ? { ...m, reasoning: (m.reasoning || "") + rawReasoning }
-                    : m
-                )
-              );
-            }
           },
           onDelta: (chunk) => {
             if (!firstTokenTs) {
