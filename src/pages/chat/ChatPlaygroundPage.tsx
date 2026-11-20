@@ -43,7 +43,6 @@ import {
 import { useToast } from "@/context/ToastContext";
 import type { ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import BuiltinRunObserver from "@/components/chat/BuiltinRunObserver";
-import { AgentStep, applySseToTimeline, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
 import RunsPage from "@/pages/runs/RunsPage";
 
@@ -88,7 +87,6 @@ interface Message {
     mode?: string;
     isRealVector?: boolean;
   };
-  traceSteps?: Record<number, any>;
   toolCalls?: ToolCallItem[];
   approvalTicket?: ApprovalTicketItem;
   tokens?: number;
@@ -101,7 +99,6 @@ interface Message {
   enableRAG?: boolean;
   enableThinking?: boolean;
   enableWebSearch?: boolean;
-  agentTimeline?: AgentStep[];
   createdAt?: string;
   runId?: string;
   traceId?: string;
@@ -251,7 +248,7 @@ export default function ChatPlaygroundPage({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  // 本地持久化存储富消息缓存（刷新页面或切换会话时，完整保留 traceSteps、toolCalls 与审批工单）
+  // 本地持久化聊天消息缓存；运行观测数据统一从后端 Run API 读取
   const LOCAL_CACHE_KEY = "ownagent_rich_session_cache_v2";
   const sessionMessagesCacheRef = useRef<Record<string, Message[]>>((() => {
     try {
@@ -582,7 +579,6 @@ export default function ChatPlaygroundPage({
       enableRAG,
       enableThinking,
       enableWebSearch: false,
-      traceSteps: {},
       createdAt: nowTimeStr,
     };
 
@@ -619,74 +615,15 @@ export default function ChatPlaygroundPage({
               ? { ...m, runId: run.runId, traceId: run.traceId, trace: { ...(m.trace || {}), runId: run.runId, traceId: run.traceId } }
               : m));
           },
-          onAgentStep: (stepData) => {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== asstMsgId) return m;
-                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "agent_step", stepData);
-                return {
-                  ...m,
-                  agentTimeline: updatedTimeline,
-                };
-              })
-            );
-          },
-          onTraceStep: (stepData) => {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== asstMsgId) return m;
-                const flatData = { ...stepData, ...(stepData.data || {}) };
-                const prevSteps = m.traceSteps || {};
-                const newSteps = { ...prevSteps, [flatData.step]: flatData };
-                const traceUpdate = { ...(m.trace || {}) };
-
-                if (flatData.hashKey) {
-                  traceUpdate.hashKey = flatData.hashKey;
-                }
-                if (flatData.cached !== undefined) {
-                  traceUpdate.cached = !!flatData.cached;
-                }
-                if (flatData.cacheHit !== undefined) {
-                  traceUpdate.cached = !!flatData.cacheHit;
-                }
-                if (flatData.ragMs !== undefined) {
-                  traceUpdate.ragMs = flatData.ragMs;
-                }
-                if (flatData.costMs !== undefined) {
-                  traceUpdate.ragMs = flatData.costMs;
-                }
-                if (flatData.ttftMs !== undefined) {
-                  traceUpdate.ttftMs = flatData.ttftMs;
-                }
-                if (flatData.totalMs !== undefined) {
-                  traceUpdate.totalMs = flatData.totalMs;
-                }
-                if (flatData.totalTokens !== undefined) {
-                  (traceUpdate as any).tokens = flatData.totalTokens;
-                }
-
-                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "trace_step", flatData);
-
-                return {
-                  ...m,
-                  traceSteps: newSteps,
-                  trace: traceUpdate,
-                  agentTimeline: updatedTimeline,
-                };
-              })
-            );
-          },
           onCitations: (newCitations, ragStats) => {
             if (Array.isArray(newCitations) && newCitations.length > 0) {
               setMessages((prev) =>
                 prev.map((m) => {
                   if (m.id !== asstMsgId) return m;
-                  const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "citations", { items: newCitations, ...(ragStats || {}) });
                   return {
                     ...m,
                     citations: newCitations,
                     ragStats: ragStats || m.ragStats,
-                    agentTimeline: updatedTimeline,
                   };
                 })
               );
@@ -697,12 +634,10 @@ export default function ChatPlaygroundPage({
               prev.map((m) => {
                 if (m.id !== asstMsgId) return m;
                 const existing = m.toolCalls || [];
-                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "tool", toolData);
                 return {
                   ...m,
                   activeToolName: toolData.tool,
                   toolCalls: [...existing, toolData],
-                  agentTimeline: updatedTimeline,
                 };
               })
             );
@@ -768,7 +703,6 @@ export default function ChatPlaygroundPage({
                       duration: meta.duration,
                       isCached: !!meta.cached,
                       trace: meta.trace,
-                      agentTimeline: finalizeTimeline(m.agentTimeline || []),
                     }
                     : m
                 )
@@ -780,7 +714,6 @@ export default function ChatPlaygroundPage({
                     ? {
                       ...m,
                       isThinking: false,
-                      agentTimeline: finalizeTimeline(m.agentTimeline || []),
                     }
                     : m
                 )
@@ -1062,18 +995,6 @@ export default function ChatPlaygroundPage({
 
           {/* 当前模型真实连接状态胶囊与设置快捷入口 */}
           <div className="flex items-center gap-2">
-            {/* Only show a workflow label when the backend actually matched one. */}
-            {(() => {
-              const latestAsst = messages.slice().reverse().find((m) => m.role === "assistant");
-              const matchedWorkflow = latestAsst?.traceSteps?.[2]?.matchedWorkflowName;
-              return matchedWorkflow ? (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-600">
-                  <Layers className="w-3.5 h-3.5 text-slate-500" />
-                  <span>工作流：{matchedWorkflow}</span>
-                </div>
-              ) : null;
-            })()}
-
             <div
               className={`flex items-center gap-1.5 px-3 py-1 bg-white/95 border rounded-full text-xs shadow-2xs transition-all ${modelProbe?.connected
                 ? "border-emerald-200 text-emerald-800"
