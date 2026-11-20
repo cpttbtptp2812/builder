@@ -135,15 +135,12 @@ interface ChatPlaygroundProps {
   onAddAuditLog?: (log: AuditLogItem) => void;
   onNavigateSettings?: () => void;
   onOpenModal?: (tab: any) => void;
-  onBackHome?: () => void;
   workflows?: PipelineItem[];
   initialPrompt?: string | { prompt: string; autoSend?: boolean };
   onClearInitialPrompt?: () => void;
   onOpenCreateWorkflow?: () => void;
   onRunWorkflow?: (wf: PipelineItem) => void;
   onNavigateStudio?: () => void;
-  dreamSeed?: string;
-  onDreamResponse?: (dream: string, response: string) => void;
   onOpenEvaluation?: (message: Message) => void;
 }
 
@@ -191,15 +188,12 @@ export default function ChatPlaygroundPage({
   onAddAuditLog,
   onNavigateSettings,
   onOpenModal,
-  onBackHome,
   workflows = [],
   initialPrompt,
   onClearInitialPrompt,
   onOpenCreateWorkflow,
   onRunWorkflow,
   onNavigateStudio,
-  dreamSeed,
-  onDreamResponse,
   onOpenEvaluation,
 }: ChatPlaygroundProps) {
   const toast = useToast();
@@ -211,9 +205,6 @@ export default function ChatPlaygroundPage({
   const [isExternalRunsOpen, setIsExternalRunsOpen] = useState(false);
   const [runExplorerTarget, setRunExplorerTarget] = useState<{ sessionId: string; runId: string } | null>(null);
   const [sessionBootstrapReady, setSessionBootstrapReady] = useState(false);
-  const dreamResponseHandledRef = useRef(false);
-  useEffect(() => { dreamResponseHandledRef.current = false; }, [dreamSeed]);
-
   // 思考、联网、RAG 开关
   const [enableThinking, setEnableThinking] = useState(true);
   const [enableWebSearch, setEnableWebSearch] = useState(false);
@@ -825,10 +816,6 @@ export default function ChatPlaygroundPage({
                     : m
                 )
               );
-            }
-            if (dreamSeed && !dreamResponseHandledRef.current && accumulatedContent.trim()) {
-              dreamResponseHandledRef.current = true;
-              onDreamResponse?.(dreamSeed, accumulatedContent);
             }
           },
           onError: (err) => {
