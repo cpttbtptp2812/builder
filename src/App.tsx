@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import HomePage, { type DreamoraStar } from "./pages/home/HomePage";
+import React, { useState, useEffect, useRef } from "react";
 import ChatPlaygroundPage from "./pages/chat/ChatPlaygroundPage";
 import WorkflowsListPage from "./pages/workflows/WorkflowsListPage";
 import WorkflowDesignerPage from "./pages/workflows/WorkflowDesignerPage";
@@ -25,30 +24,23 @@ import {
   checkBackendHealth,
   fetchWorkflowsApi,
   deleteWorkflowApi,
-  fetchKnowledgeChunksApi,
-  fetchToolsApi,
   saveWorkflowApi,
 } from "./services/api";
 import { WorkflowExecutionModal } from "./components/workflow/WorkflowExecutionModal";
 import { useToast } from "./context/ToastContext";
 import {
-  Segmented,
-  Badge,
   Button,
-  Space,
   Tag,
   Tooltip,
 } from "antd";
 import {
-  DashboardOutlined,
   MessageOutlined,
-  AppstoreOutlined,
   SettingOutlined,
   DeploymentUnitOutlined,
+  ActivityOutlined,
 } from "@ant-design/icons";
 
 export type ViewMode =
-  | "home"
   | "chat"
   | "workflows"
   | "knowledge"
@@ -66,7 +58,7 @@ export default function App() {
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
-    const order: Record<string, number> = { home: 0, chat: 1, workflows: 2, designer: 3, knowledge: 4, agents: 5, tools: 6, settings: 7, evaluation: 8, runs: 9, integrations: 10 };
+    const order: Record<string, number> = { chat: 0, runs: 1, integrations: 2, workflows: 3, designer: 4, knowledge: 5, agents: 6, tools: 7, settings: 8, evaluation: 9 };
     const curIdx = order[currentView] ?? 0;
     const newIdx = order[newView] ?? 0;
     if (newIdx > curIdx) {
@@ -90,59 +82,7 @@ export default function App() {
     { prompt: string; autoSend?: boolean } | string | undefined
   >(undefined);
   const [executingWorkflow, setExecutingWorkflow] = useState<PipelineItem | null>(null);
-  const [pendingDream, setPendingDream] = useState("");
-  const [pendingDreamMode, setPendingDreamMode] = useState("倾听");
-  const [dreamArrival, setDreamArrival] = useState<DreamoraStar | null>(null);
-  const [continuingDream, setContinuingDream] = useState<DreamoraStar | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<any>(null);
-  const dismissDreamArrival = useCallback(() => setDreamArrival(null), []);
-
-  const handleLaunchDream = (dream: string, mode: string) => {
-    const guidance: Record<string, string> = {
-      倾听: "先认真倾听和理解，不急着给建议。回应这份梦想对用户意味着什么，让它被看见。",
-      探索: "陪用户探索这个梦想的来源、可能性和想象空间。先提出有启发的问题，不替用户下结论。",
-      规划: "帮助用户把梦想拆成温和、可调整的阶段和第一个小步骤，不制造压力。",
-      创造: "和用户一起构思可以创造出来的作品、原型或体验，给出一个能开始的创意方向。",
-      研究: "帮助用户梳理值得研究的问题、资料方向和现实资源；不编造事实或来源。",
-      行动: "优先识别当前 Agent 已注册、可用的工具或 Action，先说明准备执行的动作、参数和可能副作用，并等待用户明确确认及系统审批。只有审批通过后才能通过现有执行能力操作；不花钱、不联系他人、不修改外部数据，除非用户明确授权。若没有可用 Action，就诚实给出可执行计划，不要声称已经执行。"
-    };
-    setPendingDream(dream);
-    setPendingDreamMode(mode);
-    setInitialChatPrompt({
-      prompt: `这是用户亲自写下的梦想：\n\n${dream}\n\n用户选择的陪伴方式：${mode}。\n${guidance[mode] || guidance["倾听"]}\n\n请用真诚、具体、有想象力的中文回应。尊重用户的自主权，不评判梦想是否现实，不把所有梦想强行变成效率任务。`,
-      autoSend: true
-    });
-    handleNavChange("chat");
-  };
-
-  const handleContinueDream = (star: DreamoraStar) => {
-    setContinuingDream(star);
-    setPendingDream(star.dream);
-    setPendingDreamMode(star.mode || "倾听");
-    setInitialChatPrompt({
-      prompt: `我们正在继续一份被记录在 DREAMORA 星图里的梦想。\n\n原始梦想：\n${star.dream}\n\n上一次的回应：\n${star.response || "这份梦想刚刚被记录下来。"}\n\n请承接之前的语境继续交流，不要重新介绍自己，也不要重复整段旧回应。可以询问用户下一步最想探索的部分，并给出有温度、有实质内容的回应。`,
-      autoSend: true
-    });
-    handleNavChange("chat");
-  };
-
-  const handleDreamResponse = (dream: string, response: string) => {
-    const previous = continuingDream;
-    setDreamArrival(previous ? {
-      ...previous,
-      response: [previous.response, response].filter(Boolean).join("\n\n"),
-      createdAt: previous.createdAt
-    } : {
-      id: `dream-${Date.now()}`,
-      dream,
-      response,
-      mode: pendingDreamMode,
-      createdAt: new Date().toISOString()
-    });
-    setContinuingDream(null);
-    setPendingDream("");
-    handleNavChange("home");
-  };
 
   // 初始化探测后端健康度并加载业务数据
   useEffect(() => {
@@ -284,7 +224,7 @@ export default function App() {
   };
 
   // 导航项映射
-  const navValue = currentView === "designer" ? "workflows" : currentView;
+  const navValue = currentView === "runs" || currentView === "integrations" ? currentView : "chat";
 
   // 顶栏滑动高光胶囊指示器 (Apple / Linear 级顺滑滑动物理反馈)
   const navContainerRef = useRef<HTMLDivElement | null>(null);
@@ -292,15 +232,13 @@ export default function App() {
   const navItemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const navItems = [
-    { label: "首页大盘", value: "home", icon: <DashboardOutlined /> },
     { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
-    { label: "运行观测", value: "runs", icon: <DeploymentUnitOutlined /> },
+    { label: "运行观测", value: "runs", icon: <ActivityOutlined /> },
     { label: "接入中心", value: "integrations", icon: <DeploymentUnitOutlined /> },
-    { label: "业务流中心", value: "workflows", icon: <AppstoreOutlined /> },
   ];
 
   useEffect(() => {
-    const activeKey = currentView === "designer" ? "workflows" : currentView;
+    const activeKey = navValue;
     const targetEl = navItemRefs.current[activeKey];
     if (targetEl && navContainerRef.current) {
       const containerRect = navContainerRef.current.getBoundingClientRect();
@@ -310,7 +248,7 @@ export default function App() {
         width: targetRect.width,
       });
     }
-  }, [currentView]);
+  }, [currentView, navValue]);
 
   return (
     <div
@@ -328,9 +266,9 @@ export default function App() {
         style={{
           height: 60,
           padding: "0 28px",
-          background: currentView === "home" ? "rgba(5, 8, 20, 0.78)" : "rgba(255, 255, 255, 0.92)",
+          background: "rgba(255, 255, 255, 0.92)",
           backdropFilter: "blur(22px)",
-          borderBottom: currentView === "home" ? "1px solid rgba(190,190,255,.14)" : "1px solid #e2e8f0",
+          borderBottom: "1px solid #e2e8f0",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -342,7 +280,7 @@ export default function App() {
         <div style={{ display: "flex", alignItems: "center", gap: 28 }}>
           {/* Logo */}
           <div
-            onClick={() => setCurrentView("home")}
+            onClick={() => handleNavChange("chat")}
             style={{
               display: "flex",
               alignItems: "center",
@@ -368,8 +306,8 @@ export default function App() {
               <DeploymentUnitOutlined />
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span style={{ fontSize: 16.5, fontWeight: 800, color: currentView === "home" ? "#f2edff" : "#0f172a", letterSpacing: currentView === "home" ? "3px" : "-0.4px" }}>
-                {currentView === "home" ? "DREAMORA" : "OwnAgent"}
+              <span style={{ fontSize: 16.5, fontWeight: 800, color: "#0f172a", letterSpacing: "-0.4px" }}>
+                OwnAgent
               </span>
               <Tag
                 style={{
@@ -396,11 +334,11 @@ export default function App() {
               display: "flex",
               alignItems: "center",
               gap: 2,
-              background: currentView === "home" ? "rgba(255,255,255,.055)" : "#f1f5f9",
+              background: "#f1f5f9",
               padding: "4px",
               borderRadius: 999,
-              border: currentView === "home" ? "1px solid rgba(196,181,253,.18)" : "1px solid #e2e8f0",
-              boxShadow: currentView === "home" ? "inset 0 1px 0 rgba(255,255,255,.08)" : "inset 0 1px 2px rgba(0, 0, 0, 0.03)",
+              border: "1px solid #e2e8f0",
+              boxShadow: "inset 0 1px 2px rgba(0, 0, 0, 0.03)",
             }}
           >
             {/* 顺滑游动的物理高光胶囊 (Sliding Pill Indicator) */}
@@ -412,9 +350,9 @@ export default function App() {
                 left: 0,
                 transform: `translateX(${navIndicator.left}px)`,
                 width: `${navIndicator.width}px`,
-                background: currentView === "home" ? "linear-gradient(110deg,rgba(205,190,255,.24),rgba(255,255,255,.12))" : "#ffffff",
+                background: "#ffffff",
                 borderRadius: 999,
-                boxShadow: currentView === "home" ? "0 0 22px rgba(169,145,255,.18)" : "0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.1)",
+                boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.1)",
                 transition: "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
                 pointerEvents: "none",
                 zIndex: 1,
@@ -438,22 +376,22 @@ export default function App() {
                     borderRadius: 999,
                     fontSize: 13,
                     fontWeight: isActive ? 700 : 500,
-                    color: currentView === "home" ? (isActive ? "#f6f0ff" : "#9d9ab8") : (isActive ? "#4338ca" : "#64748b"),
+                    color: isActive ? "#4338ca" : "#64748b",
                     cursor: "pointer",
                     userSelect: "none",
                     transition: "color 0.2s ease, transform 0.12s ease",
                   }}
                   onMouseEnter={(e) => {
-                    if (!isActive) e.currentTarget.style.color = currentView === "home" ? "#f1eaff" : "#0f172a";
+                    if (!isActive) e.currentTarget.style.color = "#0f172a";
                   }}
                   onMouseLeave={(e) => {
-                    if (!isActive) e.currentTarget.style.color = currentView === "home" ? "#9d9ab8" : "#64748b";
+                    if (!isActive) e.currentTarget.style.color = "#64748b";
                   }}
                 >
                   <span
                     style={{
                       fontSize: 13,
-                      color: currentView === "home" ? (isActive ? "#e0d2ff" : "#777692") : (isActive ? "#4f46e5" : "#94a3b8"),
+                      color: isActive ? "#4f46e5" : "#94a3b8",
                       transition: "color 0.2s ease",
                     }}
                   >
@@ -509,16 +447,6 @@ export default function App() {
           className={navDirection === "forward" ? "cyber-slide-in-right" : "cyber-slide-in-left"}
           style={{ width: "100%", height: "100%", flex: 1, display: currentView === "chat" ? "none" : "flex", flexDirection: "column", overflow: "hidden" }}
         >
-          {currentView === "home" && (
-            <HomePage
-              onLaunchDream={handleLaunchDream}
-              arrivalDream={dreamArrival}
-              onDismissArrival={dismissDreamArrival}
-              onContinueDream={handleContinueDream}
-            />
-          )}
-
-
           {currentView === "workflows" && (
             <WorkflowsListPage
               workflows={workflows}
@@ -599,15 +527,12 @@ export default function App() {
             onOpenModal={(tab: NavTab) => {
               handleNavChange(tab as ViewMode);
             }}
-            onBackHome={() => handleNavChange("home")}
             workflows={workflows}
             initialPrompt={initialChatPrompt}
             onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
             onOpenCreateWorkflow={handleOpenCreateWorkflow}
             onNavigateStudio={() => handleNavChange("workflows")}
             onRunWorkflow={handleLaunchWorkflow}
-            dreamSeed={pendingDream}
-            onDreamResponse={handleDreamResponse}
             onOpenEvaluation={(message) => { setEvaluationMessage(message); handleNavChange("evaluation"); }}
           />
         </div>
