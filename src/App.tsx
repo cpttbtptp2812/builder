@@ -217,7 +217,7 @@ export default function App() {
   };
 
   // 导航项映射
-  const navValue = currentView === "chat" || currentView === "runs" || currentView === "integrations" ? currentView : null;
+  const navValue = currentView === "agents" || currentView === "chat" || currentView === "runs" || currentView === "integrations" ? currentView : null;
 
   // 顶栏滑动高光胶囊指示器 (Apple / Linear 级顺滑滑动物理反馈)
   const navContainerRef = useRef<HTMLDivElement | null>(null);
@@ -225,6 +225,7 @@ export default function App() {
   const navItemRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   const navItems = [
+    { label: "Agent 管理", value: "agents", icon: <DeploymentUnitOutlined /> },
     { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
     { label: "运行观测", value: "runs", icon: <LineChartOutlined /> },
     { label: "接入中心", value: "integrations", icon: <DeploymentUnitOutlined /> },
