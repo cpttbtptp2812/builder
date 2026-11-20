@@ -531,9 +531,7 @@ export default function App() {
             workflows={workflows}
             initialPrompt={initialChatPrompt}
             onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
-            onOpenCreateWorkflow={handleOpenCreateWorkflow}
             onNavigateStudio={() => handleNavChange("workflows")}
-            onRunWorkflow={handleLaunchWorkflow}
             onOpenEvaluation={(message) => { setEvaluationMessage(message); handleNavChange("evaluation"); }}
           />
         </div>
