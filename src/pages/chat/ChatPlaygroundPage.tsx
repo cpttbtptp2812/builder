@@ -30,7 +30,7 @@ import {
   Clock,
 } from "lucide-react";
 import { downloadSummaryReport } from "@/lib/reportExport";
-import { AgentItem, AuditLogItem, PipelineItem } from "../../types/platform";
+import { AgentItem, PipelineItem } from "../../types/platform";
 import {
   fetchSessionsApi,
   createSessionApi,
@@ -43,7 +43,7 @@ import {
 import { useToast } from "@/context/ToastContext";
 import type { ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import BuiltinRunObserver from "@/components/chat/BuiltinRunObserver";
-import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
+import { AgentStep, applySseToTimeline, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
 import RunsPage from "@/pages/runs/RunsPage";
 
