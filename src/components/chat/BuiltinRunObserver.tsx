@@ -182,6 +182,10 @@ export default function BuiltinRunObserver({ message }: { message: RunMessage })
   const spans = detail?.spans ?? [];
   const events = detail?.events ?? [];
   const running = String(run?.status || (message.isThinking ? "RUNNING" : "UNKNOWN")).toUpperCase() === "RUNNING";
+  const knownTimes = spans.flatMap((span) => [Date.parse(span.startedAt || ""), Date.parse(span.endedAt || "")]).filter(Number.isFinite);
+  const timelineStart = knownTimes.length ? Math.min(...knownTimes) : 0;
+  const timelineEnd = Math.max(timelineStart + 1, ...knownTimes, ...(running ? [Date.now()] : []));
+  const timelineRange = Math.max(1, timelineEnd - timelineStart);
 
   return (
     <aside className="trace-cosmos relative flex h-full min-h-0 min-w-0 flex-col border-l border-slate-800 bg-slate-950 text-slate-100" style={{ flex: "1 1 54%", width: "54%" }}>
@@ -243,6 +247,43 @@ export default function BuiltinRunObserver({ message }: { message: RunMessage })
                 <div><div className="text-slate-500">开始时间</div><div className="mt-1 text-slate-200">{dateLabel(run?.startedAt)}</div></div>
               </div>
               {run?.errorMessage && <div className="mt-3 rounded-lg border border-rose-300/20 bg-rose-400/5 p-3 text-xs text-rose-200"><div className="font-semibold">运行失败</div><p className="mt-1 whitespace-pre-wrap break-words">{run.errorMessage}</p></div>}
+            </section>
+
+            <section className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h3 className="text-xs font-semibold text-white">执行瀑布流</h3>
+                <span className="text-[10px] text-slate-500">按真实 Span 时间戳绘制</span>
+              </div>
+              {spans.length === 0 ? (
+                <p className="py-4 text-center text-xs text-slate-500">等待真实执行步骤…</p>
+              ) : (
+                <div className="mt-3 space-y-3">
+                  {spans.map((span) => {
+                    const start = Date.parse(span.startedAt || "");
+                    const persistedEnd = Date.parse(span.endedAt || "");
+                    const end = Number.isFinite(persistedEnd) ? persistedEnd : (running && Number.isFinite(start) ? Date.now() : NaN);
+                    const hasTime = Number.isFinite(start);
+                    const left = hasTime ? Math.max(0, Math.min(100, ((start - timelineStart) / timelineRange) * 100)) : 0;
+                    const width = hasTime && Number.isFinite(end)
+                      ? Math.max(1.5, Math.min(100 - left, ((end - start) / timelineRange) * 100))
+                      : 0;
+                    const tone = span.status === "ERROR" ? "bg-rose-400" : span.endedAt ? "bg-emerald-400" : "bg-cyan-300";
+                    return (
+                      <div key={span.spanId} className="grid grid-cols-[minmax(88px,1fr)_minmax(0,2fr)_58px] items-center gap-2">
+                        <span className="truncate text-[10px] text-slate-300" title={span.name}>{span.name}</span>
+                        <div className="h-2 overflow-hidden rounded-full bg-white/5">
+                          {hasTime && width > 0 && <div className={"h-full rounded-full " + tone} style={{ marginLeft: left + "%", width: width + "%" }} />}
+                        </div>
+                        <span className="text-right text-[9px] tabular-nums text-slate-500">{durationLabel(span.durationMs)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              <div className="mt-3 flex justify-between text-[9px] text-slate-500">
+                <span>{timelineStart ? dateLabel(new Date(timelineStart).toISOString()) : "开始时间未上报"}</span>
+                <span>{running ? "执行中" : timelineEnd > timelineStart ? dateLabel(new Date(timelineEnd).toISOString()) : "结束时间未上报"}</span>
+              </div>
             </section>
 
             <section className="rounded-xl border border-white/10 bg-white/[0.025] p-3">
