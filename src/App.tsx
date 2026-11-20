@@ -10,7 +10,6 @@ import EvaluationPage from "./pages/evaluation/EvaluationPage";
 import RunsPage from "./pages/runs/RunsPage";
 import IntegrationsPage from "./pages/integrations/IntegrationsPage";
 import {
-  NavTab,
   AgentItem,
   AuditLogItem,
   PipelineItem,
@@ -113,10 +112,6 @@ export default function App() {
         setWorkflows([]);
       });
   }, []);
-
-  const handleAddAuditLog = (newLog: AuditLogItem) => {
-    setLogs((prev) => [newLog, ...prev]);
-  };
 
   const handleOpenChat = (agent: AgentItem) => {
     setCurrentAgent(agent);
@@ -520,12 +515,7 @@ export default function App() {
           <ChatPlaygroundPage
             agents={agents}
             currentAgent={currentAgent}
-            onSelectAgent={setCurrentAgent}
-            onAddAuditLog={handleAddAuditLog}
             onNavigateSettings={() => handleNavChange("settings")}
-            onOpenModal={(tab: NavTab) => {
-              handleNavChange(tab as ViewMode);
-            }}
             workflows={workflows}
             initialPrompt={initialChatPrompt}
             onClearInitialPrompt={() => setInitialChatPrompt(undefined)}
