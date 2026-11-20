@@ -985,6 +985,7 @@ export default function ChatPlaygroundPage({
         .dream-chat-world .dream-muted{color:rgba(204,211,243,.62)!important}
         .dream-chat-world .dream-empty-title{color:#f1efff}
         @media(max-width:900px){.ownagent-control-workspace{height:auto;min-height:100%;overflow-y:auto;overflow-x:hidden;flex-direction:column}.ownagent-control-workspace .dream-chat-main{flex:0 0 62vh;width:100%;min-width:0;border-right:0;border-bottom:1px solid rgba(174,164,255,.18)}.ownagent-control-workspace .trace-cosmos{flex:0 0 auto;width:100%;height:auto!important;min-height:680px;border-left:0;border-top:1px solid rgba(111,133,255,.22)}.ownagent-control-workspace .dream-chat-history{position:absolute;top:0;bottom:auto;height:62vh;width:256px!important}}
+        @media(max-width:900px){.ownagent-control-workspace.observer-collapsed .dream-chat-main{flex:0 0 62vh;width:100%}}
         @media(prefers-reduced-motion:no-preference){.dream-chat-world .dream-user-bubble,.dream-chat-world .dream-assistant-bubble{animation:dreamMessageIn .38s cubic-bezier(.2,.7,.2,1) both}@keyframes dreamMessageIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}}
         @media(prefers-reduced-motion:reduce){.dream-chat-world *{animation:none!important;transition:none!important}}
       `}</style>
