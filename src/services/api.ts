@@ -339,28 +339,31 @@ export async function streamChatFromBackend(
 // ==========================================
 // 4. 插件与技能市场工具 API (真实执行与切换)
 // ==========================================
+async function readToolApiError(response: Response, fallback: string): Promise<Error> {
+  const body = await response.json().catch(() => null);
+  const message = typeof body?.error === "string" ? body.error : fallback;
+  return new Error(message);
+}
+
 export async function fetchToolsApi(): Promise<ToolItem[]> {
-  try {
-    const res = await apiFetch("/api/tools");
-    if (!res.ok) throw new Error("Failed to fetch tools");
-    const data = await res.json();
-    return data.map((t: any) => ({
-      id: t.id,
-      name: t.functionName || t.id,
-      displayName: t.displayName || t.functionName,
-      desc: t.description || "",
-      category: (t.category || "BUSINESS") as any,
-      isEnabled: t.enabled !== false,
-      paramsSchema: t.parametersSchema || '{\n  "query": "param"\n}',
-    }));
-  } catch {
-    return [];
-  }
+  const res = await apiFetch("/api/tools");
+  if (!res.ok) throw await readToolApiError(res, `读取工具列表失败（HTTP ${res.status}）`);
+  const data = await res.json();
+  if (!Array.isArray(data)) throw new Error("工具列表接口返回格式无效");
+  return data.map((t: any) => ({
+    id: t.id,
+    name: t.functionName || t.id,
+    displayName: t.displayName || t.functionName,
+    desc: t.description || "",
+    category: (t.category || "BUSINESS") as any,
+    isEnabled: t.enabled !== false,
+    paramsSchema: t.parametersSchema || '{\n  "query": "param"\n}',
+  }));
 }
 
 export async function toggleToolApi(id: string): Promise<boolean> {
-  const res = await apiFetch(`/api/tools/toggle/${id}`, { method: "POST" });
-  if (!res.ok) throw new Error("Failed to toggle tool");
+  const res = await apiFetch(`/api/tools/toggle/${encodeURIComponent(id)}`, { method: "POST" });
+  if (!res.ok) throw await readToolApiError(res, `切换工具状态失败（HTTP ${res.status}）`);
   const data = await res.json();
   return Boolean(data.enabled);
 }
@@ -371,7 +374,7 @@ export async function testToolApi(toolName: string, payload: any): Promise<any> 
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ toolName, payload }),
   });
-  if (!res.ok) throw new Error("Failed to execute tool");
+  if (!res.ok) throw await readToolApiError(res, `工具测试失败（HTTP ${res.status}）`);
   return await res.json();
 }
 
@@ -399,13 +402,13 @@ export async function saveToolApi(tool: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!res.ok) throw new Error("保存工具失败");
+  if (!res.ok) throw await readToolApiError(res, `保存工具失败（HTTP ${res.status}）`);
   return await res.json();
 }
 
 export async function deleteToolApi(id: string): Promise<boolean> {
-  const res = await apiFetch(`/api/tools/${id}`, { method: "DELETE" });
-  if (!res.ok) throw new Error("删除工具失败");
+  const res = await apiFetch(`/api/tools/${encodeURIComponent(id)}`, { method: "DELETE" });
+  if (!res.ok) throw await readToolApiError(res, `删除工具失败（HTTP ${res.status}）`);
   return true;
 }
 
