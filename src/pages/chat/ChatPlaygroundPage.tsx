@@ -18,7 +18,6 @@ import {
   Settings,
   Activity,
   ExternalLink,
-  Coins,
   Zap,
   Layers,
   ShieldAlert,
@@ -31,7 +30,7 @@ import {
   Clock,
 } from "lucide-react";
 import { downloadSummaryReport } from "@/lib/reportExport";
-import { AgentItem, AuditLogItem, PipelineItem } from "../../types/platform";
+import { AgentItem, PipelineItem } from "../../types/platform";
 import {
   fetchSessionsApi,
   createSessionApi,
@@ -44,8 +43,6 @@ import {
 import { useToast } from "@/context/ToastContext";
 import type { ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import BuiltinRunObserver from "@/components/chat/BuiltinRunObserver";
-import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
-import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
 import RunsPage from "@/pages/runs/RunsPage";
 
@@ -79,7 +76,6 @@ interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
-  reasoning?: string;
   isThinking?: boolean;
   activeToolName?: string | null;
   citations?: CitationItem[];
@@ -91,7 +87,6 @@ interface Message {
     mode?: string;
     isRealVector?: boolean;
   };
-  traceSteps?: Record<number, any>;
   toolCalls?: ToolCallItem[];
   approvalTicket?: ApprovalTicketItem;
   tokens?: number;
@@ -104,7 +99,6 @@ interface Message {
   enableRAG?: boolean;
   enableThinking?: boolean;
   enableWebSearch?: boolean;
-  agentTimeline?: AgentStep[];
   createdAt?: string;
   runId?: string;
   traceId?: string;
@@ -131,19 +125,11 @@ const formatMessageTime = (timeStr?: string) => {
 interface ChatPlaygroundProps {
   agents?: AgentItem[];
   currentAgent?: AgentItem | null;
-  onSelectAgent?: (agent: AgentItem) => void;
-  onAddAuditLog?: (log: AuditLogItem) => void;
   onNavigateSettings?: () => void;
-  onOpenModal?: (tab: any) => void;
-  onBackHome?: () => void;
   workflows?: PipelineItem[];
   initialPrompt?: string | { prompt: string; autoSend?: boolean };
   onClearInitialPrompt?: () => void;
-  onOpenCreateWorkflow?: () => void;
-  onRunWorkflow?: (wf: PipelineItem) => void;
   onNavigateStudio?: () => void;
-  dreamSeed?: string;
-  onDreamResponse?: (dream: string, response: string) => void;
   onOpenEvaluation?: (message: Message) => void;
 }
 
@@ -187,19 +173,11 @@ const renderContentWithCitations = (
 export default function ChatPlaygroundPage({
   agents = [],
   currentAgent,
-  onSelectAgent,
-  onAddAuditLog,
   onNavigateSettings,
-  onOpenModal,
-  onBackHome,
   workflows = [],
   initialPrompt,
   onClearInitialPrompt,
-  onOpenCreateWorkflow,
-  onRunWorkflow,
   onNavigateStudio,
-  dreamSeed,
-  onDreamResponse,
   onOpenEvaluation,
 }: ChatPlaygroundProps) {
   const toast = useToast();
@@ -211,9 +189,6 @@ export default function ChatPlaygroundPage({
   const [isExternalRunsOpen, setIsExternalRunsOpen] = useState(false);
   const [runExplorerTarget, setRunExplorerTarget] = useState<{ sessionId: string; runId: string } | null>(null);
   const [sessionBootstrapReady, setSessionBootstrapReady] = useState(false);
-  const dreamResponseHandledRef = useRef(false);
-  useEffect(() => { dreamResponseHandledRef.current = false; }, [dreamSeed]);
-
   // 思考、联网、RAG 开关
   const [enableThinking, setEnableThinking] = useState(true);
   const [enableWebSearch, setEnableWebSearch] = useState(false);
@@ -221,7 +196,6 @@ export default function ChatPlaygroundPage({
 
   // 历史侧栏收起/展开 (类似 DeepSeek / 豆包默认轻巧贴边)
   const [isHistoryOpen, setIsHistoryOpen] = useState(false);
-  const [expandedReasoning, setExpandedReasoning] = useState<{ [key: string]: boolean }>({});
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   // 系统模型配置（优先读取持久化缓存，杜绝加载瞬间闪烁沙箱）
@@ -251,15 +225,8 @@ export default function ChatPlaygroundPage({
   });
 
   // 全链路执行分析与知识溯源面板 (支持左右分栏 split 与浮层抽屉 drawer 自由切换)
-  const [activeTraceDrawer, setActiveTraceDrawer] = useState<{
-    messageId: string;
-    defaultTab: "lifecycle" | "waterfall" | "knowledge" | "reasoning" | "finops";
-    highlightCitationIndex?: number;
-  } | null>(null);
-  const [traceLayoutMode, setTraceLayoutMode] = useState<"split" | "drawer">("split");
-  const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
+  const [activeTraceDrawer, setActiveTraceDrawer] = useState<{ messageId: string } | null>(null);
   const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
-  const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -281,12 +248,19 @@ export default function ChatPlaygroundPage({
     return () => document.removeEventListener("mousedown", handleOutsideClick);
   }, []);
 
-  // 本地持久化存储富消息缓存（刷新页面或切换会话时，完整保留 traceSteps、toolCalls 与审批工单）
+  // 本地持久化聊天消息缓存；运行观测数据统一从后端 Run API 读取
   const LOCAL_CACHE_KEY = "ownagent_rich_session_cache_v2";
   const sessionMessagesCacheRef = useRef<Record<string, Message[]>>((() => {
     try {
       const raw = localStorage.getItem(LOCAL_CACHE_KEY);
-      return raw ? JSON.parse(raw) : {};
+      const stored = raw ? JSON.parse(raw) : {};
+      return Object.fromEntries(Object.entries(stored).map(([sessionId, entries]) => [
+        sessionId,
+        Array.isArray(entries) ? entries.map((entry: any) => {
+          const { reasoning: _hiddenReasoning, ...safeMessage } = entry || {};
+          return safeMessage;
+        }) : [],
+      ]));
     } catch {
       return {};
     }
@@ -401,14 +375,18 @@ export default function ChatPlaygroundPage({
             return;
           }
           const cached = sessionMessagesCacheRef.current[currentSessionId];
+          const safeHistory = (history || []).map((message: any) => {
+            const { reasoning: _hiddenReasoning, ...safeMessage } = message || {};
+            return safeMessage as Message;
+          });
           if (cached && cached.length > 0) {
-            const merged = (history && history.length > 0 ? history : cached).map((h) => {
+            const merged = (safeHistory.length > 0 ? safeHistory : cached).map((h) => {
               const hit = cached.find((c) => c.id === h.id || c.content === h.content);
               return hit ? { ...h, ...hit } : h;
             });
             setMessages(merged);
           } else {
-            setMessages(history || []);
+            setMessages(safeHistory);
           }
         })
         .catch((error: any) => {
@@ -601,19 +579,15 @@ export default function ChatPlaygroundPage({
       enableRAG,
       enableThinking,
       enableWebSearch: false,
-      traceSteps: {},
       createdAt: nowTimeStr,
     };
 
     setMessages((prev) => [...prev, userMsg, asstMsg]);
-    setExpandedReasoning((p) => ({ ...p, [asstMsgId]: false }));
 
     // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同，默认呈现决策瀑布流)
     setActiveTraceDrawer({
       messageId: asstMsgId,
-      defaultTab: "flow",
     });
-    setTraceLayoutMode("split");
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -641,74 +615,15 @@ export default function ChatPlaygroundPage({
               ? { ...m, runId: run.runId, traceId: run.traceId, trace: { ...(m.trace || {}), runId: run.runId, traceId: run.traceId } }
               : m));
           },
-          onAgentStep: (stepData) => {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== asstMsgId) return m;
-                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "agent_step", stepData);
-                return {
-                  ...m,
-                  agentTimeline: updatedTimeline,
-                };
-              })
-            );
-          },
-          onTraceStep: (stepData) => {
-            setMessages((prev) =>
-              prev.map((m) => {
-                if (m.id !== asstMsgId) return m;
-                const flatData = { ...stepData, ...(stepData.data || {}) };
-                const prevSteps = m.traceSteps || {};
-                const newSteps = { ...prevSteps, [flatData.step]: flatData };
-                const traceUpdate = { ...(m.trace || {}) };
-
-                if (flatData.hashKey) {
-                  traceUpdate.hashKey = flatData.hashKey;
-                }
-                if (flatData.cached !== undefined) {
-                  traceUpdate.cached = !!flatData.cached;
-                }
-                if (flatData.cacheHit !== undefined) {
-                  traceUpdate.cached = !!flatData.cacheHit;
-                }
-                if (flatData.ragMs !== undefined) {
-                  traceUpdate.ragMs = flatData.ragMs;
-                }
-                if (flatData.costMs !== undefined) {
-                  traceUpdate.ragMs = flatData.costMs;
-                }
-                if (flatData.ttftMs !== undefined) {
-                  traceUpdate.ttftMs = flatData.ttftMs;
-                }
-                if (flatData.totalMs !== undefined) {
-                  traceUpdate.totalMs = flatData.totalMs;
-                }
-                if (flatData.totalTokens !== undefined) {
-                  (traceUpdate as any).tokens = flatData.totalTokens;
-                }
-
-                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "trace_step", flatData);
-
-                return {
-                  ...m,
-                  traceSteps: newSteps,
-                  trace: traceUpdate,
-                  agentTimeline: updatedTimeline,
-                };
-              })
-            );
-          },
           onCitations: (newCitations, ragStats) => {
             if (Array.isArray(newCitations) && newCitations.length > 0) {
               setMessages((prev) =>
                 prev.map((m) => {
                   if (m.id !== asstMsgId) return m;
-                  const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "citations", { items: newCitations, ...(ragStats || {}) });
                   return {
                     ...m,
                     citations: newCitations,
                     ragStats: ragStats || m.ragStats,
-                    agentTimeline: updatedTimeline,
                   };
                 })
               );
@@ -719,12 +634,10 @@ export default function ChatPlaygroundPage({
               prev.map((m) => {
                 if (m.id !== asstMsgId) return m;
                 const existing = m.toolCalls || [];
-                const updatedTimeline = applySseToTimeline(m.agentTimeline || [], "tool", toolData);
                 return {
                   ...m,
                   activeToolName: toolData.tool,
                   toolCalls: [...existing, toolData],
-                  agentTimeline: updatedTimeline,
                 };
               })
             );
@@ -746,24 +659,6 @@ export default function ChatPlaygroundPage({
                   : m
               )
             );
-          },
-          onReasoning: (rawReasoning) => {
-            try {
-              const parsed = JSON.parse(rawReasoning);
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === asstMsgId ? { ...m, reasoning: parsed.content } : m
-                )
-              );
-            } catch {
-              setMessages((prev) =>
-                prev.map((m) =>
-                  m.id === asstMsgId
-                    ? { ...m, reasoning: (m.reasoning || "") + rawReasoning }
-                    : m
-                )
-              );
-            }
           },
           onDelta: (chunk) => {
             if (!firstTokenTs) {
@@ -808,7 +703,6 @@ export default function ChatPlaygroundPage({
                       duration: meta.duration,
                       isCached: !!meta.cached,
                       trace: meta.trace,
-                      agentTimeline: finalizeTimeline(m.agentTimeline || []),
                     }
                     : m
                 )
@@ -820,15 +714,10 @@ export default function ChatPlaygroundPage({
                     ? {
                       ...m,
                       isThinking: false,
-                      agentTimeline: finalizeTimeline(m.agentTimeline || []),
                     }
                     : m
                 )
               );
-            }
-            if (dreamSeed && !dreamResponseHandledRef.current && accumulatedContent.trim()) {
-              dreamResponseHandledRef.current = true;
-              onDreamResponse?.(dreamSeed, accumulatedContent);
             }
           },
           onError: (err) => {
@@ -970,13 +859,14 @@ export default function ChatPlaygroundPage({
   })();
 
   return (
-    <div className="dream-chat-world ownagent-control-workspace flex-1 flex h-full w-full min-w-0 overflow-hidden relative font-sans cyber-grid-canvas">
+    <div className={`dream-chat-world ownagent-control-workspace ${activeTraceDrawer ? "has-run-observer" : "observer-collapsed"} flex-1 flex h-full w-full min-w-0 overflow-hidden relative font-sans cyber-grid-canvas`}>
       <style>{`
         .dream-chat-world{isolation:isolate;background:radial-gradient(ellipse at 18% 18%,rgba(102,78,205,.20),transparent 34%),radial-gradient(ellipse at 78% 78%,rgba(40,116,164,.16),transparent 38%),linear-gradient(135deg,#090d24 0%,#11152f 48%,#0a1730 100%);color:#e9eaff}
         .dream-chat-world:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(210,202,255,.48) .7px,transparent .9px),radial-gradient(rgba(103,232,249,.28) .8px,transparent 1px);background-size:31px 31px,53px 53px;background-position:0 0,17px 23px;mask-image:linear-gradient(180deg,rgba(0,0,0,.9),transparent 94%)}
         .dream-chat-world:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:58%;height:48%;left:20%;top:26%;background:radial-gradient(ellipse,rgba(124,58,237,.12),transparent 70%);filter:blur(42px)}
         .ownagent-control-workspace .dream-chat-history{position:absolute;left:0;top:0;bottom:0;z-index:35;box-shadow:18px 0 45px rgba(0,0,0,.28)}
         .ownagent-control-workspace .dream-chat-main{flex:0 0 46%;width:46%;min-width:320px;border-right:1px solid rgba(174,164,255,.18)}
+        .ownagent-control-workspace.observer-collapsed .dream-chat-main{flex:1 1 100%;width:100%;border-right:0}
         .ownagent-control-workspace .trace-cosmos{flex:1 1 54%;width:54%;min-width:0;max-width:none;height:100%;border-left:1px solid rgba(111,133,255,.22);box-shadow:-20px 0 60px rgba(0,0,0,.18)}
         .ownagent-control-workspace .dream-chat-toolbar{padding-left:18px;padding-right:18px}
         .ownagent-control-workspace .dream-chat-scroll{padding-left:14px;padding-right:14px}
@@ -1005,6 +895,7 @@ export default function ChatPlaygroundPage({
         .dream-chat-world .dream-muted{color:rgba(204,211,243,.62)!important}
         .dream-chat-world .dream-empty-title{color:#f1efff}
         @media(max-width:900px){.ownagent-control-workspace{height:auto;min-height:100%;overflow-y:auto;overflow-x:hidden;flex-direction:column}.ownagent-control-workspace .dream-chat-main{flex:0 0 62vh;width:100%;min-width:0;border-right:0;border-bottom:1px solid rgba(174,164,255,.18)}.ownagent-control-workspace .trace-cosmos{flex:0 0 auto;width:100%;height:auto!important;min-height:680px;border-left:0;border-top:1px solid rgba(111,133,255,.22)}.ownagent-control-workspace .dream-chat-history{position:absolute;top:0;bottom:auto;height:62vh;width:256px!important}}
+        @media(max-width:900px){.ownagent-control-workspace.observer-collapsed .dream-chat-main{flex:0 0 62vh;width:100%}}
         @media(prefers-reduced-motion:no-preference){.dream-chat-world .dream-user-bubble,.dream-chat-world .dream-assistant-bubble{animation:dreamMessageIn .38s cubic-bezier(.2,.7,.2,1) both}@keyframes dreamMessageIn{from{opacity:0;transform:translateY(7px)}to{opacity:1;transform:translateY(0)}}}
         @media(prefers-reduced-motion:reduce){.dream-chat-world *{animation:none!important;transition:none!important}}
       `}</style>
@@ -1104,18 +995,6 @@ export default function ChatPlaygroundPage({
 
           {/* 当前模型真实连接状态胶囊与设置快捷入口 */}
           <div className="flex items-center gap-2">
-            {/* Only show a workflow label when the backend actually matched one. */}
-            {(() => {
-              const latestAsst = messages.slice().reverse().find((m) => m.role === "assistant");
-              const matchedWorkflow = latestAsst?.traceSteps?.[2]?.matchedWorkflowName;
-              return matchedWorkflow ? (
-                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-600">
-                  <Layers className="w-3.5 h-3.5 text-slate-500" />
-                  <span>工作流：{matchedWorkflow}</span>
-                </div>
-              ) : null;
-            })()}
-
             <div
               className={`flex items-center gap-1.5 px-3 py-1 bg-white/95 border rounded-full text-xs shadow-2xs transition-all ${modelProbe?.connected
                 ? "border-emerald-200 text-emerald-800"
@@ -1163,36 +1042,17 @@ export default function ChatPlaygroundPage({
                   const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
                   setActiveTraceDrawer({
                     messageId: targetMsg ? targetMsg.id : "finops-global",
-                    defaultTab: "flow",
                   });
-                  setTraceLayoutMode("split");
                 }
               }}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition cursor-pointer border ${activeTraceDrawer
                 ? "bg-blue-50 text-blue-700 border-blue-200"
                 : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90"
                 }`}
-              title="切换显示右侧实时执行流程与决策瀑布记录"
+              title="显示或收起本次真实运行记录"
             >
               <Activity className="w-3.5 h-3.5 text-blue-600" />
-              <span>{activeTraceDrawer ? "收起决策透视" : "全链路决策透视"}</span>
-            </button>
-
-            {/* 开销与缓存统计按钮 */}
-            <button
-              onClick={() => {
-                const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
-                setActiveTraceDrawer({
-                  messageId: targetMsg ? targetMsg.id : "finops-global",
-                  defaultTab: "finops",
-                });
-                setTraceLayoutMode("split");
-              }}
-              className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-full text-xs font-semibold text-slate-700 shadow-2xs transition cursor-pointer"
-              title="查看历史问答缓存与开销节省记录"
-            >
-              <Coins className="w-3.5 h-3.5 text-emerald-600" />
-              <span>开销与缓存统计</span>
+              <span>{activeTraceDrawer ? "收起执行记录" : "显示执行记录"}</span>
             </button>
 
             {onNavigateSettings && (
@@ -1625,8 +1485,6 @@ export default function ChatPlaygroundPage({
                                         onClick={() =>
                                           setActiveTraceDrawer({
                                             messageId: msg.id,
-                                            defaultTab: "knowledge",
-                                            highlightCitationIndex: idx,
                                           })
                                         }
                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-mono bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 cursor-pointer transition"
@@ -1723,7 +1581,6 @@ export default function ChatPlaygroundPage({
                                   onClick={() =>
                                     setActiveTraceDrawer({
                                       messageId: msg.id,
-                                      defaultTab: "knowledge",
                                     })
                                   }
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100/90 text-emerald-800 border border-emerald-200/80 text-[11px] font-semibold transition cursor-pointer shadow-2xs"
@@ -1794,7 +1651,6 @@ export default function ChatPlaygroundPage({
                                   onClick={() =>
                                     setActiveTraceDrawer({
                                       messageId: msg.id,
-                                      defaultTab: "finops",
                                     })
                                   }
                                   className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-full font-bold transition cursor-pointer"
@@ -1818,7 +1674,6 @@ export default function ChatPlaygroundPage({
                                     onClick={() =>
                                       setActiveTraceDrawer({
                                         messageId: msg.id,
-                                        defaultTab: "flow",
                                       })
                                     }
                                     className="inline-flex items-center gap-1 text-slate-500 hover:text-blue-600 font-medium hover:underline transition cursor-pointer"
@@ -1976,14 +1831,14 @@ export default function ChatPlaygroundPage({
         )}
       </div>
 
-      {/* The workspace observer reads the persisted Run, never the legacy synthetic timeline. */}
-      <BuiltinRunObserver
+      {/* Show the observer only when explicitly opened or when a message links to its Run. */}
+      {activeTraceDrawer && <BuiltinRunObserver
         message={
           activeTraceDrawer && activeTraceDrawer.messageId !== "finops-global"
             ? (messages.find((item) => item.id === activeTraceDrawer.messageId) || latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
             : (latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
         }
-      />
+      />}
 
       {isExternalRunsOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-950/40 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="外部 Agent 执行记录">
@@ -1997,17 +1852,6 @@ export default function ChatPlaygroundPage({
         </div>
       )}
 
-      {/* 业务流水线执行窗口 */}
-      <WorkflowExecutionModal
-        isOpen={!!runningWorkflow}
-        onClose={() => setRunningWorkflow(null)}
-        workflow={runningWorkflow}
-        onSwitchToChat={(prompt) => {
-          setInputMessage(prompt);
-          setRunningWorkflow(null);
-          textareaRef.current?.focus();
-        }}
-      />
     </div>
   );
 }

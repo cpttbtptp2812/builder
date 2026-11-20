@@ -1,61 +1,32 @@
 # OwnAgent — AI Agent Observability & Debugging
 
-OwnAgent is a developer workbench for understanding what an AI Agent actually did. Use the built-in Agent for your own tasks, or connect an Agent you already built and inspect its real execution without moving it into OwnAgent or routing model traffic through OwnAgent.
+OwnAgent is a practical workbench for running an Agent, inspecting what it actually did, and debugging failed executions.
 
-### Run Explorer data sources
+The Studio is intentionally organized around three entry points:
 
-The Run Explorer workspace has two explicit views: **External Agent Runs** are loaded from the authenticated persisted Run / Trace APIs; **Built-in chat history** is loaded from the existing `/api/chat/sessions` and `/api/chat/messages` endpoints and displays the persisted assistant messages, trace steps and tool calls. These remain distinct persistence models: built-in chat sessions are not assigned synthetic Run IDs or Span IDs.
+1. **接入中心** — run the complete Python example: model decision → OwnAgent Action → Local Worker → model answer.
+2. **运行观测** — inspect the external Agent's real model and Action spans; external Agent Runs are the default view.
+3. **智能工作台** — use the built-in chat separately; its legacy conversation history is not the primary integration path.
 
-## Two ways to use the workbench
+## Core workflow
 
-- **Built-in Agent:** chat in the OwnAgent workbench. The existing conversation and execution inspector stay together.
-- **External Agent:** add the OwnAgent Python SDK or export OpenTelemetry spans. Your Agent continues to run in its own application; OwnAgent receives telemetry as a side channel.
+Run `python examples/demo_agent.py` → the model selects a tool → OwnAgent validates and creates an Action → the Local Worker executes the registered Python function → the result returns to the model → inspect the resulting Run and Spans in Studio.
 
-**Current preview boundary:** the built-in chat still uses its existing live SSE execution timeline, while external Agent traces are persisted and viewed in the in-workbench external-run panel. These two sources are not yet normalized into one persistent Conversation / Run history. The target shared model is Project → Agent → Conversation / Session → Run → model calls, tool calls, events, and errors; unifying the built-in chat persistence with that model remains a core next phase.
+External Agent Runs use the authenticated Trace API and are the primary product path. Built-in chat runs remain a separate optional view; OwnAgent does not fabricate IDs or merge unrelated data sources.
 
-## What you can inspect
+## What is recorded
 
-- Every recorded Run and its parent/child span relationships.
-- Actual model requests and responses when the integration explicitly captures them.
-- Tool calls, arguments, and returned results when instrumented.
-- Provider-reported token usage, timestamps, duration, status, and errors.
-- Historical traces and live updates for an in-progress trace.
-- Action Runtime lifecycle events when an Agent delegates tool execution to OwnAgent.
+- Run status, start/end timestamps, and measured duration.
+- Model/provider metadata and provider-reported token usage, when supplied.
+- Model request/response payloads when content capture is explicitly enabled.
+- Tool names, arguments, results, and errors when the integration reports them.
+- Span parent/child relationships and persisted execution events.
 
-Missing data stays missing. OwnAgent does not invent prompts, token counts, confidence scores, or execution stages. Prompt/response capture is opt-in; hidden model chain-of-thought is not collected or displayed.
+Missing evidence stays missing: unavailable token counts, prompt bodies, or timestamps are shown as not reported rather than estimated. Hidden model chain-of-thought is not collected or displayed.
 
-## Connect an external Python Agent
+**Privacy:** prompt/response capture is disabled by default. Enable `OWNAGENT_TRACE_CAPTURE_CONTENT=1` only in a controlled debugging environment, review/redact traces before sharing, and turn it off afterwards.
 
-The backend and SDK live in [cpttbtptp2812/ownsudo](https://github.com/cpttbtptp2812/ownsudo). Start with the [Python SDK guide](https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python).
-
-```bash
-git clone https://github.com/cpttbtptp2812/ownsudo.git
-cd ownsudo/sdk/python
-python -m pip install -e .
-```
-
-Configure `OWNAGENT_BASE_URL` and an Agent API key. In this early preview, the first Agent API key is provisioned by the backend bootstrap settings; self-service key management in Studio is not yet available. The SDK guide documents the setup.
-
-```bash
-export OWNAGENT_BASE_URL=http://localhost:8080
-export OWNAGENT_AGENT_API_KEY=oa_live_...
-```
-
-Run the external Agent example:
-
-```bash
-export OPENAI_API_KEY=...
-export OPENAI_MODEL=...
-python examples/observability_agent.py
-```
-
-The example sends model traffic directly to an OpenAI-compatible provider and separately reports spans to OwnAgent. It records actual provider usage when present. To persist exact prompt messages, model responses, tool arguments, and tool results, explicitly opt in with `OWNAGENT_TRACE_CAPTURE_CONTENT=1` and review/redact sensitive data.
-
-## Where to find external runs in Studio
-
-Open **运行观测** from the Studio top navigation, enter the Agent API key, and load persisted Runs. The **智能工作台** also retains the external Agent entry point. External traces are scoped to the Agent identity represented by that key; they are not automatically merged into the built-in chat history unless the integration supplies matching session identifiers.
-
-## Local Studio development
+## Run the Studio locally
 
 Requirements: Node.js 20+.
 
@@ -64,26 +35,56 @@ npm install
 npm run dev
 ```
 
-Set `VITE_API_BASE` if the backend is not served from the same origin.
+If the backend is not served from the same origin, set `VITE_API_BASE` to its base URL.
+
+Run the frontend checks:
 
 ```bash
 npm run test:timeline
 npm run check:production
 ```
 
-## Current preview boundaries
+## Start the backend
 
-- External Agent instrumentation is explicit. OwnAgent does not automatically intercept arbitrary provider traffic.
-- The current Studio preview uses an Agent API key to read external traces; self-service project/key provisioning is future work.
-- Prompt and response bodies are disabled by default.
-- The Python SDK is synchronous and the current OTLP receiver accepts HTTP JSON; broader protocol/framework compatibility is future work.
-- Replay, safe side-effect-aware retry, async SDK, and additional framework auto-instrumentation remain future work.
+The backend, database migrations, Python SDK, and runnable examples live in [cpttbtptp2812/ownsudo](https://github.com/cpttbtptp2812/ownsudo).
+
+Follow its [backend setup guide](https://github.com/cpttbtptp2812/ownsudo#local-development) to configure Java, Maven, MySQL, database credentials, and model-provider settings. Do not put real credentials in source control.
+
+## Connect an external Agent
+
+External Agent model traffic continues to go directly to its existing provider. OwnAgent receives telemetry as a side channel; it does not proxy or replace the Agent's model client.
+
+Start with the [Python SDK guide](https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python):
+
+```bash
+git clone https://github.com/cpttbtptp2812/ownsudo.git
+cd ownsudo/sdk/python
+python -m pip install -e .
+```
+
+The current preview provisions an Agent API key through backend bootstrap configuration; self-service key management is not yet available. See the SDK guide for the exact setup and key handling.
+
+Run the included example:
+
+```bash
+export OWNAGENT_BASE_URL=http://localhost:8080
+export OWNAGENT_AGENT_API_KEY=oa_live_...
+export OPENAI_API_KEY=...
+export OPENAI_MODEL=...
+python examples/observability_agent.py
+```
+
+To view the resulting external Runs, open **运行观测 → 外部 Agent Runs**, enter the Agent API key, and load the records.
+
+## Honest preview boundaries
+
+- External Agent instrumentation is explicit; arbitrary provider traffic is not intercepted automatically.
+- The built-in chat records its own persisted Run / Span / Event data. Older chat messages created before Run recording are not retroactively converted into synthetic Runs.
+- Prompt and response bodies are opt-in; tool evidence appears only when the execution path records it.
+- The Python SDK is synchronous. Framework-specific automatic instrumentation is provided by upstream OpenTelemetry/OpenInference packages where supported.
+- Replay, safe side-effect-aware retry, and self-service project/API-key management are not part of the current core workflow.
 
 ## Repositories
 
 - [Studio frontend](https://github.com/cpttbtptp2812/builder)
 - [Backend, Python SDK, and examples](https://github.com/cpttbtptp2812/ownsudo)
-
-### Promptfoo report history
-
-The Integration Hub imports exported Promptfoo JSON / JSONL reports using an Agent API key. You may optionally provide a Run ID; the backend verifies that it belongs to the same Agent before linking the report. Saved reports can be listed and reopened later. OwnAgent does not run arbitrary Promptfoo CLI projects on the server.
