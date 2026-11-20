@@ -42,7 +42,8 @@ import {
   SessionItem,
 } from "../../services/api";
 import { useToast } from "@/context/ToastContext";
-import { TraceInspectorDrawer, ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
+import type { ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
+import BuiltinRunObserver from "@/components/chat/BuiltinRunObserver";
 import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
 import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
@@ -1975,40 +1976,14 @@ export default function ChatPlaygroundPage({
         )}
       </div>
 
-      {/* Trace Inspector Drawer (支持 split 分栏与 drawer 抽屉双模式切换) */}
-      <TraceInspectorDrawer
-        isOpen={true}
-        onClose={() => setActiveTraceDrawer(null)}
-        layoutMode="split"
-        onToggleLayout={() => setTraceLayoutMode("split")}
-        defaultTab={activeTraceDrawer?.defaultTab || "flow"}
-        highlightCitationIndex={activeTraceDrawer?.highlightCitationIndex}
-        activeStepId={focusedStepId}
-        onSelectStep={(stepId) => setFocusedStepId(stepId)}
-        onRetryRun={() => {
-          const target =
-            (activeTraceDrawer ? messages.find((item) => item.id === activeTraceDrawer.messageId) : undefined) ||
-            messages.slice().reverse().find((item) => item.role === "assistant");
-          const index = target ? messages.findIndex((item) => item.id === target.id) : -1;
-          const previousUser = index > 0 ? messages.slice(0, index).reverse().find((item) => item.role === "user") : null;
-          const prompt = target?.userPrompt || previousUser?.content;
-          if (prompt) handleSend(prompt);
-        }}
+      {/* The workspace observer reads the persisted Run, never the legacy synthetic timeline. */}
+      <BuiltinRunObserver
         message={
-          activeTraceDrawer
-            ? (() => {
-              if (activeTraceDrawer.messageId === "finops-global") return { id: "finops-global", role: "assistant", content: "历史问答缓存与开销统计", userPrompt: "开销与缓存统计", modelName: currentAgent?.model || systemModel || "系统模型", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch: false, traceSteps: {}, trace: { cached: false, totalMs: 0, tokens: 0, savedTokens: 0, savedMs: 0 } } as Message;
-              const targetMsg = messages.find((m) => m.id === activeTraceDrawer.messageId);
-              if (targetMsg) {
-                const msgIdx = messages.findIndex((m) => m.id === activeTraceDrawer.messageId);
-                const prevUserMsg = msgIdx > 0 ? messages.slice(0, msgIdx).reverse().find((m) => m.role === "user") : null;
-                return { ...targetMsg, userPrompt: targetMsg.userPrompt || prevUserMsg?.content || "", modelName: targetMsg.modelName || currentAgent?.model || systemModel || "deepseek-chat", sessionId: targetMsg.sessionId || currentSessionId, enableRAG, enableThinking, enableWebSearch };
-              }
-              return messages.slice().reverse().find((m) => m.role === "assistant") || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message;
-            })()
-            : latestAssistantTraceMessage || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message
+          activeTraceDrawer && activeTraceDrawer.messageId !== "finops-global"
+            ? (messages.find((item) => item.id === activeTraceDrawer.messageId) || latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
+            : (latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
         }
-            />
+      />
 
       {isExternalRunsOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-950/40 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="外部 Agent 执行记录">
