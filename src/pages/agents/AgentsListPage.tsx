@@ -391,9 +391,10 @@ export default function AgentsListPage({
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl shadow-md shadow-blue-500/20"
                 >
-                  保存智能体
+                  {isSaving ? "正在保存..." : "保存 Agent"}
                 </button>
               </div>
             </div>
