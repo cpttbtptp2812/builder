@@ -4,15 +4,15 @@ OwnAgent is a practical workbench for running an Agent, inspecting what it actua
 
 The Studio is intentionally organized around three entry points:
 
-1. **智能工作台** — run the built-in Agent and inspect its live execution.
-2. **运行观测** — review persisted built-in runs or inspect traces sent by an external Agent.
-3. **接入中心** — connect an existing Agent using the Python SDK or OpenTelemetry.
+1. **接入中心** — run the complete Python example: model decision → OwnAgent Action → Local Worker → model answer.
+2. **运行观测** — inspect the external Agent's real model and Action spans; external Agent Runs are the default view.
+3. **智能工作台** — use the built-in chat separately; its legacy conversation history is not the primary integration path.
 
 ## Core workflow
 
-Send a task in the built-in workbench → watch the real Run and Span data arrive → inspect model and tool evidence → open the saved Run later to investigate it.
+Run `python examples/demo_agent.py` → the model selects a tool → OwnAgent validates and creates an Action → the Local Worker executes the registered Python function → the result returns to the model → inspect the resulting Run and Spans in Studio.
 
-The built-in chat Run API and external Agent Trace API remain separate data sources. They are presented in one Run Explorer, but OwnAgent does not fabricate IDs or merge unrelated sessions.
+External Agent Runs use the authenticated Trace API and are the primary product path. Built-in chat runs remain a separate optional view; OwnAgent does not fabricate IDs or merge unrelated data sources.
 
 ## What is recorded
 
