@@ -168,6 +168,7 @@ export interface AgentItem {
   temperature: number;
   systemPrompt: string;
   toolsCount: number;
+  selectedTools?: string[];
   kbCount: number;
   enableMemory: boolean;
   status: "PUBLISHED" | "DRAFT" | "OFFLINE";
