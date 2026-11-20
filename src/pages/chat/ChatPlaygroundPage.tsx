@@ -949,13 +949,14 @@ export default function ChatPlaygroundPage({
   })();
 
   return (
-    <div className="dream-chat-world ownagent-control-workspace flex-1 flex h-full w-full min-w-0 overflow-hidden relative font-sans cyber-grid-canvas">
+    <div className={`dream-chat-world ownagent-control-workspace ${activeTraceDrawer ? "has-run-observer" : "observer-collapsed"} flex-1 flex h-full w-full min-w-0 overflow-hidden relative font-sans cyber-grid-canvas`}>
       <style>{`
         .dream-chat-world{isolation:isolate;background:radial-gradient(ellipse at 18% 18%,rgba(102,78,205,.20),transparent 34%),radial-gradient(ellipse at 78% 78%,rgba(40,116,164,.16),transparent 38%),linear-gradient(135deg,#090d24 0%,#11152f 48%,#0a1730 100%);color:#e9eaff}
         .dream-chat-world:before{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;background-image:radial-gradient(rgba(210,202,255,.48) .7px,transparent .9px),radial-gradient(rgba(103,232,249,.28) .8px,transparent 1px);background-size:31px 31px,53px 53px;background-position:0 0,17px 23px;mask-image:linear-gradient(180deg,rgba(0,0,0,.9),transparent 94%)}
         .dream-chat-world:after{content:"";position:absolute;z-index:-1;pointer-events:none;width:58%;height:48%;left:20%;top:26%;background:radial-gradient(ellipse,rgba(124,58,237,.12),transparent 70%);filter:blur(42px)}
         .ownagent-control-workspace .dream-chat-history{position:absolute;left:0;top:0;bottom:0;z-index:35;box-shadow:18px 0 45px rgba(0,0,0,.28)}
         .ownagent-control-workspace .dream-chat-main{flex:0 0 46%;width:46%;min-width:320px;border-right:1px solid rgba(174,164,255,.18)}
+        .ownagent-control-workspace.observer-collapsed .dream-chat-main{flex:1 1 100%;width:100%;border-right:0}
         .ownagent-control-workspace .trace-cosmos{flex:1 1 54%;width:54%;min-width:0;max-width:none;height:100%;border-left:1px solid rgba(111,133,255,.22);box-shadow:-20px 0 60px rgba(0,0,0,.18)}
         .ownagent-control-workspace .dream-chat-toolbar{padding-left:18px;padding-right:18px}
         .ownagent-control-workspace .dream-chat-scroll{padding-left:14px;padding-right:14px}
