@@ -11,35 +11,24 @@ type GuideKey = "sdk" | "otel" | "openinference" | "langchain" | "agents" | "mcp
 
 const guides: Record<GuideKey, { title: string; subtitle: string; install: string; code: string }> = {
   sdk: {
-    title: "OwnAgent Python SDK",
-    subtitle: "适合自己编写 Agent、需要显式记录模型调用和工具执行的场景",
-    install: "python -m pip install -e ./sdk/python  # 在克隆的 ownsudo 仓库根目录执行",
-    code: `import os
-from ownagent import OwnAgentClient
+    title: "OwnAgent Python SDK · 完整业务示例",
+    subtitle: "先跑通一条真实链路：模型决策 → OwnAgent Action → 本地 Python Worker 执行 → 工具结果回传模型 → 最终回答与 Trace。",
+    install: "cd sdk/python && python -m pip install -e .",
+    code: `# 后端启动前，在 ownsudo 仓库根目录配置（本地 profile 首次启动会创建 Agent）
+export OWNAGENT_BOOTSTRAP_AGENT_ID=ownagent-local-demo
+export OWNAGENT_BOOTSTRAP_AGENT_API_KEY="oa_live_$(openssl rand -hex 32)"
+export OWNAGENT_TOOL_ADMIN_API_KEY="$(openssl rand -hex 32)"
+mvn spring-boot:run
 
-BASE_URL = os.environ["OWNAGENT_BASE_URL"]
-API_KEY = os.environ["OWNAGENT_AGENT_API_KEY"]
-
-with OwnAgentClient(BASE_URL, API_KEY) as ownagent:
-    with ownagent.agent_run("research-agent", session_id="session-001") as run:
-        # 模型调用：把 Provider 实际返回的 usage 写入 Span
-        with run.span(
-            "chat.completions",
-            span_kind="CLIENT",
-            attributes={"provider": "openai", "model": "gpt-4.1"},
-        ) as span:
-            response = call_your_model()
-            usage = response.usage
-            if usage:
-                span.set_usage(
-                    input_tokens=usage.prompt_tokens,
-                    output_tokens=usage.completion_tokens,
-                )
-
-        # 工具执行：记录真实参数、结果和异常
-        with run.span("tool.search", attributes={"tool.name": "search"}) as span:
-            result = search_documents("query")
-`,
+# 第二个终端：在 sdk/python 目录安装并运行
+cd sdk/python
+python -m pip install -e .
+export OWNAGENT_BASE_URL=http://localhost:8080
+export OWNAGENT_AGENT_API_KEY="复制上面的 OWNAGENT_BOOTSTRAP_AGENT_API_KEY"
+export OWNAGENT_TOOL_ADMIN_API_KEY="复制上面的 OWNAGENT_TOOL_ADMIN_API_KEY"
+export OPENAI_API_KEY="你的模型 API Key"
+export OPENAI_MODEL="gpt-4.1-mini"
+python examples/demo_agent.py`,
   },
   otel: {
     title: "OpenTelemetry / 任意 Agent 框架",
