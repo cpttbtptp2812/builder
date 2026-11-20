@@ -18,7 +18,6 @@ import {
   Settings,
   Activity,
   ExternalLink,
-  Coins,
   Zap,
   Layers,
   ShieldAlert,
@@ -242,11 +241,7 @@ export default function ChatPlaygroundPage({
   });
 
   // 全链路执行分析与知识溯源面板 (支持左右分栏 split 与浮层抽屉 drawer 自由切换)
-  const [activeTraceDrawer, setActiveTraceDrawer] = useState<{
-    messageId: string;
-    defaultTab: "lifecycle" | "waterfall" | "knowledge" | "reasoning" | "finops";
-    highlightCitationIndex?: number;
-  } | null>(null);
+  const [activeTraceDrawer, setActiveTraceDrawer] = useState<{ messageId: string } | null>(null);
   const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
   const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
   const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
@@ -601,7 +596,6 @@ export default function ChatPlaygroundPage({
     // 用户发起提问时，右侧处理流程实时固定展开并实时显示 (左右分栏协同，默认呈现决策瀑布流)
     setActiveTraceDrawer({
       messageId: asstMsgId,
-      defaultTab: "flow",
     });
 
     const abortController = new AbortController();
@@ -1148,7 +1142,6 @@ export default function ChatPlaygroundPage({
                   const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
                   setActiveTraceDrawer({
                     messageId: targetMsg ? targetMsg.id : "finops-global",
-                    defaultTab: "flow",
                   });
                 }
               }}
@@ -1592,8 +1585,6 @@ export default function ChatPlaygroundPage({
                                         onClick={() =>
                                           setActiveTraceDrawer({
                                             messageId: msg.id,
-                                            defaultTab: "knowledge",
-                                            highlightCitationIndex: idx,
                                           })
                                         }
                                         className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10.5px] font-mono bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200 hover:border-indigo-200 cursor-pointer transition"
@@ -1690,7 +1681,6 @@ export default function ChatPlaygroundPage({
                                   onClick={() =>
                                     setActiveTraceDrawer({
                                       messageId: msg.id,
-                                      defaultTab: "knowledge",
                                     })
                                   }
                                   className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 hover:bg-emerald-100/90 text-emerald-800 border border-emerald-200/80 text-[11px] font-semibold transition cursor-pointer shadow-2xs"
@@ -1761,7 +1751,6 @@ export default function ChatPlaygroundPage({
                                   onClick={() =>
                                     setActiveTraceDrawer({
                                       messageId: msg.id,
-                                      defaultTab: "finops",
                                     })
                                   }
                                   className="inline-flex items-center gap-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/80 px-2 py-0.5 rounded-full font-bold transition cursor-pointer"
@@ -1785,7 +1774,6 @@ export default function ChatPlaygroundPage({
                                     onClick={() =>
                                       setActiveTraceDrawer({
                                         messageId: msg.id,
-                                        defaultTab: "flow",
                                       })
                                     }
                                     className="inline-flex items-center gap-1 text-slate-500 hover:text-blue-600 font-medium hover:underline transition cursor-pointer"
