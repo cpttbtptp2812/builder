@@ -37,7 +37,7 @@ import {
   MessageOutlined,
   SettingOutlined,
   DeploymentUnitOutlined,
-  ActivityOutlined,
+  LineChartOutlined,
 } from "@ant-design/icons";
 
 export type ViewMode =
@@ -224,7 +224,7 @@ export default function App() {
   };
 
   // 导航项映射
-  const navValue = currentView === "runs" || currentView === "integrations" ? currentView : "chat";
+  const navValue = currentView === "chat" || currentView === "runs" || currentView === "integrations" ? currentView : null;
 
   // 顶栏滑动高光胶囊指示器 (Apple / Linear 级顺滑滑动物理反馈)
   const navContainerRef = useRef<HTMLDivElement | null>(null);
@@ -233,13 +233,13 @@ export default function App() {
 
   const navItems = [
     { label: "智能工作台", value: "chat", icon: <MessageOutlined /> },
-    { label: "运行观测", value: "runs", icon: <ActivityOutlined /> },
+    { label: "运行观测", value: "runs", icon: <LineChartOutlined /> },
     { label: "接入中心", value: "integrations", icon: <DeploymentUnitOutlined /> },
   ];
 
   useEffect(() => {
     const activeKey = navValue;
-    const targetEl = navItemRefs.current[activeKey];
+    const targetEl = activeKey ? navItemRefs.current[activeKey] : null;
     if (targetEl && navContainerRef.current) {
       const containerRect = navContainerRef.current.getBoundingClientRect();
       const targetRect = targetEl.getBoundingClientRect();
@@ -355,6 +355,7 @@ export default function App() {
                 boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(99, 102, 241, 0.1)",
                 transition: "transform 0.28s cubic-bezier(0.16, 1, 0.3, 1), width 0.28s cubic-bezier(0.16, 1, 0.3, 1)",
                 pointerEvents: "none",
+                opacity: navValue ? 1 : 0,
                 zIndex: 1,
               }}
             />
