@@ -84,7 +84,7 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
   initialChatRunId?: string | null;
 }) {
   const [apiKey, setApiKey] = useState("");
-  const [viewMode, setViewMode] = useState<"external" | "chat">(initialChatSessionId ? "chat" : "external");
+  const [viewMode, setViewMode] = useState<"external" | "chat">("chat");
   const [chatSessions, setChatSessions] = useState<any[]>([]);
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(initialChatSessionId ?? null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -463,6 +463,13 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
       setChatLoading(false);
     }
   };
+
+  // Built-in chat is the default path: opening Run Explorer should show the
+  // platform's own persisted runs without requiring an external Agent API key.
+  useEffect(() => {
+    if (initialChatSessionId) return;
+    void loadInternalChats();
+  }, []);
 
   useEffect(() => {
     if (!selectedChatRunId || selectedChatRunDetail?.run?.status !== "RUNNING") return;
