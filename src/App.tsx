@@ -56,7 +56,7 @@ export default function App() {
   const [navDirection, setNavDirection] = useState<"forward" | "backward">("forward");
 
   const handleNavChange = (newView: ViewMode) => {
-    const order: Record<string, number> = { chat: 0, runs: 1, integrations: 2, workflows: 3, designer: 4, knowledge: 5, agents: 6, tools: 7, settings: 8, evaluation: 9 };
+    const order: Record<string, number> = { agents: 0, chat: 1, runs: 2, integrations: 3, workflows: 4, designer: 5, knowledge: 6, tools: 7, settings: 8, evaluation: 9 };
     const curIdx = order[currentView] ?? 0;
     const newIdx = order[newView] ?? 0;
     if (newIdx > curIdx) {
@@ -123,37 +123,43 @@ export default function App() {
       const saved = await saveAgentApi(updated);
       setAgents((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
       if (currentAgent?.id === saved.id) setCurrentAgent(saved);
-    } catch {
-      setAgents((prev) => prev.map((a) => (a.id === updated.id ? updated : a)));
+      toast.success("Agent 配置已保存");
+    } catch (err) {
+      console.error("Agent update failed", err);
+      toast.error("Agent 保存失败，请检查后端连接后重试");
+      throw err;
     }
   };
 
   const handleDeleteAgent = async (id: string) => {
     if (agents.length <= 1) {
-      toast.warning("系统至少需保留一个可用智能体", "无法删除");
+      toast.warning("至少保留一个 Agent", "无法删除");
       return;
     }
     try {
       await deleteAgentApi(id);
-      toast.success("智能体已彻底移除", "删除成功");
+      const filtered = agents.filter((a) => a.id !== id);
+      setAgents(filtered);
+      if (currentAgent?.id === id) {
+        setCurrentAgent(filtered.length > 0 ? filtered[0] : null);
+      }
+      toast.success("Agent 已删除");
     } catch (err) {
-      console.warn("Delete API call", err);
-    }
-    const filtered = agents.filter((a) => a.id !== id);
-    setAgents(filtered);
-    if (currentAgent?.id === id) {
-      setCurrentAgent(filtered.length > 0 ? filtered[0] : null);
+      console.error("Agent delete failed", err);
+      toast.error("Agent 删除失败，数据未更改");
     }
   };
 
   const handleCreateAgent = async (newAgent: AgentItem) => {
     try {
       const saved = await saveAgentApi(newAgent);
-      setAgents([saved, ...agents]);
+      setAgents((prev) => [saved, ...prev]);
       setCurrentAgent(saved);
-    } catch {
-      setAgents([newAgent, ...agents]);
-      setCurrentAgent(newAgent);
+      toast.success("Agent 已创建");
+    } catch (err) {
+      console.error("Agent creation failed", err);
+      toast.error("Agent 创建失败，请检查后端连接后重试");
+      throw err;
     }
   };
 
