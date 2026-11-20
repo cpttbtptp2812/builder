@@ -26,7 +26,6 @@ import {
   deleteWorkflowApi,
   saveWorkflowApi,
 } from "./services/api";
-import { WorkflowExecutionModal } from "./components/workflow/WorkflowExecutionModal";
 import { useToast } from "./context/ToastContext";
 import {
   Button,
@@ -81,7 +80,6 @@ export default function App() {
   const [initialChatPrompt, setInitialChatPrompt] = useState<
     { prompt: string; autoSend?: boolean } | string | undefined
   >(undefined);
-  const [executingWorkflow, setExecutingWorkflow] = useState<PipelineItem | null>(null);
   const [evaluationMessage, setEvaluationMessage] = useState<any>(null);
 
   // 初始化探测后端健康度并加载业务数据
@@ -537,16 +535,6 @@ export default function App() {
         </div>
       </main>
 
-      <WorkflowExecutionModal
-        isOpen={!!executingWorkflow}
-        onClose={() => setExecutingWorkflow(null)}
-        workflow={executingWorkflow}
-        onSwitchToChat={(prompt) => {
-          setInitialChatPrompt({ prompt, autoSend: true });
-          setCurrentView("chat");
-          setExecutingWorkflow(null);
-        }}
-      />
     </div>
   );
 }
