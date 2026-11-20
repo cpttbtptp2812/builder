@@ -836,7 +836,7 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
               <button onClick={() => void loadInternalChats()} className="text-xs text-indigo-600">刷新</button>
             </div>
             <div className="max-h-[70vh] overflow-auto">
-              {chatSessions.length === 0 ? <p className="px-4 py-10 text-center text-xs text-slate-400">{chatLoading ? "读取中…" : "暂无内置会话"}</p> :
+              {chatSessions.length === 0 ? <p className="px-4 py-10 text-center text-xs leading-5 text-slate-400">{chatLoading ? "正在读取会话…" : "暂无会话。先在智能工作台发送一条消息，这里会自动保存每次运行。"}</p> :
                 chatSessions.map((session: any) => <button key={session.id} onClick={() => { setSelectedChatSessionId(session.id); void loadInternalChatMessages(session.id); void loadInternalChatRuns(session.id); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left hover:bg-slate-50 ${selectedChatSessionId === session.id ? "bg-indigo-50" : "bg-white"}`}>
                   <p className="truncate text-xs font-medium text-slate-800">{session.title || "未命名会话"}</p>
                   <p className="mt-1 truncate font-mono text-[10px] text-slate-400">{session.id}</p>
@@ -845,7 +845,7 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
             </div>
           </section>
           <section className="min-h-[420px] min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white">
-            {!selectedChatSessionId ? <div className="flex h-full items-center justify-center text-xs text-slate-400">选择一条内置会话</div> : (
+            {!selectedChatSessionId ? <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-xs text-slate-400">{chatLoading ? "正在读取运行记录…" : chatSessions.length === 0 ? "还没有运行记录。先去智能工作台发起一次任务。" : "选择一条内置会话查看运行详情"}</div> : (
               <>
                 <div className="border-b border-slate-100 px-5 py-4">
                   <h2 className="text-sm font-semibold">内置 Agent 对话</h2>
