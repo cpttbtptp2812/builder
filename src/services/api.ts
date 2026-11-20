@@ -76,6 +76,8 @@ export async function fetchAgentsApi(): Promise<AgentItem[]> {
       temperature: item.temperature ?? 0.7,
       systemPrompt: item.systemPrompt || "",
       toolsCount: typeof item.toolsCount === "number" ? item.toolsCount : 0,
+      selectedTools: Array.isArray(item.selectedTools) ? item.selectedTools :
+        (typeof item.selectedToolsJson === "string" ? (() => { try { const value = JSON.parse(item.selectedToolsJson); return Array.isArray(value) ? value : undefined; } catch { return undefined; } })() : undefined),
       kbCount: typeof item.kbCount === "number" ? item.kbCount : 0,
       enableMemory: item.enableMemory !== false,
       status: item.status || "PUBLISHED",
@@ -100,6 +102,7 @@ export async function saveAgentApi(agent: Partial<AgentItem>): Promise<AgentItem
       temperature: agent.temperature,
       systemPrompt: agent.systemPrompt,
       toolsCount: typeof agent.toolsCount === "number" ? agent.toolsCount : 0,
+      selectedToolsJson: JSON.stringify(agent.selectedTools ?? []),
       kbCount: typeof agent.kbCount === "number" ? agent.kbCount : 0,
       enableMemory: agent.enableMemory !== false,
       status: agent.status || "PUBLISHED",
@@ -116,11 +119,25 @@ export async function saveAgentApi(agent: Partial<AgentItem>): Promise<AgentItem
     temperature: saved.temperature ?? 0.7,
     systemPrompt: saved.systemPrompt || "",
     toolsCount: typeof saved.toolsCount === "number" ? saved.toolsCount : 0,
+    selectedTools: Array.isArray(saved.selectedTools) ? saved.selectedTools :
+      (typeof saved.selectedToolsJson === "string" ? (() => { try { const value = JSON.parse(saved.selectedToolsJson); return Array.isArray(value) ? value : []; } catch { return []; } })() : []),
     kbCount: typeof saved.kbCount === "number" ? saved.kbCount : 0,
     enableMemory: saved.enableMemory !== false,
     status: saved.status || "PUBLISHED",
     updatedAt: "刚刚",
   };
+}
+
+export interface AgentToolOption {
+  name: string;
+  description: string;
+}
+
+export async function fetchAvailableAgentToolsApi(): Promise<AgentToolOption[]> {
+  const res = await apiFetch("/api/agents/available-tools");
+  if (!res.ok) throw new Error(`Failed to fetch available tools: HTTP ${res.status}`);
+  const data = await res.json();
+  return Array.isArray(data) ? data.filter((item: any) => item && typeof item.name === "string") : [];
 }
 
 export async function deleteAgentApi(id: string): Promise<void> {
