@@ -247,7 +247,6 @@ export default function ChatPlaygroundPage({
     defaultTab: "lifecycle" | "waterfall" | "knowledge" | "reasoning" | "finops";
     highlightCitationIndex?: number;
   } | null>(null);
-  const [traceLayoutMode, setTraceLayoutMode] = useState<"split" | "drawer">("split");
   const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
   const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
   const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
@@ -604,7 +603,6 @@ export default function ChatPlaygroundPage({
       messageId: asstMsgId,
       defaultTab: "flow",
     });
-    setTraceLayoutMode("split");
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -1152,34 +1150,16 @@ export default function ChatPlaygroundPage({
                     messageId: targetMsg ? targetMsg.id : "finops-global",
                     defaultTab: "flow",
                   });
-                  setTraceLayoutMode("split");
                 }
               }}
               className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition cursor-pointer border ${activeTraceDrawer
                 ? "bg-blue-50 text-blue-700 border-blue-200"
                 : "bg-white hover:bg-slate-50 text-slate-700 border-slate-200/90"
                 }`}
-              title="切换显示右侧实时执行流程与决策瀑布记录"
+              title="显示或收起本次真实运行记录"
             >
               <Activity className="w-3.5 h-3.5 text-blue-600" />
-              <span>{activeTraceDrawer ? "收起决策透视" : "全链路决策透视"}</span>
-            </button>
-
-            {/* 开销与缓存统计按钮 */}
-            <button
-              onClick={() => {
-                const targetMsg = messages.slice().reverse().find((m) => m.role === "assistant");
-                setActiveTraceDrawer({
-                  messageId: targetMsg ? targetMsg.id : "finops-global",
-                  defaultTab: "finops",
-                });
-                setTraceLayoutMode("split");
-              }}
-              className="flex items-center gap-1.5 px-3 py-1 bg-white hover:bg-slate-50 border border-slate-200/90 rounded-full text-xs font-semibold text-slate-700 shadow-2xs transition cursor-pointer"
-              title="查看历史问答缓存与开销节省记录"
-            >
-              <Coins className="w-3.5 h-3.5 text-emerald-600" />
-              <span>开销与缓存统计</span>
+              <span>{activeTraceDrawer ? "收起执行记录" : "显示执行记录"}</span>
             </button>
 
             {onNavigateSettings && (
@@ -1963,14 +1943,14 @@ export default function ChatPlaygroundPage({
         )}
       </div>
 
-      {/* The workspace observer reads the persisted Run, never the legacy synthetic timeline. */}
-      <BuiltinRunObserver
+      {/* Show the observer only when explicitly opened or when a message links to its Run. */}
+      {activeTraceDrawer && <BuiltinRunObserver
         message={
           activeTraceDrawer && activeTraceDrawer.messageId !== "finops-global"
             ? (messages.find((item) => item.id === activeTraceDrawer.messageId) || latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
             : (latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
         }
-      />
+      />}
 
       {isExternalRunsOpen && (
         <div className="fixed inset-0 z-[100] bg-slate-950/40 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="外部 Agent 执行记录">
