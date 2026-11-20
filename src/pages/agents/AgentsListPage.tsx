@@ -22,9 +22,9 @@ import { useToast } from "@/context/ToastContext";
 interface AgentsListPageProps {
   agents: AgentItem[];
   onOpenChat: (agent: AgentItem) => void;
-  onUpdateAgent: (updated: AgentItem) => void;
+  onUpdateAgent: (updated: AgentItem) => Promise<void>;
   onDeleteAgent: (id: string) => void;
-  onCreateAgent: (newAgent: AgentItem) => void;
+  onCreateAgent: (newAgent: AgentItem) => Promise<void>;
 }
 
 export default function AgentsListPage({
@@ -37,6 +37,7 @@ export default function AgentsListPage({
   const toast = useToast();
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingAgent, setEditingAgent] = useState<AgentItem | null>(null);
 
   // 表单状态
@@ -75,44 +76,53 @@ export default function AgentsListPage({
     setIsModalOpen(true);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!formName.trim()) {
-      toast.warning("请输入智能体名称", "表单校验未通过");
+      toast.warning("请输入 Agent 名称", "表单校验未通过");
       return;
     }
+    if (isSaving) return;
 
-    if (editingAgent) {
-      onUpdateAgent({
-        ...editingAgent,
-        name: formName,
-        description: formDesc,
-        model: formModel,
-        systemPrompt: formPrompt,
-        temperature: formTemp,
-        toolsCount: formToolsCount,
-        kbCount: formKbCount,
-        enableMemory: formEnableMemory,
-        updatedAt: "刚刚",
-      });
-      toast.success(`智能体【${formName}】配置已更新！`, "更新成功");
-    } else {
-      onCreateAgent({
-        id: `agent-${Date.now().toString().slice(-4)}`,
-        name: formName,
-        description: formDesc,
-        avatarColor: "bg-blue-600",
-        model: formModel,
-        temperature: formTemp,
-        systemPrompt: formPrompt,
-        toolsCount: formToolsCount,
-        kbCount: formKbCount,
-        enableMemory: formEnableMemory,
-        status: "PUBLISHED",
-        updatedAt: "刚刚",
-      });
-      toast.success(`智能体【${formName}】已创建并持久化！`, "创建成功");
+    setIsSaving(true);
+    try {
+      if (editingAgent) {
+        await onUpdateAgent({
+          ...editingAgent,
+          name: formName.trim(),
+          description: formDesc,
+          model: formModel,
+          systemPrompt: formPrompt,
+          temperature: formTemp,
+          toolsCount: formToolsCount,
+          kbCount: formKbCount,
+          enableMemory: formEnableMemory,
+          updatedAt: "刚刚",
+        });
+        toast.success(`Agent【${formName}】配置已保存`);
+      } else {
+        await onCreateAgent({
+          id: `agent-${Date.now().toString().slice(-4)}`,
+          name: formName.trim(),
+          description: formDesc,
+          avatarColor: "bg-blue-600",
+          model: formModel,
+          temperature: formTemp,
+          systemPrompt: formPrompt,
+          toolsCount: formToolsCount,
+          kbCount: formKbCount,
+          enableMemory: formEnableMemory,
+          status: "PUBLISHED",
+          updatedAt: "刚刚",
+        });
+        toast.success(`Agent【${formName}】已创建`);
+      }
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save Agent", error);
+      toast.error("保存失败，数据没有写入。请检查后端连接后重试。");
+    } finally {
+      setIsSaving(false);
     }
-    setIsModalOpen(false);
   };
 
   const filtered = agents.filter(
@@ -381,9 +391,10 @@ export default function AgentsListPage({
                 </button>
                 <button
                   onClick={handleSave}
-                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-500/20"
+                  disabled={isSaving}
+                  className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-60 disabled:cursor-not-allowed rounded-xl shadow-md shadow-blue-500/20"
                 >
-                  保存智能体
+                  {isSaving ? "正在保存..." : "保存 Agent"}
                 </button>
               </div>
             </div>
