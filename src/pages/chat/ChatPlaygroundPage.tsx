@@ -552,12 +552,12 @@ export default function ChatPlaygroundPage({
       newlyCreatedSessionIdRef.current = activeSessionId;
     }
 
-    // 2. 计算生效模型：优先采用系统全局统一对齐的云端配置模型 (如 qwen-plus)
+    // 2. The selected Agent's model is authoritative for this run.
+    // Fall back to the global provider model only when the Agent has no model.
     const effectiveModel =
+      currentAgent?.model?.trim() ||
       systemModel ||
-      (currentAgent?.model && !currentAgent.model.includes("deepseek")
-        ? currentAgent.model
-        : "qwen-plus");
+      "qwen-plus";
 
     const userMsgId = `u-${Date.now()}`;
     const asstMsgId = `a-${Date.now()}`;

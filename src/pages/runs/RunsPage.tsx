@@ -84,7 +84,7 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
   initialChatRunId?: string | null;
 }) {
   const [apiKey, setApiKey] = useState("");
-  const [viewMode, setViewMode] = useState<"external" | "chat">(initialChatSessionId ? "chat" : "external");
+  const [viewMode, setViewMode] = useState<"external" | "chat">("chat");
   const [chatSessions, setChatSessions] = useState<any[]>([]);
   const [selectedChatSessionId, setSelectedChatSessionId] = useState<string | null>(initialChatSessionId ?? null);
   const [chatMessages, setChatMessages] = useState<any[]>([]);
@@ -488,10 +488,15 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
   }, [selectedChatRunId, selectedChatRunDetail?.run?.status]);
 
   useEffect(() => {
-    if (!initialChatSessionId) return;
-    setViewMode("chat");
-    setSelectedChatSessionId(initialChatSessionId);
-    void loadInternalChats(initialChatSessionId, initialChatRunId);
+    if (initialChatSessionId) {
+      setViewMode("chat");
+      setSelectedChatSessionId(initialChatSessionId);
+      void loadInternalChats(initialChatSessionId, initialChatRunId);
+      return;
+    }
+    // Open the platform's own persisted chat runs by default. External Agent
+    // traces remain available in the adjacent tab and still require an API key.
+    void loadInternalChats();
   }, [initialChatSessionId, initialChatRunId]);
 
   const loadRuns = async () => {

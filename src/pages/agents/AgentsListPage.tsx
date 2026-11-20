@@ -174,7 +174,7 @@ export default function AgentsListPage({
         </div>
 
         {/* 智能体卡片网格 (核心复刻 tianyangAgent: rounded-[2rem] + 右上角弥散光圈 + 悬浮动效) */}
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 xl:gap-6">
           {filtered.map((agent) => (
             <div
               key={agent.id}
