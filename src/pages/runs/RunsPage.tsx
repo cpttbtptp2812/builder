@@ -100,7 +100,7 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
   const [selectedDetail, setSelectedDetail] = useState<RunDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [runQuery, setRunQuery] = useState("");
+  const [runQuery, setRunQuery] = useState(() => new URLSearchParams(window.location.search).get("runId") || "");
   const [runStatus, setRunStatus] = useState<"ALL" | "RUNNING" | "COMPLETED" | "ERROR" | "UNKNOWN">("ALL");
   const [detailLoading, setDetailLoading] = useState(false);
   const [spanQuery, setSpanQuery] = useState("");
@@ -512,7 +512,10 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
       const data = await response.json() as RunSummary[];
       if (!Array.isArray(data)) throw new Error("后端返回的数据格式不正确。");
       setRuns(data);
-      const nextId = data.some((run) => run.runId === selectedRunId) ? selectedRunId : data[0]?.runId || null;
+      const requestedRunId = runQuery.trim();
+      const nextId = requestedRunId
+        ? data.find((run) => run.runId === requestedRunId)?.runId || null
+        : data.some((run) => run.runId === selectedRunId) ? selectedRunId : data[0]?.runId || null;
       setSelectedRunId(nextId);
       setSelectedDetail(null);
       if (nextId) await loadRunDetail(nextId, apiKey);
