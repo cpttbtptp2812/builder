@@ -537,23 +537,25 @@ export default function RunsPage({ onClose, initialChatSessionId, initialChatRun
             </div>
             {onClose && <button onClick={onClose} aria-label="关闭外部 Agent 记录" className="rounded-lg p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"><X size={17} /></button>}
           </div>
-          <div className="flex w-full max-w-xl items-center gap-2 sm:w-auto">
-            <div className="relative min-w-0 flex-1">
-              <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <input
-                type="password"
-                value={apiKey}
-                onChange={(event) => setApiKey(event.target.value)}
-                onKeyDown={(event) => { if (event.key === "Enter") void loadRuns(); }}
-                placeholder="Agent API Key"
-                autoComplete="off"
-                className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-64"
-              />
+          {viewMode === "external" && (
+            <div className="flex w-full max-w-xl items-center gap-2 sm:w-auto">
+              <div className="relative min-w-0 flex-1">
+                <KeyRound size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(event) => setApiKey(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter") void loadRuns(); }}
+                  placeholder="Agent API Key"
+                  autoComplete="off"
+                  className="h-10 w-full rounded-lg border border-slate-200 bg-white pl-9 pr-3 text-sm outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 sm:w-64"
+                />
+              </div>
+              <button onClick={() => void loadRuns()} disabled={loading} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50">
+                <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> {loading ? "读取中" : "读取记录"}
+              </button>
             </div>
-            <button onClick={() => void loadRuns()} disabled={loading} className="inline-flex h-10 shrink-0 items-center gap-2 rounded-lg bg-indigo-600 px-4 text-sm font-medium text-white transition hover:bg-indigo-700 disabled:opacity-50">
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> {loading ? "读取中" : "读取记录"}
-            </button>
-          </div>
+          )}
         </div>
       </header>
 
