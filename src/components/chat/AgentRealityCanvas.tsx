@@ -29,11 +29,6 @@ const status: Record<string, {label:string; color:string; icon:React.ElementType
   unknown:{label:"状态未上报",color:"amber",icon:CircleHelp},
 };
 
-const phaseLabels:Record<string,string> = {
-  intent:"理解目标", workflow:"组织行动", context:"获取信息", llm:"模型调用",
-  skill:"执行能力", delivery:"整理交付", closure:"任务收束", degraded:"异常处理", external:"外部事件"
-};
-
 const read = readRealityAttribute;
 const text = (value:any) => {
   if(value===undefined || value===null) return "";
@@ -43,6 +38,24 @@ const text = (value:any) => {
 };
 const messageText = realityMessageText;
 const parseStructured = parseRealityPayload;
+const isInternalReasoningKey = (key: string) => /^(analysis|reasoning|chain_of_thought|chainofthought|internal_thought|thoughts?|scratchpad)/i.test(key);
+const stripInternalReasoning = (value: any): any => {
+  if (Array.isArray(value)) {
+    return value.map(stripInternalReasoning).filter((item) => item !== undefined);
+  }
+  if (!value || typeof value !== "object") return value;
+  const channel = String(value.channel ?? value.type ?? value.kind ?? value.message_type ?? "").toLowerCase();
+  const role = String(value.role ?? "").toLowerCase();
+  if (/(analysis|reasoning|thought|internal)/.test(channel) && (!role || role === "assistant")) {
+    return undefined;
+  }
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(([key]) => !isInternalReasoningKey(key))
+      .map(([key, item]) => [key, stripInternalReasoning(item)])
+      .filter(([, item]) => item !== undefined)
+  );
+};
 const toolOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.tool.name","mcp.tool.name","tool","tool_name","toolName"]) || "");
 const operationOf = (step:AgentStep) => String(read(step.rightDetail,["gen_ai.operation.name","operation","operation_name"]) || "").toLowerCase();
 const adapterOf = (step:AgentStep):AdapterKind => classifyRealityAdapter({
@@ -89,8 +102,8 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
   const inputTokens=read(d,["gen_ai.usage.input_tokens","input_tokens","prompt_tokens"]);
   const outputTokens=read(d,["gen_ai.usage.output_tokens","output_tokens","completion_tokens"]);
   const totalTokens=read(d,["gen_ai.usage.total_tokens","total_tokens","totalTokens"]);
-  const visiblePromptMessages=toRealityMessageList(promptMessages);
-  const visibleModelResponse=parseStructured(modelResponse);
+  const visiblePromptMessages=toRealityMessageList(stripInternalReasoning(parseStructured(promptMessages)));
+  const visibleModelResponse=stripInternalReasoning(parseStructured(modelResponse));
   const decision=read(d,["decision_summary","decisionSummary","action_summary","summary"]);
   const why=read(d,["reason","purpose","explanation"]);
   const nextAction=read(d,["next_action","nextAction","next_step","handoff_target"]);
@@ -99,15 +112,15 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
     <div className="reality-action-summary">
       <div className="reality-summary-orb"><Zap size={18}/></div>
       <div className="min-w-0 flex-1">
-        <div className="reality-eyebrow">OBSERVED EVENT · {adapterMeta[adapter].label}</div>
+        <div className="reality-eyebrow">执行事件 · {adapterMeta[adapter].label}</div>
         <div className="reality-summary-title">{toolOf(step)||step.rightTitle||step.leftTitle}</div>
-        <p>{step.rightSubtitle||step.leftSummary||"执行端未上报说明"}</p>
+        {(step.rightSubtitle||step.leftSummary)&&<p>{step.rightSubtitle||step.leftSummary}</p>}
       </div>
       <div className="reality-duration"><Clock3 size={13}/>{duration}</div>
     </div>
 
     {adapter==="git" && <div className="reality-visual-block">
-      <div className="reality-block-head"><GitBranch size={15}/> 仓库状态空间 <span>GIT ADAPTER</span></div>
+      <div className="reality-block-head"><GitBranch size={15}/> 仓库信息</div>
       <div className="reality-git-target">
         <div><small>仓库</small><strong>{repo?text(repo):"未上报"}</strong></div>
         <div><small>分支</small><strong>{branch?text(branch):"未上报"}</strong></div>
@@ -118,7 +131,7 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
     </div>}
 
     {adapter==="browser" && <div className="reality-visual-block">
-      <div className="reality-block-head"><Globe2 size={15}/> 浏览器现场 <span>COMPUTER USE</span></div>
+      <div className="reality-block-head"><Globe2 size={15}/> 浏览器信息</div>
       {url&&<div className="reality-browser-bar"><span/>{text(url)}</div>}
       {title&&<div className="reality-browser-title">{text(title)}</div>}
       {typeof screenshot==="string"&&/^https?:\/\//i.test(screenshot)&&<img className="reality-screenshot" src={screenshot} alt="Agent captured browser state"/>}
@@ -126,12 +139,12 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
     </div>}
 
     {adapter==="retrieval" && <div className="reality-visual-block">
-      <div className="reality-block-head"><Database size={15}/> 信息检索现场 <span>RETRIEVAL</span></div>
+      <div className="reality-block-head"><Database size={15}/> 检索结果</div>
       {Array.isArray(sources)?<div className="reality-source-list">{sources.slice(0,6).map((item:any,i:number)=><div className="reality-source" key={i}><div className="reality-source-index">{String(i+1).padStart(2,"0")}</div><div><strong>{text(item?.title||item?.name||item?.docTitle||"检索来源")}</strong><p>{text(item?.snippet||item?.content||item?.text||item?.section||"来源已返回，暂无摘要")}</p></div><span>{typeof item?.score==="number"?item.score.toFixed(2):"SOURCE"}</span></div>)}</div>:<div className="reality-empty-visual">{sources===undefined?"检索来源尚未采集":summarize(sources)}</div>}
     </div>}
 
     {adapter==="code" && <div className="reality-visual-block">
-      <div className="reality-block-head"><Code2 size={15}/> 代码变更现场 <span>CODE ADAPTER</span></div>
+      <div className="reality-block-head"><Code2 size={15}/> 代码变更</div>
       {files!==undefined&&<div className="reality-data-chip"><FileCode2 size={14}/>{summarize(files)}</div>}
       {diff!==undefined?<pre className="reality-code-preview">{text(diff).slice(0,2400)}</pre>:<div className="reality-empty-visual">文件操作已识别；执行端未上报 Diff 内容。</div>}
     </div>}
@@ -140,12 +153,12 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
       <ShieldAlert size={20}/><div><strong>安全边界 / 人工授权</strong><p>{approval!==undefined?text(approval):"未收到明确的审批状态"}</p></div>
     </div>}
 
-    {adapter==="agent" && <div className="reality-visual-block"><div className="reality-block-head"><Network size={15}/> Agent 任务交接 <span>HANDOFF</span></div><div className="reality-empty-visual">{summarize(result??args)}</div></div>}
+    {adapter==="agent" && <div className="reality-visual-block"><div className="reality-block-head"><Network size={15}/> Agent 交接</div><div className="reality-empty-visual">{summarize(result??args)}</div></div>}
 
-    {adapter==="terminal" && <div className="reality-visual-block"><div className="reality-block-head"><Terminal size={15}/> 命令执行 <span>RUNTIME</span></div><pre className="reality-code-preview">{text(args??"命令参数未上报")}</pre>{result!==undefined&&<pre className="reality-code-preview">{text(result).slice(0,1800)}</pre>}</div>}
+    {adapter==="terminal" && <div className="reality-visual-block"><div className="reality-block-head"><Terminal size={15}/> 命令执行</div><pre className="reality-code-preview">{text(args??"命令参数未上报")}</pre>{result!==undefined&&<pre className="reality-code-preview">{text(result).slice(0,1800)}</pre>}</div>}
 
     {adapter==="model" && <div className="reality-visual-block">
-      <div className="reality-block-head"><BrainCircuit size={15}/> 模型调用现场 <span>INFERENCE</span></div>
+      <div className="reality-block-head"><BrainCircuit size={15}/> 模型请求</div>
       <div className="reality-git-target"><div><small>模型</small><strong>{model?text(model):"未上报"}</strong></div><div><small>Provider</small><strong>{provider?text(provider):"未上报"}</strong></div></div>
       {decision!==undefined&&<div className="reality-empty-visual mt-3"><strong>显式行动摘要</strong><br/>{text(decision)}</div>}
       {visiblePromptMessages&&<div className="mt-3 grid gap-2">{visiblePromptMessages.map((item:any,index:number)=><div className="reality-data-row items-start" key={index}><span className="!flex-none !w-20 text-cyan-200">{String(item?.role||"message").toUpperCase()}</span><span className="whitespace-pre-wrap break-words !overflow-visible !whitespace-normal">{messageText(item?.content??item?.message??item).slice(0,2400)}</span></div>)}</div>}
@@ -154,18 +167,18 @@ const ActionVisual:React.FC<{step:AgentStep}> = ({step}) => {
       {(inputTokens!==undefined||outputTokens!==undefined||totalTokens!==undefined)&&<div className="reality-git-target mt-3"><div><small>输入 Token</small><strong>{inputTokens!==undefined?text(inputTokens):"未上报"}</strong></div><div><small>输出 Token</small><strong>{outputTokens!==undefined?text(outputTokens):"未上报"}</strong></div></div>}<div className="mt-3 text-[10px] text-indigo-100/40">展示实际请求与响应，不展示或伪造模型隐藏思维链。</div>
     </div>}
 
-    {adapter==="generic" && <div className="reality-visual-block"><div className="reality-block-head"><Layers3 size={15}/> 执行现场 <span>EVENT DATA</span></div><div className="reality-empty-visual">{step.rightSubtitle||step.leftSummary||"执行端只上报了事件基础信息。"}</div></div>}
+    {adapter==="generic" && (step.rightSubtitle||step.leftSummary) && <div className="reality-visual-block"><div className="reality-block-head"><Layers3 size={15}/> 事件说明</div><div className="reality-empty-visual">{step.rightSubtitle||step.leftSummary}</div></div>}
 
     {adapter!=="model" && args!==undefined && <details className="reality-raw"><summary>查看本次动作的真实输入</summary><pre>{text(args)}</pre></details>}
-    {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>查看本次动作的真实返回</summary><pre>{text(result)}</pre></details>}
-    {why!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的原因</div><div className="reality-empty-visual">{text(why)}</div></div>}
+    {adapter!=="model" && result!==undefined && <details className="reality-raw"><summary>工具返回</summary><pre>{text(result)}</pre></details>}
+    {adapter!=="model"&&why!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的原因</div><div className="reality-empty-visual">{text(why)}</div></div>}
     {nextAction!==undefined&&<div className="reality-visual-block"><div className="reality-block-head"><Activity size={15}/> 执行端上报的后续动作</div><div className="reality-empty-visual">{text(nextAction)}</div></div>}
-    <div className="reality-result-strip">
-      <div><small>真实返回</small><strong>{result!==undefined?summarize(result):"尚未上报"}</strong></div>
-      <div><small>Token 用量</small><strong>{totalTokens!==undefined?text(totalTokens):read(d.usage,["total_tokens","totalTokens"])??"未上报"}</strong></div>
-      <div><small>耗时</small><strong>{duration}</strong></div>
-    </div>
-    <details className="reality-raw"><summary>开发者视图 · 原始事件数据</summary><pre>{text(d)}</pre></details>
+    {(result!==undefined||totalTokens!==undefined||read(d.usage,["total_tokens","totalTokens"])!==undefined||typeof step.durationMs==="number")&&<div className="reality-result-strip">
+      {result!==undefined&&<div><small>工具返回</small><strong>{summarize(result)}</strong></div>}
+      {(totalTokens!==undefined||read(d.usage,["total_tokens","totalTokens"])!==undefined)&&<div><small>Token</small><strong>{text(totalTokens??read(d.usage,["total_tokens","totalTokens"]))}</strong></div>}
+      {typeof step.durationMs==="number"&&<div><small>耗时</small><strong>{duration}</strong></div>}
+    </div>}
+    <details className="reality-raw"><summary>原始事件数据（已隐藏内部推理字段）</summary><pre>{text(stripInternalReasoning(d))}</pre></details>
   </div>;
 };
 
@@ -179,8 +192,8 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
   const completed=ordered.filter(s=>s.status==="done"||s.status==="passed").length;
   const live=!!isThinking||running>0;
   const select=(s:AgentStep)=>{setLocalSelected(s.stepId);onSelectStep?.(s.stepId)};
-  const getTitle=(s:AgentStep)=>toolOf(s)||s.rightTitle||s.leftTitle||phaseLabels[s.phase]||"执行事件";
-  const getSummary=(s:AgentStep)=>s.rightSubtitle||s.leftSummary||"执行端未上报说明";
+  const getTitle=(s:AgentStep)=>toolOf(s)||s.rightTitle||s.leftTitle||"执行事件";
+  const getSummary=(s:AgentStep)=>s.rightSubtitle||s.leftSummary||"";
   const fmtDuration=(v?:number)=>typeof v!=="number"||!Number.isFinite(v)||v<0?"未上报":v>=1000?(v/1000).toFixed(2)+" 秒":Math.round(v)+" 毫秒";
   const tone=(s:AgentStep)=>s.status==="failed"?"rose":s.status==="running"?"cyan":s.status==="done"||s.status==="passed"?"emerald":s.status==="pending"?"slate":"amber";
   const statusLabel=(s:AgentStep)=>status[s.status]?.label||"状态未上报";
@@ -210,7 +223,7 @@ export const AgentRealityCanvas:React.FC<Props> = ({timeline,message,activeStepI
     <div className="flow-layout relative z-10 grid min-h-0 flex-1 grid-cols-[minmax(0,1.05fr)_minmax(300px,.95fr)] gap-4 overflow-hidden p-4">
       <section className="flow-scroll min-h-0 overflow-y-auto pr-2">
         <div className="mb-4 flex items-end justify-between"><div><div className="text-[9px] font-mono tracking-[.2em] text-cyan-200/55">TASK NARRATIVE</div><h3 className="mt-1 text-xs font-semibold text-white">发生了什么</h3></div><span className="text-[10px] text-slate-500">按采集顺序呈现 · 非隐藏思维链</span></div>
-        {ordered.length===0?<div className="flex min-h-[330px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-400/20 bg-slate-900/30 px-8 text-center"><div className="grid h-16 w-16 place-items-center rounded-full border border-cyan-200/20 bg-cyan-300/5 text-cyan-100"><Orbit size={28}/></div><h3 className="mt-5 text-sm font-semibold text-white">{live?"正在等待第一条执行事件":"等待 Agent 启动"}</h3><p className="mt-2 max-w-sm text-xs leading-6 text-slate-400">真实模型请求、工具调用和执行结果抵达后，会按发生顺序出现在这里。尚未采集到的步骤不会被补造。</p></div>:<div className="space-y-4 pb-6">{ordered.map((step,index)=>{const I=adapterMeta[adapterOf(step)].icon;return <button key={step.stepId} type="button" className="flow-event" onClick={()=>select(step)} aria-pressed={selected?.stepId===step.stepId}><span className="flow-dot"><I size={14}/></span><span className="flow-body block min-w-0"><span className="flex flex-wrap items-center gap-2"><b className="min-w-0 flex-1 truncate text-[12px] text-white">{getTitle(step)}</b><span className={`text-[9px] font-medium ${tone(step)==="rose"?"text-rose-300":tone(step)==="cyan"?"text-cyan-200":tone(step)==="emerald"?"text-emerald-300":tone(step)==="amber"?"text-amber-200":"text-slate-400"}`}>{statusLabel(step)}</span></span><span className="mt-1 block text-[10px] text-cyan-100/55">{phaseLabels[step.phase]||"执行事件"} <span className="px-1 text-slate-600">·</span> {fmtDuration(step.durationMs)}</span><span className="mt-2 block whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-400">{getSummary(step)}</span><span className="mt-3 flex items-center justify-between border-t border-white/5 pt-2 text-[9px] text-slate-500"><span>EVENT {index+1} · 已采集事件</span><span>{selected?.stepId===step.stepId?"正在查看":"查看执行证据 →"}</span></span></span></button>})}</div>}
+        {ordered.length===0?<div className="flex min-h-[330px] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-400/20 bg-slate-900/30 px-8 text-center"><div className="grid h-16 w-16 place-items-center rounded-full border border-cyan-200/20 bg-cyan-300/5 text-cyan-100"><Orbit size={28}/></div><h3 className="mt-5 text-sm font-semibold text-white">{live?"正在等待第一条执行事件":"等待 Agent 启动"}</h3><p className="mt-2 max-w-sm text-xs leading-6 text-slate-400">真实模型请求、工具调用和执行结果抵达后，会按发生顺序出现在这里。尚未采集到的步骤不会被补造。</p></div>:<div className="space-y-4 pb-6">{ordered.map((step,index)=>{const I=adapterMeta[adapterOf(step)].icon;return <button key={step.stepId} type="button" className="flow-event" onClick={()=>select(step)} aria-pressed={selected?.stepId===step.stepId}><span className="flow-dot"><I size={14}/></span><span className="flow-body block min-w-0"><span className="flex flex-wrap items-center gap-2"><b className="min-w-0 flex-1 truncate text-[12px] text-white">{getTitle(step)}</b><span className={`text-[9px] font-medium ${tone(step)==="rose"?"text-rose-300":tone(step)==="cyan"?"text-cyan-200":tone(step)==="emerald"?"text-emerald-300":tone(step)==="amber"?"text-amber-200":"text-slate-400"}`}>{statusLabel(step)}</span></span><span className="mt-1 block text-[10px] text-cyan-100/55">{fmtDuration(step.durationMs)}</span>{getSummary(step)&&<span className="mt-2 block whitespace-pre-wrap break-words text-[11px] leading-5 text-slate-400">{getSummary(step)}</span>}<span className="mt-3 flex items-center justify-between border-t border-white/5 pt-2 text-[9px] text-slate-500"><span>查看详情</span><span>{selected?.stepId===step.stepId?"正在查看":"查看执行证据 →"}</span></span></span></button>})}</div>}
       </section>
       <aside className="flow-inspector flow-scroll min-h-0">
         {selected?<><div className="border-b border-slate-300/10 p-4"><div className="text-[9px] font-mono tracking-[.2em] text-cyan-200/60">EXECUTION EVIDENCE / EVENT {ordered.findIndex(s=>s.stepId===selected.stepId)+1}</div><h3 className="mt-2 break-words text-sm font-bold text-white">{getTitle(selected)}</h3><p className="mt-1 text-[11px] leading-5 text-slate-400">{getSummary(selected)}</p><div className="mt-3 flex flex-wrap gap-2"><span className="rounded-full border border-slate-400/20 px-2.5 py-1 text-[10px] text-slate-300">{statusLabel(selected)}</span><span className="rounded-full border border-slate-400/20 px-2.5 py-1 text-[10px] text-slate-300">{fmtDuration(selected.durationMs)}</span></div></div><div className="p-3"><ActionVisual step={selected}/></div></>:<div className="flex h-full min-h-[280px] flex-col items-center justify-center p-8 text-center"><Layers3 size={28} className="text-cyan-200"/><h3 className="mt-4 text-sm font-semibold text-white">选择一条执行事件</h3><p className="mt-2 text-xs leading-6 text-slate-400">这里会显示该事件实际采集到的模型请求、工具输入输出、Token、异常和原始数据。</p></div>}

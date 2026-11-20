@@ -46,6 +46,7 @@ import { TraceInspectorDrawer, ExecutionTraceData } from "@/components/chat/Trac
 import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
 import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
+import RunsPage from "@/pages/runs/RunsPage";
 
 export interface CitationItem {
   chunkId: string;
@@ -104,6 +105,8 @@ interface Message {
   enableWebSearch?: boolean;
   agentTimeline?: AgentStep[];
   createdAt?: string;
+  runId?: string;
+  traceId?: string;
 }
 
 const formatMessageTime = (timeStr?: string) => {
@@ -204,6 +207,8 @@ export default function ChatPlaygroundPage({
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isExternalRunsOpen, setIsExternalRunsOpen] = useState(false);
+  const [runExplorerTarget, setRunExplorerTarget] = useState<{ sessionId: string; runId: string } | null>(null);
   const [sessionBootstrapReady, setSessionBootstrapReady] = useState(false);
   const dreamResponseHandledRef = useRef(false);
   useEffect(() => { dreamResponseHandledRef.current = false; }, [dreamSeed]);
@@ -630,6 +635,11 @@ export default function ChatPlaygroundPage({
           enableRAG,
         },
         {
+          onRun: (run) => {
+            setMessages((prev) => prev.map((m) => m.id === asstMsgId
+              ? { ...m, runId: run.runId, traceId: run.traceId, trace: { ...(m.trace || {}), runId: run.runId, traceId: run.traceId } }
+              : m));
+          },
           onAgentStep: (stepData) => {
             setMessages((prev) =>
               prev.map((m) => {
@@ -1081,41 +1091,28 @@ export default function ChatPlaygroundPage({
               <Plus className="w-3.5 h-3.5" />
               <span>新对话</span>
             </button>
+            <button
+              onClick={() => setIsExternalRunsOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 bg-white/80 hover:bg-white rounded-xl border border-slate-200/80 shadow-2xs transition cursor-pointer"
+              title="查看通过 SDK 或 OTLP 接入的外部 Agent 执行记录"
+            >
+              <Activity className="w-3.5 h-3.5 text-indigo-600" />
+              <span>外部 Agent</span>
+            </button>
           </div>
 
           {/* 当前模型真实连接状态胶囊与设置快捷入口 */}
           <div className="flex items-center gap-2">
-            {/* AI 自适应意图感知指示灯 (零人工选择，自动研判与业务流装载) */}
+            {/* Only show a workflow label when the backend actually matched one. */}
             {(() => {
               const latestAsst = messages.slice().reverse().find((m) => m.role === "assistant");
-              const step2 = latestAsst?.traceSteps?.[2];
-              const autoWfName = step2?.matchedWorkflowName;
-              const confidence = step2?.confidence;
-
-              if (autoWfName) {
-                return (
-                  <div
-                    className="flex items-center gap-1.5 px-3 py-1 bg-gradient-to-r from-blue-50/90 to-cyan-50/90 border border-blue-200/90 rounded-full text-xs shadow-2xs text-blue-900 font-semibold"
-                    title={`AI 意图研判中枢已自动装载【${autoWfName}】(确信度 ${confidence || "99.2%"})，零人工选择成本`}
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600 animate-pulse" />
-                    <span>AI 意图感知: 自动挂载【{autoWfName}】</span>
-                    <span className="text-[10px] bg-blue-100 text-blue-800 px-1.5 py-0.2 rounded-full font-bold">
-                      置信度 {confidence || "99.2%"}
-                    </span>
-                  </div>
-                );
-              }
-
-              return (
-                <div
-                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200/90 rounded-full text-xs shadow-2xs text-slate-700 font-medium"
-                  title="输入任意指令，AI 意图路由器将自动研判意图并装载对应业务流与工具，无需手动挑选"
-                >
-                  <Compass className="w-3.5 h-3.5 text-cyan-600" />
-                  <span>AI 意图研判中枢就绪 · 零人工选择</span>
+              const matchedWorkflow = latestAsst?.traceSteps?.[2]?.matchedWorkflowName;
+              return matchedWorkflow ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-600">
+                  <Layers className="w-3.5 h-3.5 text-slate-500" />
+                  <span>工作流：{matchedWorkflow}</span>
                 </div>
-              );
+              ) : null;
             })()}
 
             <div
@@ -1831,6 +1828,25 @@ export default function ChatPlaygroundPage({
                                   </button>
                                 </>
                               )}
+                              {(msg.runId || msg.trace?.runId) && (
+                                <>
+                                  <span>·</span>
+                                  <button
+                                    onClick={() => {
+                                      const runId = String(msg.runId || msg.trace?.runId || "");
+                                      if (runId) {
+                                        setRunExplorerTarget({ sessionId: String(msg.sessionId || currentSessionId), runId });
+                                        setIsExternalRunsOpen(true);
+                                      }
+                                    }}
+                                    className="inline-flex items-center gap-1 font-mono text-[10px] font-semibold text-indigo-600 hover:text-indigo-800 hover:underline"
+                                    title={`Run ID: ${msg.runId || msg.trace?.runId} · Trace ID: ${msg.traceId || msg.trace?.traceId || "—"}`}
+                                  >
+                                    <Activity className="h-3 w-3" />
+                                    <span>运行记录 {String(msg.runId || msg.trace?.runId).slice(0, 12)} ↗</span>
+                                  </button>
+                                </>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -1993,6 +2009,18 @@ export default function ChatPlaygroundPage({
             : latestAssistantTraceMessage || { id: "observer-empty", role: "assistant", content: "", userPrompt: "", modelName: currentAgent?.model || systemModel || "模型待连接", sessionId: currentSessionId, enableRAG, enableThinking, enableWebSearch, traceSteps: {}, agentTimeline: [] } as Message
         }
             />
+
+      {isExternalRunsOpen && (
+        <div className="fixed inset-0 z-[100] bg-slate-950/40 p-3 sm:p-6" role="dialog" aria-modal="true" aria-label="外部 Agent 执行记录">
+          <div className="mx-auto h-full w-full max-w-7xl overflow-hidden rounded-2xl shadow-2xl">
+            <RunsPage
+              initialChatSessionId={runExplorerTarget?.sessionId}
+              initialChatRunId={runExplorerTarget?.runId}
+              onClose={() => { setIsExternalRunsOpen(false); setRunExplorerTarget(null); }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* 业务流水线执行窗口 */}
       <WorkflowExecutionModal

@@ -1,42 +1,89 @@
-# OwnAgent · 企业级智能体平台
+# OwnAgent — AI Agent Observability & Debugging
 
-**打通大模型与企业核心业务协同**。提供极简三屏架构：在【首页】洞悉业务大盘，在【工作台】实现代码查验与实时链路协同，在【业务流】以 4 步精确向导配置 Git 协同智能体与全域业务规则，支持代码库内置工具与轻量增量微调。
+OwnAgent is a developer workbench for understanding what an AI Agent actually did. Use the built-in Agent for your own tasks, or connect an Agent you already built and inspect its real execution without moving it into OwnAgent or routing model traffic through OwnAgent.
 
-| 模块 | 说明 |
-|------|------|
-| **01. 平台首页 (Overview)** | 全局业务健康度感知、生产业务流速览与核心业务智能体快速启动入口 |
-| **02. 智能工作台 (Workbench)** | 左右分屏深度协同、左侧推演业务步骤，右侧实时联动 APM 毫秒级瀑布流链路追踪 |
-| **03. 业务流中心 (Workflows)** | 4 步精确向导，自由配置代码库、智能体提示词人设、检查门禁规则与代码库内置 MCP |
+### Run Explorer data sources
 
----
+The Run Explorer workspace has two explicit views: **External Agent Runs** are loaded from the authenticated persisted Run / Trace APIs; **Built-in chat history** is loaded from the existing `/api/chat/sessions` and `/api/chat/messages` endpoints and displays the persisted assistant messages, trace steps and tool calls. These remain distinct persistence models: built-in chat sessions are not assigned synthetic Run IDs or Span IDs.
 
-## 核心标杆业务流
+## Two ways to use the workbench
 
-1. **Git 仓库实时监控与代码智能体 (v1.2.0)**
-   - 配置 Git 仓库地址后，智能体在对话中实时解析代码库状态，自动监控每次 Commit 与改动，深度排查代码 Bug、安全漏洞与潜在合并隐患。
-   - 标签：`#Git 监控` `#仓库凭证配置` `#视觉排查` `#安全漏洞` `#协同任务`
-2. **企业全域数据清洗与智能分析流 (v2.0.0)**
-   - 面向企业核心运营与财务数据的端到端智能流水线，涵盖多源数据抽取脱敏、合规性清洗与阈值校验、高风险账目人工校验复核，以及大模型智能 BI 指标分析与决策简报生成。
-   - 标签：`#数据清洗` `#脱敏规则` `#规则合规` `#BI 分析` `#审计存证`
+- **Built-in Agent:** chat in the OwnAgent workbench. The existing conversation and execution inspector stay together.
+- **External Agent:** add the OwnAgent Python SDK or export OpenTelemetry spans. Your Agent continues to run in its own application; OwnAgent receives telemetry as a side channel.
 
----
+**Current preview boundary:** the built-in chat still uses its existing live SSE execution timeline, while external Agent traces are persisted and viewed in the in-workbench external-run panel. These two sources are not yet normalized into one persistent Conversation / Run history. The target shared model is Project → Agent → Conversation / Session → Run → model calls, tool calls, events, and errors; unifying the built-in chat persistence with that model remains a core next phase.
 
-## 本地开发与运行
+## What you can inspect
+
+- Every recorded Run and its parent/child span relationships.
+- Actual model requests and responses when the integration explicitly captures them.
+- Tool calls, arguments, and returned results when instrumented.
+- Provider-reported token usage, timestamps, duration, status, and errors.
+- Historical traces and live updates for an in-progress trace.
+- Action Runtime lifecycle events when an Agent delegates tool execution to OwnAgent.
+
+Missing data stays missing. OwnAgent does not invent prompts, token counts, confidence scores, or execution stages. Prompt/response capture is opt-in; hidden model chain-of-thought is not collected or displayed.
+
+## Connect an external Python Agent
+
+The backend and SDK live in [cpttbtptp2812/ownsudo](https://github.com/cpttbtptp2812/ownsudo). Start with the [Python SDK guide](https://github.com/cpttbtptp2812/ownsudo/tree/main/sdk/python).
 
 ```bash
-# 安装依赖
-npm install
+git clone https://github.com/cpttbtptp2812/ownsudo.git
+cd ownsudo/sdk/python
+python -m pip install -e .
+```
 
-# 启动开发服务器
+Configure `OWNAGENT_BASE_URL` and an Agent API key. In this early preview, the first Agent API key is provisioned by the backend bootstrap settings; self-service key management in Studio is not yet available. The SDK guide documents the setup.
+
+```bash
+export OWNAGENT_BASE_URL=http://localhost:8080
+export OWNAGENT_AGENT_API_KEY=oa_live_...
+```
+
+Run the external Agent example:
+
+```bash
+export OPENAI_API_KEY=...
+export OPENAI_MODEL=...
+python examples/observability_agent.py
+```
+
+The example sends model traffic directly to an OpenAI-compatible provider and separately reports spans to OwnAgent. It records actual provider usage when present. To persist exact prompt messages, model responses, tool arguments, and tool results, explicitly opt in with `OWNAGENT_TRACE_CAPTURE_CONTENT=1` and review/redact sensitive data.
+
+## Where to find external runs in Studio
+
+Open **运行观测** from the Studio top navigation, enter the Agent API key, and load persisted Runs. The **智能工作台** also retains the external Agent entry point. External traces are scoped to the Agent identity represented by that key; they are not automatically merged into the built-in chat history unless the integration supplies matching session identifiers.
+
+## Local Studio development
+
+Requirements: Node.js 20+.
+
+```bash
+npm install
 npm run dev
 ```
 
-浏览器访问 `http://localhost:5173` 即可进入 OwnAgent 平台。
-
-## 生产构建
+Set `VITE_API_BASE` if the backend is not served from the same origin.
 
 ```bash
-npm run build
+npm run test:timeline
+npm run check:production
 ```
 
-构建产物将输出至 `dist/` 目录。
+## Current preview boundaries
+
+- External Agent instrumentation is explicit. OwnAgent does not automatically intercept arbitrary provider traffic.
+- The current Studio preview uses an Agent API key to read external traces; self-service project/key provisioning is future work.
+- Prompt and response bodies are disabled by default.
+- The Python SDK is synchronous and the current OTLP receiver accepts HTTP JSON; broader protocol/framework compatibility is future work.
+- Replay, safe side-effect-aware retry, async SDK, and additional framework auto-instrumentation remain future work.
+
+## Repositories
+
+- [Studio frontend](https://github.com/cpttbtptp2812/builder)
+- [Backend, Python SDK, and examples](https://github.com/cpttbtptp2812/ownsudo)
+
+### Promptfoo report history
+
+The Integration Hub imports exported Promptfoo JSON / JSONL reports using an Agent API key. You may optionally provide a Run ID; the backend verifies that it belongs to the same Agent before linking the report. Saved reports can be listed and reopened later. OwnAgent does not run arbitrary Promptfoo CLI projects on the server.
