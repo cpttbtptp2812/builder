@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Plus,
   Bot,
@@ -17,6 +17,7 @@ import {
   Layers,
 } from "lucide-react";
 import { AgentItem } from "../../types/platform";
+import { AgentToolOption, fetchAvailableAgentToolsApi } from "../../services/api";
 import { useToast } from "@/context/ToastContext";
 
 interface AgentsListPageProps {
@@ -46,9 +47,19 @@ export default function AgentsListPage({
   const [formModel, setFormModel] = useState("deepseek-chat");
   const [formPrompt, setFormPrompt] = useState("");
   const [formTemp, setFormTemp] = useState(0.7);
-  const [formToolsCount, setFormToolsCount] = useState<number>(0);
+  const [availableTools, setAvailableTools] = useState<AgentToolOption[]>([]);
+  const [formSelectedTools, setFormSelectedTools] = useState<string[]>([]);
   const [formKbCount, setFormKbCount] = useState<number>(0);
   const [formEnableMemory, setFormEnableMemory] = useState<boolean>(true);
+
+  useEffect(() => {
+    fetchAvailableAgentToolsApi()
+      .then(setAvailableTools)
+      .catch((error) => {
+        console.warn("Failed to load Agent tool catalog", error);
+        toast.error("工具目录加载失败，当前无法修改 Agent 工具绑定");
+      });
+  }, []);
 
   const openCreateModal = () => {
     setEditingAgent(null);
@@ -57,7 +68,7 @@ export default function AgentsListPage({
     setFormModel("deepseek-chat");
     setFormPrompt("你是一个专业高效的业务智能助手，请依据事实严谨回答。");
     setFormTemp(0.7);
-    setFormToolsCount(0);
+    setFormSelectedTools(availableTools.map((tool) => tool.name));
     setFormKbCount(0);
     setFormEnableMemory(true);
     setIsModalOpen(true);
@@ -70,7 +81,7 @@ export default function AgentsListPage({
     setFormModel(a.model);
     setFormPrompt(a.systemPrompt);
     setFormTemp(a.temperature);
-    setFormToolsCount(a.toolsCount ?? 0);
+    setFormSelectedTools(a.selectedTools ?? availableTools.map((tool) => tool.name));
     setFormKbCount(a.kbCount ?? 0);
     setFormEnableMemory(a.enableMemory !== false);
     setIsModalOpen(true);
@@ -93,7 +104,8 @@ export default function AgentsListPage({
           model: formModel,
           systemPrompt: formPrompt,
           temperature: formTemp,
-          toolsCount: formToolsCount,
+          toolsCount: formSelectedTools.length,
+          selectedTools: formSelectedTools,
           kbCount: formKbCount,
           enableMemory: formEnableMemory,
           updatedAt: "刚刚",
@@ -108,7 +120,8 @@ export default function AgentsListPage({
           model: formModel,
           temperature: formTemp,
           systemPrompt: formPrompt,
-          toolsCount: formToolsCount,
+          toolsCount: formSelectedTools.length,
+          selectedTools: formSelectedTools,
           kbCount: formKbCount,
           enableMemory: formEnableMemory,
           status: "PUBLISHED",
@@ -346,38 +359,55 @@ export default function AgentsListPage({
                   />
                 </div>
 
-                <div className="grid grid-cols-3 gap-3 pt-1">
-                  <div>
-                    <label className="text-xs text-slate-700 font-semibold">绑定工具数</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formToolsCount}
-                      onChange={(e) => setFormToolsCount(parseInt(e.target.value) || 0)}
-                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mt-1 outline-none font-mono"
-                    />
+                <div className="space-y-3 pt-1">
+                  <div className="flex items-center justify-between gap-3">
+                    <label className="text-xs text-slate-700 font-semibold">可调用工具</label>
+                    <span className="text-[11px] text-slate-500">{formSelectedTools.length} / {availableTools.length} 已绑定</span>
                   </div>
-                  <div>
-                    <label className="text-xs text-slate-700 font-semibold">绑定知识库数</label>
-                    <input
-                      type="number"
-                      min="0"
-                      value={formKbCount}
-                      onChange={(e) => setFormKbCount(parseInt(e.target.value) || 0)}
-                      className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mt-1 outline-none font-mono"
-                    />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-48 overflow-y-auto rounded-xl border border-slate-200 bg-slate-50 p-3">
+                    {availableTools.map((tool) => (
+                      <label key={tool.name} className="flex items-start gap-2 rounded-lg p-2 hover:bg-white cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formSelectedTools.includes(tool.name)}
+                          onChange={(event) => setFormSelectedTools((current) =>
+                            event.target.checked
+                              ? [...current, tool.name]
+                              : current.filter((name) => name !== tool.name)
+                          )}
+                          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600"
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-[11px] font-semibold text-slate-700">{tool.name}</span>
+                          <span className="block text-[10px] leading-relaxed text-slate-400">{tool.description}</span>
+                        </span>
+                      </label>
+                    ))}
+                    {availableTools.length === 0 && <p className="col-span-2 text-xs text-slate-400">正在加载工具目录，或后端尚未提供可绑定工具。</p>}
                   </div>
-                  <div className="flex flex-col justify-center">
-                    <label className="text-xs text-slate-700 font-semibold mb-1">长程记忆</label>
-                    <label className="flex items-center gap-1.5 cursor-pointer mt-1">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs text-slate-700 font-semibold">绑定知识库数</label>
                       <input
-                        type="checkbox"
-                        checked={formEnableMemory}
-                        onChange={(e) => setFormEnableMemory(e.target.checked)}
-                        className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                        type="number"
+                        min="0"
+                        value={formKbCount}
+                        onChange={(e) => setFormKbCount(parseInt(e.target.value) || 0)}
+                        className="w-full text-xs bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 mt-1 outline-none font-mono"
                       />
-                      <span className="text-xs text-slate-600 font-medium">启用记忆检索</span>
-                    </label>
+                    </div>
+                    <div className="flex flex-col justify-center">
+                      <label className="text-xs text-slate-700 font-semibold mb-1">长程记忆</label>
+                      <label className="flex items-center gap-1.5 cursor-pointer mt-1">
+                        <input
+                          type="checkbox"
+                          checked={formEnableMemory}
+                          onChange={(e) => setFormEnableMemory(e.target.checked)}
+                          className="w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500"
+                        />
+                        <span className="text-xs text-slate-600 font-medium">启用记忆检索</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>
