@@ -43,7 +43,6 @@ import {
 import { useToast } from "@/context/ToastContext";
 import type { ExecutionTraceData } from "@/components/chat/TraceInspectorDrawer";
 import BuiltinRunObserver from "@/components/chat/BuiltinRunObserver";
-import { WorkflowExecutionModal } from "@/components/workflow/WorkflowExecutionModal";
 import { AgentStep, applySseToTimeline, rebuildTimelineFromMessage, finalizeTimeline } from "@/lib/agentTimeline";
 import { Markdown } from "@/components/prompt-kit/markdown";
 import RunsPage from "@/pages/runs/RunsPage";
@@ -136,8 +135,6 @@ interface ChatPlaygroundProps {
   workflows?: PipelineItem[];
   initialPrompt?: string | { prompt: string; autoSend?: boolean };
   onClearInitialPrompt?: () => void;
-  onOpenCreateWorkflow?: () => void;
-  onRunWorkflow?: (wf: PipelineItem) => void;
   onNavigateStudio?: () => void;
   onOpenEvaluation?: (message: Message) => void;
 }
@@ -189,8 +186,6 @@ export default function ChatPlaygroundPage({
   workflows = [],
   initialPrompt,
   onClearInitialPrompt,
-  onOpenCreateWorkflow,
-  onRunWorkflow,
   onNavigateStudio,
   onOpenEvaluation,
 }: ChatPlaygroundProps) {
@@ -240,7 +235,6 @@ export default function ChatPlaygroundPage({
 
   // 全链路执行分析与知识溯源面板 (支持左右分栏 split 与浮层抽屉 drawer 自由切换)
   const [activeTraceDrawer, setActiveTraceDrawer] = useState<{ messageId: string } | null>(null);
-  const [runningWorkflow, setRunningWorkflow] = useState<PipelineItem | null>(null);
   const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
   const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
 
@@ -1944,17 +1938,6 @@ export default function ChatPlaygroundPage({
         </div>
       )}
 
-      {/* 业务流水线执行窗口 */}
-      <WorkflowExecutionModal
-        isOpen={!!runningWorkflow}
-        onClose={() => setRunningWorkflow(null)}
-        workflow={runningWorkflow}
-        onSwitchToChat={(prompt) => {
-          setInputMessage(prompt);
-          setRunningWorkflow(null);
-          textareaRef.current?.focus();
-        }}
-      />
     </div>
   );
 }
