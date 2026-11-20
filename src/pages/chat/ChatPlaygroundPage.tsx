@@ -128,10 +128,7 @@ const formatMessageTime = (timeStr?: string) => {
 interface ChatPlaygroundProps {
   agents?: AgentItem[];
   currentAgent?: AgentItem | null;
-  onSelectAgent?: (agent: AgentItem) => void;
-  onAddAuditLog?: (log: AuditLogItem) => void;
   onNavigateSettings?: () => void;
-  onOpenModal?: (tab: any) => void;
   workflows?: PipelineItem[];
   initialPrompt?: string | { prompt: string; autoSend?: boolean };
   onClearInitialPrompt?: () => void;
@@ -179,10 +176,7 @@ const renderContentWithCitations = (
 export default function ChatPlaygroundPage({
   agents = [],
   currentAgent,
-  onSelectAgent,
-  onAddAuditLog,
   onNavigateSettings,
-  onOpenModal,
   workflows = [],
   initialPrompt,
   onClearInitialPrompt,
@@ -236,7 +230,6 @@ export default function ChatPlaygroundPage({
   // 全链路执行分析与知识溯源面板 (支持左右分栏 split 与浮层抽屉 drawer 自由切换)
   const [activeTraceDrawer, setActiveTraceDrawer] = useState<{ messageId: string } | null>(null);
   const [activeGitRepoId, setActiveGitRepoId] = useState<string>("all");
-  const [focusedStepId, setFocusedStepId] = useState<string | null>(null);
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
