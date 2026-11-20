@@ -55,8 +55,9 @@ export default function ToolsMarketPage() {
     try {
       const list = await fetchToolsApi();
       setTools(list || []);
-    } catch {
+    } catch (error: any) {
       setTools([]);
+      toast.error(error?.message || "工具列表加载失败", "无法读取工具注册中心");
     } finally {
       setLoading(false);
     }
