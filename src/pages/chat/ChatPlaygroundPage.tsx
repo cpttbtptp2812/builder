@@ -1833,11 +1833,12 @@ export default function ChatPlaygroundPage({
 
       {/* Show the observer only when explicitly opened or when a message links to its Run. */}
       {activeTraceDrawer && <BuiltinRunObserver
-        message={
-          activeTraceDrawer && activeTraceDrawer.messageId !== "finops-global"
+        message={(() => {
+          const selected = activeTraceDrawer.messageId !== "finops-global"
             ? (messages.find((item) => item.id === activeTraceDrawer.messageId) || latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
-            : (latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false })
-        }
+            : (latestAssistantTraceMessage || { id: "observer-empty", content: "", isThinking: false });
+          return { ...selected, sessionId: selected.sessionId || currentSessionId };
+        })()}
       />}
 
       {isExternalRunsOpen && (
