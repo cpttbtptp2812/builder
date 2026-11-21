@@ -55,8 +55,9 @@ export default function ToolsMarketPage() {
     try {
       const list = await fetchToolsApi();
       setTools(list || []);
-    } catch {
+    } catch (error: any) {
       setTools([]);
+      toast.error(error?.message || "工具列表加载失败", "无法读取工具注册中心");
     } finally {
       setLoading(false);
     }
@@ -89,15 +90,24 @@ export default function ToolsMarketPage() {
   // 执行测试
   const handleRunTest = async () => {
     if (!activeTestTool) return;
+
+    // Tool arguments must be a JSON object. Silently wrapping malformed JSON
+    // as { raw } can make a test appear to execute with different arguments.
+    let parsed: Record<string, unknown>;
+    try {
+      const value = JSON.parse(testPayloadStr || "{}");
+      if (!value || typeof value !== "object" || Array.isArray(value)) {
+        throw new Error("工具参数必须是 JSON 对象");
+      }
+      parsed = value as Record<string, unknown>;
+    } catch (err: any) {
+      setTestResult({ error: true, message: err.message || "请输入合法的 JSON 对象" });
+      return;
+    }
+
     setTestRunning(true);
     setTestResult(null);
     try {
-      let parsed = {};
-      try {
-        parsed = JSON.parse(testPayloadStr);
-      } catch {
-        parsed = { raw: testPayloadStr };
-      }
       const res = await testToolApi(activeTestTool.name, parsed);
       setTestResult(res);
     } catch (err: any) {
@@ -136,6 +146,15 @@ export default function ToolsMarketPage() {
   const handleSaveTool = async () => {
     if (!formDisplayName.trim() || !formFunctionName.trim()) {
       toast.warning("请填写工具显示名称与调用函数名", "表单校验未通过");
+      return;
+    }
+    try {
+      const schema = JSON.parse(formSchema || "{}");
+      if (!schema || typeof schema !== "object" || Array.isArray(schema)) {
+        throw new Error("工具参数定义必须是 JSON 对象");
+      }
+    } catch (err: any) {
+      toast.warning(err.message || "工具参数定义不是合法 JSON", "请检查参数定义");
       return;
     }
     setIsSaving(true);
