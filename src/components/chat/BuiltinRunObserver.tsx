@@ -223,7 +223,7 @@ export default function BuiltinRunObserver({ message }: { message: RunMessage })
       controller.abort();
       if (timer) clearInterval(timer);
     };
-  }, [runId]);
+  }, [activeRunId]);
 
   const run = detail?.run;
   const spans = detail?.spans ?? [];
