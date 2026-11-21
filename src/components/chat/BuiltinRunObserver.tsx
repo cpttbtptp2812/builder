@@ -131,7 +131,7 @@ export default function BuiltinRunObserver({ message }: { message: RunMessage })
 
   useEffect(() => {
     setSelectedRunId(runId);
-  }, [activeRunId]);
+  }, [runId]);
 
   useEffect(() => {
     if (!message.sessionId) {
